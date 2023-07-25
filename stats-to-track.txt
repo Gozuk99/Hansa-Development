@@ -1,0 +1,19 @@
+Per Player:
+Points received per breakdown
+Times Displaced
+Times Displaced someone else
+Times Used the Bag Action
+Final Value of Key/Priv/Circles/Actions/Bags
+Final Pog Count
+Person who got their 3rd action first - vs their final rank
+
+Per Map:
+Final Round
+How the Game Ended (city/20+ points/pogs)
+**
+Considering that the board from the game is quite massive, and there a lot of logic still yet to program, lets start over on the map generation.
+
+Lets have 5 rows and 9 columns.
+Lets have 1 city at each corner, and 1 city in the middle of the top row and the bottom row.
+
+I saw a youtube developer suggest using pygame, not sure if that would be easier/better to use than tk?
