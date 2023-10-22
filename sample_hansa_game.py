@@ -37,6 +37,7 @@ pygame.init()
 win = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Hansa Sample Game')
 font = pygame.font.Font(None, 36)
+win.fill(TAN)
 
 class Player:
     def __init__(self, color, actions):
@@ -54,7 +55,7 @@ class Office:
         self.office_type = office_type  # "circle" or "square"
         self.color = color
         self.awards_points = awards_points
-CITY_SIZE = 50
+        self.controller = None  # Initialize controller as None
 
 class City:
     def __init__(self, name, position, color):
@@ -62,38 +63,52 @@ class City:
         self.pos = position
         self.color = color
         self.routes = []
-        self.controllers = []  # List of controlling players
+        self.controller = None  # Player controlling the city
         self.offices = []  # List of offices within the city
         self.width = 0
         self.height = 0
-        # self.rect = pygame.Rect(position[0] - (len(self.offices) * SQUARE_SIZE) // 2, position[1], CITY_SIZE + (len(self.offices) * SQUARE_SIZE), CITY_SIZE)
+        self.midpoint = (0, 0)  # Initialize midpoint with (0, 0)
 
     def add_route(self, route):
         self.routes.append(route)
 
     def change_color(self, new_color):
         self.color = new_color
-
-    def add_controller(self, player):
-        self.controllers.append(player)
     
     def add_office(self, office):
         self.offices.append(office)
 
+    def update_office_ownership(self, player, color):
+        for office in self.offices:
+            if office.controller is None:
+                office.controller = player
+                office.color = color
+                break
+
     def update_city_size(self, width, height):
         self.width = width
         self.height = height
+        self.midpoint = (self.pos[0] + self.width / 2, self.pos[1] + self.height / 2)
 
     def get_controller(self):
-        # Sort offices by position from left to right
-        sorted_offices = sorted(self.offices, key=lambda office: office.position)
+        if not self.offices:
+            return None  # No offices in the city
 
         # Determine the player controlling the rightmost office
-        rightmost_office = sorted_offices[-1]
-        rightmost_player = rightmost_office.player
+        rightmost_office = self.offices[-1]
+        rightmost_player = rightmost_office.controller
 
         # Count the number of players controlling offices in the city
-        player_counts = {office.player: sorted_offices.count(office) for office in sorted_offices}
+        player_counts = {}
+        for office in self.offices:
+            if office.controller is not None:
+                if office.controller in player_counts:
+                    player_counts[office.controller] += 1
+                else:
+                    player_counts[office.controller] = 1
+
+        if not player_counts:
+            return None  # No offices controlled by any player in the city
 
         # Find the maximum number of offices controlled by a single player
         max_offices = max(player_counts.values())
@@ -101,58 +116,37 @@ class City:
         # Check if there's a tie for the number of offices controlled
         if list(player_counts.values()).count(max_offices) == 1:
             # If there's no tie, return the player controlling the rightmost office
+            self.controller = rightmost_player
             return rightmost_player
         else:
             # If there's a tie, return the rightmost player among those controlling the same number of offices
             tied_players = [player for player, offices in player_counts.items() if offices == max_offices]
-            return max(tied_players, key=lambda player: sorted_offices[::-1].index(next(office for office in sorted_offices[::-1] if office.player == player)))
-
-    def draw(self, win):
-        BORDER_THICKNESS = 4
-        CITY_SIZE = 10
-        DISTANCE_BETWEEN = 6  # Adjust this for the distance between the squares
-
-        if self.name == "China":  # Special case for China
-            # Draw the border
-            pygame.draw.rect(win, BLACK, (self.pos[0]-CITY_SIZE//2-BORDER_THICKNESS, self.pos[1]-CITY_SIZE//2-BORDER_THICKNESS, 2*CITY_SIZE+DISTANCE_BETWEEN+2*BORDER_THICKNESS, CITY_SIZE+2*BORDER_THICKNESS))
-
-            # Draw left square
-            pygame.draw.rect(win, self.color, (self.pos[0]-CITY_SIZE//2, self.pos[1]-CITY_SIZE//2, CITY_SIZE, CITY_SIZE))
-
-            # Draw right square
-            pygame.draw.rect(win, self.color, (self.pos[0]+CITY_SIZE//2+DISTANCE_BETWEEN, self.pos[1]-CITY_SIZE//2, CITY_SIZE, CITY_SIZE))
-        else:  # For all other cities, draw a circle with a border
-            # Draw the border
-            pygame.draw.circle(win, BLACK, self.pos, CITY_SIZE+BORDER_THICKNESS)
-
-            # Draw the city
-            pygame.draw.circle(win, self.color, self.pos, CITY_SIZE)
+            self.controller = max(tied_players, key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player)))
+            return max(tied_players, key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player)))
 
 class Route:
-    def __init__(self, cities, num_posts):
+    def __init__(self, cities, num_posts, has_bonus_marker=False):
         self.cities = cities
         for city in cities:
             city.add_route(self)
         self.num_posts = num_posts
+        self.has_bonus_marker = has_bonus_marker
         self.posts = self.create_posts()
+            # Draw the roads
+        pygame.draw.line(win, WHITE, self.cities[0].midpoint, self.cities[1].midpoint, 10)
 
-    def create_posts(self):
+    def create_posts(self, buffer=0.1):
         city1, city2 = self.cities
         posts = []
 
-        # Calculate the midpoints of each city
-        city1_midpoint = (city1.pos[0] + city1.width / 2, city1.pos[1] + city1.height / 2)
-        city2_midpoint = (city2.pos[0] + city2.width / 2, city2.pos[1] + city2.height / 2)
-
-        # Print city information for debugging
-        print(f"City 1: {city1.name}, Width: {city1.width}, Height: {city1.height}, Midpoint: {city1_midpoint}")
-        print(f"City 2: {city2.name}, Width: {city2.width}, Height: {city2.height}, Midpoint: {city2_midpoint}")
-
         for i in range(1, self.num_posts + 1):
-            # Interpolate between the midpoints to determine post positions
+            # Adjust the buffer to control the post distribution
+            t = i / (self.num_posts + 1)
+            t = buffer + (1 - 2 * buffer) * t
+
             pos = (
-                city1_midpoint[0] + i / (self.num_posts + 1) * (city2_midpoint[0] - city1_midpoint[0]),
-                city1_midpoint[1] + i / (self.num_posts + 1) * (city2_midpoint[1] - city1_midpoint[1])
+                city1.midpoint[0] + t * (city2.midpoint[0] - city1.midpoint[0]),
+                city1.midpoint[1] + t * (city2.midpoint[1] - city1.midpoint[1])
             )
             posts.append(Post(pos))
 
@@ -347,12 +341,6 @@ HALLE.add_office(Office("square", "orange", False))
 cities.append(HALLE)
 set_city_width()
 
-# CHINA = City('CHINA', (3*WIDTH//5, HEIGHT//5), BLACKISH_BROWN)
-# BRAZIL = City('BRAZIL', (WIDTH//5, 4*HEIGHT//5), PINK)
-# EGYPT = City('EGYPT', (2*WIDTH//5, 4*HEIGHT//5), PINK)
-# AUSTRALIA = City('AUSTRALIA', (3*WIDTH//5, 4*HEIGHT//5), PINK)
-# cities += [CHINA, BRAZIL, EGYPT, AUSTRALIA]
-
 # Define players
 players = [Player(GREEN, 2), Player(BLUE, 1), Player(PURPLE, 1)]
 scoreboard = Scoreboard(players)
@@ -361,16 +349,40 @@ current_player = players[0]
 # Define routes
 routes = [
     Route([GRONINGEN, EMDEN], 3),
-    Route([HALLE, MAGDEBURG], 3),
-    # Route([GRONINGEN, BRAZIL], 3),
-    # Route([CHINA, AUSTRALIA], 3),
-    # Route([BRAZIL, EGYPT], 3),
-    # Route([EGYPT, AUSTRALIA], 3),
+    Route([EMDEN, OSNABRUCK], 4),
+    Route([KAMPEN, OSNABRUCK], 2),
+    Route([KAMPEN, ARNHEIM], 3),
+    Route([ARNHEIM, DUISBURG], 3),
+    Route([ARNHEIM, MUNSTER], 3),
+    Route([DUISBURG, DORTMUND], 2),
+    Route([OSNABRUCK, BREMEN], 3, True),
+    Route([MUNSTER, MINDEN], 3),
+    Route([BREMEN, MINDEN], 3),
+    Route([MINDEN, PADERBORN], 3),
+    Route([DORTMUND, PADERBORN], 3),
+    Route([COELLEN, WARBURG], 4),
+    Route([PADERBORN, WARBURG], 3),
+    Route([STADE, HAMBURG], 3),
+    Route([BREMEN, HAMBURG], 4),
+    Route([MINDEN, HANNOVER], 3),
+    Route([BREMEN, HANNOVER], 3),
+    Route([PADERBORN, HILDESHEIM], 3),
+    Route([HANNOVER, LUNEBURG], 3),
+    Route([MINDEN, BRUNSWICK], 4),
+    Route([LUBECK, HAMBURG], 3),
+    Route([LUNEBURG, HAMBURG], 4),
+    Route([LUNEBURG, PERLEBERG], 3, True),
+    Route([STENDAL, PERLEBERG], 3),
+    Route([STENDAL, BRUNSWICK], 4),
+    Route([STENDAL, MAGDEBURG], 3),
+    Route([GOSLAR, MAGDEBURG], 2),
+    Route([GOSLAR, QUEDLINBURG], 4),
+    Route([GOSLAR, HILDESHEIM], 3, True),
+    Route([HALLE, QUEDLINBURG], 4),
+    Route([GOTTINGEN, QUEDLINBURG], 3),
 ]
 
-
 def redraw_window():
-    win.fill(TAN)
     # Draw scoreboard
     scoreboard.draw(win)
 
@@ -517,20 +529,14 @@ def handle_click(pos, button):
                             if empty_post:
                                 empty_post.color = displaced_player_color
                                 break
-                    if route.is_complete():  # check if the route is complete after displacing a post
-                        score_route(route)
-                        for player in players:
-                            if player.score >= 3:
-                                end_game(player)
                     return  # an action was performed, so return
 
-    for city in [GRONINGEN, EMDEN, CHINA, BRAZIL, EGYPT, AUSTRALIA]:  # iterate through cities
-        if abs(city.pos[0]-pos[0]) < CITY_RADIUS and abs(city.pos[1]-pos[1]) < CITY_RADIUS and button == 1 and current_player.actions > 0:
+    for city in cities:  # iterate through cities
+        if (city.pos[0] < pos[0] < city.pos[0] + city.width) and (city.pos[1] < pos[1] < city.pos[1] + city.height) and button == 1 and current_player.actions > 0:
             for route in city.routes:
                 if route.is_controlled_by(current_player) and city.controller is None:  # check if route is controlled and city is unclaimed
                     score_route(route)  # score the route before claiming the city
-                    city.add_controller(current_player)
-                    city.color = current_player.color  # change color of the city
+                    city.update_office_ownership(current_player, current_player.color)
                     for post in route.posts:
                         if post.color == current_player.color:  # remove player's posts from route
                             post.color = BLACK
@@ -555,7 +561,7 @@ while True:
         elif event.type == pygame.MOUSEBUTTONUP:
             handle_click(pygame.mouse.get_pos(), event.button)
 
-    win.fill(BLACK)  # Clear the screen (fill it with BLACK)
+    # win.fill(BLACK)  # Clear the screen (fill it with BLACK)
     redraw_window()
     scoreboard.draw(win)  # Draw the scoreboard on the window
     pygame.display.flip()  # Update the screen
