@@ -3,6 +3,7 @@ import sys
 from map_data.map1 import Map1
 from player_info.player_attributes import Player, PlayerBoard
 from map_data import constants
+from drawing.drawing_utils import draw_shape, draw_text, draw_line
 
 selected_map = Map1()
 WIDTH = selected_map.map_width+800
@@ -34,7 +35,7 @@ class Scoreboard:
             window.blit(score_text, self.score_positions[i])
 
 for route in routes:
-    pygame.draw.line(win, constants.WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10)
+    draw_line(win, constants.WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
 
 # Define players
 players = [Player(constants.GREEN), Player(constants.BLUE), Player(constants.PURPLE), Player(constants.PINK), Player(constants.WHITE)]
@@ -50,36 +51,33 @@ def redraw_window():
         rect_x = city.pos[0]
         rect_y = city.pos[1]
 
-        # Draw the city itself with the calculated RECT_WIDTH and RECT_HEIGHT
-        pygame.draw.rect(win, city.color, (rect_x, rect_y, city.width, city.height))
-        text = font.render(city.name, True, constants.BLACK)
-        text_width = text.get_width()
+        # Use draw_shape function to draw the city rectangle with a border
+        draw_shape(win, "rectangle", city.color, rect_x, rect_y, city.width, city.height)
+        # Calculate text position to place it just below the city rectangle
+        text_width = font.size(city.name)[0]
         text_x = city.pos[0] + (city.width - text_width) // 2
-        text_y = city.pos[1] + city.height  # Place text just below the city rectangle
-        win.blit(text, (text_x, text_y))
+        text_y = city.pos[1] + city.height
+
+        # Use draw_text function to render the city name below the rectangle
+        draw_text(win, city.name, text_x, text_y, font, constants.BLACK)
 
         start_x = rect_x + constants.BUFFER  # Starting x-coordinate within the rectangle
         start_y = rect_y + city.height // 2 - constants.SQUARE_SIZE // 2  # Centered vertically in the rectangle
 
         for office in city.offices:
             if office.office_type == "square":
-                # Calculate the x-coordinate of the square office
-                square_x = start_x
-                square_y = rect_y + city.height // 2 - constants.SQUARE_SIZE // 2
-                pygame.draw.rect(win, office.color, (square_x, square_y, constants.SQUARE_SIZE, constants.SQUARE_SIZE))
-                # Update the starting x-coordinate for the next office (square)
+                draw_shape(win, "rectangle", office.color, start_x, start_y, constants.SQUARE_SIZE, constants.SQUARE_SIZE)
                 start_x += constants.SQUARE_SIZE + constants.SPACING
-            else:
-                # Calculate the x-coordinate of the circle office
+
+            else:  
                 circle_x = start_x + constants.CIRCLE_RADIUS
                 circle_y = start_y + constants.SQUARE_SIZE // 2
-                pygame.draw.circle(win, office.color, (circle_x, circle_y), constants.CIRCLE_RADIUS)
-                # Update the starting x-coordinate for the next office (circle)
+                draw_shape(win, "circle", office.color, circle_x, circle_y, constants.CIRCLE_RADIUS)
                 start_x += constants.CIRCLE_RADIUS * 2 + constants.SPACING
-            for route in routes:
-                for post in route.posts:
-                    # print(f"Drawing post at position {post.pos}")
-                    pygame.draw.circle(win, post.color, post.pos, constants.POST_RADIUS)
+
+        for route in routes:
+            for post in route.posts:
+                draw_shape(win, "circle", post.color, post.pos[0], post.pos[1], constants.POST_RADIUS)
 
     text_str = f"Actions: {current_player.actions}"
     combined_text = font.render(text_str, True, constants.COLOR_NAMES[current_player.color])
