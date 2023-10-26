@@ -1,11 +1,11 @@
 import pygame
 import sys
 from map_data.map1 import Map1
+from player_info.player_attributes import Player, PlayerBoard
 from map_data import constants
 
 selected_map = Map1()
-print("Map initialized")
-WIDTH = selected_map.map_width
+WIDTH = selected_map.map_width+800
 HEIGHT = selected_map.map_height
 cities = selected_map.cities
 routes = selected_map.routes
@@ -16,18 +16,12 @@ win = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Hansa Sample Game')
 font = pygame.font.Font(None, 36)
 win.fill(constants.TAN)
-
-class Player:
-    def __init__(self, color, actions):
-        self.color = color
-        self.actions = actions
-        self.score = 0  # Initialize score to 0 for each player
-        
+     
 class Scoreboard:
     def __init__(self, players):
         self.players = players
         self.font = pygame.font.SysFont(None, 36)
-        self.score_positions = [(WIDTH - 150, i*40 + 20) for i in range(len(players))]
+        self.score_positions = [(WIDTH - 800, i*40 + 20) for i in range(len(players))]
         
     def draw(self, window):
         # Clear the area for the scoreboard
@@ -43,8 +37,10 @@ for route in routes:
     pygame.draw.line(win, constants.WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10)
 
 # Define players
-players = [Player(constants.GREEN, 2), Player(constants.BLUE, 1), Player(constants.PURPLE, 1)]
-scoreboard = Scoreboard(players)
+players = [Player(constants.GREEN), Player(constants.BLUE), Player(constants.PURPLE), Player(constants.PINK), Player(constants.WHITE)]
+# scoreboard = Scoreboard(players)
+# player_boards = [PlayerBoard(WIDTH-800, i * 220) for i in range(len(players))]
+player_boards = [PlayerBoard(WIDTH-800, i * 220, player.color) for i, player in enumerate(players)]
 current_player = players[0]
 
 def redraw_window():
@@ -210,6 +206,9 @@ while True:
             handle_click(pygame.mouse.get_pos(), event.button)
 
     redraw_window()
-    scoreboard.draw(win)  # Draw the scoreboard on the window
+    # scoreboard.draw(win)  # Draw the scoreboard on the window
+    # In the game loop:
+    for board in player_boards:
+        board.draw(win)
     pygame.display.flip()  # Update the screen
     pygame.time.delay(100)
