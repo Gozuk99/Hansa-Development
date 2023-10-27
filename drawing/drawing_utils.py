@@ -1,7 +1,7 @@
 import pygame
 from map_data.constants import BLACK
 
-BORDER_WIDTH = 2
+BORDER_WIDTH = 2 #black outline of shapes
 
 def draw_shape(window, shape_to_draw, color, x, y, width=None, height=None, points=None):
     
