@@ -70,23 +70,32 @@ class Player:
             self.personal_supply_squares += num_squares
         elif self.general_stock_circles + self.general_stock_squares > self.bank:
             raise Exception("The sum of general stock circles and squares exceeds the bank value.")
+    def income_action_based_on_circle_count(self, max_circles, bank, general_stock_squares):
+        button_labels = []
+        for i in range(max_circles + 1):
+            circles = i
+            squares = min(bank - circles, general_stock_squares)
+            if 0 <= squares:
+                label = f"{squares}S/{circles}C"
+                button_labels.append(label)
+        return button_labels
             
 class PlayerBoard:
-    def __init__(self, x, y, player_color, player):
+    def __init__(self, x, y, player):
         self.x = x
         self.y = y
-        self.player_color = player_color  # Set player color
         self.player = player
         self.width = 790  # adjust based on your requirement
         self.height = 200  # adjust based on your requirement
         self.font = pygame.font.SysFont(None, 32)
+        self.start_x = 0
+        self.actions_y = 0
+        self.circle_buttons = []
+        self.button_labels = []
 
     def income_action_based_on_circle_count(self, idx):
-        # Retrieve the button label based on the index
         label = self.button_labels[idx]
         num_squares, num_circles = [int(x[:-1]) for x in label.split('/')]
-        
-        # Update the player's state
         self.player.income_action(num_squares, num_circles)
 
     def draw_circle_selection_buttons(self, window):
@@ -114,16 +123,7 @@ class PlayerBoard:
         draw_text(window, "Income:", button_center_x, button_center_y, font, BLACK, centered=True)
 
         # Logic for determining which buttons to display based on the conditions
-        max_circles = min(self.player.general_stock_circles, 4)  # Considering up to 4 circles
-        self.button_labels = []
-
-        for i in range(max_circles + 1):
-            circles = i
-            squares = min(self.player.bank - circles, self.player.general_stock_squares)
-
-            if 0 <= squares:
-                label = f"{squares}S/{circles}C"
-                self.button_labels.append(label)
+        self.button_labels = self.player.income_action_based_on_circle_count(min(self.player.general_stock_circles, 4), self.player.bank, self.player.general_stock_squares)
 
         for i, label in enumerate(self.button_labels):
             if i == 0:
@@ -188,8 +188,21 @@ class PlayerBoard:
 
     def draw(self, window, current_player):
         # Draw board background with player color
-        draw_shape(window, "rectangle", self.player_color, self.x, self.y, self.width, self.height)
+        draw_shape(window, "rectangle", self.player.color, self.x, self.y, self.width, self.height)
 
+        self.draw_city_keys_section(window)
+        self.draw_privilegium_section(window)
+        self.draw_liber_sophiae_section(window)
+        self.draw_actiones_section(window)
+        self.draw_bank_section(window)
+        
+        self.draw_general_stock(window)
+        self.draw_personal_supply(window)
+
+        if self.player == current_player:
+            self.draw_circle_selection_buttons(window)
+
+    def draw_city_keys_section(self, window):
         # Draw "City Keys" section as diamonds
         for i, value in enumerate(CITY_KEYS_MAX_VALUES):
             points = [
@@ -203,6 +216,7 @@ class PlayerBoard:
         
         draw_text(window, "Keys", self.x + 10, self.y + 10 + SQUARE_SIZE + 5, self.font, BLACK)
 
+    def draw_privilegium_section(self, window):
         # Adjusted "Privilegium" section with buffer moved further down
         privilege_y = self.y + 10 + 2*SQUARE_SIZE + 10  # adjusting spacing
         colors = [WHITE, ORANGE, PINK, BLACK]
@@ -210,49 +224,47 @@ class PlayerBoard:
             draw_shape(window, "rectangle", color, self.x + 10 + i*(SQUARE_SIZE + 5), privilege_y, width=SQUARE_SIZE, height=SQUARE_SIZE)
         
         draw_text(window, "Privilege", self.x + 10, privilege_y + SQUARE_SIZE + 5, self.font, BLACK)
-            
+
+    def draw_liber_sophiae_section(self, window):
         # Draw "Liber Sophiae" section (circles)
-        start_x = self.x + 10 + len(colors)*50 + 5*(len(colors)-1) + 10  # buffer after Privilege
+        colors = [WHITE, ORANGE, PINK, BLACK]
+        self.start_x = self.x + 10 + len(colors)*50 + 5*(len(colors)-1) + 10  # buffer after Privilege
 
         circle_label = self.font.render("Liber Sophiae", True, BLACK)
         circle_section_width = len(BOOK_OF_KNOWLEDGE_MAX_VALUES) * (CIRCLE_RADIUS*2 + 5)  # total width of all circles combined
         circle_label_width = circle_label.get_width()
 
         # Adjust start_x to center the "Liber Sophiae" section
-        start_x += (circle_section_width - circle_label_width) // 2
+        self.start_x += (circle_section_width - circle_label_width) // 2
 
         for i, value in enumerate(BOOK_OF_KNOWLEDGE_MAX_VALUES):
-            draw_shape(window, "circle", WHITE, start_x + i*(CIRCLE_RADIUS*2 + 5), self.y + 10 + CIRCLE_RADIUS, width=CIRCLE_RADIUS)
-            draw_text(window, str(value), start_x + i*(CIRCLE_RADIUS*2 + 5), self.y + 10 + CIRCLE_RADIUS, self.font, BLACK, centered=True)
+            draw_shape(window, "circle", WHITE, self.start_x + i*(CIRCLE_RADIUS*2 + 5), self.y + 10 + CIRCLE_RADIUS, width=CIRCLE_RADIUS)
+            draw_text(window, str(value), self.start_x + i*(CIRCLE_RADIUS*2 + 5), self.y + 10 + CIRCLE_RADIUS, self.font, BLACK, centered=True)
 
-        draw_text(window, "Liber Sophiae", start_x-CIRCLE_RADIUS, self.y + 10 + CIRCLE_RADIUS*2 + 5, self.font, BLACK)
+        draw_text(window, "Liber Sophiae", self.start_x-CIRCLE_RADIUS, self.y + 10 + CIRCLE_RADIUS*2 + 5, self.font, BLACK)
             
-        start_x += len(BOOK_OF_KNOWLEDGE_MAX_VALUES) * (CIRCLE_RADIUS * 2 + 5) + 10
+        self.start_x += len(BOOK_OF_KNOWLEDGE_MAX_VALUES) * (CIRCLE_RADIUS * 2 + 5) + 10
+
+    def draw_actiones_section(self, window):
         # Calculate y-position for the "Actiones" section first
-        actions_y = self.y + 10
+        self.actions_y = self.y + 10
 
         # Draw "Actiones" section (squares)
         for i, value in enumerate(ACTIONS_MAX_VALUES):
-            draw_shape(window, "rectangle", WHITE, start_x + i*(SQUARE_SIZE + 5), actions_y, width=SQUARE_SIZE, height=SQUARE_SIZE)
-            draw_text(window, str(value), start_x + i*(SQUARE_SIZE + 5) + SQUARE_SIZE // 2, actions_y + SQUARE_SIZE // 2, self.font, BLACK, centered=True)
+            draw_shape(window, "rectangle", WHITE, self.start_x + i*(SQUARE_SIZE + 5), self.actions_y, width=SQUARE_SIZE, height=SQUARE_SIZE)
+            draw_text(window, str(value), self.start_x + i*(SQUARE_SIZE + 5) + SQUARE_SIZE // 2, self.actions_y + SQUARE_SIZE // 2, self.font, BLACK, centered=True)
 
-        draw_text(window, "Actiones", start_x, actions_y + SQUARE_SIZE + 5, self.font, BLACK)
-
+        draw_text(window, "Actiones", self.start_x, self.actions_y + SQUARE_SIZE + 5, self.font, BLACK)
+    
+    def draw_bank_section(self, window):
         # Calculate y-position for the "Bank" section based on "Actiones" section height
-        bank_y = actions_y + SQUARE_SIZE + 5 + self.font.get_height() + 5
+        bank_y = self.actions_y + SQUARE_SIZE + 5 + self.font.get_height() + 5
 
         # Draw "Bank" section (squares)
         for i, value in enumerate(BANK_MAX_VALUES):
-            draw_shape(window, "rectangle", WHITE, start_x + i*(SQUARE_SIZE + 5), bank_y, width=SQUARE_SIZE, height=SQUARE_SIZE)
-            draw_text(window, str(value), start_x + i*(SQUARE_SIZE + 5) + SQUARE_SIZE // 2, bank_y + SQUARE_SIZE // 2, self.font, BLACK, centered=True)
+            draw_shape(window, "rectangle", WHITE, self.start_x + i*(SQUARE_SIZE + 5), bank_y, width=SQUARE_SIZE, height=SQUARE_SIZE)
+            draw_text(window, str(value), self.start_x + i*(SQUARE_SIZE + 5) + SQUARE_SIZE // 2, bank_y + SQUARE_SIZE // 2, self.font, BLACK, centered=True)
 
-        draw_text(window, "Bank", start_x, bank_y + SQUARE_SIZE + 5, self.font, BLACK)
-
-        self.draw_general_stock(window)
-        self.draw_personal_supply(window)
-
-        # Inside the draw() method
-        if self.player == current_player:
-            self.draw_circle_selection_buttons(window)
+        draw_text(window, "Bank", self.start_x, bank_y + SQUARE_SIZE + 5, self.font, BLACK)
 
     # More methods for PlayerBoard operations can be added here.

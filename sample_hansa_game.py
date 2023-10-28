@@ -39,7 +39,7 @@ for route in routes:
 
 # Define players
 players = [Player(constants.GREEN, 1), Player(constants.BLUE, 2), Player(constants.PURPLE, 3), Player(constants.RED, 4), Player(constants.YELLOW, 5)]
-player_boards = [PlayerBoard(WIDTH-800, i * 220, player.color, player) for i, player in enumerate(players)]
+player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(players)]
 current_player = players[0]
 
 def redraw_window():
