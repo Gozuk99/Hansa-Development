@@ -4,27 +4,33 @@ SQUARE_SIZE = 26
 BUFFER = 10  # Buffer around the rectangle
 SPACING = 10  # Increased spacing between the shapes
 
-# Color variables
-WHITE = (255, 255, 255)
-ORANGE = (255, 165, 0)
+# Alphabetized Color variables
 BLACK = (0, 0, 0)
-GREY = (192, 192, 192)
-PINK = (255, 192, 203)
-TAN = (210, 180, 140)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
-PURPLE = (128, 0, 128)
 BLACKISH_BROWN = (130, 100, 80)
+BLUE = (0, 0, 255)
+GREEN = (0, 255, 0)
+GREY = (192, 192, 192)
+ORANGE = (255, 165, 0)
+PINK = (255, 192, 203)
+PURPLE = (128, 0, 128)
+RED = (255, 0, 0)
+TAN = (210, 180, 140)
+WHITE = (255, 255, 255)
+YELLOW = (255, 255, 0)
 
 COLOR_NAMES = {
-    WHITE: "WHITE",
-    GREEN: "GREEN",
-    BLUE: "BLUE",
-    PURPLE: "PURPLE",
-    GREY: "GREY",
-    PINK: "PINK",
     BLACK: "BLACK",
+    BLACKISH_BROWN: "BLACKISH_BROWN",
+    BLUE: "BLUE",
+    GREEN: "GREEN",
+    GREY: "GREY",
+    ORANGE: "ORANGE",
+    PINK: "PINK",
+    PURPLE: "PURPLE",
+    RED: "RED",
     TAN: "TAN",
+    WHITE: "WHITE",
+    YELLOW: "YELLOW"
 }
 
 CITY_KEYS_MAX_VALUES = [1, 2, 2, 3, 4]

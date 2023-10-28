@@ -7,18 +7,12 @@ def create_combo(x, y):
     circle_radius = 20
     square_size = 26
 
-    circle = canvas.create_oval(
-        x - circle_radius, y - circle_radius, x + circle_radius, y + circle_radius,
-        fill="blue"
-    )
+    circle = canvas.create_oval(x - circle_radius, y - circle_radius, x + circle_radius, y + circle_radius, fill="white")
 
     square_x = x - square_size // 2
     square_y = y - square_size // 2
 
-    square = canvas.create_rectangle(
-        square_x, square_y, square_x + square_size, square_y + square_size,
-        fill="red"
-    )
+    square = canvas.create_rectangle(square_x, square_y, square_x + square_size, square_y + square_size, fill="black")
 
     combo = {
         "circle_x": x,

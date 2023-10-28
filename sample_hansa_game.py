@@ -38,7 +38,7 @@ for route in routes:
     draw_line(win, constants.WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
 
 # Define players
-players = [Player(constants.GREEN, 1), Player(constants.BLUE, 2), Player(constants.PURPLE, 3), Player(constants.PINK, 4), Player(constants.WHITE, 5)]
+players = [Player(constants.GREEN, 1), Player(constants.BLUE, 2), Player(constants.PURPLE, 3), Player(constants.RED, 4), Player(constants.YELLOW, 5)]
 player_boards = [PlayerBoard(WIDTH-800, i * 220, player.color, player) for i, player in enumerate(players)]
 current_player = players[0]
 
@@ -73,9 +73,16 @@ def redraw_window():
                 draw_shape(win, "circle", office.color, circle_x, circle_y, constants.CIRCLE_RADIUS)
                 start_x += constants.CIRCLE_RADIUS * 2 + constants.SPACING
 
-        for route in routes:
-            for post in route.posts:
-                draw_shape(win, "circle", post.color, post.pos[0], post.pos[1], constants.POST_RADIUS)
+    for route in routes:
+        for post in route.posts:
+            post_x, post_y = post.pos
+
+            # Draw the circle
+            draw_shape(win, "circle", post.circle_color, post_x, post_y, width=constants.CIRCLE_RADIUS)
+
+            # Draw the square if there is no owner or if the owner has placed a square piece
+            if post.owner_piece_shape is None or post.owner_piece_shape == "square":
+                draw_shape(win, "rectangle", post.square_color, post_x - constants.SQUARE_SIZE // 2, post_y - constants.SQUARE_SIZE // 2, width=constants.SQUARE_SIZE, height=constants.SQUARE_SIZE)
 
     text_str = f"Actions: {current_player.actions}"
     combined_text = font.render(text_str, True, constants.COLOR_NAMES[current_player.color])
@@ -143,32 +150,86 @@ def handle_click(pos, button):
     for route in routes:
         for post in route.posts:
             if abs(post.pos[0]-pos[0]) < constants.POST_RADIUS and abs(post.pos[1]-pos[1]) < constants.POST_RADIUS:
-                if button == 1 and post.color == constants.BLACK and current_player.actions > 0:  # left click
-                    post.color = current_player.color
-                    current_player.actions -= 1
-                    if current_player.actions == 0:
-                        next_player()
-                    return  # an action was performed, so return
+                # No one owns this post, it's free to be claimed.
+                if post.owner is None:
+                    # Place a circle or square based on left or right click.
+                    if button == 1:  # left click for square
+                        if (post.required_shape is None or post.required_shape == "square") and current_player.personal_supply_squares > 0:
+                            post.square_color = current_player.color
+                            post.owner = current_player
+                            post.owner_piece_shape = "square"
+                            current_player.actions -= 1
+                            current_player.personal_supply_squares -= 1
+                            if current_player.actions == 0:
+                                next_player()
+                            return
 
-                elif button == 3 and post.color != constants.BLACK and post.color != current_player.color and current_player.actions > 0:  # right click
-                    displaced_player_color = post.color
-                    post.color = current_player.color
+                    elif button == 3:  # right click for circle
+                        if (post.required_shape is None or post.required_shape == "circle") and current_player.personal_supply_circles > 0:
+                            post.circle_color = current_player.color
+                            post.square_color = current_player.color
+                            post.owner = current_player
+                            post.owner_piece_shape = "circle"
+                            current_player.actions -= 1
+                            current_player.personal_supply_circles -= 1
+                            if current_player.actions == 0:
+                                next_player()
+                            return
+
+                # The post is owned.
+                elif post.owner != current_player and button == 3:  # Right click on a post owned by someone else.
+                    displaced_piece_shape = post.owner_piece_shape
+
+                    # Calculate the cost to displace
+                    cost = 2 if displaced_piece_shape == "square" else 3
+
+                    if current_player.personal_supply_squares < cost:
+                        return  # Not enough squares, action cannot be performed
+
+                    displaced_player_color = post.owner.color
+
+                    post.circle_color = constants.TAN
+                    post.square_color = current_player.color
+                    post.owner_piece_shape = "square"
+                    post.owner = current_player
                     current_player.actions -= 1
+                    current_player.general_stock_squares += (cost - 1)  # Return the extra squares used to general supply
+                    current_player.personal_supply_squares -= cost
+
                     if current_player.actions == 0:
                         next_player()
+
                     displaced = False
                     for city in route.cities:
                         empty_post = find_empty_post_in_adjacent_routes(city, route)
                         if empty_post:
-                            empty_post.color = displaced_player_color
+                            if displaced_piece_shape == "circle":
+                                empty_post.circle_color = displaced_player_color
+                                empty_post.square_color = constants.TAN
+                            else:  # it's a square
+                                empty_post.square_color = displaced_player_color
+                                empty_post.circle_color = constants.TAN
+
+                            empty_post.owner_piece_shape = displaced_piece_shape
+                            empty_post.owner = post.owner  # Assigning the ownership of the displaced post.
                             displaced = True
                             break
+
                     if not displaced:
                         for city in route.cities:
                             empty_post = find_empty_post_in_next_level_routes(city, route)
                             if empty_post:
-                                empty_post.color = displaced_player_color
+                                if displaced_piece_shape == "circle":
+                                    empty_post.circle_color = displaced_player_color
+                                    empty_post.square_color = constants.TAN
+                                else:  # it's a square
+                                    empty_post.square_color = displaced_player_color
+                                    empty_post.circle_color = constants.TAN
+
+                                empty_post.owner_piece_shape = displaced_piece_shape
+                                empty_post.owner = post.owner  # Assigning the ownership of the displaced post.
                                 break
+
                     return  # an action was performed, so return
 
     for city in cities:  # iterate through cities

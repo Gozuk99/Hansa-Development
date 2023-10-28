@@ -1,6 +1,6 @@
 # map.py
 import pygame
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN
 
 class Map:
     def __init__(self):
@@ -130,7 +130,7 @@ class Route:
 
     def find_empty_post(self):
         for post in self.posts:
-            if post.color == BLACK:
+            if post.owner == None:
                 return post
         return None
     
@@ -144,6 +144,10 @@ class Route:
         return True
     
 class Post:
-    def __init__(self, pos):
-        self.pos = pos
-        self.color = BLACK
+    def __init__(self, position, owner=None, circle_color=BLACK, square_color=BLACK, required_shape=None):
+        self.pos = position
+        self.owner = owner  # This represents the player who owns the post.
+        self.owner_piece_shape = None  # This represents the player who owns the post.
+        self.circle_color = TAN
+        self.square_color = TAN
+        self.required_shape = required_shape  # can be "circle", "square", or None if no specific requirement
