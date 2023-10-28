@@ -1,11 +1,12 @@
 # player_attributes.py
 
 import pygame
+import sys
 from map_data.constants import SQUARE_SIZE, CIRCLE_RADIUS, WHITE, ORANGE, PINK, BLACK, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES
 from drawing.drawing_utils import draw_shape, draw_text
 
 class Player:
-    def __init__(self, color):
+    def __init__(self, color, order):
         self.color = color
         self.score = 0  # Initial score
         # The silver plate to store bonus markers for the end of the turn
@@ -17,6 +18,14 @@ class Player:
         self.book = 2
         self.actions = 2
         self.bank = 3
+
+        # Setting the order-based attributes for general_stock and personal_supply
+        self.general_stock_squares = 7 - order  
+        self.general_stock_circles = 0  
+
+        # Personal supply attributes (distinct circles and squares)
+        self.personal_supply_squares = 4 + order # Squares in personal supply
+        self.personal_supply_circles = 1 # Each player always starts with 1 circle in personal supply
 
     def add_bonus_marker(self, marker):
         self.bonus_markers.append(marker)
@@ -52,18 +61,132 @@ class Player:
         else:
             print("Bank is already at its maximum level!")
 
-    # Other relevant methods like calculate_score, move_tradesman, etc. can be added here
-
+    def income_action(self, num_squares=0, num_circles=0):
+        if num_circles <= self.general_stock_circles and num_squares <= self.general_stock_squares:
+            self.general_stock_circles -= num_circles
+            self.personal_supply_circles += num_circles
+            
+            self.general_stock_squares -= num_squares
+            self.personal_supply_squares += num_squares
+        elif self.general_stock_circles + self.general_stock_squares > self.bank:
+            raise Exception("The sum of general stock circles and squares exceeds the bank value.")
+            
 class PlayerBoard:
-    def __init__(self, x, y, player_color):
+    def __init__(self, x, y, player_color, player):
         self.x = x
         self.y = y
         self.player_color = player_color  # Set player color
+        self.player = player
         self.width = 790  # adjust based on your requirement
         self.height = 200  # adjust based on your requirement
         self.font = pygame.font.SysFont(None, 32)
-    
-    def draw(self, window):
+
+    def income_action_based_on_circle_count(self, idx):
+        # Retrieve the button label based on the index
+        label = self.button_labels[idx]
+        num_squares, num_circles = [int(x[:-1]) for x in label.split('/')]
+        
+        # Update the player's state
+        self.player.income_action(num_squares, num_circles)
+
+    def draw_circle_selection_buttons(self, window):
+        # Starting position for the Income label
+        income_x = self.x + self.width - 220
+        income_y = self.y + self.height - 70
+
+        # Button dimensions and spacing
+        button_width = 60
+        button_height = 30
+        horizontal_spacing = 70  # Spacing between columns
+        vertical_spacing = 35    # Spacing between rows
+
+        # Clear any previously drawn buttons
+        self.circle_buttons = []
+        
+        # Use the `draw_text` function for centering on both X and Y axis
+        font = pygame.font.SysFont(None, 28)
+
+        # Calculate the center coordinates of the button
+        button_center_x = income_x + button_width / 2
+        button_center_y = income_y + button_height / 2
+
+        # Draw the Income text centered on both axes
+        draw_text(window, "Income:", button_center_x, button_center_y, font, BLACK, centered=True)
+
+        # Logic for determining which buttons to display based on the conditions
+        max_circles = min(self.player.general_stock_circles, 4)  # Considering up to 4 circles
+        self.button_labels = []
+
+        for i in range(max_circles + 1):
+            circles = i
+            squares = min(self.player.bank - circles, self.player.general_stock_squares)
+
+            if 0 <= squares:
+                label = f"{squares}S/{circles}C"
+                self.button_labels.append(label)
+
+        for i, label in enumerate(self.button_labels):
+            if i == 0:
+                button_x = income_x
+                button_y = income_y + vertical_spacing
+            elif i == 1:
+                button_x = income_x + horizontal_spacing
+                button_y = income_y
+            elif i == 2:
+                button_x = income_x + horizontal_spacing
+                button_y = income_y + vertical_spacing
+            elif i == 3:
+                button_x = income_x + 2 * horizontal_spacing
+                button_y = income_y
+            elif i == 4:
+                button_x = income_x + 2 * horizontal_spacing
+                button_y = income_y + vertical_spacing
+
+            # Draw the button
+            button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+            self.circle_buttons.append(button_rect)
+            draw_shape(window, 'rectangle', BLACK, button_x, button_y, button_width, button_height)
+
+            # Label for the button
+            draw_text(window, label, button_x + (button_width // 2), button_y + (button_height // 2), pygame.font.SysFont(None, 24), WHITE, centered=True)
+
+    def draw_general_stock(self, window):
+        x_offset = self.x + 650  # Adjust this value based on exact positioning
+        y_offset = self.y + 10  # Adjust this value based on exact positioning
+
+        # Draw 'GS:' text
+        font = pygame.font.SysFont(None, 36)
+        draw_text(window, 'GS:', x_offset, y_offset, font, BLACK)
+        
+        # Draw square for squares count with the number inside
+        x_offset += 50
+        draw_shape(window, 'rectangle', self.player.color, x_offset, y_offset, 40, 40)
+        draw_text(window, str(self.player.general_stock_squares), x_offset + 20, y_offset + 20, font, (0, 0, 0), centered=True)  # Assuming black color for numbers
+
+        # Draw circle next to square for circles count with number inside
+        x_offset += 60
+        draw_shape(window, 'circle', self.player.color, x_offset, y_offset + 20, 20) # Assuming radius is half of square side
+        draw_text(window, str(self.player.general_stock_circles), x_offset, y_offset + 20, font, (0, 0, 0), centered=True)  # Assuming black color for numbers
+        
+    def draw_personal_supply(self, window):
+        x_offset = self.x + 650  # Adjust this value based on exact positioning
+        y_offset = self.y + 80  # Positioning it further down than GS for clarity
+
+        # Draw 'PS:' text
+        font = pygame.font.SysFont(None, 36)
+        draw_text(window, 'PS:', x_offset, y_offset, font, BLACK)
+
+        # Draw square for squares count in personal supply with the number inside
+        x_offset += 50
+        draw_shape(window, 'rectangle', self.player.color, x_offset, y_offset, 40, 40)
+        draw_text(window, str(self.player.personal_supply_squares), x_offset + 20, y_offset + 20, font, (0, 0, 0), centered=True)
+
+        # Draw circle next to square for circles count in personal supply with number inside
+        x_offset += 60
+        draw_shape(window, 'circle', self.player.color, x_offset, y_offset + 20, 20)
+        draw_text(window, str(self.player.personal_supply_circles), x_offset, y_offset + 20, font, (0, 0, 0), centered=True)
+
+    def draw(self, window, current_player):
         # Draw board background with player color
         draw_shape(window, "rectangle", self.player_color, self.x, self.y, self.width, self.height)
 
@@ -125,5 +248,11 @@ class PlayerBoard:
 
         draw_text(window, "Bank", start_x, bank_y + SQUARE_SIZE + 5, self.font, BLACK)
 
+        self.draw_general_stock(window)
+        self.draw_personal_supply(window)
+
+        # Inside the draw() method
+        if self.player == current_player:
+            self.draw_circle_selection_buttons(window)
 
     # More methods for PlayerBoard operations can be added here.

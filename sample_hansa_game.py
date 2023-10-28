@@ -38,10 +38,8 @@ for route in routes:
     draw_line(win, constants.WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
 
 # Define players
-players = [Player(constants.GREEN), Player(constants.BLUE), Player(constants.PURPLE), Player(constants.PINK), Player(constants.WHITE)]
-# scoreboard = Scoreboard(players)
-# player_boards = [PlayerBoard(WIDTH-800, i * 220) for i in range(len(players))]
-player_boards = [PlayerBoard(WIDTH-800, i * 220, player.color) for i, player in enumerate(players)]
+players = [Player(constants.GREEN, 1), Player(constants.BLUE, 2), Player(constants.PURPLE, 3), Player(constants.PINK, 4), Player(constants.WHITE, 5)]
+player_boards = [PlayerBoard(WIDTH-800, i * 220, player.color, player) for i, player in enumerate(players)]
 current_player = players[0]
 
 def redraw_window():
@@ -189,7 +187,17 @@ def handle_click(pos, button):
                         if player.score >= 3:
                             end_game(player)
                     return  # an action was performed, so return
-   
+    # Check if any player board's Income Action button was clicked
+    for board in player_boards:
+        if hasattr(board, 'circle_buttons'):
+            for idx, button_rect in enumerate(board.circle_buttons):
+                if button_rect.collidepoint(pos):
+                    board.income_action_based_on_circle_count(idx)
+                    current_player.actions -= 1
+                    if current_player.actions == 0:  # if no actions left for current player
+                        next_player()  # switch to the next player
+                    return  # an action was performed, so return
+
 def next_player():
     global current_player
     current_player = players[(players.index(current_player)+1)%len(players)]
@@ -206,7 +214,8 @@ while True:
     redraw_window()
     # scoreboard.draw(win)  # Draw the scoreboard on the window
     # In the game loop:
-    for board in player_boards:
-        board.draw(win)
+    for player_board in player_boards:
+        player_board.draw(win, current_player)
+
     pygame.display.flip()  # Update the screen
     pygame.time.delay(100)

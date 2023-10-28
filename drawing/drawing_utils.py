@@ -1,7 +1,7 @@
 import pygame
 from map_data.constants import BLACK
 
-BORDER_WIDTH = 2 #black outline of shapes
+BORDER_WIDTH = 2 #black outline of
 
 def draw_shape(window, shape_to_draw, color, x, y, width=None, height=None, points=None):
     
@@ -25,7 +25,6 @@ def draw_shape(window, shape_to_draw, color, x, y, width=None, height=None, poin
     else:
         raise ValueError("Invalid shape_to_draw value.")
     
-def draw_text(window, text, x, y, font, color=BLACK, centered=False):
     """
     Draws text on the screen.
 
@@ -37,7 +36,7 @@ def draw_text(window, text, x, y, font, color=BLACK, centered=False):
     - color: the color of the text. Default is BLACK.
     - centered: a flag to determine if the text should be centered on the x, y coords. Default is False.
     """
-
+def draw_text(window, text, x, y, font, color=BLACK, centered=False):
     text_surface = font.render(text, True, color)
 
     if centered:
