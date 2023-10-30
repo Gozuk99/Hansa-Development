@@ -36,7 +36,7 @@ class City:
 
     def update_city_size_based_on_offices(self):
         num_offices = len(self.offices)
-        num_circle_offices = sum(1 for office in self.offices if office.office_type == "circle")
+        num_circle_offices = sum(1 for office in self.offices if office.shape == "circle")
         num_square_offices = num_offices - num_circle_offices
         
         # Calculate the rectangle dimensions based on the actual number of offices
@@ -85,12 +85,29 @@ class City:
             tied_players = [player for player, offices in player_counts.items() if offices == max_offices]
             self.controller = max(tied_players, key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player)))
             return max(tied_players, key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player)))
+    
+    def has_required_piece_shape(self, player, route, city):
+        """Returns True if the player has the required piece shape on the route to claim an office in the city."""
+        required_shape = city.get_next_open_office_shape()
+
+        return any(post.owner_piece_shape == required_shape and post.owner == player for post in route.posts)
+    
+    def get_next_open_office_shape(self):
+        """Return the shape of the next open office in the city. If all offices are claimed, return None."""
+        for office in self.offices:
+            if office.is_open():
+                return office.shape
+        return None
+
 class Office:
-    def __init__(self, office_type, color, awards_points):
-        self.office_type = office_type  # "circle" or "square"
+    def __init__(self, shape, color, awards_points):
+        self.shape = shape  # "circle" or "square"
         self.color = color
         self.awards_points = awards_points
         self.controller = None  # Initialize controller as None
+    def is_open(self):
+        """Return True if the office is unclaimed."""
+        return self.controller is None
 class Route:
     def __init__(self, cities, num_posts, has_bonus_marker=False):
         self.cities = cities
@@ -135,7 +152,7 @@ class Route:
         return None
     
     def is_controlled_by(self, player):
-        return all(post.color == player.color for post in self.posts)
+        return all(post.owner == player for post in self.posts)
 
     def is_complete(self):
         for post in self.posts:
@@ -151,3 +168,25 @@ class Post:
         self.circle_color = TAN
         self.square_color = TAN
         self.required_shape = required_shape  # can be "circle", "square", or None if no specific requirement
+
+    def reset_post(self, post):
+        post.circle_color = TAN
+        post.square_color = TAN
+        post.owner = None
+        post.owner_piece_shape = None
+        
+    def is_owned(self):
+        return self.owner is not None
+
+    def can_be_claimed_by(self, player, shape):
+        return self.owner is None and (self.required_shape is None or self.required_shape == shape)
+
+    def claim(self, player, shape):
+        if shape == "circle":
+            self.circle_color = player.color
+            self.square_color = TAN
+        else:
+            self.square_color = player.color
+            self.circle_color = TAN
+        self.owner = player
+        self.owner_piece_shape = shape

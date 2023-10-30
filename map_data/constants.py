@@ -1,4 +1,4 @@
-POST_RADIUS = 15
+
 CIRCLE_RADIUS = 20
 SQUARE_SIZE = 26
 BUFFER = 10  # Buffer around the rectangle
