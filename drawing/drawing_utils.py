@@ -94,7 +94,7 @@ def redraw_window(win, cities, routes, current_player, WIDTH, HEIGHT):
             if post.owner_piece_shape is None or post.owner_piece_shape == "square":
                 draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, width=SQUARE_SIZE, height=SQUARE_SIZE)
 
-    text_str = f"Actions: {current_player.actions}"
+    text_str = f"Actions: {current_player.actions_remaining}"
     combined_text = font.render(text_str, True, COLOR_NAMES[current_player.color])
 
     # Determine the position and size of the text area

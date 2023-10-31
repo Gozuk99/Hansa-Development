@@ -1,6 +1,7 @@
 # map.py
 import pygame
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK
+from drawing.drawing_utils import draw_shape, draw_text
 
 class Map:
     def __init__(self):
@@ -17,13 +18,17 @@ class City:
         self.width = 0
         self.height = 0
         self.midpoint = (0, 0)  # Initialize midpoint with (0, 0)
+        self.upgrade_city_type = None
 
     def add_route(self, route):
         self.routes.append(route)
 
     def change_color(self, new_color):
         self.color = new_color
-    
+
+    def assign_upgrade_type(self, upgrade_type):
+        self.upgrade_city_type =upgrade_type
+
     def add_office(self, office):
         self.offices.append(office)
 
@@ -99,6 +104,23 @@ class City:
                 return office.shape
         return None
 
+class Upgrade:
+    def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):
+        self.city_name = city_name
+        self.upgrade_type = upgrade_type
+        self.x_pos = x_pos
+        self.y_pos = y_pos
+        self.width = width
+        self.height = height
+
+    def draw_upgrades_on_map(self, window):
+        font = pygame.font.SysFont(None, 28)
+        draw_shape(window, "rectangle", YELLOW, self.x_pos, self.y_pos, width=self.width, height=self.height)
+
+        x_font_centered = self.x_pos + (self.width / 2)
+        y_font_centered = self.y_pos + (self.height / 2)
+        draw_text(window, self.upgrade_type, x_font_centered, y_font_centered, font, color=BLACK, centered=True)
+
 class Office:
     def __init__(self, shape, color, awards_points):
         self.shape = shape  # "circle" or "square"
@@ -108,6 +130,7 @@ class Office:
     def is_open(self):
         """Return True if the office is unclaimed."""
         return self.controller is None
+
 class Route:
     def __init__(self, cities, num_posts, has_bonus_marker=False):
         self.cities = cities
@@ -169,11 +192,11 @@ class Post:
         self.square_color = TAN
         self.required_shape = required_shape  # can be "circle", "square", or None if no specific requirement
 
-    def reset_post(self, post):
-        post.circle_color = TAN
-        post.square_color = TAN
-        post.owner = None
-        post.owner_piece_shape = None
+    def reset_post(self):
+        self.circle_color = TAN
+        self.square_color = TAN
+        self.owner = None
+        self.owner_piece_shape = None
 
     def is_owned(self):
         return self.owner is not None
@@ -193,10 +216,10 @@ class Post:
     
     def DEBUG_print_post_details(self):
         print(f"Post Details!!!")
+        print(f"Required Shape {self.required_shape}")
         print(f"Post {self.pos}")
-        print(f"Owner {COLOR_NAMES[self.owner.color]}")
         print(f"Owner Piece Shape {self.owner_piece_shape}")
+        print(f"Owner {COLOR_NAMES[self.owner.color]}")
         print(f"Circle Color {COLOR_NAMES[self.circle_color]}")
         print(f"Square Color {COLOR_NAMES[self.square_color]}")
-        print(f"Required Shape {self.required_shape}")
         

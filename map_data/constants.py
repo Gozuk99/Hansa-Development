@@ -34,7 +34,7 @@ COLOR_NAMES = {
 }
 
 CITY_KEYS_MAX_VALUES = [1, 2, 2, 3, 4]
-ACTIONS_MAX_VALUES = [2, 3, 3, 4, 4, 5]
 PRIVILEGE_COLORS = ["white", "orange", "pink", "black"]
 BOOK_OF_KNOWLEDGE_MAX_VALUES = [2, 3, 4, 5]
-BANK_MAX_VALUES = [3, 4, 7, "C"]
+ACTIONS_MAX_VALUES = [2, 3, 3, 4, 4, 5]
+BANK_MAX_VALUES = [3, 5, 7, "C"]

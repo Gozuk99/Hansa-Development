@@ -1,6 +1,6 @@
 # map1.py
 import pygame
-from map_data.map_attributes import Map, City, Office, Route
+from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from map_data.constants import BLACKISH_BROWN
 
 class Map1(Map):
@@ -8,6 +8,7 @@ class Map1(Map):
         super().__init__()  # Call the parent class constructor
         self.cities = []
         self.routes = []
+        self.upgrades = []
         self.create_cities_and_routes()  # Populate cities, offices, and routes etc., specifically for Map1
 
         self.map_width = 1800
@@ -19,6 +20,7 @@ class Map1(Map):
         Groningen = City('Groningen', (115, 210), BLACKISH_BROWN)
         Groningen.add_office(Office("square", "grey", True))
         Groningen.add_office(Office("circle", "orange", False))
+        Groningen.assign_upgrade_type('Book')
         self.cities.append(Groningen)
 
         Emden = City('Emden', (476, 207), BLACKISH_BROWN)
@@ -86,6 +88,7 @@ class Map1(Map):
 
         Stade = City('Stade', (934, 138), BLACKISH_BROWN)
         Stade.add_office(Office("circle", "grey", True))
+        Stade.assign_upgrade_type('Privilege')
         self.cities.append(Stade)
 
         Hannover = City('Hannover', (1049, 499), BLACKISH_BROWN)
@@ -101,6 +104,7 @@ class Map1(Map):
         Gottingen = City('Gottingen', (1014, 1075), BLACKISH_BROWN)
         Gottingen.add_office(Office("square", "grey", False))
         Gottingen.add_office(Office("square", "orange", False))
+        Gottingen.assign_upgrade_type('Actions')
         self.cities.append(Gottingen)
 
         Quedlinburg = City('Quedlinburg', (1405, 983), BLACKISH_BROWN)
@@ -129,6 +133,7 @@ class Map1(Map):
         Lubeck = City('Lubeck', (1540, 122), BLACKISH_BROWN)
         Lubeck.add_office(Office("square", "grey", True))
         Lubeck.add_office(Office("square", "pink", False))
+        Lubeck.assign_upgrade_type('Bank')
         self.cities.append(Lubeck)
 
         Perleberg = City('Perleberg', (1574, 308), BLACKISH_BROWN)
@@ -151,11 +156,21 @@ class Map1(Map):
         Halle = City('Halle', (1544, 1063), BLACKISH_BROWN)
         Halle.add_office(Office("square", "grey", True))
         Halle.add_office(Office("square", "orange", False))
+        Halle.assign_upgrade_type('Keys')
+        
         self.cities.append(Halle)
 
         for city in self.cities:
             city.update_city_size_based_on_offices()
 
+        #Upgrades 
+        UPGRADE_Y_AXIS_OFFSET = 50
+        self.upgrades.append(Upgrade('Halle', 'Keys', Halle.pos[0], Halle.pos[1]-UPGRADE_Y_AXIS_OFFSET, width=Halle.width, height=Halle.height))
+        self.upgrades.append(Upgrade('Stade', 'Privilege', Stade.pos[0], Stade.pos[1]-UPGRADE_Y_AXIS_OFFSET, width=Stade.width, height=Stade.height))
+        self.upgrades.append(Upgrade('Groningen', 'Book', Groningen.pos[0], Groningen.pos[1]-UPGRADE_Y_AXIS_OFFSET, width=Groningen.width, height=Groningen.height))
+        self.upgrades.append(Upgrade('Gottingen', 'Actions', Gottingen.pos[0], Gottingen.pos[1]-UPGRADE_Y_AXIS_OFFSET, width=Gottingen.width, height=Gottingen.height))
+        self.upgrades.append(Upgrade('Lubeck', 'Bank', Lubeck.pos[0], Lubeck.pos[1]-UPGRADE_Y_AXIS_OFFSET, width=Lubeck.width, height=Lubeck.height))
+        
         # Routes
         self.routes.append(Route([Groningen, Emden], 3))
         self.routes.append(Route([Emden, Osnabruck], 4))
@@ -189,4 +204,3 @@ class Map1(Map):
         self.routes.append(Route([Goslar, Hildesheim], 3, True))
         self.routes.append(Route([Halle, Quedlinburg], 4))
         self.routes.append(Route([Gottingen, Quedlinburg], 3))
-

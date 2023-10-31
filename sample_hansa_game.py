@@ -1,7 +1,7 @@
 import pygame
 import sys
 from map_data.map1 import Map1
-from player_info.player_attributes import Player, PlayerBoard
+from player_info.player_attributes import Player, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES
 from map_data.map_attributes import Post, City
 from drawing.drawing_utils import draw_line, redraw_window, draw_end_game
@@ -11,6 +11,7 @@ WIDTH = selected_map.map_width+800
 HEIGHT = selected_map.map_height
 cities = selected_map.cities
 routes = selected_map.routes
+upgrade_cities = selected_map.upgrades
 
 pygame.init()
 
@@ -20,11 +21,14 @@ win.fill(TAN)
 
 for route in routes:
     draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
+for upgrade_types in upgrade_cities:
+    upgrade_types.draw_upgrades_on_map(win)
 
 # Define players
 players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3), Player(RED, 4), Player(YELLOW, 5)]
 player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(players)]
 current_player = players[0]
+current_player.actions_remaining = current_player.actions
 
 def find_empty_post_in_adjacent_routes(city, route_to_exclude):
     for adjacent_route in city.routes:
@@ -84,6 +88,51 @@ def handle_click(pos, button):
         elif button == 2:  # middle click
                 post.DEBUG_print_post_details()
         return
+    for upgrade in upgrade_cities:
+        if ((upgrade.x_pos < pos[0] < upgrade.x_pos + upgrade.width) and
+            (upgrade.y_pos < pos[1] < upgrade.y_pos + upgrade.height) and
+            button == 1 and current_player.actions > 0):
+
+            # Check if the current player controls a route to the city the upgrade is attached to
+            associated_city = next(city for city in cities if city.name == upgrade.city_name)
+            
+            # Determine if any route to the city is controlled by the current player
+            if any(route.is_controlled_by(current_player) for route in associated_city.routes):
+                print(f"Route(s) IS controlled by current_player: {COLOR_NAMES[current_player.color]}")
+                
+                # Use the UPGRADE_METHODS_MAP to retrieve the correct upgrade method
+                method_name = UPGRADE_METHODS_MAP[upgrade.upgrade_type.lower()]
+
+                # Check if the current value is already at its maximum
+                current_value = getattr(current_player, upgrade.upgrade_type.lower())
+                max_value = UPGRADE_MAX_VALUES.get(upgrade.upgrade_type.lower())
+
+                if current_value != max_value:
+                    # Deduct action from player
+                    current_player.actions_remaining -= 1
+
+                    # Perform the upgrade
+                    upgrade_function = getattr(current_player, method_name)
+                    upgrade_function()
+
+                    # Increment supplies based on the type of upgrade
+                    if upgrade.upgrade_type.lower() in ["keys_prov", "actions", "bank"]:
+                        current_player.personal_supply_squares += 1
+                    elif upgrade.upgrade_type.lower() == "book":
+                        current_player.personal_supply_circles += 1
+                    
+                    # Reset all the posts in the route controlled by the current player
+                    for route in associated_city.routes:
+                        for post in route.posts:
+                            if post.owner == current_player:
+                                post.reset_post()
+
+                    check_and_switch_player()
+
+                else:
+                    print(f"{upgrade.upgrade_type} is already at its maximum value for player {COLOR_NAMES[current_player.color]}. Action is invalid.")
+            else:
+                print(f"Route(s) not controlled by current_player: {COLOR_NAMES[current_player.color]}")
 
     for city in cities:  # iterate through cities
         if ((city.pos[0] < pos[0] < city.pos[0] + city.width) and
@@ -110,9 +159,9 @@ def handle_click(pos, button):
                 city.update_office_ownership(current_player, current_player.color)
                 for post in route.posts:
                     if post.owner == current_player:
-                        post.reset_post(post)
+                        post.reset_post()
 
-                current_player.actions -= 1
+                current_player.actions_remaining -= 1
                 check_and_switch_player()
 
                 for player in players:
@@ -126,48 +175,51 @@ def handle_click(pos, button):
             for idx, button_rect in enumerate(board.circle_buttons):
                 if button_rect.collidepoint(pos):
                     board.income_action_based_on_circle_count(idx)
-                    current_player.actions -= 1
+                    current_player.actions_remaining -= 1
                     check_and_switch_player()
                     return
 
 def handle_displacement(post, route, displacing_piece_shape):
     # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
+
     # Calculate the cost to displace
     cost = 2 if displaced_piece_shape == "square" else 3
 
-    # Check if the current player has the required pieces
+    # Check if the current player has enough tradesmen
     if current_player.personal_supply_squares + current_player.personal_supply_circles < cost:
-        return  # Not enough pieces, action cannot be performed
+        return  # Not enough tradesmen, action cannot be performed
 
     displaced_player = post.owner
     displaced_player_color = post.owner.color
 
-    # Depending on the click type, decide the shape and color to place on the post
+    # Handle the cost of displacement with priority to squares
+    squares_to_pay = min(current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
+    circles_to_pay = cost - 1 - squares_to_pay
+
+    current_player.personal_supply_squares -= squares_to_pay
+    current_player.personal_supply_circles -= circles_to_pay
+
+    current_player.general_stock_squares += squares_to_pay
+    current_player.general_stock_circles += circles_to_pay
+
+    # Handle the piece being placed
     if displacing_piece_shape == "square":
-        placed_shape = "square"
+        current_player.personal_supply_squares -= 1
         post.circle_color = TAN
         post.square_color = current_player.color
     elif displacing_piece_shape == "circle":
-        if current_player.personal_supply_circles == 0:
-            return  # Invalid action if trying to place circle without having one
-        placed_shape = "circle"
+        current_player.personal_supply_circles -= 1
         post.circle_color = current_player.color
         post.square_color = TAN
     else:
         sys.exit()
-    post.owner_piece_shape = placed_shape
+
+    post.owner_piece_shape = displacing_piece_shape
     post.owner = current_player
-    current_player.actions -= 1
+    current_player.actions_remaining -= 1
 
-    # Handle the cost payment with priority to squares
-    squares_used = min(current_player.personal_supply_squares, cost)
-    circles_used = cost - squares_used
-
-    current_player.personal_supply_squares -= squares_used
-    current_player.personal_supply_circles -= circles_used
-    current_player.general_stock_squares += (cost - squares_used)  # Retur
-
+    # Handle the actual displacement logic (finding a post for the displaced piece, etc.)
     displaced = False
     for city in route.cities:
         empty_post = find_empty_post_in_adjacent_routes(city, route)
@@ -184,6 +236,7 @@ def handle_displacement(post, route, displacing_piece_shape):
                 set_displaced_post_color(empty_post, displaced_piece_shape, displaced_player_color, displaced_player)
                 check_and_switch_player()
                 return  # Exit the function after successful displacement
+
 
 def set_displaced_post_color(empty_post, displaced_piece_shape, color, owner):
     if displaced_piece_shape == "circle":
@@ -203,28 +256,28 @@ def find_post_by_position(pos):
                 return route, post
     return None, None
 
-def check_and_switch_player():
-    if current_player.actions == 0:
-        next_player()
-
 def handle_left_click(post):
     if current_player.personal_supply_squares > 0:
         post.claim(current_player, "square")
-        current_player.actions -= 1
+        current_player.actions_remaining -= 1
         current_player.personal_supply_squares -= 1
         check_and_switch_player()
-        
+
 def handle_right_click(post):
     if current_player.personal_supply_circles > 0:
         post.claim(current_player, "circle")
-        current_player.actions -= 1
+        current_player.actions_remaining -= 1
         current_player.personal_supply_circles -= 1
         check_and_switch_player()
+
+def check_and_switch_player():
+    if current_player.actions_remaining == 0:
+        next_player()
 
 def next_player():
     global current_player
     current_player = players[(players.index(current_player)+1)%len(players)]
-    current_player.actions = 2 if current_player.color == GREEN else 1
+    current_player.actions_remaining = current_player.actions
 
 while True:
     for event in pygame.event.get():
