@@ -1,6 +1,6 @@
 # map.py
 import pygame
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES
 
 class Map:
     def __init__(self):
@@ -174,7 +174,7 @@ class Post:
         post.square_color = TAN
         post.owner = None
         post.owner_piece_shape = None
-        
+
     def is_owned(self):
         return self.owner is not None
 
@@ -190,3 +190,13 @@ class Post:
             self.circle_color = TAN
         self.owner = player
         self.owner_piece_shape = shape
+    
+    def DEBUG_print_post_details(self):
+        print(f"Post Details!!!")
+        print(f"Post {self.pos}")
+        print(f"Owner {COLOR_NAMES[self.owner.color]}")
+        print(f"Owner Piece Shape {self.owner_piece_shape}")
+        print(f"Circle Color {COLOR_NAMES[self.circle_color]}")
+        print(f"Square Color {COLOR_NAMES[self.square_color]}")
+        print(f"Required Shape {self.required_shape}")
+        

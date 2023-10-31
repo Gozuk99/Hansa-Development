@@ -81,6 +81,8 @@ def handle_click(pos, button):
                 handle_right_click(post)
             elif post.is_owned() and post.owner != current_player:
                 handle_displacement(post, route, "circle")
+        elif button == 2:  # middle click
+                post.DEBUG_print_post_details()
         return
 
     for city in cities:  # iterate through cities
@@ -138,6 +140,7 @@ def handle_displacement(post, route, displacing_piece_shape):
     if current_player.personal_supply_squares + current_player.personal_supply_circles < cost:
         return  # Not enough pieces, action cannot be performed
 
+    displaced_player = post.owner
     displaced_player_color = post.owner.color
 
     # Depending on the click type, decide the shape and color to place on the post
@@ -169,7 +172,7 @@ def handle_displacement(post, route, displacing_piece_shape):
     for city in route.cities:
         empty_post = find_empty_post_in_adjacent_routes(city, route)
         if empty_post:
-            set_displaced_post_color(empty_post, displaced_piece_shape, displaced_player_color, post.owner)
+            set_displaced_post_color(empty_post, displaced_piece_shape, displaced_player_color, displaced_player)
             displaced = True
             check_and_switch_player()
             return  # Exit the function after successful displacement
@@ -178,7 +181,7 @@ def handle_displacement(post, route, displacing_piece_shape):
         for city in route.cities:
             empty_post = find_empty_post_in_next_level_routes(city, route)
             if empty_post:
-                set_displaced_post_color(empty_post, displaced_piece_shape, displaced_player_color, post.owner)
+                set_displaced_post_color(empty_post, displaced_piece_shape, displaced_player_color, displaced_player)
                 check_and_switch_player()
                 return  # Exit the function after successful displacement
 
