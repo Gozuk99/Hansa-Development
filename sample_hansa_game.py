@@ -1,7 +1,7 @@
 import pygame
 import sys
 from map_data.map1 import Map1
-from player_info.player_attributes import Player, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
+from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES
 from map_data.map_attributes import Post, City
 from drawing.drawing_utils import draw_line, redraw_window, draw_end_game
@@ -26,27 +26,12 @@ for upgrade_types in upgrade_cities:
 
 # Define players
 players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3), Player(RED, 4), Player(YELLOW, 5)]
+displaced_player = DisplacedPlayer()
 player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(players)]
 current_player = players[0]
 current_player.actions_remaining = current_player.actions
-
-def find_empty_post_in_adjacent_routes(city, route_to_exclude):
-    for adjacent_route in city.routes:
-        if adjacent_route != route_to_exclude:
-            empty_post = adjacent_route.find_empty_post()
-            if empty_post:
-                return empty_post
-    return None
-
-def find_empty_post_in_next_level_routes(city, route_to_exclude):
-    for adjacent_route in city.routes:
-        if adjacent_route != route_to_exclude:
-            for next_city in adjacent_route.cities:
-                if next_city != city:
-                    empty_post = find_empty_post_in_adjacent_routes(next_city, adjacent_route)
-                    if empty_post:
-                        return empty_post
-    return None
+waiting_for_displaced_player = False
+empty_posts = []
 
 def end_game(winning_player):
     while True:
@@ -77,16 +62,18 @@ def handle_click(pos, button):
     if post:
         if button == 1:  # left click
             if post.can_be_claimed_by(current_player, "square"):
-                handle_left_click(post)
+                claim_post(post, current_player, "square")
             elif post.is_owned() and post.owner != current_player:
                 handle_displacement(post, route, "square")
         elif button == 3:  # right click
             if post.can_be_claimed_by(current_player, "circle"):
-                handle_right_click(post)
+                claim_post(post, current_player, "circle")
             elif post.is_owned() and post.owner != current_player:
                 handle_displacement(post, route, "circle")
         elif button == 2:  # middle click
-                post.DEBUG_print_post_details()
+            post.DEBUG_print_post_details()
+            return
+        check_and_switch_player()
         return
     for upgrade in upgrade_cities:
         if ((upgrade.x_pos < pos[0] < upgrade.x_pos + upgrade.width) and
@@ -179,9 +166,53 @@ def handle_click(pos, button):
                     check_and_switch_player()
                     return
 
+def displaced_click(pos, button):
+    route, post = find_post_by_position(pos)
+
+    if post:
+        if displaced_player.total_pieces_to_place == 1 and not displaced_player.played_displaced_shape:
+            # If there's only one piece left to place, it must be the displaced_shape.
+            if (button == 1 and displaced_player.displaced_shape == "square" and post.can_be_claimed_by(displaced_player.player, "square")):
+                displace_to(post, displaced_player, "square")                
+            elif (button == 3 and displaced_player.displaced_shape == "circle" and post.can_be_claimed_by(displaced_player.player, "circle")):
+                displace_to(post, displaced_player, "circle")
+        else:
+            if button == 1:  # left click
+                if post.can_be_claimed_by(displaced_player.player, "square"):
+                    displace_to(post, displaced_player, "square")
+            elif button == 3:  # right click
+                if post.can_be_claimed_by(displaced_player.player, "circle"):
+                    displace_to(post, displaced_player, "circle")                   
+
+def displace_to(post, displaced_player, piece_to_play):
+    # Check if the shape being placed is the same as the displaced shape
+    is_displaced_shape = piece_to_play == displaced_player.displaced_shape
+    
+    if piece_to_play == "square":
+        if is_displaced_shape or displaced_player.player.general_stock_squares > 0:
+            post.claim(displaced_player.player, "square")
+            if not is_displaced_shape:
+                displaced_player.player.general_stock_squares -= 1
+            displaced_player.total_pieces_to_place -= 1
+            empty_posts.remove(post)
+            if is_displaced_shape:
+                displaced_player.played_displaced_shape = True
+                
+    elif piece_to_play == "circle":
+        if is_displaced_shape or displaced_player.player.general_stock_circles > 0:
+            post.claim(displaced_player.player, "circle")
+            if not is_displaced_shape:
+                displaced_player.player.general_stock_circles -= 1
+            displaced_player.total_pieces_to_place -= 1
+            empty_posts.remove(post)
+            if is_displaced_shape:
+                displaced_player.played_displaced_shape = True
+
 def handle_displacement(post, route, displacing_piece_shape):
+    global waiting_for_displaced_player, empty_posts
     # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
+    current_displaced_player = post.owner
 
     # Calculate the cost to displace
     cost = 2 if displaced_piece_shape == "square" else 3
@@ -189,9 +220,6 @@ def handle_displacement(post, route, displacing_piece_shape):
     # Check if the current player has enough tradesmen
     if current_player.personal_supply_squares + current_player.personal_supply_circles < cost:
         return  # Not enough tradesmen, action cannot be performed
-
-    displaced_player = post.owner
-    displaced_player_color = post.owner.color
 
     # Handle the cost of displacement with priority to squares
     squares_to_pay = min(current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
@@ -217,37 +245,18 @@ def handle_displacement(post, route, displacing_piece_shape):
 
     post.owner_piece_shape = displacing_piece_shape
     post.owner = current_player
-    current_player.actions_remaining -= 1
 
-    # Handle the actual displacement logic (finding a post for the displaced piece, etc.)
-    displaced = False
     for city in route.cities:
-        empty_post = find_empty_post_in_adjacent_routes(city, route)
-        if empty_post:
-            set_displaced_post_color(empty_post, displaced_piece_shape, displaced_player_color, displaced_player)
-            displaced = True
-            check_and_switch_player()
-            return  # Exit the function after successful displacement
-
-    if not displaced:
-        for city in route.cities:
-            empty_post = find_empty_post_in_next_level_routes(city, route)
-            if empty_post:
-                set_displaced_post_color(empty_post, displaced_piece_shape, displaced_player_color, displaced_player)
-                check_and_switch_player()
-                return  # Exit the function after successful displacement
-
-
-def set_displaced_post_color(empty_post, displaced_piece_shape, color, owner):
-    if displaced_piece_shape == "circle":
-        empty_post.circle_color = color
-        empty_post.square_color = TAN
-    else:  # it's a square
-        empty_post.square_color = color
-        empty_post.circle_color = TAN
-
-    empty_post.owner_piece_shape = displaced_piece_shape
-    empty_post.owner = owner  # Assigning the ownership of the displaced post.
+        for adjacent_route in city.routes:
+            if adjacent_route != route:
+                for post in adjacent_route.posts:
+                    if post.owner == None:
+                        empty_posts.append(post)
+    for post in empty_posts:
+        post.valid_post_to_displace_to()
+    waiting_for_displaced_player = True
+    displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
+    print(f"Waiting for Displaced Player {COLOR_NAMES[displaced_player.color]} to place {displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {displaced_player.displaced_shape}.")
 
 def find_post_by_position(pos):
     for route in routes:
@@ -256,20 +265,16 @@ def find_post_by_position(pos):
                 return route, post
     return None, None
 
-def handle_left_click(post):
-    if current_player.personal_supply_squares > 0:
-        post.claim(current_player, "square")
-        current_player.actions_remaining -= 1
-        current_player.personal_supply_squares -= 1
-        check_and_switch_player()
-
-def handle_right_click(post):
-    if current_player.personal_supply_circles > 0:
-        post.claim(current_player, "circle")
-        current_player.actions_remaining -= 1
-        current_player.personal_supply_circles -= 1
-        check_and_switch_player()
-
+def claim_post(post, player, piece_to_play):
+    if piece_to_play == "square" and player.personal_supply_squares > 0:
+        post.claim(player, "square")
+        player.actions_remaining -= 1
+        player.personal_supply_squares -= 1
+    elif piece_to_play == "circle" and player.personal_supply_circles > 0:
+        post.claim(player, "circle")
+        player.actions_remaining -= 1
+        player.personal_supply_circles -= 1
+        
 def check_and_switch_player():
     if current_player.actions_remaining == 0:
         next_player()
@@ -279,15 +284,30 @@ def next_player():
     current_player = players[(players.index(current_player)+1)%len(players)]
     current_player.actions_remaining = current_player.actions
 
+def reset_valid_posts_to_displace_to():
+    for post in empty_posts:
+        post.reset_post()
+    empty_posts.clear()
+
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
-            handle_click(pygame.mouse.get_pos(), event.button)
+            # while game_not_over:
+            if waiting_for_displaced_player:
+                displaced_click(pygame.mouse.get_pos(), event.button)
+                if displaced_player.all_pieces_placed():
+                    reset_valid_posts_to_displace_to()
+                    displaced_player.reset_displaced_player()
+                    waiting_for_displaced_player = False
+                    current_player.actions_remaining -= 1
+                    check_and_switch_player()
+            else:
+                handle_click(pygame.mouse.get_pos(), event.button)
 
-    redraw_window(win, cities, routes, current_player, WIDTH, HEIGHT)
+    redraw_window(win, cities, routes, current_player, waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
 
     # In the game loop:
     for player_board in player_boards:

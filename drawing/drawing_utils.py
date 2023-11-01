@@ -1,5 +1,5 @@
 import pygame
-from map_data.constants import WHITE, COLOR_NAMES, BLACK, BUFFER, SQUARE_SIZE, SPACING, CIRCLE_RADIUS
+from map_data.constants import WHITE, TAN, COLOR_NAMES, BLACK, BUFFER, SQUARE_SIZE, SPACING, CIRCLE_RADIUS
 
 BORDER_WIDTH = 2 #black outline of
 
@@ -51,9 +51,16 @@ def draw_line(surface, color, start_pos, end_pos, line_width, border_width):
     # Draw the main line on top of the border
     pygame.draw.line(surface, color, start_pos, end_pos, line_width)
 
-def redraw_window(win, cities, routes, current_player, WIDTH, HEIGHT):
+last_text_box = None
+def redraw_window(win, cities, routes, current_player, waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT):
+    global last_text_box
     # Draw cities and their offices
     font = pygame.font.Font(None, 36)
+
+    # Clear the area with the background color
+    if last_text_box is not None:
+        pygame.draw.rect(win, TAN, last_text_box)
+
     for city in cities:
         # Calculate the position of the rectangle
         rect_x = city.pos[0]
@@ -93,14 +100,25 @@ def redraw_window(win, cities, routes, current_player, WIDTH, HEIGHT):
             # Draw the square if there is no owner or if the owner has placed a square piece
             if post.owner_piece_shape is None or post.owner_piece_shape == "square":
                 draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, width=SQUARE_SIZE, height=SQUARE_SIZE)
+   
+    if waiting_for_displaced_player:
+        text_str = f"{COLOR_NAMES[current_player.color]} displaced {COLOR_NAMES[displaced_player.color]} - waiting for {COLOR_NAMES[displaced_player.color]} to place {displaced_player.total_pieces_to_place} pieces!"
+        combined_text = font.render(text_str, True, COLOR_NAMES[current_player.color])
 
-    text_str = f"Actions: {current_player.actions_remaining}"
-    combined_text = font.render(text_str, True, COLOR_NAMES[current_player.color])
+        # Determine the position and size of the text area
+        text_width = combined_text.get_width()
+        text_height = combined_text.get_height()
+        text_area = pygame.Rect(WIDTH // 2 - text_width // 2, HEIGHT - 50 - text_height // 2, text_width, text_height)
+        last_text_box = text_area
+    else:
+        text_str = f"Actions: {current_player.actions_remaining}"
+        combined_text = font.render(text_str, True, COLOR_NAMES[current_player.color])
 
-    # Determine the position and size of the text area
-    text_width = combined_text.get_width()
-    text_height = combined_text.get_height()
-    text_area = pygame.Rect(WIDTH // 2 - text_width // 2, HEIGHT - 50 - text_height // 2, text_width, text_height)
+        # Determine the position and size of the text area
+        text_width = combined_text.get_width()
+        text_height = combined_text.get_height()
+        text_area = pygame.Rect(WIDTH // 2 - text_width // 2, HEIGHT - 50 - text_height // 2, text_width, text_height)
+        last_text_box = text_area
 
     # Clear the area with the background color
     pygame.draw.rect(win, WHITE, text_area)

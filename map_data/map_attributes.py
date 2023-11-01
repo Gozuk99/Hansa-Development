@@ -1,6 +1,6 @@
 # map.py
 import pygame
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK, WHITE
 from drawing.drawing_utils import draw_shape, draw_text
 
 class Map:
@@ -197,6 +197,10 @@ class Post:
         self.square_color = TAN
         self.owner = None
         self.owner_piece_shape = None
+    
+    def valid_post_to_displace_to(self):
+        self.circle_color = WHITE
+        self.square_color = WHITE
 
     def is_owned(self):
         return self.owner is not None

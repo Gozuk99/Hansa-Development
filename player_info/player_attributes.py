@@ -137,7 +137,41 @@ class Player:
                 label = f"{squares}S/{circles}C"
                 button_labels.append(label)
         return button_labels
+
+class DisplacedPlayer:
+    def __init__(self):
+        self.reset_displaced_player()
+
+    def reset_displaced_player(self):
+        self.player = None
+        self.color = None
+        self.general_stock_squares = 0
+        self.general_stock_circles = 0
+        self.personal_supply_squares = 0
+        self.personal_supply_circles = 0
+        self.displaced_shape = None
+        self.played_displaced_shape = False
+        self.total_pieces_to_place = 0
+
+    def populate_displaced_player(self, player, displaced_shape):
+        self.player = player
+        self.color = player.color
+        self.general_stock_squares = player.general_stock_squares
+        self.general_stock_circles = player.general_stock_circles
+        self.personal_supply_squares = player.personal_supply_squares
+        self.personal_supply_circles = player.personal_supply_circles
+
+        self.displaced_shape = displaced_shape
+        if self.displaced_shape == "square":
+            self.total_pieces_to_place = 2
+        elif self.displaced_shape == "circle":
+            self.total_pieces_to_place = 3
+        else:
+            sys.exit()
             
+    def all_pieces_placed(self):
+        return self.total_pieces_to_place == 0 and self.played_displaced_shape
+
 class PlayerBoard:
     def __init__(self, x, y, player):
         self.x = x
