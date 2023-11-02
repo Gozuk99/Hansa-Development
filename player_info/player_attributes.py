@@ -144,23 +144,12 @@ class DisplacedPlayer:
 
     def reset_displaced_player(self):
         self.player = None
-        self.color = None
-        self.general_stock_squares = 0
-        self.general_stock_circles = 0
-        self.personal_supply_squares = 0
-        self.personal_supply_circles = 0
         self.displaced_shape = None
         self.played_displaced_shape = False
         self.total_pieces_to_place = 0
 
     def populate_displaced_player(self, player, displaced_shape):
         self.player = player
-        self.color = player.color
-        self.general_stock_squares = player.general_stock_squares
-        self.general_stock_circles = player.general_stock_circles
-        self.personal_supply_squares = player.personal_supply_squares
-        self.personal_supply_circles = player.personal_supply_circles
-
         self.displaced_shape = displaced_shape
         if self.displaced_shape == "square":
             self.total_pieces_to_place = 2

@@ -102,7 +102,7 @@ def redraw_window(win, cities, routes, current_player, waiting_for_displaced_pla
                 draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, width=SQUARE_SIZE, height=SQUARE_SIZE)
    
     if waiting_for_displaced_player:
-        text_str = f"{COLOR_NAMES[current_player.color]} displaced {COLOR_NAMES[displaced_player.color]} - waiting for {COLOR_NAMES[displaced_player.color]} to place {displaced_player.total_pieces_to_place} pieces!"
+        text_str = f"{COLOR_NAMES[current_player.color]} displaced {COLOR_NAMES[displaced_player.player.color]} - waiting for {COLOR_NAMES[displaced_player.player.color]} to place {displaced_player.total_pieces_to_place} pieces!"
         combined_text = font.render(text_str, True, COLOR_NAMES[current_player.color])
 
         # Determine the position and size of the text area

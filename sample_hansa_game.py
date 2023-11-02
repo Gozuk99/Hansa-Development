@@ -2,7 +2,7 @@ import pygame
 import sys
 from map_data.map1 import Map1
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
-from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES
+from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
 from map_data.map_attributes import Post, City
 from drawing.drawing_utils import draw_line, redraw_window, draw_end_game
 
@@ -25,7 +25,8 @@ for upgrade_types in upgrade_cities:
     upgrade_types.draw_upgrades_on_map(win)
 
 # Define players
-players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3), Player(RED, 4), Player(YELLOW, 5)]
+players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3)]
+# players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3), Player(RED, 4), Player(YELLOW, 5)]
 displaced_player = DisplacedPlayer()
 player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(players)]
 current_player = players[0]
@@ -121,40 +122,17 @@ def handle_click(pos, button):
             else:
                 print(f"Route(s) not controlled by current_player: {COLOR_NAMES[current_player.color]}")
 
-    for city in cities:  # iterate through cities
-        if ((city.pos[0] < pos[0] < city.pos[0] + city.width) and
-            (city.pos[1] < pos[1] < city.pos[1] + city.height) and
-            button == 1 and current_player.actions > 0):
-            
-            # Print details for debugging
+    for city in cities:
+        if city_was_clicked(city, pos) and button == 1 and current_player.actions > 0:
             print(f"Clicked on city {city.name}:")
+            next_open_office_color = city.get_next_open_office_color()
+            print(f"Next open office color: {next_open_office_color}")
 
-            for route in city.routes:
-                route_city_1, route_city_2 = route.cities
-                print(f"  Route from {route_city_1.name} to {route_city_2.name}:")
-                for post in route.posts:
-                    owner_name = COLOR_NAMES[post.owner.color] if post.owner else "None"
-                    print(f"    Post at position {post.pos}: owned by {owner_name}")
-
-                if not route.is_controlled_by(current_player):
-                    continue
-
-                if city.controller or not city.has_required_piece_shape(current_player, route, city):
-                    continue
-
-                score_route(route)
-                city.update_office_ownership(current_player, current_player.color)
-                for post in route.posts:
-                    if post.owner == current_player:
-                        post.reset_post()
-
-                current_player.actions_remaining -= 1
-                check_and_switch_player()
-
-                for player in players:
-                    if player.score >= 3:
-                        end_game(player)
-                return
+            if player_can_claim_office(current_player, next_open_office_color):
+                for route in city.routes:
+                    handle_route_for_city_claim(route, city, current_player)
+            else:
+                print(f"{COLOR_NAMES[current_player.color]} doesn't have the privilege to claim an office in {city.name}.")
 
     # Check if any player board's Income Action button was clicked
     for board in player_boards:
@@ -166,47 +144,127 @@ def handle_click(pos, button):
                     check_and_switch_player()
                     return
 
-def displaced_click(pos, button):
-    route, post = find_post_by_position(pos)
+def player_can_claim_office(player, office_color):
+    """Check if a player can claim an office of the specified color."""
+    allowed_office_colors = PRIVILEGE_COLORS[:PRIVILEGE_COLORS.index(player.privilege) + 1]
+    return office_color in allowed_office_colors
 
-    if post:
-        if displaced_player.total_pieces_to_place == 1 and not displaced_player.played_displaced_shape:
-            # If there's only one piece left to place, it must be the displaced_shape.
-            if (button == 1 and displaced_player.displaced_shape == "square" and post.can_be_claimed_by(displaced_player.player, "square")):
-                displace_to(post, displaced_player, "square")                
-            elif (button == 3 and displaced_player.displaced_shape == "circle" and post.can_be_claimed_by(displaced_player.player, "circle")):
-                displace_to(post, displaced_player, "circle")
+def handle_route_for_city_claim(route, city, player):
+    """Handle the actions for a route when trying to claim a city."""
+    route_city_1, route_city_2 = route.cities
+
+    if route.is_controlled_by(player):
+        print(f"  Route from {route_city_1.name} to {route_city_2.name}:")
+        circles_on_route = sum(1 for post in route.posts if post.owner == player and post.owner_piece_shape == "circle")
+        squares_on_route = sum(1 for post in route.posts if post.owner == player and post.owner_piece_shape == "square")
+        print(f"Circles on route {route_city_1.name} to {route_city_2.name}: {circles_on_route}")
+        print(f"Squares on route {route_city_1.name} to {route_city_2.name}: {squares_on_route}")
+        
+        # Fetch required shape for the office first
+        required_shape = city.get_next_open_office_shape()
+
+        if not city.has_required_piece_shape(player, route, city):
+            print(f"{COLOR_NAMES[player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
         else:
-            if button == 1:  # left click
-                if post.can_be_claimed_by(displaced_player.player, "square"):
-                    displace_to(post, displaced_player, "square")
-            elif button == 3:  # right click
-                if post.can_be_claimed_by(displaced_player.player, "circle"):
-                    displace_to(post, displaced_player, "circle")                   
+            score_route(route)
+            city.update_office_ownership(player, player.color)
+            
+            # Adjust the general supply based on the shape used to claim the office
+            print(f"Required Shape for office in {city.name} : {required_shape}")
+            if required_shape == "circle":
+                circles_on_route -= 1
+            elif required_shape == "square":
+                squares_on_route -= 1
+            
+            print(f"2Circles on route {route_city_1.name} to {route_city_2.name}: {circles_on_route}")
+            print(f"2Squares on route {route_city_1.name} to {route_city_2.name}: {squares_on_route}")
+            
+            # Update the player's general supply
+            player.general_stock_circles += circles_on_route
+            player.general_stock_squares += squares_on_route
 
-def displace_to(post, displaced_player, piece_to_play):
-    # Check if the shape being placed is the same as the displaced shape
-    is_displaced_shape = piece_to_play == displaced_player.displaced_shape
+            for post in route.posts:
+                if post.owner == player:
+                    post.reset_post()
+            player.actions_remaining -= 1
+            check_and_switch_player()
+
+            for player in players:
+                if player.score >= 3:
+                    end_game(player)
+
+def city_was_clicked(city, pos):
+    """Check if the city was clicked."""
+    return city.pos[0] < pos[0] < city.pos[0] + city.width and city.pos[1] < pos[1] < city.pos[1] + city.height
+
+def displaced_click(pos, button):
+    route, post = find_post_by_position(pos)  
+
+    if post not in empty_posts:
+        return
+
+    # Determine which shape the player wants to place based on the button they clicked
+    if button == 1:
+        desired_shape = "square"
+    elif button == 3:
+        desired_shape = "circle"
+    else:
+        return
+
+    # Determine if the player wants to use the displaced shape
+    wants_to_use_displaced_piece = (not displaced_player.played_displaced_shape) and (desired_shape == displaced_player.displaced_shape)
     
-    if piece_to_play == "square":
-        if is_displaced_shape or displaced_player.player.general_stock_squares > 0:
-            post.claim(displaced_player.player, "square")
-            if not is_displaced_shape:
-                displaced_player.player.general_stock_squares -= 1
-            displaced_player.total_pieces_to_place -= 1
-            empty_posts.remove(post)
-            if is_displaced_shape:
-                displaced_player.played_displaced_shape = True
-                
-    elif piece_to_play == "circle":
-        if is_displaced_shape or displaced_player.player.general_stock_circles > 0:
-            post.claim(displaced_player.player, "circle")
-            if not is_displaced_shape:
-                displaced_player.player.general_stock_circles -= 1
-            displaced_player.total_pieces_to_place -= 1
-            empty_posts.remove(post)
-            if is_displaced_shape:
-                displaced_player.played_displaced_shape = True
+    if wants_to_use_displaced_piece:
+        print(f"Attempting to place a {desired_shape} while Displaced Shape has NOT been played yet")
+        displace_to(post, displaced_player, desired_shape, use_displaced_piece=True)
+    else:
+        displace_to(post, displaced_player, desired_shape)
+
+def displace_to(post, displaced_player, shape, use_displaced_piece=False):
+    if use_displaced_piece:
+        print(f"Attempting to use displaced piece {shape} - no affect to the GS or PS")
+        claim_and_update(post, displaced_player, shape, use_displaced_piece=True)
+    else:
+        if has_general_stock(displaced_player, shape):
+            print(f"Attempting to place a {shape} from general_stock, because use_displaced is false")
+            claim_and_update(post, displaced_player, shape)
+        elif is_general_stock_empty(displaced_player) and has_personal_supply(displaced_player, shape):
+            print(f"Attempting to place a {shape} from personal_supply, because use_displaced is false")
+            claim_and_update(post, displaced_player, shape, from_personal_supply=True)
+        else:
+            print(f"Cannot place a {shape} because there are remaining pieces in general stock.")
+
+def has_general_stock(displaced_player, shape):
+    if shape == "square":
+        return displaced_player.player.general_stock_squares > 0
+    return displaced_player.player.general_stock_circles > 0
+
+def is_general_stock_empty(displaced_player):
+    return displaced_player.player.general_stock_squares == 0 and displaced_player.player.general_stock_circles == 0
+
+def has_personal_supply(displaced_player, shape):
+    if shape == "square":
+        return displaced_player.player.personal_supply_squares > 0
+    return displaced_player.player.personal_supply_circles > 0
+
+def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, from_personal_supply=False):
+    post.claim(displaced_player.player, shape)
+    empty_posts.remove(post)
+    
+    if use_displaced_piece:
+        displaced_player.played_displaced_shape = True
+    elif not from_personal_supply:
+        if shape == "square":
+            displaced_player.player.general_stock_squares -= 1
+        else:
+            displaced_player.player.general_stock_circles -= 1
+    else:
+        if shape == "square":
+            displaced_player.player.personal_supply_squares -= 1
+        else:
+            displaced_player.player.personal_supply_circles -= 1
+    
+    displaced_player.total_pieces_to_place -= 1
 
 def handle_displacement(post, route, displacing_piece_shape):
     global waiting_for_displaced_player, empty_posts
@@ -220,6 +278,14 @@ def handle_displacement(post, route, displacing_piece_shape):
     # Check if the current player has enough tradesmen
     if current_player.personal_supply_squares + current_player.personal_supply_circles < cost:
         return  # Not enough tradesmen, action cannot be performed
+
+    # Before displacing with a square, check if the current player has a square in their personal supply
+    if displacing_piece_shape == "square" and current_player.personal_supply_squares == 0:
+        return  # Invalid move as there's no square in the personal supply
+
+    # Before displacing with a circle, check if the current player has a circle in their personal supply
+    if displacing_piece_shape == "circle" and current_player.personal_supply_circles == 0:
+        return  # Invalid move as there's no circle in the personal supply
 
     # Handle the cost of displacement with priority to squares
     squares_to_pay = min(current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
@@ -246,17 +312,42 @@ def handle_displacement(post, route, displacing_piece_shape):
     post.owner_piece_shape = displacing_piece_shape
     post.owner = current_player
 
-    for city in route.cities:
-        for adjacent_route in city.routes:
-            if adjacent_route != route:
-                for post in adjacent_route.posts:
-                    if post.owner == None:
-                        empty_posts.append(post)
+    # Find empty posts on adjacent routes
+    gather_empty_posts(route, [route])
     for post in empty_posts:
         post.valid_post_to_displace_to()
     waiting_for_displaced_player = True
     displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
-    print(f"Waiting for Displaced Player {COLOR_NAMES[displaced_player.color]} to place {displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {displaced_player.displaced_shape}.")
+    print(f"Waiting for Displaced Player {COLOR_NAMES[displaced_player.player.color]} to place {displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {displaced_player.displaced_shape}.")
+
+def gather_empty_posts(current_route, checked_routes):
+    """Recursively gather empty posts from adjacent routes."""
+    adjacent_routes = get_adjacent_routes(current_route)
+    for adjacent_route in adjacent_routes:
+        if adjacent_route not in checked_routes:
+            checked_routes.append(adjacent_route)
+            if is_route_filled(adjacent_route):
+                gather_empty_posts(adjacent_route, checked_routes)
+            else:
+                for post in adjacent_route.posts:
+                    if post.owner is None and post not in empty_posts:
+                        empty_posts.append(post)
+
+def get_adjacent_routes(current_route):
+    """Returns a list of routes adjacent to the given route."""
+    adjacent_routes = []
+    for city in current_route.cities:
+        for adjacent_route in city.routes:
+            if adjacent_route != current_route and adjacent_route not in adjacent_routes:
+                adjacent_routes.append(adjacent_route)
+    return adjacent_routes
+
+def is_route_filled(route):
+    """Checks if all posts on a route are filled."""
+    for post in route.posts:
+        if post.owner is None:
+            return False
+    return True
 
 def find_post_by_position(pos):
     for route in routes:

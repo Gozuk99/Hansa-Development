@@ -18,18 +18,18 @@ class Map1(Map):
         # Define Map1-specific cities and offices
         # Define cities
         Groningen = City('Groningen', (115, 210), BLACKISH_BROWN)
-        Groningen.add_office(Office("square", "grey", True))
+        Groningen.add_office(Office("square", "white", True))
         Groningen.add_office(Office("circle", "orange", False))
         Groningen.assign_upgrade_type('Book')
         self.cities.append(Groningen)
 
         Emden = City('Emden', (476, 207), BLACKISH_BROWN)
-        Emden.add_office(Office("circle", "grey", False))
+        Emden.add_office(Office("circle", "white", False))
         Emden.add_office(Office("square", "pink", False))
         self.cities.append(Emden)
 
         Osnabruck = City('Osnabruck', (434, 537), BLACKISH_BROWN)
-        Osnabruck.add_office(Office("square", "grey", False))
+        Osnabruck.add_office(Office("square", "white", False))
         Osnabruck.add_office(Office("square", "orange", False))
         Osnabruck.add_office(Office("square", "black", False))
         self.cities.append(Osnabruck)
@@ -40,28 +40,28 @@ class Map1(Map):
         self.cities.append(Kampen)
 
         Arnheim = City('Arnheim', (88, 655), BLACKISH_BROWN)
-        Arnheim.add_office(Office("square", "grey", False))
-        Arnheim.add_office(Office("circle", "grey", False))
+        Arnheim.add_office(Office("square", "white", False))
+        Arnheim.add_office(Office("circle", "white", False))
         Arnheim.add_office(Office("square", "orange", False))
         Arnheim.add_office(Office("square", "pink", False))
         self.cities.append(Arnheim)
 
         Duisburg = City('Duisburg', (179, 911), BLACKISH_BROWN)
-        Duisburg.add_office(Office("square", "grey", False))
+        Duisburg.add_office(Office("square", "white", False))
         self.cities.append(Duisburg)
 
         Dortmund = City('Dortmund', (432, 894), BLACKISH_BROWN)
-        Dortmund.add_office(Office("circle", "grey", False))
+        Dortmund.add_office(Office("circle", "white", False))
         Dortmund.add_office(Office("square", "orange", False))
         self.cities.append(Dortmund)
 
         Munster = City('Munster', (474, 702), BLACKISH_BROWN)
-        Munster.add_office(Office("circle", "grey", False))
+        Munster.add_office(Office("circle", "white", False))
         Munster.add_office(Office("square", "orange", False))
         self.cities.append(Munster)
 
         Coellen = City('Coellen', (105, 1062), BLACKISH_BROWN)
-        Coellen.add_office(Office("square", "grey", True))
+        Coellen.add_office(Office("square", "white", True))
         Coellen.add_office(Office("square", "pink", False))
         self.cities.append(Coellen)
 
@@ -71,12 +71,12 @@ class Map1(Map):
         self.cities.append(Warburg)
 
         Paderborn = City('Paderborn', (786, 925), BLACKISH_BROWN)
-        Paderborn.add_office(Office("square", "grey", False))
+        Paderborn.add_office(Office("square", "white", False))
         Paderborn.add_office(Office("circle", "black", False))
         self.cities.append(Paderborn)
 
         Minden = City('Minden', (757, 621), BLACKISH_BROWN)
-        Minden.add_office(Office("square", "grey", False))
+        Minden.add_office(Office("square", "white", False))
         Minden.add_office(Office("square", "orange", False))
         Minden.add_office(Office("square", "pink", False))
         Minden.add_office(Office("square", "black", False))
@@ -87,22 +87,22 @@ class Map1(Map):
         self.cities.append(Bremen)
 
         Stade = City('Stade', (934, 138), BLACKISH_BROWN)
-        Stade.add_office(Office("circle", "grey", True))
+        Stade.add_office(Office("circle", "white", True))
         Stade.assign_upgrade_type('Privilege')
         self.cities.append(Stade)
 
         Hannover = City('Hannover', (1049, 499), BLACKISH_BROWN)
-        Hannover.add_office(Office("square", "grey", False))
+        Hannover.add_office(Office("square", "white", False))
         Hannover.add_office(Office("square", "pink", False))
         self.cities.append(Hannover)
 
         Hildesheim = City('Hildesheim', (1089, 755), BLACKISH_BROWN)
-        Hildesheim.add_office(Office("square", "grey", False))
+        Hildesheim.add_office(Office("square", "white", False))
         Hildesheim.add_office(Office("square", "black", False))
         self.cities.append(Hildesheim)
 
         Gottingen = City('Gottingen', (1014, 1075), BLACKISH_BROWN)
-        Gottingen.add_office(Office("square", "grey", False))
+        Gottingen.add_office(Office("square", "white", False))
         Gottingen.add_office(Office("square", "orange", False))
         Gottingen.assign_upgrade_type('Actions')
         self.cities.append(Gottingen)
@@ -113,7 +113,7 @@ class Map1(Map):
         self.cities.append(Quedlinburg)
 
         Goslar = City('Goslar', (1387, 839), BLACKISH_BROWN)
-        Goslar.add_office(Office("square", "grey", True))
+        Goslar.add_office(Office("square", "white", True))
         self.cities.append(Goslar)
 
         Brunswick = City('Brunswick', (1253, 582), BLACKISH_BROWN)
@@ -121,40 +121,40 @@ class Map1(Map):
         self.cities.append(Brunswick)
 
         Luneburg = City('Luneburg', (1359, 358), BLACKISH_BROWN)
-        Luneburg.add_office(Office("circle", "grey", True))
+        Luneburg.add_office(Office("circle", "white", True))
         self.cities.append(Luneburg)
 
         Hamburg = City('Hamburg', (1274, 105), BLACKISH_BROWN)
-        Hamburg.add_office(Office("square", "grey", False))
+        Hamburg.add_office(Office("square", "white", False))
         Hamburg.add_office(Office("square", "orange", False))
         Hamburg.add_office(Office("square", "black", False))
         self.cities.append(Hamburg)
 
         Lubeck = City('Lubeck', (1540, 122), BLACKISH_BROWN)
-        Lubeck.add_office(Office("square", "grey", True))
+        Lubeck.add_office(Office("square", "white", True))
         Lubeck.add_office(Office("square", "pink", False))
         Lubeck.assign_upgrade_type('Bank')
         self.cities.append(Lubeck)
 
         Perleberg = City('Perleberg', (1574, 308), BLACKISH_BROWN)
-        Perleberg.add_office(Office("square", "grey", True))
+        Perleberg.add_office(Office("square", "white", True))
         Perleberg.add_office(Office("circle", "black", False))
         self.cities.append(Perleberg)
 
         Stendal = City('Stendal', (1538, 633), BLACKISH_BROWN)
-        Stendal.add_office(Office("square", "grey", False))
-        Stendal.add_office(Office("circle", "grey", False))
+        Stendal.add_office(Office("square", "white", False))
+        Stendal.add_office(Office("circle", "white", False))
         Stendal.add_office(Office("square", "orange", False))
         Stendal.add_office(Office("square", "pink", False))
         self.cities.append(Stendal)
 
         Magdeburg = City('Magdeburg', (1598, 929), BLACKISH_BROWN)
-        Magdeburg.add_office(Office("circle", "grey", False))
+        Magdeburg.add_office(Office("circle", "white", False))
         Magdeburg.add_office(Office("square", "orange", False))
         self.cities.append(Magdeburg)
 
         Halle = City('Halle', (1544, 1063), BLACKISH_BROWN)
-        Halle.add_office(Office("square", "grey", True))
+        Halle.add_office(Office("square", "white", True))
         Halle.add_office(Office("square", "orange", False))
         Halle.assign_upgrade_type('Keys')
         

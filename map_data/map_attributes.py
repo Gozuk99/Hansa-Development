@@ -103,6 +103,12 @@ class City:
             if office.is_open():
                 return office.shape
         return None
+    def get_next_open_office_color(self):
+        """Return the color of the next open office in the city. If all offices are claimed, return None."""
+        for office in self.offices:
+            if office.is_open():
+                return office.color
+        return None
 
 class Upgrade:
     def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):
