@@ -1,6 +1,6 @@
 # map.py
 import pygame
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK, WHITE
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS
 from drawing.drawing_utils import draw_shape, draw_text
 
 class Map:
@@ -120,12 +120,89 @@ class Upgrade:
         self.height = height
 
     def draw_upgrades_on_map(self, window):
-        font = pygame.font.SysFont(None, 28)
         draw_shape(window, "rectangle", YELLOW, self.x_pos, self.y_pos, width=self.width, height=self.height)
+
+        # If upgrade type is 'SpecialPrestigePoints', handle it differently
+        if self.upgrade_type == "SpecialPrestigePoints":
+            self.draw_special_prestige_points(window)
+            return
 
         x_font_centered = self.x_pos + (self.width / 2)
         y_font_centered = self.y_pos + (self.height / 2)
+        font = pygame.font.SysFont(None, 28)
         draw_text(window, self.upgrade_type, x_font_centered, y_font_centered, font, color=BLACK, centered=True)
+
+class SpecialPrestigePoints:
+    def __init__(self, city_name, x_pos, y_pos, width, height):
+        self.city_name = city_name
+        self.x_pos = x_pos
+        self.y_pos = y_pos
+        self.width = width
+        self.height = height
+
+        self.circle_data = [
+            {"color": WHITE, "value": 7, "owner": None},
+            {"color": ORANGE, "value": 8, "owner": None},
+            {"color": PINK, "value": 9, "owner": None},
+            {"color": BLACK, "value": 11, "owner": None}
+        ]
+    def claim_highest_prestige(self, player):
+        # Log player details and privileges
+        print(f"Player's Color: {player.color}, Player's Privilege: {player.privilege}")
+
+        # Player's privilege color
+        player_privilege_color = player.privilege  # This should directly return one of the values in PRIVILEGE_COLORS
+            
+        # Check if the player's privilege allows claiming the circle
+        try:
+            player_privilege_index = PRIVILEGE_COLORS.index(player_privilege_color)
+        except ValueError:
+            print(f"Player's privilege color {player_privilege_color} not found in PRIVILEGE_COLORS.")
+            return
+
+        # Check each circle in decreasing order of value
+        for circle in sorted(self.circle_data, key=lambda x: x["value"], reverse=True):
+            # Log circle details
+            print(f"Checking Circle: {circle}")
+
+            # Map RGB to its string name
+            circle_color_name = COLOR_NAMES.get(circle["color"])
+            if circle_color_name not in PRIVILEGE_COLORS:
+                print(f"Circle color {circle_color_name} not in PRIVILEGE_COLORS. Skipping...")
+                continue  # Skip circles with colors not in PRIVILEGE_COLORS
+
+            # Circle's privilege index
+            circle_privilege_index = PRIVILEGE_COLORS.index(circle_color_name)
+                
+            if circle["owner"] is None and player_privilege_index >= circle_privilege_index:
+                circle["owner"] = player
+                # Change the circle color to the player's RGB to indicate ownership
+                circle["color"] = player.color
+                print(f"Circle claimed by player. Circle color changed to {player.color}.")
+                break
+        
+    def draw_special_prestige_points(self, window):
+        draw_shape(window, "rectangle", YELLOW, self.x_pos, self.y_pos, width=self.width, height=self.height)
+
+        # Define the total width of all circles and spaces combined
+        total_width = (CIRCLE_RADIUS * 2) * 4 + (SPACING * 3)
+
+        # Define starting position for the circles
+        start_x = self.x_pos + (self.width - total_width) / 2 + CIRCLE_RADIUS  # Adjust the starting position
+        start_y = self.y_pos + self.height / 2  # This centers the circle vertically in the rectangle
+
+        for circle in self.circle_data:
+            # Draw circle with the circle's color (either a privilege color or a player's color)
+            pygame.draw.circle(window, circle["color"], (int(start_x), int(start_y)), CIRCLE_RADIUS)
+
+            # Render text
+            font = pygame.font.SysFont(None, 36)  # Use default font, size 36
+            text_surface = font.render(str(circle["value"]), True, WHITE if circle["color"] == BLACK else BLACK)
+            text_rect = text_surface.get_rect(center=(start_x, start_y))
+            window.blit(text_surface, text_rect)
+
+            # Adjust start_x for next circle
+            start_x += CIRCLE_RADIUS * 2 + SPACING
 
 class Office:
     def __init__(self, shape, color, awards_points):

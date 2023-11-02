@@ -12,6 +12,7 @@ HEIGHT = selected_map.map_height
 cities = selected_map.cities
 routes = selected_map.routes
 upgrade_cities = selected_map.upgrades
+specialprestigepoints_city = selected_map.specialprestigepoints
 
 pygame.init()
 
@@ -23,6 +24,7 @@ for route in routes:
     draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
 for upgrade_types in upgrade_cities:
     upgrade_types.draw_upgrades_on_map(win)
+specialprestigepoints_city.draw_special_prestige_points(win)
 
 # Define players
 players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3)]
@@ -122,6 +124,17 @@ def handle_click(pos, button):
             else:
                 print(f"Route(s) not controlled by current_player: {COLOR_NAMES[current_player.color]}")
 
+    if (specialprestigepoints_city.x_pos < pos[0] < specialprestigepoints_city.x_pos + specialprestigepoints_city.width and
+        specialprestigepoints_city.y_pos < pos[1] < specialprestigepoints_city.y_pos + specialprestigepoints_city.height and
+        button == 1 and current_player.actions > 0):
+            # Get the city associated with the specialprestigepoints_city using city_name
+            associated_city = next(city for city in cities if city.name == specialprestigepoints_city.city_name)
+            
+            # Directly check the single route associated with the city
+            if associated_city.routes[0].is_controlled_by(current_player):
+                specialprestigepoints_city.claim_highest_prestige(current_player)
+                specialprestigepoints_city.draw_special_prestige_points(win)
+    
     for city in cities:
         if city_was_clicked(city, pos) and button == 1 and current_player.actions > 0:
             print(f"Clicked on city {city.name}:")

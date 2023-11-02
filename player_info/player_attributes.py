@@ -29,10 +29,10 @@ class Player:
 
         # The available abilities with their starting values
         self.keys = 1
-        self.privilege = "white"
+        self.privilege = "BLACK"
         self.book = 2
         self.actions_index = 0
-        self.actions = ACTIONS_MAX_VALUES[0]
+        self.actions = ACTIONS_MAX_VALUES[5]
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
         self.bank = 3
 
@@ -94,7 +94,7 @@ class Player:
         return self.keys > index
 
     def has_unlocked_privilege(self, index):
-        privileges_order = ["white", "orange", "pink", "black"]
+        privileges_order = ["WHITE", "ORANGE", "PINK", "BLACK"]
         return privileges_order.index(self.privilege) >= index
 
     def has_unlocked_book(self, index):
