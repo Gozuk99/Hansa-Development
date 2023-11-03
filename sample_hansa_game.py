@@ -146,7 +146,7 @@ def handle_click(pos, button):
                 for route in city.routes:
                     handle_route_for_city_claim(route, city, current_player)
             else:
-                print(f"{COLOR_NAMES[current_player.color]} doesn't have the privilege to claim an office in {city.name}.")
+                print(f"{COLOR_NAMES[current_player.color]} doesn't have the correct privilege - {current_player.privilege} - to claim an office in {city.name}.")
 
     # Check if any player board's Income Action button was clicked
     for board in player_boards:

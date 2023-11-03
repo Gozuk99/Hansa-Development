@@ -29,7 +29,7 @@ class Player:
 
         # The available abilities with their starting values
         self.keys = 1
-        self.privilege = "BLACK"
+        self.privilege = "WHITE"
         self.book = 2
         self.actions_index = 0
         self.actions = ACTIONS_MAX_VALUES[5]

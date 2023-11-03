@@ -78,16 +78,32 @@ def redraw_window(win, cities, routes, current_player, waiting_for_displaced_pla
 
         start_x = rect_x + BUFFER  # Starting x-coordinate within the rectangle
         start_y = rect_y + city.height // 2 - SQUARE_SIZE // 2  # Centered vertically in the rectangle
-
+        
         for office in city.offices:
             if office.shape == "square":
                 draw_shape(win, "rectangle", office.color, start_x, start_y, SQUARE_SIZE, SQUARE_SIZE)
+                
+                # Check for awards_points and draw text
+                if office.awards_points > 0:
+                    text_width, text_height = font.size(str(office.awards_points))
+                    text_x = start_x + (SQUARE_SIZE - text_width) // 2
+                    text_y = start_y + (SQUARE_SIZE - text_height) // 2
+                    draw_text(win, str(office.awards_points), text_x, text_y, font, BLACK)
+                
                 start_x += SQUARE_SIZE + SPACING
 
             else:  
                 circle_x = start_x + CIRCLE_RADIUS
                 circle_y = start_y + SQUARE_SIZE // 2
                 draw_shape(win, "circle", office.color, circle_x, circle_y, CIRCLE_RADIUS)
+                
+                # Check for awards_points and draw text
+                if office.awards_points > 0:
+                    text_width, text_height = font.size(str(office.awards_points))
+                    text_x = circle_x - text_width // 2
+                    text_y = circle_y - text_height // 2
+                    draw_text(win, str(office.awards_points), text_x, text_y, font, BLACK)
+                
                 start_x += CIRCLE_RADIUS * 2 + SPACING
 
     for route in routes:
