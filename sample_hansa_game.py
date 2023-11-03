@@ -34,7 +34,8 @@ player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumer
 current_player = players[0]
 current_player.actions_remaining = current_player.actions
 waiting_for_displaced_player = False
-empty_posts = []
+original_route_of_displacement = None
+all_empty_posts = []
 
 def end_game(winning_player):
     while True:
@@ -213,7 +214,7 @@ def city_was_clicked(city, pos):
 def displaced_click(pos, button):
     route, post = find_post_by_position(pos)  
 
-    if post not in empty_posts:
+    if post not in all_empty_posts:
         return
 
     # Determine which shape the player wants to place based on the button they clicked
@@ -224,7 +225,18 @@ def displaced_click(pos, button):
     else:
         return
 
-    # Determine if the player wants to use the displaced shape
+    # Check if the player is forced to use the displaced shape
+    must_use_displaced_piece = False
+    if not displaced_player.played_displaced_shape:
+        if displaced_player.displaced_shape == "circle" and displaced_player.total_pieces_to_place == 1:
+            must_use_displaced_piece = True
+        elif displaced_player.displaced_shape == "square" and displaced_player.total_pieces_to_place == 1:
+            must_use_displaced_piece = True
+
+    if must_use_displaced_piece and desired_shape != displaced_player.displaced_shape:
+        print("Invalid action. Must use the displaced piece.")
+        return
+
     wants_to_use_displaced_piece = (not displaced_player.played_displaced_shape) and (desired_shape == displaced_player.displaced_shape)
     
     if wants_to_use_displaced_piece:
@@ -245,7 +257,7 @@ def displace_to(post, displaced_player, shape, use_displaced_piece=False):
             print(f"Attempting to place a {shape} from personal_supply, because use_displaced is false")
             claim_and_update(post, displaced_player, shape, from_personal_supply=True)
         else:
-            print(f"Cannot place a {shape} because there are remaining pieces in general stock.")
+            print(f"Cannot place a {shape} because the general stock and personal supply are empty.")
 
 def has_general_stock(displaced_player, shape):
     if shape == "square":
@@ -262,7 +274,7 @@ def has_personal_supply(displaced_player, shape):
 
 def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, from_personal_supply=False):
     post.claim(displaced_player.player, shape)
-    empty_posts.remove(post)
+    all_empty_posts.remove(post)
     
     if use_displaced_piece:
         displaced_player.played_displaced_shape = True
@@ -280,7 +292,7 @@ def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, f
     displaced_player.total_pieces_to_place -= 1
 
 def handle_displacement(post, route, displacing_piece_shape):
-    global waiting_for_displaced_player, empty_posts
+    global waiting_for_displaced_player, all_empty_posts, original_route_of_displacement
     # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
     current_displaced_player = post.owner
@@ -326,25 +338,53 @@ def handle_displacement(post, route, displacing_piece_shape):
     post.owner = current_player
 
     # Find empty posts on adjacent routes
-    gather_empty_posts(route, [route])
-    for post in empty_posts:
+    all_empty_posts = gather_empty_posts(route)
+    for post in all_empty_posts:
         post.valid_post_to_displace_to()
+    # Check conditions based on displaced_piece_shape and number of all_empty_posts
+    if ((displaced_piece_shape == "square" and len(all_empty_posts) == 1) or
+        (displaced_piece_shape == "circle" and 1 <= len(all_empty_posts) <= 2)):
+        original_route_of_displacement = route
+
     waiting_for_displaced_player = True
     displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
     print(f"Waiting for Displaced Player {COLOR_NAMES[displaced_player.player.color]} to place {displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {displaced_player.displaced_shape}.")
 
-def gather_empty_posts(current_route, checked_routes):
-    """Recursively gather empty posts from adjacent routes."""
-    adjacent_routes = get_adjacent_routes(current_route)
-    for adjacent_route in adjacent_routes:
-        if adjacent_route not in checked_routes:
-            checked_routes.append(adjacent_route)
-            if is_route_filled(adjacent_route):
-                gather_empty_posts(adjacent_route, checked_routes)
-            else:
-                for post in adjacent_route.posts:
-                    if post.owner is None and post not in empty_posts:
-                        empty_posts.append(post)
+def gather_empty_posts(start_route):
+    visited_routes = [start_route]  # Mark the start route as visited immediately
+    queue = get_adjacent_routes(start_route)  # Start with the routes adjacent to the given route
+
+    while queue:
+        level_size = len(queue)
+        empty_posts = []
+        next_level_routes = []  # Routes for the next level
+        
+        # Process each route in the current level
+        for i in range(level_size):
+            current_route = queue.pop(0)
+            if current_route in visited_routes:
+                continue
+            visited_routes.append(current_route)
+
+            # Add routes connected to current_route to the next level
+            adjacent_routes = get_adjacent_routes(current_route)
+            for route in adjacent_routes:
+                if route not in visited_routes and route not in next_level_routes:
+                    next_level_routes.append(route)
+            
+            # Check for empty posts in the current route
+            for post in current_route.posts:
+                if not post.is_owned():
+                    empty_posts.append(post)
+
+        # If we've found empty posts at this level, return them
+        if empty_posts:
+            return empty_posts
+        
+        # Otherwise, continue to the next level
+        queue.extend(next_level_routes)
+
+    return []  # If no empty posts are found after all levels are traversed
 
 def get_adjacent_routes(current_route):
     """Returns a list of routes adjacent to the given route."""
@@ -389,9 +429,9 @@ def next_player():
     current_player.actions_remaining = current_player.actions
 
 def reset_valid_posts_to_displace_to():
-    for post in empty_posts:
+    for post in all_empty_posts:
         post.reset_post()
-    empty_posts.clear()
+    all_empty_posts.clear()
 
 while True:
     for event in pygame.event.get():
@@ -402,8 +442,20 @@ while True:
             # while game_not_over:
             if waiting_for_displaced_player:
                 displaced_click(pygame.mouse.get_pos(), event.button)
+                if not all_empty_posts:
+                    print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
+                    all_empty_posts = gather_empty_posts(original_route_of_displacement)
+                    if not all_empty_posts:
+                        print("No empty posts found in adjacent routes either!")  # Debugging log
+                    
+                    post_count = 0  # Counter for the number of posts processed
+                    for post in all_empty_posts:
+                        post.valid_post_to_displace_to()
+                        post_count += 1
+                    print(f"Processed {post_count} posts.")  # Debugging log
                 if displaced_player.all_pieces_placed():
                     reset_valid_posts_to_displace_to()
+                    original_route_of_displacement = None
                     displaced_player.reset_displaced_player()
                     waiting_for_displaced_player = False
                     current_player.actions_remaining -= 1
