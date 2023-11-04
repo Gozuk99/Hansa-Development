@@ -267,7 +267,7 @@ class Route:
         return True
     
 class Post:
-    def __init__(self, position, owner=None, circle_color=BLACK, square_color=BLACK, required_shape=None):
+    def __init__(self, position, owner=None, required_shape=None):
         self.pos = position
         self.owner = owner  # This represents the player who owns the post.
         self.owner_piece_shape = None  # This represents the player who owns the post.
@@ -288,7 +288,7 @@ class Post:
     def is_owned(self):
         return self.owner is not None
 
-    def can_be_claimed_by(self, player, shape):
+    def can_be_claimed_by(self, shape):
         return self.owner is None and (self.required_shape is None or self.required_shape == shape)
 
     def claim(self, player, shape):

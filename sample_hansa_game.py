@@ -65,61 +65,46 @@ def handle_click(pos, button):
     route, post = find_post_by_position(pos)
     if post:
         if button == 1:  # left click
-            if post.can_be_claimed_by(current_player, "square"):
+            if post.can_be_claimed_by("square"):
                 claim_post(post, current_player, "square")
             elif post.is_owned() and post.owner != current_player:
                 handle_displacement(post, route, "square")
         elif button == 3:  # right click
-            if post.can_be_claimed_by(current_player, "circle"):
+            if post.can_be_claimed_by("circle"):
                 claim_post(post, current_player, "circle")
             elif post.is_owned() and post.owner != current_player:
                 handle_displacement(post, route, "circle")
         elif button == 2:  # middle click
             post.DEBUG_print_post_details()
             return
-        check_and_switch_player()
+        switch_player_if_needed()
         return
     for upgrade in upgrade_cities:
         if ((upgrade.x_pos < pos[0] < upgrade.x_pos + upgrade.width) and
             (upgrade.y_pos < pos[1] < upgrade.y_pos + upgrade.height) and
             button == 1 and current_player.actions > 0):
 
-            # Check if the current player controls a route to the city the upgrade is attached to
             associated_city = next(city for city in cities if city.name == upgrade.city_name)
-            
-            # Determine if any route to the city is controlled by the current player
-            if any(route.is_controlled_by(current_player) for route in associated_city.routes):
-                print(f"Route(s) IS controlled by current_player: {COLOR_NAMES[current_player.color]}")
-                
-                # Use the UPGRADE_METHODS_MAP to retrieve the correct upgrade method
-                method_name = UPGRADE_METHODS_MAP[upgrade.upgrade_type.lower()]
 
-                # Check if the current value is already at its maximum
+            if any(route.is_controlled_by(current_player) for route in associated_city.routes):
+                method_name = UPGRADE_METHODS_MAP[upgrade.upgrade_type.lower()]
                 current_value = getattr(current_player, upgrade.upgrade_type.lower())
                 max_value = UPGRADE_MAX_VALUES.get(upgrade.upgrade_type.lower())
 
                 if current_value != max_value:
-                    # Deduct action from player
-                    current_player.actions_remaining -= 1
-
-                    # Perform the upgrade
                     upgrade_function = getattr(current_player, method_name)
                     upgrade_function()
 
-                    # Increment supplies based on the type of upgrade
-                    if upgrade.upgrade_type.lower() in ["keys_prov", "actions", "bank"]:
+                    if upgrade.upgrade_type.lower() in ["keys", "privilege", "actions", "bank"]:
                         current_player.personal_supply_squares += 1
                     elif upgrade.upgrade_type.lower() == "book":
                         current_player.personal_supply_circles += 1
-                    
-                    # Reset all the posts in the route controlled by the current player
+
                     for route in associated_city.routes:
-                        for post in route.posts:
-                            if post.owner == current_player:
-                                post.reset_post()
-
-                    check_and_switch_player()
-
+                        if route.is_controlled_by(current_player):
+                            update_stock_and_reset(route, current_player)
+                            current_player.actions_remaining -= 1
+                            switch_player_if_needed()
                 else:
                     print(f"{upgrade.upgrade_type} is already at its maximum value for player {COLOR_NAMES[current_player.color]}. Action is invalid.")
             else:
@@ -155,7 +140,7 @@ def handle_click(pos, button):
                 if button_rect.collidepoint(pos):
                     board.income_action_based_on_circle_count(idx)
                     current_player.actions_remaining -= 1
-                    check_and_switch_player()
+                    switch_player_if_needed()
                     return
 
 def player_can_claim_office(player, office_color):
@@ -164,17 +149,7 @@ def player_can_claim_office(player, office_color):
     return office_color in allowed_office_colors
 
 def handle_route_for_city_claim(route, city, player):
-    """Handle the actions for a route when trying to claim a city."""
-    route_city_1, route_city_2 = route.cities
-
     if route.is_controlled_by(player):
-        print(f"  Route from {route_city_1.name} to {route_city_2.name}:")
-        circles_on_route = sum(1 for post in route.posts if post.owner == player and post.owner_piece_shape == "circle")
-        squares_on_route = sum(1 for post in route.posts if post.owner == player and post.owner_piece_shape == "square")
-        print(f"Circles on route {route_city_1.name} to {route_city_2.name}: {circles_on_route}")
-        print(f"Squares on route {route_city_1.name} to {route_city_2.name}: {squares_on_route}")
-        
-        # Fetch required shape for the office first
         required_shape = city.get_next_open_office_shape()
 
         if not city.has_required_piece_shape(player, route, city):
@@ -182,30 +157,31 @@ def handle_route_for_city_claim(route, city, player):
         else:
             score_route(route)
             city.update_office_ownership(player, player.color)
-            
-            # Adjust the general supply based on the shape used to claim the office
-            print(f"Required Shape for office in {city.name} : {required_shape}")
-            if required_shape == "circle":
-                circles_on_route -= 1
-            elif required_shape == "square":
-                squares_on_route -= 1
-            
-            print(f"2Circles on route {route_city_1.name} to {route_city_2.name}: {circles_on_route}")
-            print(f"2Squares on route {route_city_1.name} to {route_city_2.name}: {squares_on_route}")
-            
-            # Update the player's general supply
-            player.general_stock_circles += circles_on_route
-            player.general_stock_squares += squares_on_route
-
-            for post in route.posts:
-                if post.owner == player:
-                    post.reset_post()
+            update_stock_and_reset(route, player, required_shape)
             player.actions_remaining -= 1
-            check_and_switch_player()
+            switch_player_if_needed()
 
-            for player in players:
-                if player.score >= 3:
-                    end_game(player)
+            for other_player in players:
+                if other_player.score >= 3:
+                    end_game(other_player)
+
+def update_stock_and_reset(route, player, placed_piece_shape=None):
+    """Update player's general stock based on pieces on the route and reset those posts."""
+    circles_on_route = sum(1 for post in route.posts if post.owner == player and post.owner_piece_shape == "circle")
+    squares_on_route = sum(1 for post in route.posts if post.owner == player and post.owner_piece_shape == "square")
+
+    if placed_piece_shape == "circle":
+        circles_on_route -= 1
+    elif placed_piece_shape == "square":
+        squares_on_route -= 1
+
+    # Update the player's general supply
+    player.general_stock_circles += circles_on_route
+    player.general_stock_squares += squares_on_route
+
+    for post in route.posts:
+        if post.owner == player:
+            post.reset_post()
 
 def city_was_clicked(city, pos):
     """Check if the city was clicked."""
@@ -419,14 +395,11 @@ def claim_post(post, player, piece_to_play):
         player.actions_remaining -= 1
         player.personal_supply_circles -= 1
         
-def check_and_switch_player():
-    if current_player.actions_remaining == 0:
-        next_player()
-
-def next_player():
+def switch_player_if_needed():
     global current_player
-    current_player = players[(players.index(current_player)+1)%len(players)]
-    current_player.actions_remaining = current_player.actions
+    if current_player.actions_remaining == 0:
+        current_player = players[(players.index(current_player) + 1) % len(players)]
+        current_player.actions_remaining = current_player.actions
 
 def reset_valid_posts_to_displace_to():
     for post in all_empty_posts:
@@ -459,7 +432,7 @@ while True:
                     displaced_player.reset_displaced_player()
                     waiting_for_displaced_player = False
                     current_player.actions_remaining -= 1
-                    check_and_switch_player()
+                    switch_player_if_needed()
             else:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
