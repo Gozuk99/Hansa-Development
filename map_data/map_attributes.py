@@ -230,7 +230,6 @@ class Office:
     def is_open(self):
         """Return True if the office is unclaimed."""
         return self.controller is None
-
 class Route:
     def __init__(self, cities, num_posts, has_bonus_marker=False):
         self.cities = cities

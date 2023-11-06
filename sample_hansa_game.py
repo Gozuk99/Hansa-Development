@@ -58,11 +58,13 @@ def score_route(route):
             player.score += 1
             print(f"Player {COLOR_NAMES[player.color]} scored for controlling {city.name}, total score: {player.score}")
     # Check for the game-ending condition after all points have been allocated
-    for player in players:
-        if player.score >= 3:
-            end_game(player)
+    check_for_game_end()
 
-def handle_click(pos, button):
+def check_bounds(item, pos):
+    return (item.x_pos < pos[0] < item.x_pos + item.width and
+            item.y_pos < pos[1] < item.y_pos + item.height)
+
+def check_if_post_clicked(pos, button):
     route, post = find_post_by_position(pos)
     if post:
         if button == 1:  # left click
@@ -80,11 +82,10 @@ def handle_click(pos, button):
             return
         switch_player_if_needed()
         return
+    
+def upgrade_clicked(pos):
     for upgrade in upgrade_cities:
-        if ((upgrade.x_pos < pos[0] < upgrade.x_pos + upgrade.width) and
-            (upgrade.y_pos < pos[1] < upgrade.y_pos + upgrade.height) and
-            button == 1 and current_player.actions > 0):
-
+        if check_bounds(upgrade, pos) and current_player.actions > 0:
             associated_city = next(city for city in cities if city.name == upgrade.city_name)
 
             if any(route.is_controlled_by(current_player) for route in associated_city.routes):
@@ -103,6 +104,7 @@ def handle_click(pos, button):
 
                     for route in associated_city.routes:
                         if route.is_controlled_by(current_player):
+                            score_route(route)
                             update_stock_and_reset(route, current_player)
                             current_player.actions_remaining -= 1
                             switch_player_if_needed()
@@ -111,20 +113,10 @@ def handle_click(pos, button):
             else:
                 print(f"Route(s) not controlled by current_player: {COLOR_NAMES[current_player.color]}")
 
-    if (specialprestigepoints_city.x_pos < pos[0] < specialprestigepoints_city.x_pos + specialprestigepoints_city.width and
-        specialprestigepoints_city.y_pos < pos[1] < specialprestigepoints_city.y_pos + specialprestigepoints_city.height and
-        button == 1 and current_player.actions > 0):
-            # Get the city associated with the specialprestigepoints_city using city_name
-            associated_city = next(city for city in cities if city.name == specialprestigepoints_city.city_name)
-            
-            # Directly check the single route associated with the city
-            if associated_city.routes[0].is_controlled_by(current_player):
-                specialprestigepoints_city.claim_highest_prestige(current_player)
-                specialprestigepoints_city.draw_special_prestige_points(win)
-    
+def claim_office_clicked(pos):
     for city in cities:
-        if city_was_clicked(city, pos) and button == 1 and current_player.actions > 0:
-            print(f"Clicked on city {city.name}:")
+        if city_was_clicked(city, pos) and current_player.actions > 0:
+            print(f"Clicked on city: {city.name}")
             next_open_office_color = city.get_next_open_office_color()
             print(f"Next open office color: {next_open_office_color}")
 
@@ -134,6 +126,29 @@ def handle_click(pos, button):
             else:
                 print(f"{COLOR_NAMES[current_player.color]} doesn't have the correct privilege - {current_player.privilege} - to claim an office in {city.name}.")
 
+def claim_route_for_points_clicked(pos):
+    for city in cities:
+        if city_was_clicked(city, pos) and current_player.actions > 0:
+            print(f"Clicked on city: {city.name}")
+            for route in city.routes:
+                if route.is_controlled_by(current_player):
+                    score_route(route)
+                    update_stock_and_reset(route, current_player)
+                    current_player.actions_remaining -= 1
+                    switch_player_if_needed()
+                    check_for_game_end()
+
+def special_bonus_points_clicked(pos):
+    if check_bounds(specialprestigepoints_city, pos) and current_player.actions > 0:
+        # Get the city associated with the specialprestigepoints_city using city_name
+        associated_city = next(city for city in cities if city.name == specialprestigepoints_city.city_name)
+        
+        # Directly check the single route associated with the city
+        if associated_city.routes[0].is_controlled_by(current_player):
+            specialprestigepoints_city.claim_highest_prestige(current_player)
+            specialprestigepoints_city.draw_special_prestige_points(win)
+
+def check_if_income_clicked(pos):
     # Check if any player board's Income Action button was clicked
     for board in player_boards:
         if hasattr(board, 'circle_buttons'):
@@ -144,27 +159,55 @@ def handle_click(pos, button):
                     switch_player_if_needed()
                     return
 
+def check_if_route_claimed(pos, button):
+    if button == 1:
+        if upgrade_clicked(pos):
+            return
+        if claim_office_clicked(pos):
+            return
+        if special_bonus_points_clicked(pos):
+            return
+    elif button == 3:
+        if claim_route_for_points_clicked(pos):
+            return
+
+def handle_click(pos, button):
+    check_if_post_clicked(pos, button)
+    check_if_route_claimed(pos,button)
+    check_if_income_clicked(pos)            
+
 def player_can_claim_office(player, office_color):
     """Check if a player can claim an office of the specified color."""
     allowed_office_colors = PRIVILEGE_COLORS[:PRIVILEGE_COLORS.index(player.privilege) + 1]
     return office_color in allowed_office_colors
 
-def handle_route_for_city_claim(route, city, player):
-    if route.is_controlled_by(player):
+def try_claim_office(route, city, player):
+    if not city.has_required_piece_shape(player, route, city):
         required_shape = city.get_next_open_office_shape()
+        print(f"{COLOR_NAMES[player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
+        return False
+    return True
 
-        if not city.has_required_piece_shape(player, route, city):
-            print(f"{COLOR_NAMES[player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
-        else:
-            score_route(route)
-            city.update_office_ownership(player, player.color)
-            update_stock_and_reset(route, player, required_shape)
-            player.actions_remaining -= 1
-            switch_player_if_needed()
+def handle_route_for_city_claim(route, city, player):
+    """Attempt to claim a route for a city and handle the action."""
+    if route.is_controlled_by(player):
+        if try_claim_office(route, city, player):
+            finalize_route_claim(route, city, player)
 
-            for other_player in players:
-                if other_player.score >= 3:
-                    end_game(other_player)
+def finalize_route_claim(route, city, player):
+    score_route(route)
+    placed_piece_shape = city.get_next_open_office_shape()
+    print(f"Shaped placed into office is {placed_piece_shape}")
+    update_stock_and_reset(route, player, placed_piece_shape)
+    city.update_office_ownership(player, player.color)
+    player.actions_remaining -= 1
+    switch_player_if_needed()
+    check_for_game_end()
+
+def check_for_game_end():
+    for player in players:
+        if player.score >= 3:
+            end_game(player)
 
 def update_stock_and_reset(route, player, placed_piece_shape=None):
     """Update player's general stock based on pieces on the route and reset those posts."""
