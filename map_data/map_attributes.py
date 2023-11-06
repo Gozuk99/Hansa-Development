@@ -59,37 +59,54 @@ class City:
 
     def get_controller(self):
         if not self.offices:
+            print(f"No offices in {self.name}, therefore no controller.")
             return None  # No offices in the city
 
-        # Determine the player controlling the rightmost office
+        # Determine if the rightmost office has a controller
         rightmost_office = self.offices[-1]
         rightmost_player = rightmost_office.controller
+        if rightmost_player:
+            print(f"Rightmost office in {self.name} is controlled by Player {COLOR_NAMES[rightmost_player.color]}")
+        else:
+            print(f"Rightmost office in {self.name} has no controller.")
 
         # Count the number of players controlling offices in the city
         player_counts = {}
         for office in self.offices:
-            if office.controller is not None:
+            if office.controller:
                 if office.controller in player_counts:
                     player_counts[office.controller] += 1
                 else:
                     player_counts[office.controller] = 1
 
         if not player_counts:
+            print(f"No players control any offices in {self.name}.")
             return None  # No offices controlled by any player in the city
+
+        for player, count in player_counts.items():
+            print(f"Player {COLOR_NAMES[player.color]} controls {count} office(s) in {self.name}.")
 
         # Find the maximum number of offices controlled by a single player
         max_offices = max(player_counts.values())
 
-        # Check if there's a tie for the number of offices controlled
-        if list(player_counts.values()).count(max_offices) == 1:
-            # If there's no tie, return the player controlling the rightmost office
-            self.controller = rightmost_player
-            return rightmost_player
-        else:
-            # If there's a tie, return the rightmost player among those controlling the same number of offices
-            tied_players = [player for player, offices in player_counts.items() if offices == max_offices]
-            self.controller = max(tied_players, key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player)))
-            return max(tied_players, key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player)))
+        # Identify the player(s) with the maximum number of offices
+        players_with_max_offices = [player for player, count in player_counts.items() if count == max_offices]
+
+        # If only one player has the max, they're the controller, regardless of the rightmost office
+        if len(players_with_max_offices) == 1:
+            controlling_player = players_with_max_offices[0]
+            self.controller = controlling_player
+            print(f"Player {COLOR_NAMES[controlling_player.color]} controls the most offices in {self.name}.")
+            return controlling_player
+
+        # If there's a tie, find the rightmost player among those tied
+        rightmost_tied_player = max(
+            players_with_max_offices,
+            key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player))
+        )
+        self.controller = rightmost_tied_player
+        print(f"There is a tie. Rightmost player among tied players in {self.name} is Player {COLOR_NAMES[rightmost_tied_player.color]}.")
+        return rightmost_tied_player
     
     def has_required_piece_shape(self, player, route, city):
         """Returns True if the player has the required piece shape on the route to claim an office in the city."""

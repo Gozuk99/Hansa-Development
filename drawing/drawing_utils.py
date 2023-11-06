@@ -78,7 +78,7 @@ def redraw_window(win, cities, routes, current_player, waiting_for_displaced_pla
 
         start_x = rect_x + BUFFER  # Starting x-coordinate within the rectangle
         start_y = rect_y + city.height // 2 - SQUARE_SIZE // 2  # Centered vertically in the rectangle
-        
+
         for office in city.offices:
             if office.shape == "square":
                 draw_shape(win, "rectangle", office.color, start_x, start_y, SQUARE_SIZE, SQUARE_SIZE)
@@ -142,6 +142,25 @@ def redraw_window(win, cities, routes, current_player, waiting_for_displaced_pla
     # Draw the combined text onto the main window
     win.blit(combined_text, (WIDTH // 2 - text_width // 2, HEIGHT - 50 - text_height // 2))
     pygame.display.update(text_area)
+
+def draw_scoreboard(win, players, start_x, start_y):
+    font = pygame.font.Font(None, 30)  # Adjust the size as needed
+    background_color = TAN  # Choose a background color that fits your design
+    scoreboard_height = len(players) * 20 + 50  # Adjust based on text size and spacing
+    scoreboard_width = 200  # Set the width according to your requirements
+
+    # Fill the scoreboard background
+    win.fill(background_color, (start_x, start_y, scoreboard_width, scoreboard_height))
+
+    # Draw the scoreboard label
+    score_board_label = font.render("Score Board", True, BLACK)
+    win.blit(score_board_label, (start_x, start_y))
+
+    # Draw each player's score
+    for index, player in enumerate(players):
+        score_text = f"Player {index + 1}: {player.score}"
+        text_surface = font.render(score_text, True, player.color)
+        win.blit(text_surface, (start_x, start_y + 25 + (index * 20)))  # Adjust the spacing as needed
 
 def draw_end_game(win, winning_player):
     font = pygame.font.Font(None, 36)

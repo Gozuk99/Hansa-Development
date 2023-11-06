@@ -4,7 +4,7 @@ from map_data.map1 import Map1
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
 from map_data.map_attributes import Post, City
-from drawing.drawing_utils import draw_line, redraw_window, draw_end_game
+from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game
 
 selected_map = Map1()
 WIDTH = selected_map.map_width+800
@@ -27,8 +27,8 @@ for upgrade_types in upgrade_cities:
 specialprestigepoints_city.draw_special_prestige_points(win)
 
 # Define players
-players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3)]
-# players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3), Player(RED, 4), Player(YELLOW, 5)]
+# players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3)]
+players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3), Player(RED, 4), Player(YELLOW, 5)]
 displaced_player = DisplacedPlayer()
 player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(players)]
 current_player = players[0]
@@ -56,6 +56,7 @@ def score_route(route):
         player = city.get_controller()
         if player is not None:
             player.score += 1
+            print(f"Player {COLOR_NAMES[player.color]} scored for controlling {city.name}, total score: {player.score}")
     # Check for the game-ending condition after all points have been allocated
     for player in players:
         if player.score >= 3:
@@ -437,7 +438,7 @@ while True:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
     redraw_window(win, cities, routes, current_player, waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
-
+    draw_scoreboard(win, players, WIDTH-200, HEIGHT-150)
     # In the game loop:
     for player_board in player_boards:
         player_board.draw(win, current_player)
