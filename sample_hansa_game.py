@@ -72,6 +72,8 @@ def check_if_post_clicked(pos, button):
                 claim_post(post, current_player, "square")
             elif post.is_owned() and post.owner != current_player:
                 handle_displacement(post, route, "square")
+            elif post.is_owned() and post.owner == current_player:
+                handle_move(pos, button)
         elif button == 3:  # right click
             if post.can_be_claimed_by("circle"):
                 claim_post(post, current_player, "circle")
@@ -82,7 +84,38 @@ def check_if_post_clicked(pos, button):
             return
         switch_player_if_needed()
         return
-    
+
+def handle_move(pos, button):
+    # Find the clicked post based on position
+    route, post = find_post_by_position(pos)
+
+    # If no post was found, simply return without doing anything
+    if post is None:
+        print("No post found at this position.")
+        return
+
+    # If the player is picking up pieces
+    if button == 1 and post.owner == current_player:
+        # If we have not started a move yet, start one
+        if current_player.pieces_to_place is None:
+            current_player.start_move()
+        # Attempt to pick up a piece if within the pieces to move limit (book)
+        current_player.pick_up_piece(post)
+
+    # If the player has pieces in hand to place
+    elif current_player.holding_pieces:
+        # Left-click on an empty post to place a square
+        if button == 1 and not post.is_owned():
+            current_player.place_piece(post, 'square')
+        # Right-click on an empty post to place a circle
+        elif button == 3 and not post.is_owned():
+            current_player.place_piece(post, 'circle')
+
+        # If no pieces are left to place, finish the move
+        if not current_player.holding_pieces:
+            current_player.finish_move()
+            switch_player_if_needed()  # Check if out of actions
+
 def upgrade_clicked(pos):
     for upgrade in upgrade_cities:
         if check_bounds(upgrade, pos) and current_player.actions > 0:
@@ -477,6 +510,8 @@ while True:
                     waiting_for_displaced_player = False
                     current_player.actions_remaining -= 1
                     switch_player_if_needed()
+            elif current_player.holding_pieces:
+                handle_move(pygame.mouse.get_pos(), event.button)
             else:
                 handle_click(pygame.mouse.get_pos(), event.button)
 

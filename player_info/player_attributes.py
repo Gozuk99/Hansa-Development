@@ -26,11 +26,13 @@ class Player:
         self.score = 0  # Initial score
         # The silver plate to store bonus markers for the end of the turn
         self.bonus_markers = []
+        self.holding_pieces = []
+        self.pieces_to_place = None
 
         # The available abilities with their starting values
         self.keys = 1
         self.privilege = "WHITE"
-        self.book = 2
+        self.book = 3
         self.actions_index = 0
         self.actions = ACTIONS_MAX_VALUES[5]
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
@@ -46,6 +48,43 @@ class Player:
 
     def add_bonus_marker(self, marker):
         self.bonus_markers.append(marker)
+    
+    def start_move(self):
+        # Start a new move by setting pieces to place equal to book value
+        self.pieces_to_place = self.book
+        print(f"Starting move: you can move up to {self.book} pieces.")
+
+    def pick_up_piece(self, post):
+        # Pick up a piece from the post if under the limit
+        if self.pieces_to_place > 0 and post.owner_piece_shape:
+            self.holding_pieces.append(post.owner_piece_shape)
+            self.pieces_to_place -= 1
+            print(f"Picked up a {post.owner_piece_shape}. {self.pieces_to_place} moves left.")
+            post.reset_post()
+        else:
+            message = "No more pieces can be picked up this turn." if self.pieces_to_place <= 0 else "This post is empty."
+            print(message)
+
+    def place_piece(self, post, shape):
+        # Place a specific shape on a post if it exists in holding_pieces
+        if shape in self.holding_pieces:
+            post.claim(self, shape)
+            self.holding_pieces.remove(shape)
+            print(f"Placed a {shape} on the board.")
+            if not self.holding_pieces:
+                # If all pieces are placed, reset pieces_to_place
+                self.pieces_to_place = self.book
+        else:
+            print(f"You don't have a {shape} to place.")
+
+    def finish_move(self):
+        # End the move process if no pieces are being held
+        if not self.holding_pieces:
+            print("Move completed.")
+            self.actions_remaining -= 1  # Deduct an action for the move
+            self.pieces_to_place = None  # Clear the move commitment
+        else:
+            print("You still have pieces to place. Finish your move.")
 
     def upgrade_keys(self):
         print("Upgrade Keys called")
