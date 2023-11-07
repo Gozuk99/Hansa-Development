@@ -1,12 +1,61 @@
 # map.py
 import pygame
+import random
 from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS
 from drawing.drawing_utils import draw_shape, draw_text
 
 class Map:
     def __init__(self):
-        self.placeholder = 0
+        # This should never change
+        self.initial_bonus_types = ['Move3', 'SwapOffice', 'PlaceAdjacent']
+        self.bonus_marker_pool = []
+        self.place_new_bonus_marker = False
+        # Prepare the starting bonus markers
+        self.assign_bm_pool_default()
 
+    def assign_starting_bm_types(self, route):
+        if self.initial_bonus_types:
+            # Assign a bonus marker type from the shuffled list and remove it
+            bm_type = self.initial_bonus_types.pop()
+            route.bonus_marker = Route.BonusMarker(bm_type) if route.has_bonus_marker else None
+
+    def assign_bm_pool_default(self):
+        # Default bonus markers
+        default_bonus_markers = {
+            'PlaceAdjacent': 3,
+            'SwapOffice': 2,
+            'Move3': 1,
+            'UpgradeAbility': 2,
+            '3Actions': 2,
+            '4Actions': 2
+        }
+        # Add the default bonus markers to the pool
+        for bm_type, count in default_bonus_markers.items():
+            self.bonus_marker_pool.extend([bm_type] * count)
+    
+    def assign_bm_pool_random(self):
+        # All possible bonus markers including expansions
+        all_bonus_markers = {
+            'PlaceAdjacent': 3,
+            'SwapOffice': 2,
+            'Move3': 1,
+            'UpgradeAbility': 2,
+            '3Actions': 2,
+            '4Actions': 2,
+            'Exchange Bonus Marker': 2,
+            'Tribute for Establish a Trading Post': 2,
+            'Block Trade Route': 2
+        }
+
+        # Create a list of all bonus markers based on their maximum count
+        all_bonus_markers_list = [bm_type for bm_type, max_count in all_bonus_markers.items() for _ in range(max_count)]
+
+        # Shuffle the list of all possible bonus markers
+        random.shuffle(all_bonus_markers_list)
+
+        # Take exactly 12 bonus markers to form the bonus marker pool
+        self.bonus_marker_pool = all_bonus_markers_list[:12]
+    
 class City:
     def __init__(self, name, position, color):
         self.name = name
@@ -230,39 +279,31 @@ class Office:
     def is_open(self):
         """Return True if the office is unclaimed."""
         return self.controller is None
+
 class Route:
-    def __init__(self, cities, num_posts, has_bonus_marker=False):
+    def __init__(self, cities, num_posts, has_bonus_marker=False, bonus_marker_type=None):
         self.cities = cities
         for city in cities:
             city.add_route(self)
         self.num_posts = num_posts
         self.has_bonus_marker = has_bonus_marker
+        self.bonus_marker = self.BonusMarker(bonus_marker_type) if has_bonus_marker else None
         self.posts = self.create_posts()
 
     def create_posts(self, buffer=0.1):
         city1, city2 = self.cities
         posts = []
 
-        # Print cities' midpoints to ensure they are correct
-        # print(f"City1 Midpoint: {city1.midpoint}")
-        # print(f"City2 Midpoint: {city2.midpoint}")
-
         for i in range(1, self.num_posts + 1):
             # Adjust the buffer to control the post distribution
             t = i / (self.num_posts + 1)
             t = buffer + (1 - 2 * buffer) * t
-
-            # Print the 't' value to ensure it's computed correctly
-            # print(f"Interpolation Factor t for post {i}: {t}")
 
             pos = (
                 city1.midpoint[0] + t * (city2.midpoint[0] - city1.midpoint[0]),
                 city1.midpoint[1] + t * (city2.midpoint[1] - city1.midpoint[1])
             )
             
-            # Print the computed position for each post
-            # print(f"Computed Position for Post {i}: {pos}")
-
             posts.append(Post(pos))
 
         return posts
@@ -282,6 +323,19 @@ class Route:
                 return False
         return True
     
+    class BonusMarker:
+        def __init__(self, type):
+            self.type = type
+
+        def draw(self, screen, position):
+            # Draw the bonus marker as a simple shape (e.g., a circle)
+            pygame.draw.circle(screen, BLACK, position, 30)
+            # Draw the text for the bonus marker type
+            font = pygame.font.SysFont(None, 24)
+            text = font.render(self.type, True, WHITE)  # Render the text with the bonus marker's type
+            text_rect = text.get_rect(center=position)  # Get a rect object to center the text inside the circle
+            screen.blit(text, text_rect)  # Draw the text to the screen at the specified position
+
 class Post:
     def __init__(self, position, owner=None, required_shape=None):
         self.pos = position

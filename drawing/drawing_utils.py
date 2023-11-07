@@ -45,6 +45,28 @@ def draw_text(window, text, x, y, font, color=BLACK, centered=False):
         text_rect = text_surface.get_rect(topleft=(x, y))
 
     window.blit(text_surface, text_rect)
+
+def draw_bonus_markers(win, selected_map):
+    routes = selected_map.routes
+
+    win.fill(TAN)
+
+    for route in routes:
+        draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
+        # Check if the route has a bonus marker and call its draw method
+        if route.bonus_marker:
+            # Construct the key for the dictionary
+            city_pair = tuple(sorted([route.cities[0].name, route.cities[1].name]))
+            # Fetch the bonus marker position from the dictionary
+            bonus_marker_pos = selected_map.bonus_marker_positions.get(city_pair)
+
+            # If the position exists, call the draw method on the bonus marker
+            if bonus_marker_pos:
+                route.bonus_marker.draw(win, bonus_marker_pos)
+                # print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
+            # else:
+                # print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")
+
 def draw_line(surface, color, start_pos, end_pos, line_width, border_width):
     # Draw the thicker border line first
     pygame.draw.line(surface, BLACK, start_pos, end_pos, line_width + 2 * border_width)

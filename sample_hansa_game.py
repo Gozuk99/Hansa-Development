@@ -4,7 +4,7 @@ from map_data.map1 import Map1
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
 from map_data.map_attributes import Post, City
-from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game
+from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game, draw_bonus_markers
 
 selected_map = Map1()
 WIDTH = selected_map.map_width+800
@@ -22,6 +22,21 @@ win.fill(TAN)
 
 for route in routes:
     draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
+    # Check if the route has a bonus marker and call its draw method
+    if route.bonus_marker:
+        # Construct the key for the dictionary
+        city_pair = tuple(sorted([route.cities[0].name, route.cities[1].name]))
+        # Fetch the bonus marker position from the dictionary
+        bonus_marker_pos = selected_map.bonus_marker_positions.get(city_pair)
+        selected_map.assign_starting_bm_types(route)
+
+        # If the position exists, call the draw method on the bonus marker
+        if bonus_marker_pos:
+            route.bonus_marker.draw(win, bonus_marker_pos)
+            print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
+        else:
+            print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")
+
 for upgrade_types in upgrade_cities:
     upgrade_types.draw_upgrades_on_map(win)
 specialprestigepoints_city.draw_special_prestige_points(win)
@@ -139,6 +154,7 @@ def upgrade_clicked(pos):
                         if route.is_controlled_by(current_player):
                             score_route(route)
                             update_stock_and_reset(route, current_player)
+                            handle_bonus_marker(current_player, route)
                             current_player.actions_remaining -= 1
                             switch_player_if_needed()
                 else:
@@ -168,18 +184,25 @@ def claim_route_for_points_clicked(pos):
                     score_route(route)
                     update_stock_and_reset(route, current_player)
                     current_player.actions_remaining -= 1
+                    handle_bonus_marker(current_player, route)
                     switch_player_if_needed()
                     check_for_game_end()
 
 def special_bonus_points_clicked(pos):
     if check_bounds(specialprestigepoints_city, pos) and current_player.actions > 0:
         # Get the city associated with the specialprestigepoints_city using city_name
-        associated_city = next(city for city in cities if city.name == specialprestigepoints_city.city_name)
-        
+        special_prestige_city = next(city for city in cities if city.name == specialprestigepoints_city.city_name)
+        route_to_special_prestige_city = special_prestige_city.routes[0]
         # Directly check the single route associated with the city
-        if associated_city.routes[0].is_controlled_by(current_player):
+        if route_to_special_prestige_city.is_controlled_by(current_player):
             specialprestigepoints_city.claim_highest_prestige(current_player)
             specialprestigepoints_city.draw_special_prestige_points(win)
+            score_route(route_to_special_prestige_city)
+            update_stock_and_reset(route_to_special_prestige_city, current_player, "circle")
+            current_player.actions_remaining -= 1
+            handle_bonus_marker(current_player, route_to_special_prestige_city)
+            switch_player_if_needed()
+            check_for_game_end()
 
 def check_if_income_clicked(pos):
     # Check if any player board's Income Action button was clicked
@@ -191,6 +214,12 @@ def check_if_income_clicked(pos):
                     current_player.actions_remaining -= 1
                     switch_player_if_needed()
                     return
+
+def handle_bonus_marker(player, route):
+    if route.bonus_marker:
+        player.bonus_markers.append(route.bonus_marker)
+        route.bonus_marker = None
+        selected_map.place_new_bonus_marker = True
 
 def check_if_route_claimed(pos, button):
     if button == 1:
@@ -234,13 +263,23 @@ def finalize_route_claim(route, city, player):
     update_stock_and_reset(route, player, placed_piece_shape)
     city.update_office_ownership(player, player.color)
     player.actions_remaining -= 1
+    handle_bonus_marker(current_player, route)
     switch_player_if_needed()
     check_for_game_end()
 
 def check_for_game_end():
-    for player in players:
-        if player.score >= 3:
-            end_game(player)
+    # Check if the bonus marker pool is empty
+    if not selected_map.bonus_marker_pool:
+        # Find the player with the highest score
+        highest_scoring_player = max(players, key=lambda p: p.score)
+        # End the game with the player who has the highest score
+        end_game(highest_scoring_player)
+    else:
+        # If the bonus marker pool is not empty, check if any player has reached the score threshold
+        for player in players:
+            if player.score >= 3:
+                end_game(player)
+                break
 
 def update_stock_and_reset(route, player, placed_piece_shape=None):
     """Update player's general stock based on pieces on the route and reset those posts."""
@@ -515,6 +554,7 @@ while True:
             else:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
+    draw_bonus_markers(win, selected_map)
     redraw_window(win, cities, routes, current_player, waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
     draw_scoreboard(win, players, WIDTH-200, HEIGHT-150)
     # In the game loop:

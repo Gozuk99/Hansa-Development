@@ -15,6 +15,42 @@ class Map1(Map):
         self.map_width = 1800
         self.map_height = 1255
 
+        #keep the cities in alphabetical order - helps when searching
+        self.bonus_marker_positions = {
+            ('Emden', 'Groningen'): (339, 159),
+            ('Emden', 'Osnabruck'): (454, 356),
+            ('Kampen', 'Osnabruck'): (336, 439),
+            ('Arnheim', 'Kampen'): (208, 558),
+            ('Arnheim', 'Duisburg'): (110, 832),
+            ('Arnheim', 'Munster'): (339, 758),
+            ('Dortmund', 'Duisburg'): (338, 880),
+            ('Bremen', 'Osnabruck'): (665, 382),
+            ('Minden', 'Munster'): (657, 626),
+            ('Bremen', 'Minden'): (802, 483),
+            ('Minden', 'Paderborn'): (774, 789),
+            ('Dortmund', 'Paderborn'): (632, 862),
+            ('Coellen', 'Warburg'): (420, 1113),
+            ('Paderborn', 'Warburg'): (678, 1052),
+            ('Hamburg', 'Stade'): (1125, 70),
+            ('Bremen', 'Hamburg'): (1125, 244),
+            ('Hannover', 'Minden'): (974, 530),
+            ('Bremen', 'Hannover'): (1047, 377),
+            ('Hildesheim', 'Paderborn'): (988, 907),
+            ('Hannover', 'Luneburg'): (1225, 401),
+            ('Brunswick', 'Minden'): (1041, 694),
+            ('Hamburg', 'Lubeck'): (1484, 78),
+            ('Hamburg', 'Luneburg'): (1404, 272),
+            ('Luneburg', 'Perleberg'): (1507, 430),
+            ('Perleberg', 'Stendal'): (1717, 499),
+            ('Brunswick', 'Stendal'): (1476, 605),
+            ('Magdeburg', 'Stendal'): (1719, 821),
+            ('Goslar', 'Magdeburg'): (1537, 830),
+            ('Goslar', 'Quedlinburg'): (1335, 996),
+            ('Goslar', 'Hildesheim'): (1243, 861),
+            ('Halle', 'Quedlinburg'): (1519, 1083),
+            ('Gottingen', 'Quedlinburg'): (1194, 1066),
+        }
+
     def create_cities_and_routes(self):
         # Define Map1-specific cities and offices
         # Define cities
