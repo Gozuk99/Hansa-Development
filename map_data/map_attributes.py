@@ -2,7 +2,7 @@
 import pygame
 import random
 from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS
-from drawing.drawing_utils import draw_shape, draw_text
+from drawing.drawing_utils import draw_shape, draw_text, draw_line
 
 class Map:
     def __init__(self):
@@ -13,11 +13,19 @@ class Map:
         # Prepare the starting bonus markers
         self.assign_bm_pool_default()
 
-    def assign_starting_bm_types(self, route):
-        if self.initial_bonus_types:
-            # Assign a bonus marker type from the shuffled list and remove it
-            bm_type = self.initial_bonus_types.pop()
-            route.bonus_marker = Route.BonusMarker(bm_type) if route.has_bonus_marker else None
+    def assign_starting_bonus_markers(self):
+         # Ensure we shuffle the initial bonus types to randomize the assignment
+        random.shuffle(self.initial_bonus_types)
+
+        for route in self.routes:
+            # Check if the route has a bonus marker
+            if route.has_bonus_marker:
+                if self.initial_bonus_types:  # Check if there are still bonus types available
+                    bm_type = self.initial_bonus_types.pop()
+                    # print(f"Assigning bonus marker: {bm_type} to route between {route.cities[0].name} and {route.cities[1].name}")
+                    route.assign_bonus_marker(bm_type)
+                else:
+                    print(f"Ran out of initial bonus types to assign for route between {route.cities[0].name} and {route.cities[1].name}")
 
     def assign_bm_pool_default(self):
         # Default bonus markers
@@ -32,6 +40,7 @@ class Map:
         # Add the default bonus markers to the pool
         for bm_type, count in default_bonus_markers.items():
             self.bonus_marker_pool.extend([bm_type] * count)
+        random.shuffle(self.bonus_marker_pool)
     
     def assign_bm_pool_random(self):
         # All possible bonus markers including expansions
@@ -56,6 +65,28 @@ class Map:
         # Take exactly 12 bonus markers to form the bonus marker pool
         self.bonus_marker_pool = all_bonus_markers_list[:12]
     
+    def draw_initial_state(self, win):
+        for route in self.routes:
+            draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
+            # Check if the route has a bonus marker and call its draw method
+            if route.bonus_marker:
+                # Construct the key for the dictionary
+                city_pair = tuple(sorted([route.cities[0].name, route.cities[1].name]))
+                # Fetch the bonus marker position from the dictionary
+                bonus_marker_pos = self.bonus_marker_positions.get(city_pair)
+                # self.assign_starting_bm_types(route)
+
+                # If the position exists, call the draw method on the bonus marker
+                if bonus_marker_pos:
+                    route.bonus_marker.draw(win, bonus_marker_pos)
+                    # print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
+                else:
+                    print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")
+
+        for upgrade_types in self.upgrades:
+            upgrade_types.draw_upgrades_on_map(win)
+        self.specialprestigepoints.draw_special_prestige_points(win)
+
 class City:
     def __init__(self, name, position, color):
         self.name = name
@@ -157,6 +188,12 @@ class City:
         print(f"There is a tie. Rightmost player among tied players in {self.name} is Player {COLOR_NAMES[rightmost_tied_player.color]}.")
         return rightmost_tied_player
     
+    def has_empty_office(self):
+        for office in self.offices:
+            if office.controller == None:
+                return True
+        return False
+
     def has_required_piece_shape(self, player, route, city):
         """Returns True if the player has the required piece shape on the route to claim an office in the city."""
         required_shape = city.get_next_open_office_shape()
@@ -287,7 +324,8 @@ class Route:
             city.add_route(self)
         self.num_posts = num_posts
         self.has_bonus_marker = has_bonus_marker
-        self.bonus_marker = self.BonusMarker(bonus_marker_type) if has_bonus_marker else None
+        # self.bonus_marker = self.assign_bonus_marker(bonus_marker_type) if has_bonus_marker else None
+        self.bonus_marker = None  # Don't assign it yet
         self.posts = self.create_posts()
 
     def create_posts(self, buffer=0.1):
@@ -314,6 +352,22 @@ class Route:
                 return post
         return None
     
+    def has_tradesmen(self):
+        for post in self.posts:
+            if post.owner is not None:
+                # print(f"Route check: Tradesman found at post {self.posts.index(post)+1}/{self.num_posts} on the route between {self.cities[0].name} and {self.cities[1].name}.")
+                return True
+        print(f"Route check: No tradesmen found on the route between {self.cities[0].name} and {self.cities[1].name}.")
+        return False
+
+    def has_empty_office_in_cities(self):
+        city1, city2 = self.cities
+        if city1.has_empty_office() or city2.has_empty_office():
+            print(f"Route check: At least one empty office found in cities {city1.name} or {city2.name}.")
+            return True
+        print(f"Route check: No empty offices found in cities {city1.name} and {city2.name}.")
+        return False
+    
     def is_controlled_by(self, player):
         return all(post.owner == player for post in self.posts)
 
@@ -323,6 +377,13 @@ class Route:
                 return False
         return True
     
+    def assign_bonus_marker(self, bm_type):
+        if not self.bonus_marker:  # Only assign if there's no bonus marker already
+            # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
+            self.bonus_marker = self.BonusMarker(bm_type)
+        else:
+            print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
+
     class BonusMarker:
         def __init__(self, type):
             self.type = type

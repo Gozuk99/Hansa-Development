@@ -11,6 +11,7 @@ class Map1(Map):
         self.upgrades = []
         self.specialprestigepoints = None
         self.create_cities_and_routes()  # Populate cities, offices, and routes etc., specifically for Map1
+        self.assign_starting_bonus_markers()
 
         self.map_width = 1800
         self.map_height = 1255
@@ -231,7 +232,7 @@ class Map1(Map):
         self.routes.append(Route([Arnheim, Duisburg], 3))
         self.routes.append(Route([Arnheim, Munster], 3))
         self.routes.append(Route([Duisburg, Dortmund], 2))
-        self.routes.append(Route([Osnabruck, Bremen], 3, True))
+        self.routes.append(Route([Osnabruck, Bremen], 3, has_bonus_marker=True))
         self.routes.append(Route([Munster, Minden], 3))
         self.routes.append(Route([Bremen, Minden], 3))
         self.routes.append(Route([Minden, Paderborn], 3))
@@ -247,12 +248,12 @@ class Map1(Map):
         self.routes.append(Route([Minden, Brunswick], 4))
         self.routes.append(Route([Lubeck, Hamburg], 3))
         self.routes.append(Route([Luneburg, Hamburg], 4))
-        self.routes.append(Route([Luneburg, Perleberg], 3, True))
+        self.routes.append(Route([Luneburg, Perleberg], 3, has_bonus_marker=True))
         self.routes.append(Route([Stendal, Perleberg], 3))
         self.routes.append(Route([Stendal, Brunswick], 4))
         self.routes.append(Route([Stendal, Magdeburg], 3))
         self.routes.append(Route([Goslar, Magdeburg], 2))
         self.routes.append(Route([Goslar, Quedlinburg], 4))
-        self.routes.append(Route([Goslar, Hildesheim], 3, True))
+        self.routes.append(Route([Goslar, Hildesheim], 3, has_bonus_marker=True))
         self.routes.append(Route([Halle, Quedlinburg], 4))
         self.routes.append(Route([Gottingen, Quedlinburg], 3))

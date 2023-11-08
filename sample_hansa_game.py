@@ -3,16 +3,17 @@ import sys
 from map_data.map1 import Map1
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
-from map_data.map_attributes import Post, City
+from map_data.map_attributes import Route, Post, City
+from game_info.game_attributes import Game
 from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game, draw_bonus_markers
 
-selected_map = Map1()
-WIDTH = selected_map.map_width+800
-HEIGHT = selected_map.map_height
-cities = selected_map.cities
-routes = selected_map.routes
-upgrade_cities = selected_map.upgrades
-specialprestigepoints_city = selected_map.specialprestigepoints
+game = Game(map_num=1, num_players=5)
+WIDTH = game.selected_map.map_width+800
+HEIGHT = game.selected_map.map_height
+cities = game.selected_map.cities
+routes = game.selected_map.routes
+upgrade_cities = game.selected_map.upgrades
+specialprestigepoints_city = game.selected_map.specialprestigepoints
 
 pygame.init()
 
@@ -20,37 +21,14 @@ win = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Hansa Sample Game')
 win.fill(TAN)
 
-for route in routes:
-    draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
-    # Check if the route has a bonus marker and call its draw method
-    if route.bonus_marker:
-        # Construct the key for the dictionary
-        city_pair = tuple(sorted([route.cities[0].name, route.cities[1].name]))
-        # Fetch the bonus marker position from the dictionary
-        bonus_marker_pos = selected_map.bonus_marker_positions.get(city_pair)
-        selected_map.assign_starting_bm_types(route)
-
-        # If the position exists, call the draw method on the bonus marker
-        if bonus_marker_pos:
-            route.bonus_marker.draw(win, bonus_marker_pos)
-            print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
-        else:
-            print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")
-
-for upgrade_types in upgrade_cities:
-    upgrade_types.draw_upgrades_on_map(win)
-specialprestigepoints_city.draw_special_prestige_points(win)
+# Draw the initial game state
+game.selected_map.draw_initial_state(win)
 
 # Define players
 # players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3)]
-players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3), Player(RED, 4), Player(YELLOW, 5)]
-displaced_player = DisplacedPlayer()
+players = game.players
+displaced_player = game.displaced_player
 player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(players)]
-current_player = players[0]
-current_player.actions_remaining = current_player.actions
-waiting_for_displaced_player = False
-original_route_of_displacement = None
-all_empty_posts = []
 
 def end_game(winning_player):
     while True:
@@ -84,21 +62,57 @@ def check_if_post_clicked(pos, button):
     if post:
         if button == 1:  # left click
             if post.can_be_claimed_by("square"):
-                claim_post(post, current_player, "square")
-            elif post.is_owned() and post.owner != current_player:
+                claim_post(post, game.current_player, "square")
+            elif post.is_owned() and post.owner != game.current_player:
                 handle_displacement(post, route, "square")
-            elif post.is_owned() and post.owner == current_player:
+            elif post.is_owned() and post.owner == game.current_player:
                 handle_move(pos, button)
         elif button == 3:  # right click
             if post.can_be_claimed_by("circle"):
-                claim_post(post, current_player, "circle")
-            elif post.is_owned() and post.owner != current_player:
+                claim_post(post, game.current_player, "circle")
+            elif post.is_owned() and post.owner != game.current_player:
                 handle_displacement(post, route, "circle")
         elif button == 2:  # middle click
             post.DEBUG_print_post_details()
             return
-        switch_player_if_needed()
+        game.switch_player_if_needed()
         return
+
+def assign_new_bonus_marker_on_route(pos, button):
+    # Ensure left click
+    if button != 1:  # Assuming 1 is the left click
+        print("No action taken: Click was not a left click.")
+        return
+
+    # Find the post and route by position
+    route, post = find_post_by_position(pos)
+
+    if not route:
+        print("Invalid BM Placement: Clicked position does not correspond to any route.")
+        return
+
+    if route.bonus_marker:
+        print(f"Invalid BM Placement: Route between {route.cities[0].name} and {route.cities[1].name} already has a bonus marker.")
+        return
+
+    if route.has_tradesmen():
+        print(f"Invalid BM Placement: Route between {route.cities[0].name} and {route.cities[1].name} has tradesmen on it.")
+        return
+
+    if not route.has_empty_office_in_cities():
+        print(f"Invalid BM Placement: Both cities at the ends of the route between {route.cities[0].name} and {route.cities[1].name} have no empty offices.")
+        return
+
+    if game.selected_map.bonus_marker_pool:
+        bm_type = game.selected_map.bonus_marker_pool.pop()
+        route.assign_bonus_marker(bm_type)  # Create a new BonusMarker instance with the type
+        print(f"Bonus marker '{bm_type}' has been placed on the route between {route.cities[0].name} and {route.cities[1].name}.")
+        # Set the flag to False after placing the new bonus marker
+        game.replace_bonus_marker -= 1
+        # Now you might want to update the display or the route to show the bonus marker
+        # draw_bonus_marker_on_route(route)  # Implement this function as needed
+    else:
+        print("No action taken: No bonus markers available in the pool.")
 
 def handle_move(pos, button):
     # Find the clicked post based on position
@@ -110,98 +124,98 @@ def handle_move(pos, button):
         return
 
     # If the player is picking up pieces
-    if button == 1 and post.owner == current_player:
+    if button == 1 and post.owner == game.current_player:
         # If we have not started a move yet, start one
-        if current_player.pieces_to_place is None:
-            current_player.start_move()
+        if game.current_player.pieces_to_place is None:
+            game.current_player.start_move()
         # Attempt to pick up a piece if within the pieces to move limit (book)
-        current_player.pick_up_piece(post)
+        game.current_player.pick_up_piece(post)
 
     # If the player has pieces in hand to place
-    elif current_player.holding_pieces:
+    elif game.current_player.holding_pieces:
         # Left-click on an empty post to place a square
         if button == 1 and not post.is_owned():
-            current_player.place_piece(post, 'square')
+            game.current_player.place_piece(post, 'square')
         # Right-click on an empty post to place a circle
         elif button == 3 and not post.is_owned():
-            current_player.place_piece(post, 'circle')
+            game.current_player.place_piece(post, 'circle')
 
         # If no pieces are left to place, finish the move
-        if not current_player.holding_pieces:
-            current_player.finish_move()
-            switch_player_if_needed()  # Check if out of actions
+        if not game.current_player.holding_pieces:
+            game.current_player.finish_move()
+            game.switch_player_if_needed()  # Check if out of actions
 
 def upgrade_clicked(pos):
     for upgrade in upgrade_cities:
-        if check_bounds(upgrade, pos) and current_player.actions > 0:
+        if check_bounds(upgrade, pos) and game.current_player.actions > 0:
             associated_city = next(city for city in cities if city.name == upgrade.city_name)
 
-            if any(route.is_controlled_by(current_player) for route in associated_city.routes):
+            if any(route.is_controlled_by(game.current_player) for route in associated_city.routes):
                 method_name = UPGRADE_METHODS_MAP[upgrade.upgrade_type.lower()]
-                current_value = getattr(current_player, upgrade.upgrade_type.lower())
+                current_value = getattr(game.current_player, upgrade.upgrade_type.lower())
                 max_value = UPGRADE_MAX_VALUES.get(upgrade.upgrade_type.lower())
 
                 if current_value != max_value:
-                    upgrade_function = getattr(current_player, method_name)
+                    upgrade_function = getattr(game.current_player, method_name)
                     upgrade_function()
 
                     if upgrade.upgrade_type.lower() in ["keys", "privilege", "actions", "bank"]:
-                        current_player.personal_supply_squares += 1
+                        game.current_player.personal_supply_squares += 1
                     elif upgrade.upgrade_type.lower() == "book":
-                        current_player.personal_supply_circles += 1
+                        game.current_player.personal_supply_circles += 1
 
                     for route in associated_city.routes:
-                        if route.is_controlled_by(current_player):
+                        if route.is_controlled_by(game.current_player):
                             score_route(route)
-                            update_stock_and_reset(route, current_player)
-                            handle_bonus_marker(current_player, route)
-                            current_player.actions_remaining -= 1
-                            switch_player_if_needed()
+                            update_stock_and_reset(route, game.current_player)
+                            handle_bonus_marker(game.current_player, route)
+                            game.current_player.actions_remaining -= 1
+                            game.switch_player_if_needed()
                 else:
-                    print(f"{upgrade.upgrade_type} is already at its maximum value for player {COLOR_NAMES[current_player.color]}. Action is invalid.")
+                    print(f"{upgrade.upgrade_type} is already at its maximum value for player {COLOR_NAMES[game.current_player.color]}. Action is invalid.")
             else:
-                print(f"Route(s) not controlled by current_player: {COLOR_NAMES[current_player.color]}")
+                print(f"Route(s) not controlled by current_player: {COLOR_NAMES[game.current_player.color]}")
 
 def claim_office_clicked(pos):
     for city in cities:
-        if city_was_clicked(city, pos) and current_player.actions > 0:
+        if city_was_clicked(city, pos) and game.current_player.actions > 0:
             print(f"Clicked on city: {city.name}")
             next_open_office_color = city.get_next_open_office_color()
             print(f"Next open office color: {next_open_office_color}")
 
-            if player_can_claim_office(current_player, next_open_office_color):
+            if player_can_claim_office(game.current_player, next_open_office_color):
                 for route in city.routes:
-                    handle_route_for_city_claim(route, city, current_player)
+                    handle_route_for_city_claim(route, city, game.current_player)
             else:
-                print(f"{COLOR_NAMES[current_player.color]} doesn't have the correct privilege - {current_player.privilege} - to claim an office in {city.name}.")
+                print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
 
 def claim_route_for_points_clicked(pos):
     for city in cities:
-        if city_was_clicked(city, pos) and current_player.actions > 0:
+        if city_was_clicked(city, pos) and game.current_player.actions > 0:
             print(f"Clicked on city: {city.name}")
             for route in city.routes:
-                if route.is_controlled_by(current_player):
+                if route.is_controlled_by(game.current_player):
                     score_route(route)
-                    update_stock_and_reset(route, current_player)
-                    current_player.actions_remaining -= 1
-                    handle_bonus_marker(current_player, route)
-                    switch_player_if_needed()
+                    update_stock_and_reset(route, game.current_player)
+                    game.current_player.actions_remaining -= 1
+                    handle_bonus_marker(game.current_player, route)
+                    game.switch_player_if_needed()
                     check_for_game_end()
 
 def special_bonus_points_clicked(pos):
-    if check_bounds(specialprestigepoints_city, pos) and current_player.actions > 0:
+    if check_bounds(specialprestigepoints_city, pos) and game.current_player.actions > 0:
         # Get the city associated with the specialprestigepoints_city using city_name
         special_prestige_city = next(city for city in cities if city.name == specialprestigepoints_city.city_name)
         route_to_special_prestige_city = special_prestige_city.routes[0]
         # Directly check the single route associated with the city
-        if route_to_special_prestige_city.is_controlled_by(current_player):
-            specialprestigepoints_city.claim_highest_prestige(current_player)
+        if route_to_special_prestige_city.is_controlled_by(game.current_player):
+            specialprestigepoints_city.claim_highest_prestige(game.current_player)
             specialprestigepoints_city.draw_special_prestige_points(win)
             score_route(route_to_special_prestige_city)
-            update_stock_and_reset(route_to_special_prestige_city, current_player, "circle")
-            current_player.actions_remaining -= 1
-            handle_bonus_marker(current_player, route_to_special_prestige_city)
-            switch_player_if_needed()
+            update_stock_and_reset(route_to_special_prestige_city, game.current_player, "circle")
+            game.current_player.actions_remaining -= 1
+            handle_bonus_marker(game.current_player, route_to_special_prestige_city)
+            game.switch_player_if_needed()
             check_for_game_end()
 
 def check_if_income_clicked(pos):
@@ -211,15 +225,15 @@ def check_if_income_clicked(pos):
             for idx, button_rect in enumerate(board.circle_buttons):
                 if button_rect.collidepoint(pos):
                     board.income_action_based_on_circle_count(idx)
-                    current_player.actions_remaining -= 1
-                    switch_player_if_needed()
+                    game.current_player.actions_remaining -= 1
+                    game.switch_player_if_needed()
                     return
 
 def handle_bonus_marker(player, route):
     if route.bonus_marker:
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
-        selected_map.place_new_bonus_marker = True
+        game.replace_bonus_marker += 1
 
 def check_if_route_claimed(pos, button):
     if button == 1:
@@ -259,17 +273,17 @@ def handle_route_for_city_claim(route, city, player):
 def finalize_route_claim(route, city, player):
     score_route(route)
     placed_piece_shape = city.get_next_open_office_shape()
-    print(f"Shaped placed into office is {placed_piece_shape}")
+    print(f"{COLOR_NAMES[player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
     update_stock_and_reset(route, player, placed_piece_shape)
     city.update_office_ownership(player, player.color)
     player.actions_remaining -= 1
-    handle_bonus_marker(current_player, route)
-    switch_player_if_needed()
+    handle_bonus_marker(game.current_player, route)
+    game.switch_player_if_needed()
     check_for_game_end()
 
 def check_for_game_end():
     # Check if the bonus marker pool is empty
-    if not selected_map.bonus_marker_pool:
+    if not game.selected_map.bonus_marker_pool:
         # Find the player with the highest score
         highest_scoring_player = max(players, key=lambda p: p.score)
         # End the game with the player who has the highest score
@@ -306,7 +320,7 @@ def city_was_clicked(city, pos):
 def displaced_click(pos, button):
     route, post = find_post_by_position(pos)  
 
-    if post not in all_empty_posts:
+    if post not in game.all_empty_posts:
         return
 
     # Determine which shape the player wants to place based on the button they clicked
@@ -366,7 +380,7 @@ def has_personal_supply(displaced_player, shape):
 
 def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, from_personal_supply=False):
     post.claim(displaced_player.player, shape)
-    all_empty_posts.remove(post)
+    game.all_empty_posts.remove(post)
     
     if use_displaced_piece:
         displaced_player.played_displaced_shape = True
@@ -384,7 +398,6 @@ def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, f
     displaced_player.total_pieces_to_place -= 1
 
 def handle_displacement(post, route, displacing_piece_shape):
-    global waiting_for_displaced_player, all_empty_posts, original_route_of_displacement
     # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
     current_displaced_player = post.owner
@@ -393,52 +406,52 @@ def handle_displacement(post, route, displacing_piece_shape):
     cost = 2 if displaced_piece_shape == "square" else 3
 
     # Check if the current player has enough tradesmen
-    if current_player.personal_supply_squares + current_player.personal_supply_circles < cost:
+    if game.current_player.personal_supply_squares + game.current_player.personal_supply_circles < cost:
         return  # Not enough tradesmen, action cannot be performed
 
     # Before displacing with a square, check if the current player has a square in their personal supply
-    if displacing_piece_shape == "square" and current_player.personal_supply_squares == 0:
+    if displacing_piece_shape == "square" and game.current_player.personal_supply_squares == 0:
         return  # Invalid move as there's no square in the personal supply
 
     # Before displacing with a circle, check if the current player has a circle in their personal supply
-    if displacing_piece_shape == "circle" and current_player.personal_supply_circles == 0:
+    if displacing_piece_shape == "circle" and game.current_player.personal_supply_circles == 0:
         return  # Invalid move as there's no circle in the personal supply
 
     # Handle the cost of displacement with priority to squares
-    squares_to_pay = min(current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
+    squares_to_pay = min(game.current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
     circles_to_pay = cost - 1 - squares_to_pay
 
-    current_player.personal_supply_squares -= squares_to_pay
-    current_player.personal_supply_circles -= circles_to_pay
+    game.current_player.personal_supply_squares -= squares_to_pay
+    game.current_player.personal_supply_circles -= circles_to_pay
 
-    current_player.general_stock_squares += squares_to_pay
-    current_player.general_stock_circles += circles_to_pay
+    game.current_player.general_stock_squares += squares_to_pay
+    game.current_player.general_stock_circles += circles_to_pay
 
     # Handle the piece being placed
     if displacing_piece_shape == "square":
-        current_player.personal_supply_squares -= 1
+        game.current_player.personal_supply_squares -= 1
         post.circle_color = TAN
-        post.square_color = current_player.color
+        post.square_color = game.current_player.color
     elif displacing_piece_shape == "circle":
-        current_player.personal_supply_circles -= 1
-        post.circle_color = current_player.color
+        game.current_player.personal_supply_circles -= 1
+        post.circle_color = game.current_player.color
         post.square_color = TAN
     else:
         sys.exit()
 
     post.owner_piece_shape = displacing_piece_shape
-    post.owner = current_player
+    post.owner = game.current_player
 
     # Find empty posts on adjacent routes
-    all_empty_posts = gather_empty_posts(route)
-    for post in all_empty_posts:
+    game.all_empty_posts = gather_empty_posts(route)
+    for post in game.all_empty_posts:
         post.valid_post_to_displace_to()
-    # Check conditions based on displaced_piece_shape and number of all_empty_posts
-    if ((displaced_piece_shape == "square" and len(all_empty_posts) == 1) or
-        (displaced_piece_shape == "circle" and 1 <= len(all_empty_posts) <= 2)):
-        original_route_of_displacement = route
+    # Check conditions based on displaced_piece_shape and number of game.all_empty_posts
+    if ((displaced_piece_shape == "square" and len(game.all_empty_posts) == 1) or
+        (displaced_piece_shape == "circle" and 1 <= len(game.all_empty_posts) <= 2)):
+        game.original_route_of_displacement = route
 
-    waiting_for_displaced_player = True
+    game.waiting_for_displaced_player = True
     displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
     print(f"Waiting for Displaced Player {COLOR_NAMES[displaced_player.player.color]} to place {displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {displaced_player.displaced_shape}.")
 
@@ -511,16 +524,10 @@ def claim_post(post, player, piece_to_play):
         player.actions_remaining -= 1
         player.personal_supply_circles -= 1
         
-def switch_player_if_needed():
-    global current_player
-    if current_player.actions_remaining == 0:
-        current_player = players[(players.index(current_player) + 1) % len(players)]
-        current_player.actions_remaining = current_player.actions
-
 def reset_valid_posts_to_displace_to():
-    for post in all_empty_posts:
+    for post in game.all_empty_posts:
         post.reset_post()
-    all_empty_posts.clear()
+    game.all_empty_posts.clear()
 
 while True:
     for event in pygame.event.get():
@@ -529,37 +536,42 @@ while True:
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
             # while game_not_over:
-            if waiting_for_displaced_player:
+            if game.waiting_for_displaced_player:
                 displaced_click(pygame.mouse.get_pos(), event.button)
-                if not all_empty_posts:
+                if not game.all_empty_posts:
                     print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
-                    all_empty_posts = gather_empty_posts(original_route_of_displacement)
-                    if not all_empty_posts:
+                    game.all_empty_posts = gather_empty_posts(game.original_route_of_displacement)
+                    if not game.all_empty_posts:
                         print("No empty posts found in adjacent routes either!")  # Debugging log
                     
                     post_count = 0  # Counter for the number of posts processed
-                    for post in all_empty_posts:
+                    for post in game.all_empty_posts:
                         post.valid_post_to_displace_to()
                         post_count += 1
                     print(f"Processed {post_count} posts.")  # Debugging log
                 if displaced_player.all_pieces_placed():
                     reset_valid_posts_to_displace_to()
-                    original_route_of_displacement = None
+                    game.original_route_of_displacement = None
                     displaced_player.reset_displaced_player()
-                    waiting_for_displaced_player = False
-                    current_player.actions_remaining -= 1
-                    switch_player_if_needed()
-            elif current_player.holding_pieces:
+                    game.waiting_for_displaced_player = False
+                    game.current_player.actions_remaining -= 1
+                    game.switch_player_if_needed()
+            elif game.current_player.holding_pieces:
                 handle_move(pygame.mouse.get_pos(), event.button)
+            elif game.current_player.actions_remaining == 0:
+                if game.replace_bonus_marker > 0:
+                    # If replace_bonus_marker > 0, the current player must place 1+ new bonus markers
+                    assign_new_bonus_marker_on_route(pygame.mouse.get_pos(), event.button)
+                game.switch_player_if_needed()
             else:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
-    draw_bonus_markers(win, selected_map)
-    redraw_window(win, cities, routes, current_player, waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
+    draw_bonus_markers(win, game.selected_map)
+    redraw_window(win, cities, routes, game.current_player, game.waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
     draw_scoreboard(win, players, WIDTH-200, HEIGHT-150)
     # In the game loop:
     for player_board in player_boards:
-        player_board.draw(win, current_player)
+        player_board.draw(win, game.current_player)
 
     pygame.display.flip()  # Update the screen
     pygame.time.delay(100)
