@@ -296,13 +296,12 @@ class Office:
         return self.controller is None
 
 class Route:
-    def __init__(self, cities, num_posts, has_bonus_marker=False, bonus_marker_type=None):
+    def __init__(self, cities, num_posts, has_bonus_marker=False):
         self.cities = cities
         for city in cities:
             city.add_route(self)
         self.num_posts = num_posts
         self.has_bonus_marker = has_bonus_marker
-        # self.bonus_marker = self.assign_bonus_marker(bonus_marker_type) if has_bonus_marker else None
         self.bonus_marker = None  # Don't assign it yet
         self.posts = self.create_posts()
 
@@ -382,6 +381,40 @@ class BonusMarker:
         distance_squared = (self.position[0] - mouse_pos[0]) ** 2 + (self.position[1] - mouse_pos[1]) ** 2
         return distance_squared <= CIRCLE_RADIUS ** 2
     
+    def use_bm(self, game):
+        # Call a method depending on the type of the bonus marker
+        if self.type == 'PlaceAdjacent':
+            print ("Only can be done if route is full.")
+            print ("If route is full, clicking on the city will automatically handle this.")
+            return
+        # elif self.type == 'SwapOffice':
+        #     handle_swap_office(current_player)
+        # elif self.type == 'Move3':
+        #     handle_move_3(current_player)
+        elif self.type == 'UpgradeAbility':
+            self.handle_upgrade_ability(game)
+        elif self.type == '3Actions':
+            self.handle_3_actions(game.current_player)
+        elif self.type == '4Actions':
+            self.handle_4_actions(game.current_player)
+        else:
+            print(f"Unknown bonus marker type: {self.type}")
+        # Remove the bonus marker after use
+        game.current_player.bonus_markers.pop()
+
+    def handle_upgrade_ability(self, game):
+        game.waiting_for_bm_upgrade_choice = True
+        print("Please click on an upgrade to choose it.")
+        pass
+
+    def handle_3_actions(self, current_player):
+        current_player.actions_remaining += 3
+        pass
+
+    def handle_4_actions(self, current_player):
+        current_player.actions_remaining += 4
+        pass
+
 class Post:
     def __init__(self, position, owner=None, required_shape=None):
         self.pos = position

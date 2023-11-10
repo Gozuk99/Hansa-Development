@@ -2,7 +2,7 @@
 
 import pygame
 import sys
-from map_data.constants import SQUARE_SIZE, CIRCLE_RADIUS, WHITE, ORANGE, PINK, BLACK, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES
+from map_data.constants import SQUARE_SIZE, CIRCLE_RADIUS, WHITE, ORANGE, PINK, BLACK, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES
 from drawing.drawing_utils import draw_shape, draw_text
 
 UPGRADE_METHODS_MAP = {
@@ -32,7 +32,7 @@ class Player:
         # The available abilities with their starting values
         self.keys = 1
         self.privilege = "WHITE"
-        self.book = 3
+        self.book = 2
         self.actions_index = 0
         self.actions = ACTIONS_MAX_VALUES[5]
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
@@ -128,6 +128,26 @@ class Player:
             self.bank = BANK_MAX_VALUES[current_index + 1]
         else:
             print("Bank is already at its maximum level!")
+
+    def perform_upgrade(self, upgrade_type):
+        method_name = UPGRADE_METHODS_MAP[upgrade_type.lower()]
+        current_value = getattr(self, upgrade_type.lower())
+        max_value = UPGRADE_MAX_VALUES.get(upgrade_type.lower())
+
+        if current_value != max_value:
+            upgrade_function = getattr(self, method_name)
+            upgrade_function()
+
+            if upgrade_type.lower() in ["keys", "privilege", "actions", "bank"]:
+                self.personal_supply_squares += 1
+            elif upgrade_type.lower() == "book":
+                self.personal_supply_circles += 1
+
+            # If this is called from a bonus marker, you might not want to adjust actions or switch player
+            return True
+        else:
+            print(f"{upgrade_type} is already at its maximum value for player {COLOR_NAMES[self.color]}.")
+            return False
 
     def has_unlocked_key(self, index):
         return self.keys > index

@@ -145,19 +145,7 @@ def upgrade_clicked(pos):
             associated_city = next(city for city in cities if city.name == upgrade.city_name)
 
             if any(route.is_controlled_by(game.current_player) for route in associated_city.routes):
-                method_name = UPGRADE_METHODS_MAP[upgrade.upgrade_type.lower()]
-                current_value = getattr(game.current_player, upgrade.upgrade_type.lower())
-                max_value = UPGRADE_MAX_VALUES.get(upgrade.upgrade_type.lower())
-
-                if current_value != max_value:
-                    upgrade_function = getattr(game.current_player, method_name)
-                    upgrade_function()
-
-                    if upgrade.upgrade_type.lower() in ["keys", "privilege", "actions", "bank"]:
-                        game.current_player.personal_supply_squares += 1
-                    elif upgrade.upgrade_type.lower() == "book":
-                        game.current_player.personal_supply_circles += 1
-
+               if game.current_player.perform_upgrade(upgrade.upgrade_type):
                     for route in associated_city.routes:
                         if route.is_controlled_by(game.current_player):
                             score_route(route)
@@ -165,8 +153,6 @@ def upgrade_clicked(pos):
                             handle_bonus_marker(game.current_player, route)
                             game.current_player.actions_remaining -= 1
                             game.switch_player_if_needed()
-                else:
-                    print(f"{upgrade.upgrade_type} is already at its maximum value for player {COLOR_NAMES[game.current_player.color]}. Action is invalid.")
             else:
                 print(f"Route(s) not controlled by current_player: {COLOR_NAMES[game.current_player.color]}")
 
@@ -246,6 +232,7 @@ def check_if_bm_clicked(pos):
     for bm in game.current_player.bonus_markers:
         if bm.is_clicked(pos):
             print(f"Clicked on bonus marker: {bm.type}")
+            bm.use_bm(game)
 
 def handle_click(pos, button):
     check_if_post_clicked(pos, button)
@@ -559,6 +546,14 @@ while True:
                     game.switch_player_if_needed()
             elif game.current_player.holding_pieces:
                 handle_move(pygame.mouse.get_pos(), event.button)
+            elif game.waiting_for_bm_upgrade_choice:
+                for upgrade in upgrade_cities:
+                    if check_bounds(upgrade, pygame.mouse.get_pos()):
+                        if game.current_player.perform_upgrade(upgrade.upgrade_type):
+                            print("Successfully used Upgrade BM")
+                            game.waiting_for_bm_upgrade_choice = False
+                        else:
+                            print("Invalid click when Upgrading via BM")
             elif game.current_player.actions_remaining == 0:
                 if game.replace_bonus_marker > 0:
                     # If replace_bonus_marker > 0, the current player must place 1+ new bonus markers

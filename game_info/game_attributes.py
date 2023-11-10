@@ -21,6 +21,7 @@ class Game:
         self.displaced_player = DisplacedPlayer()
         self.waiting_for_displaced_player = False
         self.original_route_of_displacement = None
+        self.waiting_for_bm_upgrade_choice = False
         self.all_empty_posts = []
 
     def create_players(self, num_players):
