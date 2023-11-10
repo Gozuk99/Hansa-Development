@@ -46,6 +46,11 @@ def draw_text(window, text, x, y, font, color=BLACK, centered=False):
 
     window.blit(text_surface, text_rect)
 
+def draw_upgrades(win, selected_map):
+    for upgrade_types in selected_map.upgrades:
+        upgrade_types.draw_upgrades_on_map(win)
+    selected_map.specialprestigepoints.draw_special_prestige_points(win)
+    
 def draw_bonus_markers(win, selected_map):
     routes = selected_map.routes
 
@@ -62,7 +67,7 @@ def draw_bonus_markers(win, selected_map):
 
             # If the position exists, call the draw method on the bonus marker
             if bonus_marker_pos:
-                route.bonus_marker.draw(win, bonus_marker_pos)
+                route.bonus_marker.draw_board_bonus_markers(win, bonus_marker_pos)
                 # print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
             # else:
                 # print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")

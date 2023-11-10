@@ -321,6 +321,7 @@ class PlayerBoard:
 
         self.draw_city_keys_section(window)
         self.draw_privilegium_section(window)
+        self.draw_bonus_markers_section(window)
         self.draw_liber_sophiae_section(window)
         self.draw_actiones_section(window)
         self.draw_bank_section(window)
@@ -358,6 +359,15 @@ class PlayerBoard:
             draw_shape(window, "rectangle", color_to_use, self.x + 10 + i*(SQUARE_SIZE + 5), privilege_y, width=SQUARE_SIZE, height=SQUARE_SIZE)
         
         draw_text(window, "Privilege", self.x + 10, privilege_y + SQUARE_SIZE + 5, self.font, BLACK)
+
+    def draw_bonus_markers_section(self, window):
+        # Starting position for bonus markers (below the privilege section)
+        bm_start_y = self.y + self.height - CIRCLE_RADIUS*2  # adjusting spacing
+
+        for i, bm in enumerate(self.player.bonus_markers):
+            bm_x = self.x + 20 + CIRCLE_RADIUS + (i * (CIRCLE_RADIUS*2 + 30))
+            bm_position = (bm_x, bm_start_y)
+            bm.draw_board_bonus_markers(window, bm_position)
 
     def draw_liber_sophiae_section(self, window):
          # Draw "Liber Sophiae" section (circles)

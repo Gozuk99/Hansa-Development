@@ -65,28 +65,6 @@ class Map:
         # Take exactly 12 bonus markers to form the bonus marker pool
         self.bonus_marker_pool = all_bonus_markers_list[:12]
     
-    def draw_initial_state(self, win):
-        for route in self.routes:
-            draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
-            # Check if the route has a bonus marker and call its draw method
-            if route.bonus_marker:
-                # Construct the key for the dictionary
-                city_pair = tuple(sorted([route.cities[0].name, route.cities[1].name]))
-                # Fetch the bonus marker position from the dictionary
-                bonus_marker_pos = self.bonus_marker_positions.get(city_pair)
-                # self.assign_starting_bm_types(route)
-
-                # If the position exists, call the draw method on the bonus marker
-                if bonus_marker_pos:
-                    route.bonus_marker.draw(win, bonus_marker_pos)
-                    # print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
-                else:
-                    print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")
-
-        for upgrade_types in self.upgrades:
-            upgrade_types.draw_upgrades_on_map(win)
-        self.specialprestigepoints.draw_special_prestige_points(win)
-
 class City:
     def __init__(self, name, position, color):
         self.name = name
@@ -380,22 +358,22 @@ class Route:
     def assign_bonus_marker(self, bm_type):
         if not self.bonus_marker:  # Only assign if there's no bonus marker already
             # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
-            self.bonus_marker = self.BonusMarker(bm_type)
+            self.bonus_marker = BonusMarker(bm_type)
         else:
             print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
 
-    class BonusMarker:
-        def __init__(self, type):
-            self.type = type
+class BonusMarker:
+    def __init__(self, type):
+        self.type = type
 
-        def draw(self, screen, position):
-            # Draw the bonus marker as a simple shape (e.g., a circle)
-            pygame.draw.circle(screen, BLACK, position, 30)
-            # Draw the text for the bonus marker type
-            font = pygame.font.SysFont(None, 24)
-            text = font.render(self.type, True, WHITE)  # Render the text with the bonus marker's type
-            text_rect = text.get_rect(center=position)  # Get a rect object to center the text inside the circle
-            screen.blit(text, text_rect)  # Draw the text to the screen at the specified position
+    def draw_board_bonus_markers(self, screen, position):
+        # Draw the bonus marker as a simple shape (e.g., a circle)
+        pygame.draw.circle(screen, BLACK, position, 30)
+        # Draw the text for the bonus marker type
+        font = pygame.font.SysFont(None, 24)
+        text = font.render(self.type, True, WHITE)  # Render the text with the bonus marker's type
+        text_rect = text.get_rect(center=position)  # Get a rect object to center the text inside the circle
+        screen.blit(text, text_rect)  # Draw the text to the screen at the specified position
 
 class Post:
     def __init__(self, position, owner=None, required_shape=None):

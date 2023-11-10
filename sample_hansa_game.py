@@ -5,7 +5,7 @@ from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, 
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
 from map_data.map_attributes import Route, Post, City
 from game_info.game_attributes import Game
-from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game, draw_bonus_markers
+from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game, draw_bonus_markers, draw_upgrades
 
 game = Game(map_num=1, num_players=5)
 WIDTH = game.selected_map.map_width+800
@@ -21,14 +21,8 @@ win = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Hansa Sample Game')
 win.fill(TAN)
 
-# Draw the initial game state
-game.selected_map.draw_initial_state(win)
-
-# Define players
-# players = [Player(GREEN, 1), Player(BLUE, 2), Player(PURPLE, 3)]
-players = game.players
 displaced_player = game.displaced_player
-player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(players)]
+player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(game.players)]
 
 def end_game(winning_player):
     while True:
@@ -285,12 +279,12 @@ def check_for_game_end():
     # Check if the bonus marker pool is empty
     if not game.selected_map.bonus_marker_pool:
         # Find the player with the highest score
-        highest_scoring_player = max(players, key=lambda p: p.score)
+        highest_scoring_player = max(game.players, key=lambda p: p.score)
         # End the game with the player who has the highest score
         end_game(highest_scoring_player)
     else:
         # If the bonus marker pool is not empty, check if any player has reached the score threshold
-        for player in players:
+        for player in game.players:
             if player.score >= 3:
                 end_game(player)
                 break
@@ -567,8 +561,9 @@ while True:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
     draw_bonus_markers(win, game.selected_map)
+    draw_upgrades(win, game.selected_map)
     redraw_window(win, cities, routes, game.current_player, game.waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
-    draw_scoreboard(win, players, WIDTH-200, HEIGHT-150)
+    draw_scoreboard(win, game.players, WIDTH-200, HEIGHT-150)
     # In the game loop:
     for player_board in player_boards:
         player_board.draw(win, game.current_player)
