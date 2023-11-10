@@ -366,8 +366,8 @@ class PlayerBoard:
 
         for i, bm in enumerate(self.player.bonus_markers):
             bm_x = self.x + 20 + CIRCLE_RADIUS + (i * (CIRCLE_RADIUS*2 + 30))
-            bm_position = (bm_x, bm_start_y)
-            bm.draw_board_bonus_markers(window, bm_position)
+            self.player.bonus_markers[i].position = (bm_x, bm_start_y) #update the position
+            bm.draw_board_bonus_markers(window, self.player.bonus_markers[i].position)
 
     def draw_liber_sophiae_section(self, window):
          # Draw "Liber Sophiae" section (circles)

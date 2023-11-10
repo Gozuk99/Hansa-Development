@@ -99,7 +99,7 @@ def assign_new_bonus_marker_on_route(pos, button):
 
     if game.selected_map.bonus_marker_pool:
         bm_type = game.selected_map.bonus_marker_pool.pop()
-        route.assign_bonus_marker(bm_type)  # Create a new BonusMarker instance with the type
+        route.assign_map_new_bonus_marker(bm_type)  # Create a new BonusMarker instance with the type
         print(f"Bonus marker '{bm_type}' has been placed on the route between {route.cities[0].name} and {route.cities[1].name}.")
         # Set the flag to False after placing the new bonus marker
         game.replace_bonus_marker -= 1
@@ -225,6 +225,7 @@ def check_if_income_clicked(pos):
 
 def handle_bonus_marker(player, route):
     if route.bonus_marker:
+        route.bonus_marker.owner = player
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
         game.replace_bonus_marker += 1
@@ -241,10 +242,16 @@ def check_if_route_claimed(pos, button):
         if claim_route_for_points_clicked(pos):
             return
 
+def check_if_bm_clicked(pos):
+    for bm in game.current_player.bonus_markers:
+        if bm.is_clicked(pos):
+            print(f"Clicked on bonus marker: {bm.type}")
+
 def handle_click(pos, button):
     check_if_post_clicked(pos, button)
     check_if_route_claimed(pos,button)
     check_if_income_clicked(pos)            
+    check_if_bm_clicked(pos)            
 
 def player_can_claim_office(player, office_color):
     """Check if a player can claim an office of the specified color."""

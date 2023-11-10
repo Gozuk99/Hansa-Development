@@ -23,7 +23,7 @@ class Map:
                 if self.initial_bonus_types:  # Check if there are still bonus types available
                     bm_type = self.initial_bonus_types.pop()
                     # print(f"Assigning bonus marker: {bm_type} to route between {route.cities[0].name} and {route.cities[1].name}")
-                    route.assign_bonus_marker(bm_type)
+                    route.assign_map_new_bonus_marker(bm_type)
                 else:
                     print(f"Ran out of initial bonus types to assign for route between {route.cities[0].name} and {route.cities[1].name}")
 
@@ -355,7 +355,7 @@ class Route:
                 return False
         return True
     
-    def assign_bonus_marker(self, bm_type):
+    def assign_map_new_bonus_marker(self, bm_type):
         if not self.bonus_marker:  # Only assign if there's no bonus marker already
             # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
             self.bonus_marker = BonusMarker(bm_type)
@@ -363,8 +363,10 @@ class Route:
             print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
 
 class BonusMarker:
-    def __init__(self, type):
+    def __init__(self, type, owner=None):
         self.type = type
+        self.owner = owner
+        self.position = (0, 0)
 
     def draw_board_bonus_markers(self, screen, position):
         # Draw the bonus marker as a simple shape (e.g., a circle)
@@ -374,7 +376,12 @@ class BonusMarker:
         text = font.render(self.type, True, WHITE)  # Render the text with the bonus marker's type
         text_rect = text.get_rect(center=position)  # Get a rect object to center the text inside the circle
         screen.blit(text, text_rect)  # Draw the text to the screen at the specified position
-
+    
+    def is_clicked(self, mouse_pos):
+        # Check if the mouse click is within the circle of the bonus marker
+        distance_squared = (self.position[0] - mouse_pos[0]) ** 2 + (self.position[1] - mouse_pos[1]) ** 2
+        return distance_squared <= CIRCLE_RADIUS ** 2
+    
 class Post:
     def __init__(self, position, owner=None, required_shape=None):
         self.pos = position
