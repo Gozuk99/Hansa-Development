@@ -52,30 +52,39 @@ class Player:
     def start_move(self):
         # Start a new move by setting pieces to place equal to book value
         self.pieces_to_place = self.book
+        self.holding_pieces = []
         print(f"Starting move: you can move up to {self.book} pieces.")
 
     def pick_up_piece(self, post):
         # Pick up a piece from the post if under the limit
         if self.pieces_to_place > 0 and post.owner_piece_shape:
-            self.holding_pieces.append(post.owner_piece_shape)
+            self.holding_pieces.append((post.owner_piece_shape, post.owner))
             self.pieces_to_place -= 1
-            print(f"Picked up a {post.owner_piece_shape}. {self.pieces_to_place} moves left.")
+            print(f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape}. {self.pieces_to_place} moves left.")  # Assuming owner has a 'color' attribute
             post.reset_post()
         else:
             message = "No more pieces can be picked up this turn." if self.pieces_to_place <= 0 else "This post is empty."
             print(message)
 
-    def place_piece(self, post, shape):
-        # Place a specific shape on a post if it exists in holding_pieces
-        if shape in self.holding_pieces:
-            post.claim(self, shape)
-            self.holding_pieces.remove(shape)
-            print(f"Placed a {shape} on the board.")
-            if not self.holding_pieces:
-                # If all pieces are placed, reset pieces_to_place
-                self.pieces_to_place = self.book
+    def place_piece(self, post, button):
+        if not self.holding_pieces:
+            print("No pieces to place.")
+            return
+
+        # Retrieve the shape and the owner of the next piece to be placed
+        shape_to_place, owner_to_place = self.holding_pieces[0]
+
+        # Determine the shape based on the button clicked
+        shape_clicked = 'circle' if button == 3 else 'square'
+
+        if shape_to_place == shape_clicked:
+            # The shape matches, so place it and remove from holding_pieces
+            print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")  # Assuming owner has a 'color' attribute
+            post.claim(owner_to_place, shape_to_place)  # Note: The owner should be passed to the claim method
+            self.holding_pieces.pop(0)
+            print(f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board.")
         else:
-            print(f"You don't have a {shape} to place.")
+            print(f"The next piece to place must be Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
 
     def finish_move(self):
         # End the move process if no pieces are being held

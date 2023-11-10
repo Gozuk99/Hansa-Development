@@ -114,7 +114,6 @@ def handle_move(pos, button):
 
     # If no post was found, simply return without doing anything
     if post is None:
-        print("No post found at this position.")
         return
 
     # If the player is picking up pieces
@@ -127,17 +126,33 @@ def handle_move(pos, button):
 
     # If the player has pieces in hand to place
     elif game.current_player.holding_pieces:
-        # Left-click on an empty post to place a square
-        if button == 1 and not post.is_owned():
-            game.current_player.place_piece(post, 'square')
-        # Right-click on an empty post to place a circle
-        elif button == 3 and not post.is_owned():
-            game.current_player.place_piece(post, 'circle')
+        if not post.is_owned():
+            game.current_player.place_piece(post, button)
 
         # If no pieces are left to place, finish the move
         if not game.current_player.holding_pieces:
             game.current_player.finish_move()
             game.switch_player_if_needed()  # Check if out of actions
+
+# And the corresponding changes in the handle_move_opponent function:
+def handle_move_opponent(pos, button):
+    route, post = find_post_by_position(pos)
+
+    if post is None:
+        return
+
+    if button == 1 and post.is_owned() and post.owner != game.current_player:
+        if game.current_player.pieces_to_place > 0:
+            game.current_player.pick_up_piece(post)
+
+    elif game.current_player.holding_pieces:
+        if not post.is_owned():
+            game.current_player.place_piece(post, button)
+            if not game.current_player.holding_pieces:
+                game.current_player.finish_move()
+                game.waiting_for_bm_move3_choice = False
+        else:
+            print("Cannot place a piece here. The post is already occupied.")
 
 def upgrade_clicked(pos):
     for upgrade in upgrade_cities:
@@ -544,8 +559,13 @@ while True:
                     game.waiting_for_displaced_player = False
                     game.current_player.actions_remaining -= 1
                     game.switch_player_if_needed()
-            elif game.current_player.holding_pieces:
+
+            elif game.waiting_for_bm_move3_choice:
+                handle_move_opponent(pygame.mouse.get_pos(), event.button)
+
+            elif game.current_player.holding_pieces and not game.waiting_for_bm_move3_choice:
                 handle_move(pygame.mouse.get_pos(), event.button)
+
             elif game.waiting_for_bm_upgrade_choice:
                 for upgrade in upgrade_cities:
                     if check_bounds(upgrade, pygame.mouse.get_pos()):
@@ -554,6 +574,7 @@ while True:
                             game.waiting_for_bm_upgrade_choice = False
                         else:
                             print("Invalid click when Upgrading via BM")
+                            
             elif game.current_player.actions_remaining == 0:
                 if game.replace_bonus_marker > 0:
                     # If replace_bonus_marker > 0, the current player must place 1+ new bonus markers

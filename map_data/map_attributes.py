@@ -389,8 +389,8 @@ class BonusMarker:
             return
         # elif self.type == 'SwapOffice':
         #     handle_swap_office(current_player)
-        # elif self.type == 'Move3':
-        #     handle_move_3(current_player)
+        elif self.type == 'Move3':
+            self.handle_move_3(game)
         elif self.type == 'UpgradeAbility':
             self.handle_upgrade_ability(game)
         elif self.type == '3Actions':
@@ -401,19 +401,21 @@ class BonusMarker:
             print(f"Unknown bonus marker type: {self.type}")
         # Remove the bonus marker after use
         game.current_player.bonus_markers.pop()
-
+        
+    def handle_move_3(self, game):
+        game.waiting_for_bm_move3_choice = True
+        game.current_player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker
+        print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
+        
     def handle_upgrade_ability(self, game):
         game.waiting_for_bm_upgrade_choice = True
         print("Please click on an upgrade to choose it.")
-        pass
 
     def handle_3_actions(self, current_player):
         current_player.actions_remaining += 3
-        pass
 
     def handle_4_actions(self, current_player):
         current_player.actions_remaining += 4
-        pass
 
 class Post:
     def __init__(self, position, owner=None, required_shape=None):

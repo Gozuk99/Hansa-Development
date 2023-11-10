@@ -22,11 +22,13 @@ class Game:
         self.waiting_for_displaced_player = False
         self.original_route_of_displacement = None
         self.waiting_for_bm_upgrade_choice = False
+        self.waiting_for_bm_move3_choice = False
         self.all_empty_posts = []
 
     def create_players(self, num_players):
         # Create player objects based on the number of players
-        colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
+        # colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
+        colors = [GREEN, BLUE, PURPLE]  # Assume these are defined somewhere
         players = [Player(color, i+1) for i, color in enumerate(colors[:num_players])]
         for player in players:
             player.actions_remaining = player.actions  # Initialize actions_remaining for each player
