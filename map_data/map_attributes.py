@@ -119,52 +119,37 @@ class City:
         if not self.offices:
             print(f"No offices in {self.name}, therefore no controller.")
             return None  # No offices in the city
-
-        # Determine if the rightmost office has a controller
-        rightmost_office = self.offices[-1]
-        rightmost_player = rightmost_office.controller
-        if rightmost_player:
-            print(f"Rightmost office in {self.name} is controlled by Player {COLOR_NAMES[rightmost_player.color]}")
-        else:
-            print(f"Rightmost office in {self.name} has no controller.")
-
-        # Count the number of players controlling offices in the city
+        
+        # Count the number of offices controlled by each player
         player_counts = {}
         for office in self.offices:
             if office.controller:
-                if office.controller in player_counts:
-                    player_counts[office.controller] += 1
-                else:
-                    player_counts[office.controller] = 1
+                player_counts[office.controller] = player_counts.get(office.controller, 0) + 1
 
         if not player_counts:
             print(f"No players control any offices in {self.name}.")
             return None  # No offices controlled by any player in the city
 
-        for player, count in player_counts.items():
-            print(f"Player {COLOR_NAMES[player.color]} controls {count} office(s) in {self.name}.")
+        # Determine the player with the maximum number of offices controlled
+        max_controlled_offices = max(player_counts.values())
+        players_with_max_offices = [player for player, count in player_counts.items() if count == max_controlled_offices]
 
-        # Find the maximum number of offices controlled by a single player
-        max_offices = max(player_counts.values())
-
-        # Identify the player(s) with the maximum number of offices
-        players_with_max_offices = [player for player, count in player_counts.items() if count == max_offices]
-
-        # If only one player has the max, they're the controller, regardless of the rightmost office
+        # If one player has more offices than the others, they control the city
         if len(players_with_max_offices) == 1:
-            controlling_player = players_with_max_offices[0]
-            self.controller = controlling_player
-            print(f"Player {COLOR_NAMES[controlling_player.color]} controls the most offices in {self.name}.")
-            return controlling_player
+            self.controller = players_with_max_offices[0]
+            print(f"Player {COLOR_NAMES[self.controller.color]} controls the most offices in {self.name}.")
+            return self.controller
 
-        # If there's a tie, find the rightmost player among those tied
-        rightmost_tied_player = max(
-            players_with_max_offices,
-            key=lambda player: self.offices[::-1].index(next(office for office in self.offices[::-1] if office.controller == player))
-        )
-        self.controller = rightmost_tied_player
-        print(f"There is a tie. Rightmost player among tied players in {self.name} is Player {COLOR_NAMES[rightmost_tied_player.color]}.")
-        return rightmost_tied_player
+        # If there's a tie for the number of offices, find the rightmost player among those tied
+        rightmost_office_index = -1
+        for player in players_with_max_offices:
+            for i, office in reversed(list(enumerate(self.offices))):
+                if office.controller == player and i > rightmost_office_index:
+                    rightmost_office_index = i
+                    self.controller = player
+
+        print(f"There is a tie. Rightmost player among tied players in {self.name} is Player {COLOR_NAMES[self.controller.color]}.")
+        return self.controller
     
     def has_empty_office(self):
         for office in self.offices:
@@ -184,12 +169,74 @@ class City:
             if office.is_open():
                 return office.shape
         return None
+    
     def get_next_open_office_color(self):
         """Return the color of the next open office in the city. If all offices are claimed, return None."""
         for office in self.offices:
             if office.is_open():
                 return office.color
         return None
+    
+    def check_if_eligible_to_swap_offices(self, current_player):
+        # Check if the current player has at least one office in the city
+        player_has_office = any(office.controller == current_player for office in self.offices)
+        if not player_has_office:
+            print(f"{COLOR_NAMES[current_player.color]} does not have an office in {self.name}.")
+            return False
+
+        # Check if other players have offices in the city
+        other_players_present = any(office.controller and office.controller != current_player for office in self.offices)
+        if not other_players_present:
+            print(f"{COLOR_NAMES[current_player.color]} is the only player with offices in {self.name}.")
+            return False
+
+        # Check if the current player controls the city
+        if self.get_controller() == current_player:
+            print(f"{COLOR_NAMES[current_player.color]} controls the city of {self.name} and is not eligible to swap offices.")
+            return False
+
+        # If all checks pass, the player is eligible to swap offices
+        print(f"{COLOR_NAMES[current_player.color]} is eligible to swap offices in {self.name}.")
+        return True
+    
+    def swap_offices(self, current_player):
+        # Find the current player's rightmost office
+        rightmost_office_index = next((i for i, office in reversed(list(enumerate(self.offices))) if office.controller == current_player), None)
+
+        # Check if there's an office to the right to swap with
+        if rightmost_office_index is not None and rightmost_office_index < len(self.offices) - 1:
+            # Identify the office to swap with (the next office to the right)
+            swap_office_index = rightmost_office_index + 1
+            swap_office = self.offices[swap_office_index]
+
+            # Ensure the swap office is controlled by a different player
+            if swap_office.controller and swap_office.controller != current_player:
+                # Print the swap information
+                rightmost_office = self.offices[rightmost_office_index]
+                print(f"Swapping offices between {COLOR_NAMES[current_player.color]} and {COLOR_NAMES[swap_office.controller.color]} in {self.name}.")
+
+                # Swap the controllers and colors
+                rightmost_office.controller = swap_office.controller
+                swap_office.controller = rightmost_office.controller
+                rightmost_office.color = swap_office.color
+                swap_office.color = rightmost_office.color
+
+                # Assuming you have a method in the Player class to get their associated color
+                rightmost_office_color = current_player.color
+                swap_office_color = swap_office.controller.color
+
+                # Update the colors according to the new controller
+                rightmost_office.color = swap_office_color
+                swap_office.color = rightmost_office_color
+
+                return True
+            else:
+                print(f"The office next to {COLOR_NAMES[current_player.color]}'s is not controlled by a different player.")
+                return False
+        else:
+            print(f"{COLOR_NAMES[current_player.color]} does not have a rightmost office that can be swapped or is already the last office.")
+        return False
+
 
 class Upgrade:
     def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):
@@ -387,8 +434,8 @@ class BonusMarker:
             print ("Only can be done if route is full.")
             print ("If route is full, clicking on the city will automatically handle this.")
             return
-        # elif self.type == 'SwapOffice':
-        #     handle_swap_office(current_player)
+        elif self.type == 'SwapOffice':
+            self.handle_swap_office(game)
         elif self.type == 'Move3':
             self.handle_move_3(game)
         elif self.type == 'UpgradeAbility':
@@ -402,6 +449,10 @@ class BonusMarker:
         # Remove the bonus marker after use
         game.current_player.bonus_markers.pop()
         
+    def handle_swap_office(self, game):
+        game.waiting_for_bm_swap_office = True
+        print("Click a City to swap offices on.")
+
     def handle_move_3(self, game):
         game.waiting_for_bm_move3_choice = True
         game.current_player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker

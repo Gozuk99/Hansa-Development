@@ -560,6 +560,17 @@ while True:
                     game.current_player.actions_remaining -= 1
                     game.switch_player_if_needed()
 
+            elif game.waiting_for_bm_swap_office:
+                for city in cities:
+                    if city_was_clicked(city, pygame.mouse.get_pos()):
+                        print(f"Clicked on city: {city.name}")
+                        if city.check_if_eligible_to_swap_offices(game.current_player):
+                            print ("Valid City to swap offices")
+                            city.swap_offices(game.current_player)
+                            game.waiting_for_bm_swap_office = False
+                        else:
+                            print ("Invalid City to Swap offices, please try another city.")
+
             elif game.waiting_for_bm_move3_choice:
                 handle_move_opponent(pygame.mouse.get_pos(), event.button)
 
@@ -580,6 +591,7 @@ while True:
                     # If replace_bonus_marker > 0, the current player must place 1+ new bonus markers
                     assign_new_bonus_marker_on_route(pygame.mouse.get_pos(), event.button)
                 game.switch_player_if_needed()
+
             else:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
