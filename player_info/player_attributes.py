@@ -206,6 +206,11 @@ class Player:
                 button_labels.append(label)
         return button_labels
 
+    def player_can_claim_office(self, office_color):
+        """Check if a player can claim an office of the specified color."""
+        allowed_office_colors = PRIVILEGE_COLORS[:PRIVILEGE_COLORS.index(self.privilege) + 1]
+        return office_color in allowed_office_colors
+
 class DisplacedPlayer:
     def __init__(self):
         self.reset_displaced_player()

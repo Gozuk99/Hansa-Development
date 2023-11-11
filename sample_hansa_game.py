@@ -51,6 +51,11 @@ def check_bounds(item, pos):
     return (item.x_pos < pos[0] < item.x_pos + item.width and
             item.y_pos < pos[1] < item.y_pos + item.height)
 
+def city_was_clicked(city, pos):
+    """Check if the city was clicked."""
+    return (city.pos[0] < pos[0] < city.pos[0] + city.width and 
+            city.pos[1] < pos[1] < city.pos[1] + city.height)
+
 def check_if_post_clicked(pos, button):
     route, post = find_post_by_position(pos)
     if post:
@@ -154,64 +159,82 @@ def handle_move_opponent(pos, button):
         else:
             print("Cannot place a piece here. The post is already occupied.")
 
-def upgrade_clicked(pos):
-    for upgrade in upgrade_cities:
-        if check_bounds(upgrade, pos) and game.current_player.actions > 0:
-            associated_city = next(city for city in cities if city.name == upgrade.city_name)
+def find_clicked_city(cities, pos):
+    for city in cities:
+        if city_was_clicked(city, pos):
+            print(f"Clicked on city: {city.name}")
+            return city
+    return None
 
-            if any(route.is_controlled_by(game.current_player) for route in associated_city.routes):
-               if game.current_player.perform_upgrade(upgrade.upgrade_type):
-                    for route in associated_city.routes:
-                        if route.is_controlled_by(game.current_player):
+def finalize_route_claim(route, placed_piece_shape):
+    update_stock_and_reset(route, game.current_player, placed_piece_shape)
+    handle_bonus_marker(game.current_player, route)
+    game.current_player.actions_remaining -= 1
+    game.switch_player_if_needed()
+    check_for_game_end()
+
+def check_if_route_claimed(pos, button):
+    placed_piece_shape = None
+
+    if game.current_player.actions <= 0:
+        return
+
+    city = find_clicked_city(game.selected_map.cities, pos)
+
+    if city:
+        print(f"Clicked on city: {city.name}")
+        for route in city.routes:
+            if route.is_controlled_by(game.current_player):
+                if button == 1: # leftclick
+                    next_open_office_color = city.get_next_open_office_color()
+                    print(f"Next open office color: {next_open_office_color}")
+
+                    if game.current_player.player_can_claim_office(next_open_office_color):
+                        if not city.has_required_piece_shape(game.current_player, route, city):
+                            required_shape = city.get_next_open_office_shape()
+                            print(f"{COLOR_NAMES[game.current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
+                        else:
                             score_route(route)
-                            update_stock_and_reset(route, game.current_player)
-                            handle_bonus_marker(game.current_player, route)
-                            game.current_player.actions_remaining -= 1
-                            game.switch_player_if_needed()
+                            placed_piece_shape = city.get_next_open_office_shape()
+                            print(f"{COLOR_NAMES[game.current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
+                            city.update_office_ownership(game.current_player, game.current_player.color)
+                            finalize_route_claim(route, placed_piece_shape)
+                    elif 'PlaceAdjacent' in (bm.type for bm in game.current_player.bonus_markers) or (city.city_is_full()):
+                        score_route(route)
+                        city.claim_office_with_bonus_marker(game.current_player)
+                        print(f"{COLOR_NAMES[game.current_player.color]} placed a square into a NEW office of {city.name}.")
+                        finalize_route_claim(route, "square")
+                    else:
+                        print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
+
+                elif button == 2: #middle click
+                    if city.upgrade_city_type == "SpecialPrestigePoints":
+                        if specialprestigepoints_city.claim_highest_prestige(game.current_player):
+                            specialprestigepoints_city.draw_special_prestige_points(win)
+                            score_route(route)
+                            finalize_route_claim(route, placed_piece_shape)
+                    elif city.upgrade_city_type in ["Keys", "Privilege", "Book", "Actions", "Bank"]:
+                        if game.current_player.perform_upgrade(city.upgrade_city_type):
+                            score_route(route)
+                            finalize_route_claim(route, placed_piece_shape)
+                    else:
+                        print(f"Cannot upgrade an ability by Middle clicking {city.name}")
+                elif button == 3: #right click
+                    score_route(route)
+                    finalize_route_claim(route, placed_piece_shape)
+                else:
+                    print(f"Invalid scenario with {city.name}")
+                return
             else:
                 print(f"Route(s) not controlled by current_player: {COLOR_NAMES[game.current_player.color]}")
 
-def claim_office_clicked(pos):
-    for city in cities:
-        if city_was_clicked(city, pos) and game.current_player.actions > 0:
-            print(f"Clicked on city: {city.name}")
-            next_open_office_color = city.get_next_open_office_color()
-            print(f"Next open office color: {next_open_office_color}")
+# def upgrade_clicked(pos):
 
-            if player_can_claim_office(game.current_player, next_open_office_color):
-                for route in city.routes:
-                    handle_route_for_city_claim(route, city, game.current_player)
-            else:
-                print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
+# def claim_office_clicked(pos):
 
-def claim_route_for_points_clicked(pos):
-    for city in cities:
-        if city_was_clicked(city, pos) and game.current_player.actions > 0:
-            print(f"Clicked on city: {city.name}")
-            for route in city.routes:
-                if route.is_controlled_by(game.current_player):
-                    score_route(route)
-                    update_stock_and_reset(route, game.current_player)
-                    game.current_player.actions_remaining -= 1
-                    handle_bonus_marker(game.current_player, route)
-                    game.switch_player_if_needed()
-                    check_for_game_end()
+# def claim_route_for_points_clicked(pos):
 
-def special_bonus_points_clicked(pos):
-    if check_bounds(specialprestigepoints_city, pos) and game.current_player.actions > 0:
-        # Get the city associated with the specialprestigepoints_city using city_name
-        special_prestige_city = next(city for city in cities if city.name == specialprestigepoints_city.city_name)
-        route_to_special_prestige_city = special_prestige_city.routes[0]
-        # Directly check the single route associated with the city
-        if route_to_special_prestige_city.is_controlled_by(game.current_player):
-            specialprestigepoints_city.claim_highest_prestige(game.current_player)
-            specialprestigepoints_city.draw_special_prestige_points(win)
-            score_route(route_to_special_prestige_city)
-            update_stock_and_reset(route_to_special_prestige_city, game.current_player, "circle")
-            game.current_player.actions_remaining -= 1
-            handle_bonus_marker(game.current_player, route_to_special_prestige_city)
-            game.switch_player_if_needed()
-            check_for_game_end()
+# def special_bonus_points_clicked(pos):
 
 def check_if_income_clicked(pos):
     # Check if any player board's Income Action button was clicked
@@ -231,17 +254,18 @@ def handle_bonus_marker(player, route):
         route.bonus_marker = None
         game.replace_bonus_marker += 1
 
-def check_if_route_claimed(pos, button):
-    if button == 1:
-        if upgrade_clicked(pos):
-            return
-        if claim_office_clicked(pos):
-            return
-        if special_bonus_points_clicked(pos):
-            return
-    elif button == 3:
-        if claim_route_for_points_clicked(pos):
-            return
+# def check_if_route_claimed(pos, button):
+#     # if button == 1:
+#     #     if upgrade_clicked(pos):
+#     #         return
+#     #     if claim_office_clicked(pos):
+#     #         return
+#     #     if special_bonus_points_clicked(pos):
+#     #         return
+#     # elif button == 3:
+#     #     if claim_route_for_points_clicked(pos):
+#     #         return
+#     claim_route_clicked(pos, button)
 
 def check_if_bm_clicked(pos):
     for bm in game.current_player.bonus_markers:
@@ -255,11 +279,6 @@ def handle_click(pos, button):
     check_if_income_clicked(pos)            
     check_if_bm_clicked(pos)            
 
-def player_can_claim_office(player, office_color):
-    """Check if a player can claim an office of the specified color."""
-    allowed_office_colors = PRIVILEGE_COLORS[:PRIVILEGE_COLORS.index(player.privilege) + 1]
-    return office_color in allowed_office_colors
-
 def try_claim_office(route, city, player):
     if not city.has_required_piece_shape(player, route, city):
         required_shape = city.get_next_open_office_shape()
@@ -269,20 +288,22 @@ def try_claim_office(route, city, player):
 
 def handle_route_for_city_claim(route, city, player):
     """Attempt to claim a route for a city and handle the action."""
-    if route.is_controlled_by(player):
-        if try_claim_office(route, city, player):
-            finalize_route_claim(route, city, player)
-
-def finalize_route_claim(route, city, player):
-    score_route(route)
-    placed_piece_shape = city.get_next_open_office_shape()
-    print(f"{COLOR_NAMES[player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
-    update_stock_and_reset(route, player, placed_piece_shape)
-    city.update_office_ownership(player, player.color)
-    player.actions_remaining -= 1
-    handle_bonus_marker(game.current_player, route)
-    game.switch_player_if_needed()
-    check_for_game_end()
+    # if try_claim_office(route, city, player):
+    if not city.has_required_piece_shape(player, route, city):
+        required_shape = city.get_next_open_office_shape()
+        print(f"{COLOR_NAMES[player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
+        return False
+    else:
+        score_route(route)
+        placed_piece_shape = city.get_next_open_office_shape()
+        print(f"{COLOR_NAMES[player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
+        update_stock_and_reset(route, player, placed_piece_shape)
+        city.update_office_ownership(player, player.color)
+        player.actions_remaining -= 1
+        handle_bonus_marker(game.current_player, route)
+        game.switch_player_if_needed()
+        check_for_game_end()
+        return True
 
 def check_for_game_end():
     # Check if the bonus marker pool is empty
@@ -315,10 +336,6 @@ def update_stock_and_reset(route, player, placed_piece_shape=None):
     for post in route.posts:
         if post.owner == player:
             post.reset_post()
-
-def city_was_clicked(city, pos):
-    """Check if the city was clicked."""
-    return city.pos[0] < pos[0] < city.pos[0] + city.width and city.pos[1] < pos[1] < city.pos[1] + city.height
 
 def displaced_click(pos, button):
     route, post = find_post_by_position(pos)  
@@ -561,7 +578,7 @@ while True:
                     game.switch_player_if_needed()
 
             elif game.waiting_for_bm_swap_office:
-                for city in cities:
+                for city in game.selected_map.cities:
                     if city_was_clicked(city, pygame.mouse.get_pos()):
                         print(f"Clicked on city: {city.name}")
                         if city.check_if_eligible_to_swap_offices(game.current_player):
@@ -579,7 +596,7 @@ while True:
 
             elif game.waiting_for_bm_upgrade_choice:
                 for upgrade in upgrade_cities:
-                    if check_bounds(upgrade, pygame.mouse.get_pos()):
+                    if city_was_clicked(upgrade, pygame.mouse.get_pos()):
                         if game.current_player.perform_upgrade(upgrade.upgrade_type):
                             print("Successfully used Upgrade BM")
                             game.waiting_for_bm_upgrade_choice = False
@@ -597,7 +614,7 @@ while True:
 
     draw_bonus_markers(win, game.selected_map)
     draw_upgrades(win, game.selected_map)
-    redraw_window(win, cities, routes, game.current_player, game.waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
+    redraw_window(win, game.selected_map.cities, routes, game.current_player, game.waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
     draw_scoreboard(win, game.players, WIDTH-200, HEIGHT-150)
     # In the game loop:
     for player_board in player_boards:

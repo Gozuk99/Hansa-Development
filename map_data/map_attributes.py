@@ -85,7 +85,7 @@ class City:
         self.color = new_color
 
     def assign_upgrade_type(self, upgrade_type):
-        self.upgrade_city_type =upgrade_type
+        self.upgrade_city_type = upgrade_type
 
     def add_office(self, office):
         self.offices.append(office)
@@ -237,7 +237,32 @@ class City:
             print(f"{COLOR_NAMES[current_player.color]} does not have a rightmost office that can be swapped or is already the last office.")
         return False
 
+    def claim_office_with_bonus_marker(self, player):
+        # Check if the player has the 'PlaceAdjacent' bonus marker and can't claim the next office
+        # Use the bonus marker to create a new office to the left of the leftmost office
+        new_office = self.create_new_office(player.color)
+        new_office.controller = player
+        new_office.color = player.color
 
+        # Update player's bonus markers by removing the first 'PlaceAdjacent'
+        place_adjacent_bm = next((bm for bm in player.bonus_markers if bm.type == 'PlaceAdjacent'), None)
+        if place_adjacent_bm:
+            player.bonus_markers.remove(place_adjacent_bm)
+
+        # Notify that the bonus marker was used to place adjacent
+        print(f"{COLOR_NAMES[player.color]} used 'PlaceAdjacent' bonus marker to claim a new office in {self.name}.")
+        
+    def city_is_full(self):
+        # Check if all offices in the city are claimed
+        return all(office.controller is not None for office in self.offices)
+    
+    def create_new_office(self, color):
+        # Create a new office to the left of the leftmost office
+        new_office_shape = 'square'  # or 'circle', depending on your game rules
+        new_office = Office(new_office_shape, color, awards_points=False)  # Set 'awards_points' as per your game rules
+        self.offices.insert(0, new_office)  # Insert the new office at the beginning of the list
+        return new_office
+        
 class Upgrade:
     def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):
         self.city_name = city_name
@@ -246,6 +271,13 @@ class Upgrade:
         self.y_pos = y_pos
         self.width = width
         self.height = height
+
+        self.circle_data = [
+            {"color": WHITE, "value": 7, "owner": None},
+            {"color": ORANGE, "value": 8, "owner": None},
+            {"color": PINK, "value": 9, "owner": None},
+            {"color": BLACK, "value": 11, "owner": None}
+        ]
 
     def draw_upgrades_on_map(self, window):
         draw_shape(window, "rectangle", YELLOW, self.x_pos, self.y_pos, width=self.width, height=self.height)
@@ -260,23 +292,17 @@ class Upgrade:
         font = pygame.font.SysFont(None, 28)
         draw_text(window, self.upgrade_type, x_font_centered, y_font_centered, font, color=BLACK, centered=True)
 
-class SpecialPrestigePoints:
-    def __init__(self, city_name, x_pos, y_pos, width, height):
-        self.city_name = city_name
-        self.x_pos = x_pos
-        self.y_pos = y_pos
-        self.width = width
-        self.height = height
+# class SpecialPrestigePoints:
+#     def __init__(self, city_name, x_pos, y_pos, width, height):
+#         self.city_name = city_name
+#         self.x_pos = x_pos
+#         self.y_pos = y_pos
+#         self.width = width
+#         self.height = height
 
-        self.circle_data = [
-            {"color": WHITE, "value": 7, "owner": None},
-            {"color": ORANGE, "value": 8, "owner": None},
-            {"color": PINK, "value": 9, "owner": None},
-            {"color": BLACK, "value": 11, "owner": None}
-        ]
     def claim_highest_prestige(self, player):
         # Log player details and privileges
-        print(f"Player's Color: {player.color}, Player's Privilege: {player.privilege}")
+        print(f"Player's Color: {COLOR_NAMES[player.color]}, Player's Privilege: {player.privilege}")
 
         # Player's privilege color
         player_privilege_color = player.privilege  # This should directly return one of the values in PRIVILEGE_COLORS
@@ -286,7 +312,7 @@ class SpecialPrestigePoints:
             player_privilege_index = PRIVILEGE_COLORS.index(player_privilege_color)
         except ValueError:
             print(f"Player's privilege color {player_privilege_color} not found in PRIVILEGE_COLORS.")
-            return
+            return False
 
         # Check each circle in decreasing order of value
         for circle in sorted(self.circle_data, key=lambda x: x["value"], reverse=True):
@@ -296,7 +322,7 @@ class SpecialPrestigePoints:
             # Map RGB to its string name
             circle_color_name = COLOR_NAMES.get(circle["color"])
             if circle_color_name not in PRIVILEGE_COLORS:
-                print(f"Circle color {circle_color_name} not in PRIVILEGE_COLORS. Skipping...")
+                # print(f"Circle color {circle_color_name} not in PRIVILEGE_COLORS. Skipping...")
                 continue  # Skip circles with colors not in PRIVILEGE_COLORS
 
             # Circle's privilege index
@@ -306,8 +332,9 @@ class SpecialPrestigePoints:
                 circle["owner"] = player
                 # Change the circle color to the player's RGB to indicate ownership
                 circle["color"] = player.color
-                print(f"Circle claimed by player. Circle color changed to {player.color}.")
-                break
+                print(f"Circle claimed by player. Circle color changed to {COLOR_NAMES[player.color]}.")
+                return True
+        return False
         
     def draw_special_prestige_points(self, window):
         draw_shape(window, "rectangle", YELLOW, self.x_pos, self.y_pos, width=self.width, height=self.height)

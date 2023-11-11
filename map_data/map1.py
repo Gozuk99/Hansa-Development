@@ -1,6 +1,6 @@
 # map1.py
 import pygame
-from map_data.map_attributes import Map, City, Upgrade, SpecialPrestigePoints, Office, Route
+from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, SPACING
 
 class Map1(Map):
@@ -101,6 +101,7 @@ class Map1(Map):
         Coellen = City('Coellen', (105, 1117), BLACKISH_BROWN)
         Coellen.add_office(Office("square", "WHITE", 1))
         Coellen.add_office(Office("square", "PINK", 0))
+        Coellen.assign_upgrade_type('SpecialPrestigePoints')
         self.cities.append(Coellen)
 
         Warburg = City('Warburg', (625, 1139), BLACKISH_BROWN)
@@ -222,7 +223,7 @@ class Map1(Map):
         y_start_pos = Coellen.pos[1] - circle_size - (SPACING*2)
 
         # Use the calculated positions for the Upgrade
-        self.specialprestigepoints = SpecialPrestigePoints('Coellen', x_start_pos, y_start_pos, width=x_specialprestigepoints_box_size, height=circle_size + SPACING*2)
+        self.specialprestigepoints = Upgrade('Coellen', 'SpecialPrestigePoints', x_start_pos, y_start_pos, width=x_specialprestigepoints_box_size, height=circle_size + SPACING*2)
 
         # Routes
         self.routes.append(Route([Groningen, Emden], 3))
