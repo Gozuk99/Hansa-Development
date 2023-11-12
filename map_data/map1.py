@@ -10,6 +10,10 @@ class Map1(Map):
         self.routes = []
         self.upgrades = []
         self.specialprestigepoints = None
+        self.max_full_cities = 10
+        self.max_full_cities_x_pos = 77
+        self.max_full_cities_y_pos = 52
+
         self.create_cities_and_routes()  # Populate cities, offices, and routes etc., specifically for Map1
         self.assign_starting_bonus_markers()
 

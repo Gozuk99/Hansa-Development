@@ -51,6 +51,27 @@ def draw_upgrades(win, selected_map):
         upgrade_types.draw_upgrades_on_map(win)
     selected_map.specialprestigepoints.draw_special_prestige_points(win)
     
+def draw_completed_cities_indicator(win, selected_map):
+    full_cities = [city for city in selected_map.cities if city.city_is_full()]
+    num_full_cities = len(full_cities)
+    font_size = 24  # Define the font size for the numbers
+    label_font_size = 20  # Define the font size for the label
+
+    # Draw label below the boxes
+    draw_text(win, "Completed Cities", selected_map.max_full_cities_x_pos, selected_map.max_full_cities_y_pos + SQUARE_SIZE + 5, pygame.font.SysFont(None, label_font_size), BLACK, centered=False)
+
+    # Draw a rectangle for each city and the test value (city index) in each square
+    for i in range(selected_map.max_full_cities):
+        rect_x = selected_map.max_full_cities_x_pos + (SQUARE_SIZE + SPACING) * i
+        rect_y = selected_map.max_full_cities_y_pos
+        color = BLACK if i < num_full_cities else WHITE
+
+        # Draw the city rectangle using draw_shape function
+        draw_shape(win, "rectangle", color, rect_x, rect_y, SQUARE_SIZE, SQUARE_SIZE)
+
+        # Draw the test value (city index) in each square using draw_text function
+        draw_text(win, str(i + 1), rect_x + SQUARE_SIZE // 2, rect_y + SQUARE_SIZE // 2, pygame.font.SysFont(None, font_size), BLACK, centered=True)
+
 def draw_bonus_markers(win, selected_map):
     routes = selected_map.routes
 

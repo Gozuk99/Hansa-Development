@@ -5,7 +5,7 @@ from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, 
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
 from map_data.map_attributes import Route, Post, City
 from game_info.game_attributes import Game
-from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game, draw_bonus_markers, draw_upgrades
+from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game, draw_bonus_markers, draw_upgrades, draw_completed_cities_indicator
 
 game = Game(map_num=1, num_players=5)
 WIDTH = game.selected_map.map_width+800
@@ -173,7 +173,6 @@ def check_if_route_claimed(pos, button):
     city = find_clicked_city(game.selected_map.cities, pos)
 
     if city:
-        print(f"Clicked on city: {city.name}")
         for route in city.routes:
             if route.is_controlled_by(game.current_player):
                 if button == 1: # leftclick
@@ -190,7 +189,7 @@ def check_if_route_claimed(pos, button):
                             print(f"{COLOR_NAMES[game.current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
                             city.update_office_ownership(game.current_player, game.current_player.color)
                             finalize_route_claim(route, placed_piece_shape)
-                    elif 'PlaceAdjacent' in (bm.type for bm in game.current_player.bonus_markers) or (city.city_is_full()):
+                    elif 'PlaceAdjacent' in (bm.type for bm in game.current_player.bonus_markers):
                         score_route(route)
                         city.claim_office_with_bonus_marker(game.current_player)
                         print(f"{COLOR_NAMES[game.current_player.color]} placed a square into a NEW office of {city.name}.")
@@ -607,6 +606,7 @@ while True:
     draw_upgrades(win, game.selected_map)
     redraw_window(win, game.selected_map.cities, routes, game.current_player, game.waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
     draw_scoreboard(win, game.players, WIDTH-200, HEIGHT-150)
+    draw_completed_cities_indicator(win, game.selected_map)
     # In the game loop:
     for player_board in player_boards:
         player_board.draw(win, game.current_player)
