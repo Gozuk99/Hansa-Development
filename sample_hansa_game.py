@@ -99,10 +99,7 @@ def assign_new_bonus_marker_on_route(pos, button):
         bm_type = game.selected_map.bonus_marker_pool.pop()
         route.assign_map_new_bonus_marker(bm_type)  # Create a new BonusMarker instance with the type
         print(f"Bonus marker '{bm_type}' has been placed on the route between {route.cities[0].name} and {route.cities[1].name}.")
-        # Set the flag to False after placing the new bonus marker
         game.replace_bonus_marker -= 1
-        # Now you might want to update the display or the route to show the bonus marker
-        # draw_bonus_marker_on_route(route)  # Implement this function as needed
     else:
         print("No action taken: No bonus markers available in the pool.")
 

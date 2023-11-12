@@ -248,6 +248,8 @@ class City:
         # Update player's bonus markers by removing the first 'PlaceAdjacent'
         place_adjacent_bm = next((bm for bm in player.bonus_markers if bm.type == 'PlaceAdjacent'), None)
         if place_adjacent_bm:
+            # Move the used bonus marker to the used list
+            player.used_bonus_markers.append(place_adjacent_bm)
             player.bonus_markers.remove(place_adjacent_bm)
 
         # Notify that the bonus marker was used to place adjacent
@@ -477,8 +479,10 @@ class BonusMarker:
             self.handle_4_actions(game.current_player)
         else:
             print(f"Unknown bonus marker type: {self.type}")
-        # Remove the bonus marker after use
-        game.current_player.bonus_markers.pop()
+
+        # Move the used bonus marker to the used list
+        game.current_player.used_bonus_markers.append(self)
+        game.current_player.bonus_markers.remove(self)
         
     def handle_swap_office(self, game):
         game.waiting_for_bm_swap_office = True
