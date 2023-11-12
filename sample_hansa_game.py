@@ -44,17 +44,10 @@ def score_route(route):
         if player is not None:
             player.score += 1
             print(f"Player {COLOR_NAMES[player.color]} scored for controlling {city.name}, total score: {player.score}")
-    # Check for the game-ending condition after all points have been allocated
-    check_for_game_end()
 
 def check_bounds(item, pos):
     return (item.x_pos < pos[0] < item.x_pos + item.width and
             item.y_pos < pos[1] < item.y_pos + item.height)
-
-def city_was_clicked(city, pos):
-    """Check if the city was clicked."""
-    return (city.pos[0] < pos[0] < city.pos[0] + city.width and 
-            city.pos[1] < pos[1] < city.pos[1] + city.height)
 
 def check_if_post_clicked(pos, button):
     route, post = find_post_by_position(pos)
@@ -161,7 +154,7 @@ def handle_move_opponent(pos, button):
 
 def find_clicked_city(cities, pos):
     for city in cities:
-        if city_was_clicked(city, pos):
+        if check_bounds(city, pos):
             print(f"Clicked on city: {city.name}")
             return city
     return None
@@ -170,6 +163,7 @@ def finalize_route_claim(route, placed_piece_shape):
     update_stock_and_reset(route, game.current_player, placed_piece_shape)
     handle_bonus_marker(game.current_player, route)
     game.current_player.actions_remaining -= 1
+    game.check_for_east_west_connection()
     game.switch_player_if_needed()
     check_for_game_end()
 
@@ -579,7 +573,7 @@ while True:
 
             elif game.waiting_for_bm_swap_office:
                 for city in game.selected_map.cities:
-                    if city_was_clicked(city, pygame.mouse.get_pos()):
+                    if check_bounds(city, pygame.mouse.get_pos()):
                         print(f"Clicked on city: {city.name}")
                         if city.check_if_eligible_to_swap_offices(game.current_player):
                             print ("Valid City to swap offices")
@@ -596,7 +590,7 @@ while True:
 
             elif game.waiting_for_bm_upgrade_choice:
                 for upgrade in upgrade_cities:
-                    if city_was_clicked(upgrade, pygame.mouse.get_pos()):
+                    if check_bounds(upgrade, pygame.mouse.get_pos()):
                         if game.current_player.perform_upgrade(upgrade.upgrade_type):
                             print("Successfully used Upgrade BM")
                             game.waiting_for_bm_upgrade_choice = False

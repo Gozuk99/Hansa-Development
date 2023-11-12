@@ -66,9 +66,10 @@ class Map:
         self.bonus_marker_pool = all_bonus_markers_list[:12]
     
 class City:
-    def __init__(self, name, position, color):
+    def __init__(self, name, x_pos, y_pos, color):
         self.name = name
-        self.pos = position
+        self.x_pos = x_pos
+        self.y_pos = y_pos
         self.color = color
         self.routes = []
         self.controller = None  # Player controlling the city
@@ -113,7 +114,7 @@ class City:
         
         self.width = rect_width
         self.height = rect_height
-        self.midpoint = (self.pos[0] + rect_width / 2, self.pos[1] + rect_height / 2)
+        self.midpoint = (self.x_pos + rect_width / 2, self.y_pos + rect_height / 2)
 
     def get_controller(self):
         if not self.offices:
@@ -263,6 +264,9 @@ class City:
         self.offices.insert(0, new_office)  # Insert the new office at the beginning of the list
         return new_office
         
+    def has_office_controlled_by(self, player):
+        return any(office.controller == player for office in self.offices)
+    
 class Upgrade:
     def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):
         self.city_name = city_name

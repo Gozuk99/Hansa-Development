@@ -26,6 +26,10 @@ class Game:
         self.waiting_for_bm_move3_choice = False
         self.all_empty_posts = []
 
+        self.east_west_completed_count = 0
+        self.players_who_completed_east_west = set()  # Track players who have completed the connection
+
+
     def create_players(self, num_players):
         # Create player objects based on the number of players
         # colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
@@ -41,6 +45,7 @@ class Game:
             return Map1()
         # Add additional maps as needed
         # ...
+    
     def claim_bonus_marker(self):
         # This method would be called when a player claims a new bonus marker
         self.bonus_markers_to_place += 1
@@ -69,3 +74,74 @@ class Game:
         for post in self.all_empty_posts:
             post.reset_post()
         self.all_empty_posts.clear()
+
+    def check_for_east_west_connection(self):
+        if self.current_player in self.players_who_completed_east_west:
+            print(f"{COLOR_NAMES[self.current_player.color]} has already completed the East-West Connection.")
+            return
+        
+        if not self.check_if_player_has_matching_offices_in_east_west('Stendal', 'Arnheim'):
+            return
+
+        if self.has_east_west_connection('Stendal', 'Arnheim'):
+            # Points for the 1st, 2nd, and 3rd completions
+            east_west_points = [7, 4, 2]
+
+            # Check if the connection has been completed less than 3 times
+            if self.east_west_completed_count < len(east_west_points):
+                awarded_points = east_west_points[self.east_west_completed_count]
+                self.current_player.score += awarded_points
+                self.east_west_completed_count += 1
+                self.players_who_completed_east_west.add(self.current_player)
+
+                print(f"{COLOR_NAMES[self.current_player.color]} has created an East-West Connection and is awarded {awarded_points} points! Total score is now {self.current_player.score}.")
+            else:
+                print(f"East West Connection has been completed 3+ times. No points awarded to {COLOR_NAMES[self.current_player.color]}.")
+    
+    def check_if_player_has_matching_offices_in_east_west(self, start_city_name, end_city_name):
+        start_city = next((city for city in self.selected_map.cities if city.name == start_city_name), None)
+        end_city = next((city for city in self.selected_map.cities if city.name == end_city_name), None)
+
+        if not start_city or not end_city:
+            return False
+
+        start_city_owners = {office.controller for office in start_city.offices if office.controller}
+        end_city_owners = {office.controller for office in end_city.offices if office.controller}
+
+        # Check for intersection between the sets of owners
+        common_owners = start_city_owners.intersection(end_city_owners)
+        return bool(common_owners)
+    
+    def has_east_west_connection(self, start_city_name, end_city_name, visited=None):
+        # This is a recursive depth-first search (DFS) algorithm.
+        if visited is None:
+            visited = set()
+
+        start_city = next((city for city in self.selected_map.cities if city.name == start_city_name), None)
+        end_city = next((city for city in self.selected_map.cities if city.name == end_city_name), None)
+
+        # Check if both cities exist in the game.
+        if start_city is None or end_city is None:
+            return False
+
+        # If we've reached the end city, return True
+        if start_city == end_city:
+            return True
+
+        # Mark the start city as visited
+        visited.add(start_city)
+
+        # Go through each route connected to the start city
+        for route in start_city.routes:
+            # Check all cities connected to this route
+            for connected_city in route.cities:
+                # Skip if we've already visited this city or if the connected city doesn't have the player's office
+                if connected_city in visited or not connected_city.has_office_controlled_by(self.current_player):
+                    continue
+
+                # Recursively check if the connected city leads to the end city
+                if self.has_east_west_connection(connected_city.name, end_city_name, visited):
+                    return True
+
+        # If none of the routes lead to the end city, return False
+        return False

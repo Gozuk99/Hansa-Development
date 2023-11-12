@@ -90,15 +90,15 @@ def redraw_window(win, cities, routes, current_player, waiting_for_displaced_pla
 
     for city in cities:
         # Calculate the position of the rectangle
-        rect_x = city.pos[0]
-        rect_y = city.pos[1]
+        rect_x = city.x_pos
+        rect_y = city.y_pos
 
         # Use draw_shape function to draw the city rectangle with a border
         draw_shape(win, "rectangle", city.color, rect_x, rect_y, city.width, city.height)
         # Calculate text position to place it just below the city rectangle
         text_width = font.size(city.name)[0]
-        text_x = city.pos[0] + (city.width - text_width) // 2
-        text_y = city.pos[1] + city.height
+        text_x = city.x_pos + (city.width - text_width) // 2
+        text_y = city.y_pos + city.height
 
         # Use draw_text function to render the city name below the rectangle
         draw_text(win, city.name, text_x, text_y, font, BLACK)
