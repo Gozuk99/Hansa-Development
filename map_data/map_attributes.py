@@ -385,7 +385,7 @@ class Route:
         self.bonus_marker = None  # Don't assign it yet
         self.posts = self.create_posts()
 
-    def create_posts(self, buffer=0.1):
+    def create_posts(self, buffer=0.15):  # Increase the buffer value as needed
         city1, city2 = self.cities
         posts = []
 

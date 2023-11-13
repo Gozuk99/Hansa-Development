@@ -8,7 +8,7 @@ class Map1(Map):
         super().__init__()  # Call the parent class constructor
         self.cities = []
         self.routes = []
-        self.upgrades = []
+        self.upgrade_cities = []
         self.specialprestigepoints = None
         self.max_full_cities = 10
         self.max_full_cities_x_pos = 77
@@ -208,11 +208,11 @@ class Map1(Map):
 
         #Upgrades 
         UPGRADE_Y_AXIS_OFFSET = 50
-        self.upgrades.append(Upgrade('Halle', 'Keys', Halle.x_pos, Halle.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Halle.width, height=Halle.height))
-        self.upgrades.append(Upgrade('Stade', 'Privilege', Stade.x_pos, Stade.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Stade.width, height=Stade.height))
-        self.upgrades.append(Upgrade('Groningen', 'Book', Groningen.x_pos, Groningen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Groningen.width, height=Groningen.height))
-        self.upgrades.append(Upgrade('Gottingen', 'Actions', Gottingen.x_pos, Gottingen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Gottingen.width, height=Gottingen.height))
-        self.upgrades.append(Upgrade('Lubeck', 'Bank', Lubeck.x_pos, Lubeck.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Lubeck.width, height=Lubeck.height))
+        self.upgrade_cities.append(Upgrade('Halle', 'Keys', Halle.x_pos, Halle.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Halle.width, height=Halle.height))
+        self.upgrade_cities.append(Upgrade('Stade', 'Privilege', Stade.x_pos, Stade.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Stade.width, height=Stade.height))
+        self.upgrade_cities.append(Upgrade('Groningen', 'Book', Groningen.x_pos, Groningen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Groningen.width, height=Groningen.height))
+        self.upgrade_cities.append(Upgrade('Gottingen', 'Actions', Gottingen.x_pos, Gottingen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Gottingen.width, height=Gottingen.height))
+        self.upgrade_cities.append(Upgrade('Lubeck', 'Bank', Lubeck.x_pos, Lubeck.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Lubeck.width, height=Lubeck.height))
         
         #Upgrade - Coellen which has SpecialPrestigePoints
         circle_size = CIRCLE_RADIUS*2

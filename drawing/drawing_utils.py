@@ -1,6 +1,10 @@
 import pygame
 from map_data.constants import WHITE, TAN, COLOR_NAMES, BLACK, BUFFER, SQUARE_SIZE, SPACING, CIRCLE_RADIUS
 
+pygame.init()
+
+FONT_LARGE = pygame.font.Font(None, 36)  # Initialize once and use everywhere
+FONT_SMALL = pygame.font.Font(None, 24)  # Initialize once and use everywhere
 BORDER_WIDTH = 2 #black outline of
 
 def draw_shape(window, shape_to_draw, color, x, y, width=None, height=None, points=None):
@@ -47,7 +51,7 @@ def draw_text(window, text, x, y, font, color=BLACK, centered=False):
     window.blit(text_surface, text_rect)
 
 def draw_upgrades(win, selected_map):
-    for upgrade_types in selected_map.upgrades:
+    for upgrade_types in selected_map.upgrade_cities:
         upgrade_types.draw_upgrades_on_map(win)
     selected_map.specialprestigepoints.draw_special_prestige_points(win)
     
@@ -58,7 +62,7 @@ def draw_completed_cities_indicator(win, selected_map):
     label_font_size = 20  # Define the font size for the label
 
     # Draw label below the boxes
-    draw_text(win, "Completed Cities", selected_map.max_full_cities_x_pos, selected_map.max_full_cities_y_pos + SQUARE_SIZE + 5, pygame.font.SysFont(None, label_font_size), BLACK, centered=False)
+    draw_text(win, "Completed Cities", selected_map.max_full_cities_x_pos, selected_map.max_full_cities_y_pos + SQUARE_SIZE + 5, FONT_SMALL, BLACK, centered=False)
 
     # Draw a rectangle for each city and the test value (city index) in each square
     for i in range(selected_map.max_full_cities):
@@ -70,7 +74,7 @@ def draw_completed_cities_indicator(win, selected_map):
         draw_shape(win, "rectangle", color, rect_x, rect_y, SQUARE_SIZE, SQUARE_SIZE)
 
         # Draw the test value (city index) in each square using draw_text function
-        draw_text(win, str(i + 1), rect_x + SQUARE_SIZE // 2, rect_y + SQUARE_SIZE // 2, pygame.font.SysFont(None, font_size), BLACK, centered=True)
+        draw_text(win, str(i + 1), rect_x + SQUARE_SIZE // 2, rect_y + SQUARE_SIZE // 2, FONT_SMALL, BLACK, centered=True)
 
 def draw_bonus_markers(win, selected_map):
     routes = selected_map.routes
@@ -99,122 +103,136 @@ def draw_line(surface, color, start_pos, end_pos, line_width, border_width):
     # Draw the main line on top of the border
     pygame.draw.line(surface, color, start_pos, end_pos, line_width)
 
-last_text_box = None
-def redraw_window(win, cities, routes, current_player, waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT):
-    global last_text_box
-    # Draw cities and their offices
-    font = pygame.font.Font(None, 36)
-
-    # Clear the area with the background color
-    if last_text_box is not None:
-        pygame.draw.rect(win, TAN, last_text_box)
-
+def draw_cities_and_offices(win, cities):
     for city in cities:
-        # Calculate the position of the rectangle
-        rect_x = city.x_pos
-        rect_y = city.y_pos
+        draw_city_rectangle(win, city)
+        draw_city_offices(win, city)
 
-        # Use draw_shape function to draw the city rectangle with a border
-        draw_shape(win, "rectangle", city.color, rect_x, rect_y, city.width, city.height)
-        # Calculate text position to place it just below the city rectangle
-        text_width = font.size(city.name)[0]
-        text_x = city.x_pos + (city.width - text_width) // 2
-        text_y = city.y_pos + city.height
+def draw_city_rectangle(win, city):
+    rect_x, rect_y = city.x_pos, city.y_pos
+    draw_shape(win, "rectangle", city.color, rect_x, rect_y, city.width, city.height)
+    draw_text_below_rectangle(win, city.name, rect_x, rect_y, city.width, city.height)
 
-        # Use draw_text function to render the city name below the rectangle
-        draw_text(win, city.name, text_x, text_y, font, BLACK)
+def draw_text_below_rectangle(win, text, rect_x, rect_y, rect_width, rect_height):
+    text_width, text_height = FONT_LARGE.size(text)
+    text_x = rect_x + (rect_width - text_width) // 2
+    text_y = rect_y + rect_height
+    draw_text(win, text, text_x, text_y, FONT_LARGE, BLACK)
 
-        start_x = rect_x + BUFFER  # Starting x-coordinate within the rectangle
-        start_y = rect_y + city.height // 2 - SQUARE_SIZE // 2  # Centered vertically in the rectangle
+def draw_office_awards_points(win, office, center_x, center_y):
+    if office.awards_points > 0:
+        text = str(office.awards_points)
+        text_width, text_height = FONT_LARGE.size(text)
+        # Calculate the centered text coordinates
+        text_x = center_x - text_width // 2
+        text_y = center_y - text_height // 2
+        draw_text(win, text, text_x, text_y, FONT_LARGE, BLACK)
 
-        for office in city.offices:
-            if office.shape == "square":
-                draw_shape(win, "rectangle", office.color, start_x, start_y, SQUARE_SIZE, SQUARE_SIZE)
-                
-                # Check for awards_points and draw text
-                if office.awards_points > 0:
-                    text_width, text_height = font.size(str(office.awards_points))
-                    text_x = start_x + (SQUARE_SIZE - text_width) // 2
-                    text_y = start_y + (SQUARE_SIZE - text_height) // 2
-                    draw_text(win, str(office.awards_points), text_x, text_y, font, BLACK)
-                
-                start_x += SQUARE_SIZE + SPACING
+def draw_square_office(win, office, start_x, start_y):
+    # Draw the square office
+    draw_shape(win, "rectangle", office.color, start_x, start_y, SQUARE_SIZE, SQUARE_SIZE)
+    # Calculate the center of the square
+    center_x = start_x + SQUARE_SIZE // 2
+    center_y = start_y + SQUARE_SIZE // 2
+    # Draw the points text centered in the square
+    draw_office_awards_points(win, office, center_x, center_y)
 
-            else:  
-                circle_x = start_x + CIRCLE_RADIUS
-                circle_y = start_y + SQUARE_SIZE // 2
-                draw_shape(win, "circle", office.color, circle_x, circle_y, CIRCLE_RADIUS)
-                
-                # Check for awards_points and draw text
-                if office.awards_points > 0:
-                    text_width, text_height = font.size(str(office.awards_points))
-                    text_x = circle_x - text_width // 2
-                    text_y = circle_y - text_height // 2
-                    draw_text(win, str(office.awards_points), text_x, text_y, font, BLACK)
-                
-                start_x += CIRCLE_RADIUS * 2 + SPACING
+def draw_circle_office(win, office, start_x, start_y):
+    # Calculate the center of the circle
+    center_x = start_x + CIRCLE_RADIUS
+    center_y = start_y + CIRCLE_RADIUS
+    # Draw the circle office
+    draw_shape(win, "circle", office.color, center_x, center_y, CIRCLE_RADIUS)
+    # Draw the points text centered in the circle
+    draw_office_awards_points(win, office, center_x, center_y)
 
+def draw_city_offices(win, city):
+    start_x = city.x_pos + BUFFER
+    start_y = city.y_pos + city.height // 2 - SQUARE_SIZE // 2
+
+    for office in city.offices:
+        if office.shape == "square":
+            draw_square_office(win, office, start_x, start_y)
+            start_x += SQUARE_SIZE + SPACING
+        else:  # office.shape == "circle"
+            draw_circle_office(win, office, start_x, start_y - CIRCLE_RADIUS // 2)  # Adjust Y for circle center
+            start_x += CIRCLE_RADIUS * 2 + SPACING
+
+def draw_routes(win, routes):
     for route in routes:
         for post in route.posts:
-            post_x, post_y = post.pos
+            draw_route_post(win, post)
 
-            # Draw the circle
-            draw_shape(win, "circle", post.circle_color, post_x, post_y, width=CIRCLE_RADIUS)
+def draw_route_post(win, post):
+    post_x, post_y = post.pos
+    draw_shape(win, "circle", post.circle_color, post_x, post_y, CIRCLE_RADIUS)
+    if post.owner_piece_shape is None or post.owner_piece_shape == "square":
+        draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, SQUARE_SIZE, SQUARE_SIZE)
 
-            # Draw the square if there is no owner or if the owner has placed a square piece
-            if post.owner_piece_shape is None or post.owner_piece_shape == "square":
-                draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, width=SQUARE_SIZE, height=SQUARE_SIZE)
-   
-    if waiting_for_displaced_player:
-        text_str = f"{COLOR_NAMES[current_player.color]} displaced {COLOR_NAMES[displaced_player.player.color]} - waiting for {COLOR_NAMES[displaced_player.player.color]} to place {displaced_player.total_pieces_to_place} pieces!"
-        combined_text = font.render(text_str, True, COLOR_NAMES[current_player.color])
+def draw_actions_remaining(win, game):
+    padding = 5  # Define padding value for spacing around text
 
-        # Determine the position and size of the text area
-        text_width = combined_text.get_width()
-        text_height = combined_text.get_height()
-        text_area = pygame.Rect(WIDTH // 2 - text_width // 2, HEIGHT - 50 - text_height // 2, text_width, text_height)
-        last_text_box = text_area
+    # Calculate text dimensions and positions
+    if game.waiting_for_displaced_player:
+        text_str = f"{COLOR_NAMES[game.current_player.color]} displaced {COLOR_NAMES[game.displaced_player.player.color]} - waiting for {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} pieces!"
     else:
-        text_str = f"Actions: {current_player.actions_remaining}"
-        combined_text = font.render(text_str, True, COLOR_NAMES[current_player.color])
+        text_str = f"Actions: {game.current_player.actions_remaining}"
 
-        # Determine the position and size of the text area
-        text_width = combined_text.get_width()
-        text_height = combined_text.get_height()
-        text_area = pygame.Rect(WIDTH // 2 - text_width // 2, HEIGHT - 50 - text_height // 2, text_width, text_height)
-        last_text_box = text_area
+    combined_text = FONT_LARGE.render(text_str, True, COLOR_NAMES[game.current_player.color])
+    text_width = combined_text.get_width() + 2 * padding  # Add padding to width
+    text_height = combined_text.get_height() + 2 * padding  # Add padding to height
+    text_x = game.selected_map.map_width // 2 - text_width // 2
+    text_y = game.selected_map.map_height - 50 - text_height // 2
 
-    # Clear the area with the background color
-    pygame.draw.rect(win, WHITE, text_area)
+    # Draw the background for the new text
+    draw_shape(win, "rectangle", WHITE, text_x, text_y, text_width, text_height)
 
-    # Draw the combined text onto the main window
-    win.blit(combined_text, (WIDTH // 2 - text_width // 2, HEIGHT - 50 - text_height // 2))
-    pygame.display.update(text_area)
+    # Draw the new text with padding applied
+    win.blit(combined_text, (text_x + padding, text_y + padding))
+    pygame.display.update((text_x, text_y, text_width, text_height))
+
+def redraw_window(win, game):
+    selected_map = game.selected_map
+
+    draw_bonus_markers(win, selected_map)
+    draw_upgrades(win, selected_map)   
+    draw_cities_and_offices(win, selected_map.cities)
+    draw_routes(win, selected_map.routes)
+    draw_actions_remaining(win, game)
+    draw_scoreboard(win, game.players, selected_map.map_width+600, selected_map.map_height-170)
+    draw_completed_cities_indicator(win, selected_map)
 
 def draw_scoreboard(win, players, start_x, start_y):
-    font = pygame.font.Font(None, 30)  # Adjust the size as needed
-    background_color = TAN  # Choose a background color that fits your design
     scoreboard_height = len(players) * 20 + 50  # Adjust based on text size and spacing
     scoreboard_width = 200  # Set the width according to your requirements
+    scoreboard_rect = pygame.Rect(start_x, start_y, scoreboard_width, scoreboard_height)
 
     # Fill the scoreboard background
-    win.fill(background_color, (start_x, start_y, scoreboard_width, scoreboard_height))
+    win.fill(TAN, scoreboard_rect)
 
-    # Draw the scoreboard label
-    score_board_label = font.render("Score Board", True, BLACK)
-    win.blit(score_board_label, (start_x, start_y))
+    # Draw the scoreboard label at the top
+    score_board_label = FONT_LARGE.render("Score Board:", True, BLACK)
+    win.blit(score_board_label, scoreboard_rect.topleft)
+
+    # Set initial Y offset for player scores just below the label
+    y_offset = score_board_label.get_height() + 5
 
     # Draw each player's score
     for index, player in enumerate(players):
         score_text = f"Player {index + 1}: {player.score}"
-        text_surface = font.render(score_text, True, player.color)
-        win.blit(text_surface, (start_x, start_y + 25 + (index * 20)))  # Adjust the spacing as needed
+        text_surface = FONT_LARGE.render(score_text, True, player.color)
+        text_position = (start_x, start_y + y_offset + (index * 25))  # Y position adjusted here
+        win.blit(text_surface, text_position)
 
 def draw_end_game(win, winning_player):
-    font = pygame.font.Font(None, 36)
-    win.fill((255, 255, 255, 80))  # semi-transparent white background
-    winner_text = font.render(f"Game Over! {COLOR_NAMES[winning_player.color]} wins!", True, winning_player.color)
-    rect = winner_text.get_rect()
-    rect.center = win.get_rect().center
+    # Create a semi-transparent surface
+    transparent_surface = pygame.Surface(win.get_size(), pygame.SRCALPHA)
+    transparent_surface.fill((255, 255, 255, 128))  # 128 here for 50% transparency
+
+    # Blit the semi-transparent surface onto the window
+    win.blit(transparent_surface, (0, 0))
+
+    winner_text = FONT_LARGE.render(f"Game Over! {COLOR_NAMES[winning_player.color]} wins!", True, winning_player.color)
+    rect = winner_text.get_rect(center=win.get_rect().center)
     win.blit(winner_text, rect)
     pygame.display.update()

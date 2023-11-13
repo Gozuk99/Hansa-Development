@@ -32,8 +32,8 @@ class Game:
 
     def create_players(self, num_players):
         # Create player objects based on the number of players
-        # colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
-        colors = [GREEN, BLUE, PURPLE]  # Assume these are defined somewhere
+        colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
+        # colors = [GREEN, BLUE, PURPLE]  # Assume these are defined somewhere
         players = [Player(color, i+1) for i, color in enumerate(colors[:num_players])]
         for player in players:
             player.actions_remaining = player.actions  # Initialize actions_remaining for each player
@@ -145,3 +145,13 @@ class Game:
 
         # If none of the routes lead to the end city, return False
         return False
+    
+    def check_for_game_end(self):
+        # Check if the bonus marker pool is empty or any player has reached the score threshold
+        if not self.selected_map.bonus_marker_pool or any(player.score >= 3 for player in self.players):
+            # Find the player with the highest score
+            highest_scoring_players = [player for player in self.players if player.score == max(player.score for player in self.players)]
+            # If there's a tie, you might need additional logic to determine the winner
+            return highest_scoring_players
+        # Game continues if no end condition is met
+        return None

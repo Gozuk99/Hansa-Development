@@ -1,6 +1,5 @@
 import pygame
 import sys
-from map_data.map1 import Map1
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
 from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
 from map_data.map_attributes import Route, Post, City
@@ -12,16 +11,12 @@ WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
 cities = game.selected_map.cities
 routes = game.selected_map.routes
-upgrade_cities = game.selected_map.upgrades
 specialprestigepoints_city = game.selected_map.specialprestigepoints
-
-pygame.init()
 
 win = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Hansa Sample Game')
 win.fill(TAN)
 
-displaced_player = game.displaced_player
 player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(game.players)]
 
 def end_game(winning_player):
@@ -162,7 +157,11 @@ def finalize_route_claim(route, placed_piece_shape):
     game.current_player.actions_remaining -= 1
     game.check_for_east_west_connection()
     game.switch_player_if_needed()
-    check_for_game_end()
+
+    highest_scoring_players = game.check_for_game_end()
+    if highest_scoring_players:
+        end_game(highest_scoring_players)
+
 
 def check_if_route_claimed(pos, button):
     placed_piece_shape = None
@@ -269,46 +268,6 @@ def handle_click(pos, button):
     check_if_income_clicked(pos)            
     check_if_bm_clicked(pos)            
 
-def try_claim_office(route, city, player):
-    if not city.has_required_piece_shape(player, route, city):
-        required_shape = city.get_next_open_office_shape()
-        print(f"{COLOR_NAMES[player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
-        return False
-    return True
-
-def handle_route_for_city_claim(route, city, player):
-    """Attempt to claim a route for a city and handle the action."""
-    # if try_claim_office(route, city, player):
-    if not city.has_required_piece_shape(player, route, city):
-        required_shape = city.get_next_open_office_shape()
-        print(f"{COLOR_NAMES[player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
-        return False
-    else:
-        score_route(route)
-        placed_piece_shape = city.get_next_open_office_shape()
-        print(f"{COLOR_NAMES[player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
-        update_stock_and_reset(route, player, placed_piece_shape)
-        city.update_office_ownership(player, player.color)
-        player.actions_remaining -= 1
-        handle_bonus_marker(game.current_player, route)
-        game.switch_player_if_needed()
-        check_for_game_end()
-        return True
-
-def check_for_game_end():
-    # Check if the bonus marker pool is empty
-    if not game.selected_map.bonus_marker_pool:
-        # Find the player with the highest score
-        highest_scoring_player = max(game.players, key=lambda p: p.score)
-        # End the game with the player who has the highest score
-        end_game(highest_scoring_player)
-    else:
-        # If the bonus marker pool is not empty, check if any player has reached the score threshold
-        for player in game.players:
-            if player.score >= 3:
-                end_game(player)
-                break
-
 def update_stock_and_reset(route, player, placed_piece_shape=None):
     """Update player's general stock based on pieces on the route and reset those posts."""
     circles_on_route = sum(1 for post in route.posts if post.owner == player and post.owner_piece_shape == "circle")
@@ -343,23 +302,23 @@ def displaced_click(pos, button):
 
     # Check if the player is forced to use the displaced shape
     must_use_displaced_piece = False
-    if not displaced_player.played_displaced_shape:
-        if displaced_player.displaced_shape == "circle" and displaced_player.total_pieces_to_place == 1:
+    if not game.displaced_player.played_displaced_shape:
+        if game.displaced_player.displaced_shape == "circle" and game.displaced_player.total_pieces_to_place == 1:
             must_use_displaced_piece = True
-        elif displaced_player.displaced_shape == "square" and displaced_player.total_pieces_to_place == 1:
+        elif game.displaced_player.displaced_shape == "square" and game.displaced_player.total_pieces_to_place == 1:
             must_use_displaced_piece = True
 
-    if must_use_displaced_piece and desired_shape != displaced_player.displaced_shape:
+    if must_use_displaced_piece and desired_shape != game.displaced_player.displaced_shape:
         print("Invalid action. Must use the displaced piece.")
         return
 
-    wants_to_use_displaced_piece = (not displaced_player.played_displaced_shape) and (desired_shape == displaced_player.displaced_shape)
+    wants_to_use_displaced_piece = (not game.displaced_player.played_displaced_shape) and (desired_shape == game.displaced_player.displaced_shape)
     
     if wants_to_use_displaced_piece:
         print(f"Attempting to place a {desired_shape} while Displaced Shape has NOT been played yet")
-        displace_to(post, displaced_player, desired_shape, use_displaced_piece=True)
+        displace_to(post, game.displaced_player, desired_shape, use_displaced_piece=True)
     else:
-        displace_to(post, displaced_player, desired_shape)
+        displace_to(post, game.displaced_player, desired_shape)
 
 def displace_to(post, displaced_player, shape, use_displaced_piece=False):
     if use_displaced_piece:
@@ -462,8 +421,8 @@ def handle_displacement(post, route, displacing_piece_shape):
         game.original_route_of_displacement = route
 
     game.waiting_for_displaced_player = True
-    displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
-    print(f"Waiting for Displaced Player {COLOR_NAMES[displaced_player.player.color]} to place {displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {displaced_player.displaced_shape}.")
+    game.displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
+    print(f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}.")
 
 def gather_empty_posts(start_route):
     visited_routes = [start_route]  # Mark the start route as visited immediately
@@ -559,10 +518,10 @@ while True:
                         post.valid_post_to_displace_to()
                         post_count += 1
                     print(f"Processed {post_count} posts.")  # Debugging log
-                if displaced_player.all_pieces_placed():
+                if game.displaced_player.all_pieces_placed():
                     reset_valid_posts_to_displace_to()
                     game.original_route_of_displacement = None
-                    displaced_player.reset_displaced_player()
+                    game.displaced_player.reset_displaced_player()
                     game.waiting_for_displaced_player = False
                     game.current_player.actions_remaining -= 1
                     game.switch_player_if_needed()
@@ -585,7 +544,7 @@ while True:
                 handle_move(pygame.mouse.get_pos(), event.button)
 
             elif game.waiting_for_bm_upgrade_choice:
-                for upgrade in upgrade_cities:
+                for upgrade in game.selected_map.upgrade_cities:
                     if check_bounds(upgrade, pygame.mouse.get_pos()):
                         if game.current_player.perform_upgrade(upgrade.upgrade_type):
                             print("Successfully used Upgrade BM")
@@ -602,11 +561,9 @@ while True:
             else:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
-    draw_bonus_markers(win, game.selected_map)
-    draw_upgrades(win, game.selected_map)
-    redraw_window(win, game.selected_map.cities, routes, game.current_player, game.waiting_for_displaced_player, displaced_player, WIDTH, HEIGHT)
-    draw_scoreboard(win, game.players, WIDTH-200, HEIGHT-150)
-    draw_completed_cities_indicator(win, game.selected_map)
+
+    redraw_window(win, game)
+    
     # In the game loop:
     for player_board in player_boards:
         player_board.draw(win, game.current_player)
