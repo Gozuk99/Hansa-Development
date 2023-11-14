@@ -1,8 +1,6 @@
 # map.py
-import pygame
 import random
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, YELLOW, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS
-from drawing.drawing_utils import draw_shape, draw_text, draw_line
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS
 
 class Map:
     def __init__(self):
@@ -91,11 +89,13 @@ class City:
     def add_office(self, office):
         self.offices.append(office)
 
-    def update_office_ownership(self, player, color):
+    def update_next_open_office_ownership(self, player, color):
         for office in self.offices:
             if office.controller is None:
                 office.controller = player
                 office.color = color
+                if office.awards_points:
+                    player.score += office.awards_points
                 break
 
     def update_city_size_based_on_offices(self):
@@ -269,6 +269,12 @@ class City:
     def has_office_controlled_by(self, player):
         return any(office.controller == player for office in self.offices)
     
+    def has_office_owned_by(self, player):
+        for office in self.offices:
+            if office.controller == player:
+                return True
+        return False
+        
 class Upgrade:
     def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):
         self.city_name = city_name
@@ -285,27 +291,9 @@ class Upgrade:
             {"color": BLACK, "value": 11, "owner": None}
         ]
 
-    def draw_upgrades_on_map(self, window):
-        draw_shape(window, "rectangle", YELLOW, self.x_pos, self.y_pos, width=self.width, height=self.height)
-
-        # If upgrade type is 'SpecialPrestigePoints', handle it differently
-        if self.upgrade_type == "SpecialPrestigePoints":
-            self.draw_special_prestige_points(window)
-            return
-
-        x_font_centered = self.x_pos + (self.width / 2)
-        y_font_centered = self.y_pos + (self.height / 2)
-        font = pygame.font.SysFont(None, 28)
-        draw_text(window, self.upgrade_type, x_font_centered, y_font_centered, font, color=BLACK, centered=True)
-
-# class SpecialPrestigePoints:
-#     def __init__(self, city_name, x_pos, y_pos, width, height):
-#         self.city_name = city_name
-#         self.x_pos = x_pos
-#         self.y_pos = y_pos
-#         self.width = width
-#         self.height = height
-
+    def get_special_prestige_points_for_player(self, player):
+        return sum(circle['value'] for circle in self.circle_data if circle['owner'] == player)
+    
     def claim_highest_prestige(self, player):
         # Log player details and privileges
         print(f"Player's Color: {COLOR_NAMES[player.color]}, Player's Privilege: {player.privilege}")
@@ -342,31 +330,8 @@ class Upgrade:
                 return True
         return False
         
-    def draw_special_prestige_points(self, window):
-        draw_shape(window, "rectangle", YELLOW, self.x_pos, self.y_pos, width=self.width, height=self.height)
-
-        # Define the total width of all circles and spaces combined
-        total_width = (CIRCLE_RADIUS * 2) * 4 + (SPACING * 3)
-
-        # Define starting position for the circles
-        start_x = self.x_pos + (self.width - total_width) / 2 + CIRCLE_RADIUS  # Adjust the starting position
-        start_y = self.y_pos + self.height / 2  # This centers the circle vertically in the rectangle
-
-        for circle in self.circle_data:
-            # Draw circle with the circle's color (either a privilege color or a player's color)
-            pygame.draw.circle(window, circle["color"], (int(start_x), int(start_y)), CIRCLE_RADIUS)
-
-            # Render text
-            font = pygame.font.SysFont(None, 36)  # Use default font, size 36
-            text_surface = font.render(str(circle["value"]), True, WHITE if circle["color"] == BLACK else BLACK)
-            text_rect = text_surface.get_rect(center=(start_x, start_y))
-            window.blit(text_surface, text_rect)
-
-            # Adjust start_x for next circle
-            start_x += CIRCLE_RADIUS * 2 + SPACING
-
 class Office:
-    def __init__(self, shape, color, awards_points):
+    def __init__(self, shape, color, awards_points=0):
         self.shape = shape  # "circle" or "square"
         self.color = color
         self.awards_points = awards_points
@@ -385,7 +350,7 @@ class Route:
         self.bonus_marker = None  # Don't assign it yet
         self.posts = self.create_posts()
 
-    def create_posts(self, buffer=0.15):  # Increase the buffer value as needed
+    def create_posts(self, buffer=0.12):  # Increase the buffer value as needed
         city1, city2 = self.cities
         posts = []
 
@@ -441,20 +406,19 @@ class Route:
         else:
             print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
 
+    def contains_a_circle(self):
+        for post in self.posts:
+            if post.owner_piece_shape == "circle":
+                return True
+        else:
+            print("Route doesn't contain a circle!")
+            return False
+
 class BonusMarker:
     def __init__(self, type, owner=None):
         self.type = type
         self.owner = owner
         self.position = (0, 0)
-
-    def draw_board_bonus_markers(self, screen, position):
-        # Draw the bonus marker as a simple shape (e.g., a circle)
-        pygame.draw.circle(screen, BLACK, position, 30)
-        # Draw the text for the bonus marker type
-        font = pygame.font.SysFont(None, 24)
-        text = font.render(self.type, True, WHITE)  # Render the text with the bonus marker's type
-        text_rect = text.get_rect(center=position)  # Get a rect object to center the text inside the circle
-        screen.blit(text, text_rect)  # Draw the text to the screen at the specified position
     
     def is_clicked(self, mouse_pos):
         # Check if the mouse click is within the circle of the bonus marker
@@ -540,10 +504,19 @@ class Post:
     
     def DEBUG_print_post_details(self):
         print(f"Post Details!!!")
-        print(f"Required Shape {self.required_shape}")
-        print(f"Post {self.pos}")
-        print(f"Owner Piece Shape {self.owner_piece_shape}")
-        print(f"Owner {COLOR_NAMES[self.owner.color]}")
-        print(f"Circle Color {COLOR_NAMES[self.circle_color]}")
-        print(f"Square Color {COLOR_NAMES[self.square_color]}")
+        print(f"Required Shape: {self.required_shape}")
+        print(f"Post Position: {self.pos}")
+        print(f"Owner Piece Shape: {self.owner_piece_shape}")
+        
+        # Check if owner is None before trying to access its color
+        owner_color = 'None' if self.owner is None else COLOR_NAMES[self.owner.color]
+        print(f"Owner: {owner_color}")
+        
+        # Check if circle_color is None before trying to access its color name
+        circle_color_name = 'None' if self.circle_color is None else COLOR_NAMES.get(self.circle_color, 'Unknown')
+        print(f"Circle Color: {circle_color_name}")
+        
+        # Check if square_color is None before trying to access its color name
+        square_color_name = 'None' if self.square_color is None else COLOR_NAMES.get(self.square_color, 'Unknown')
+        print(f"Square Color: {square_color_name}")
         

@@ -1,12 +1,10 @@
 import pygame
 import sys
-from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
-from map_data.constants import WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, BLACK, CIRCLE_RADIUS, TAN, COLOR_NAMES, PRIVILEGE_COLORS
-from map_data.map_attributes import Route, Post, City
+from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES
 from game_info.game_attributes import Game
-from drawing.drawing_utils import draw_line, redraw_window, draw_scoreboard, draw_end_game, draw_bonus_markers, draw_upgrades, draw_completed_cities_indicator
+from drawing.drawing_utils import redraw_window, draw_end_game
 
-game = Game(map_num=1, num_players=5)
+game = Game(map_num=1, num_players=3)
 WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
 cities = game.selected_map.cities
@@ -17,9 +15,8 @@ win = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Hansa Sample Game')
 win.fill(TAN)
 
-player_boards = [PlayerBoard(WIDTH-800, i * 220, player) for i, player in enumerate(game.players)]
-
-def end_game(winning_player):
+def end_game(winning_players):
+    draw_end_game(win, winning_players)
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -29,8 +26,6 @@ def end_game(winning_player):
                 if event.key == pygame.K_RETURN:
                     pygame.quit()
                     sys.exit()
-
-        draw_end_game(win, winning_player)
 
 def score_route(route):
     # Allocate points
@@ -160,8 +155,8 @@ def finalize_route_claim(route, placed_piece_shape):
 
     highest_scoring_players = game.check_for_game_end()
     if highest_scoring_players:
+        redraw_window(win, game)
         end_game(highest_scoring_players)
-
 
 def check_if_route_claimed(pos, button):
     placed_piece_shape = None
@@ -186,7 +181,7 @@ def check_if_route_claimed(pos, button):
                             score_route(route)
                             placed_piece_shape = city.get_next_open_office_shape()
                             print(f"{COLOR_NAMES[game.current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
-                            city.update_office_ownership(game.current_player, game.current_player.color)
+                            city.update_next_open_office_ownership(game.current_player, game.current_player.color)
                             finalize_route_claim(route, placed_piece_shape)
                     elif 'PlaceAdjacent' in (bm.type for bm in game.current_player.bonus_markers):
                         score_route(route)
@@ -197,11 +192,11 @@ def check_if_route_claimed(pos, button):
                         print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
 
                 elif button == 2: #middle click
-                    if city.upgrade_city_type == "SpecialPrestigePoints":
+                    if city.upgrade_city_type == "SpecialPrestigePoints" and route.contains_a_circle():
                         if specialprestigepoints_city.claim_highest_prestige(game.current_player):
-                            specialprestigepoints_city.draw_special_prestige_points(win)
+                            # specialprestigepoints_city.draw_special_prestige_points(win)
                             score_route(route)
-                            finalize_route_claim(route, placed_piece_shape)
+                            finalize_route_claim(route, "circle")
                     elif city.upgrade_city_type in ["Keys", "Privilege", "Book", "Actions", "Bank"]:
                         if game.current_player.perform_upgrade(city.upgrade_city_type):
                             score_route(route)
@@ -227,14 +222,14 @@ def check_if_route_claimed(pos, button):
 
 def check_if_income_clicked(pos):
     # Check if any player board's Income Action button was clicked
-    for board in player_boards:
-        if hasattr(board, 'circle_buttons'):
-            for idx, button_rect in enumerate(board.circle_buttons):
-                if button_rect.collidepoint(pos):
-                    board.income_action_based_on_circle_count(idx)
-                    game.current_player.actions_remaining -= 1
-                    game.switch_player_if_needed()
-                    return
+    board = game.current_player.board
+    if hasattr(board, 'circle_buttons'):
+        for idx, button_rect in enumerate(board.circle_buttons):
+            if button_rect.collidepoint(pos):
+                board.income_action_based_on_circle_count(idx)
+                game.current_player.actions_remaining -= 1
+                game.switch_player_if_needed()
+                return
 
 def handle_bonus_marker(player, route):
     if route.bonus_marker:
@@ -561,12 +556,7 @@ while True:
             else:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
-
     redraw_window(win, game)
-    
-    # In the game loop:
-    for player_board in player_boards:
-        player_board.draw(win, game.current_player)
 
     pygame.display.flip()  # Update the screen
     pygame.time.delay(100)

@@ -1,12 +1,8 @@
 # player_attributes.py
 
-import pygame
-import sys
-
 from map_data.map1 import Map1
-from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, SQUARE_SIZE, CIRCLE_RADIUS, WHITE, ORANGE, PINK, BLACK, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES
-from drawing.drawing_utils import draw_shape, draw_text
-from player_info.player_attributes import Player, DisplacedPlayer
+from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW
+from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
 
 class Game:
     def __init__(self, map_num, num_players):
@@ -31,12 +27,15 @@ class Game:
 
 
     def create_players(self, num_players):
-        # Create player objects based on the number of players
         colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
-        # colors = [GREEN, BLUE, PURPLE]  # Assume these are defined somewhere
-        players = [Player(color, i+1) for i, color in enumerate(colors[:num_players])]
-        for player in players:
-            player.actions_remaining = player.actions  # Initialize actions_remaining for each player
+        players = []
+        
+        for i, color in enumerate(colors[:num_players]):
+            new_player = Player(color, i+1)
+            new_player.board = PlayerBoard(self.selected_map.map_width, i * 220, new_player)  # Create and assign the board directly here
+            new_player.actions_remaining = new_player.actions  # Initialize actions_remaining for the player
+            players.append(new_player)
+        
         return players
 
     def assign_map(self, map_num):
@@ -146,12 +145,128 @@ class Game:
         # If none of the routes lead to the end city, return False
         return False
     
+    def get_bonus_marker_points(self, total_bms):
+        if total_bms == 1:
+            return 1
+        elif 2 <= total_bms <= 3:
+            return 3
+        elif 4 <= total_bms <= 5:
+            return 6
+        elif 6 <= total_bms <= 7:
+            return 10
+        elif 8 <= total_bms <= 9:
+            return 15
+        elif total_bms >= 10:
+            return 21
+        else:
+            return 0
+        
+        #1 initial points
+        #2 fully developed abilities
+        #3 prestige points for total bonus markers collected
+        #  1-1, 2or3-3, 4or5-6, 6or7-10, 8or9-15, 10+ - 21
+        #4 specialprestigepoints 7/8/9/11
+        #5 prestige points for cities, 2 per control
+        #6 largest network x key       
+    
+    def dfs_network_size(self, player, city, visited_cities):
+        if city in visited_cities:
+            return 0  # This city is already part of the current network
+
+        visited_cities.add(city)
+        network_size = 1  # Include current city in the network size
+
+        for route in city.routes:
+            for connected_city in route.cities:
+                if connected_city != city and connected_city.has_office_owned_by(player) and connected_city not in visited_cities:
+                    network_size += self.dfs_network_size(player, connected_city, visited_cities)
+
+        return network_size
+
+    def calculate_largest_network(self, player):
+        largest_network = 0
+        all_visited_cities = set()  # To keep track of all visited cities across all networks
+
+        for city in self.selected_map.cities:
+            if city.has_office_owned_by(player) and city not in all_visited_cities:
+                visited_cities = set()
+                network_size = self.dfs_network_size(player, city, visited_cities)
+                largest_network = max(largest_network, network_size)
+                all_visited_cities.update(visited_cities)  # Add the cities of this network to the total set of visited cities
+
+        return largest_network
+
+    def finalize_end_of_game_points(self):
+        for player in self.players:
+            initial_points = player.score
+            ability_points = 0
+            bonus_marker_points = 0
+            special_prestige_points = 0
+            city_control_points = 0
+            largest_network_points = 0
+
+            # 2. Fully developed abilities
+            for ability in ['keys', 'book', 'actions', 'bank']: # exclude keys intentionally
+                if getattr(player, ability) == UPGRADE_MAX_VALUES[ability]:
+                    ability_points += 4  # Assuming 4 points for each fully developed ability
+
+            # 3. Prestige points for total bonus markers collected
+            total_bms = len(player.bonus_markers) + len(player.used_bonus_markers)
+            bonus_marker_points += self.get_bonus_marker_points(total_bms)
+
+            # 5. Add Special Prestige Points
+            for upgrade_city in self.selected_map.upgrade_cities:
+                if upgrade_city.upgrade_type == "SpecialPrestigePoints":
+                    special_prestige_points += upgrade_city.get_special_prestige_points_for_player(player)
+
+            # 6. Add points for control of cities
+            for city in self.selected_map.cities:
+                if city.controller == player:
+                    city_control_points += 2  # 2 points per city controlled
+
+            # 7. Points for the largest network
+            largest_network_points += self.calculate_largest_network(player) * player.keys
+
+            # Sum up the final score
+            player.final_score = (initial_points + ability_points + bonus_marker_points + special_prestige_points + city_control_points + largest_network_points)
+
+            # Print or store the score breakdown for display
+            score_breakdown = {
+                'Initial Points': initial_points,
+                'Ability Points': ability_points,
+                'Bonus Marker Points': bonus_marker_points,
+                'Special Prestige Points': special_prestige_points,
+                'City Control Points': city_control_points,
+                'Largest Network Points': largest_network_points
+            }
+
+            # Ensure final score is not less than the initial score
+            player.final_score = max(player.final_score, initial_points)
+
+            # You can print the score breakdown here if needed
+            print(f"Score breakdown for {COLOR_NAMES[player.color]}: {score_breakdown}")
+
     def check_for_game_end(self):
         # Check if the bonus marker pool is empty or any player has reached the score threshold
-        if not self.selected_map.bonus_marker_pool or any(player.score >= 3 for player in self.players):
-            # Find the player with the highest score
-            highest_scoring_players = [player for player in self.players if player.score == max(player.score for player in self.players)]
+        end_conditions_met = not self.selected_map.bonus_marker_pool or any(player.score >= 1 for player in self.players)
+
+        if end_conditions_met:
+            # Finalize points before determining the winner
+            self.finalize_end_of_game_points()
+
+            # Find the player(s) with the highest score
+            highest_score = max(player.final_score for player in self.players)
+            highest_scoring_players = [player for player in self.players if player.final_score == highest_score]
+
             # If there's a tie, you might need additional logic to determine the winner
             return highest_scoring_players
+
         # Game continues if no end condition is met
         return None
+
+    # # Example usage in your game loop:
+    # winning_players = game.check_for_game_end()
+    # if winning_players:
+    #     # Handle end of game, which might involve displaying a message with draw_end_game
+    #     draw_end_game(win, winning_players)
+    #     # Maybe break out of the game loop or wait for user input to restart or exit

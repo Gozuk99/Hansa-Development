@@ -38,3 +38,18 @@ PRIVILEGE_COLORS = ["WHITE", "ORANGE", "PINK", "BLACK"]
 BOOK_OF_KNOWLEDGE_MAX_VALUES = [2, 3, 4, 5]
 ACTIONS_MAX_VALUES = [2, 3, 3, 4, 4, 5]
 BANK_MAX_VALUES = [3, 5, 7, "C"]
+
+UPGRADE_METHODS_MAP = {
+    "keys": "upgrade_keys",
+    "actions": "upgrade_actions",
+    "privilege": "upgrade_privilege",
+    "book": "upgrade_book",
+    "bank": "upgrade_bank"
+}
+UPGRADE_MAX_VALUES = {
+    'keys': CITY_KEYS_MAX_VALUES[-1],
+    'privilege': PRIVILEGE_COLORS[-1],
+    'book': BOOK_OF_KNOWLEDGE_MAX_VALUES[-1],
+    'actions': ACTIONS_MAX_VALUES[-1],
+    'bank': BANK_MAX_VALUES[-1]
+}
