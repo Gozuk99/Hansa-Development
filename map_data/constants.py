@@ -8,6 +8,8 @@ SPACING = 10  # Increased spacing between the shapes
 BLACK = (0, 0, 0)
 BLACKISH_BROWN = (130, 100, 80)
 BLUE = (0, 0, 255)
+DARK_GREEN = (34, 139, 34)
+DARK_RED = (139, 0, 0)
 GREEN = (0, 255, 0)
 GREY = (192, 192, 192)
 ORANGE = (255, 165, 0)
@@ -22,6 +24,8 @@ COLOR_NAMES = {
     BLACK: "BLACK",
     BLACKISH_BROWN: "BLACKISH_BROWN",
     BLUE: "BLUE",
+    DARK_GREEN : "DARK_GREEN",
+    DARK_RED : "DARK_RED",
     GREEN: "GREEN",
     GREY: "GREY",
     ORANGE: "ORANGE",

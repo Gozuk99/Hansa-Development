@@ -1,12 +1,13 @@
 # player_attributes.py
 
 from map_data.map1 import Map1
+from map_data.map2 import Map2
 from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
 
 class Game:
     def __init__(self, map_num, num_players):
-        self.selected_map = self.assign_map(map_num)
+        self.selected_map = self.assign_map(map_num, num_players)
         self.num_players = num_players
 
         self.players = self.create_players(num_players)
@@ -38,10 +39,12 @@ class Game:
         
         return players
 
-    def assign_map(self, map_num):
+    def assign_map(self, map_num, num_players):
         # Logic to assign a map based on map_num
         if map_num == 1:
-            return Map1()
+            return Map1(num_players)
+        if map_num == 2:
+            return Map2()
         # Add additional maps as needed
         # ...
     
@@ -79,10 +82,10 @@ class Game:
             print(f"{COLOR_NAMES[self.current_player.color]} has already completed the East-West Connection.")
             return
         
-        if not self.check_if_player_has_matching_offices_in_east_west('Stendal', 'Arnheim'):
+        if not self.check_if_player_has_matching_offices_in_east_west(self.selected_map.east_west_cities[0], self.selected_map.east_west_cities[1]):
             return
 
-        if self.has_east_west_connection('Stendal', 'Arnheim'):
+        if self.has_east_west_connection(self.selected_map.east_west_cities[0], self.selected_map.east_west_cities[1]):
             # Points for the 1st, 2nd, and 3rd completions
             east_west_points = [7, 4, 2]
 

@@ -64,7 +64,7 @@ toggle_button = tk.Button(root, text="Toggle Coordinates", command=toggle_coordi
 toggle_button.pack()
 
 # Load and process your image with reduced opacity
-image = Image.open('temp3.JPG')
+image = Image.open('temp.jpg')
 enhancer = ImageEnhance.Brightness(image)
 translucent_image = enhancer.enhance(0.4)
 translucent_image = ImageTk.PhotoImage(translucent_image)

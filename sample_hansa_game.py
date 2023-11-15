@@ -1,10 +1,10 @@
 import pygame
 import sys
-from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES
+from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 from game_info.game_attributes import Game
 from drawing.drawing_utils import redraw_window, draw_end_game
 
-game = Game(map_num=1, num_players=3)
+game = Game(map_num=2, num_players=3)
 WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
 cities = game.selected_map.cities
@@ -173,7 +173,7 @@ def check_if_route_claimed(pos, button):
                     next_open_office_color = city.get_next_open_office_color()
                     print(f"Next open office color: {next_open_office_color}")
 
-                    if game.current_player.player_can_claim_office(next_open_office_color):
+                    if game.current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
                         if not city.has_required_piece_shape(game.current_player, route, city):
                             required_shape = city.get_next_open_office_shape()
                             print(f"{COLOR_NAMES[game.current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
@@ -188,9 +188,10 @@ def check_if_route_claimed(pos, button):
                         city.claim_office_with_bonus_marker(game.current_player)
                         print(f"{COLOR_NAMES[game.current_player.color]} placed a square into a NEW office of {city.name}.")
                         finalize_route_claim(route, "square")
+                    elif city.color == DARK_GREEN:
+                        print(f"{COLOR_NAMES[game.current_player.color]} cannot claim a GREEN City ({city.name}) without a PlaceAdjacent BM.")
                     else:
                         print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
-
                 elif button == 2: #middle click
                     if city.upgrade_city_type == "SpecialPrestigePoints" and route.contains_a_circle():
                         if specialprestigepoints_city.claim_highest_prestige(game.current_player):

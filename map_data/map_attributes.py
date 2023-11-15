@@ -1,6 +1,6 @@
 # map.py
 import random
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN
 
 class Map:
     def __init__(self):
@@ -244,6 +244,14 @@ class City:
         new_office = self.create_new_office(player.color)
         new_office.controller = player
         new_office.color = player.color
+
+        if self.color == DARK_GREEN:
+            # Check the number of owned offices and remove the last one if there are less than 6
+            num_owned_offices = sum(1 for office in self.offices if office.controller is not None)
+            if num_owned_offices < 6:
+                self.offices.pop()
+
+        self.update_city_size_based_on_offices()
 
         # Update player's bonus markers by removing the first 'PlaceAdjacent'
         place_adjacent_bm = next((bm for bm in player.bonus_markers if bm.type == 'PlaceAdjacent'), None)

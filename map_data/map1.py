@@ -1,20 +1,20 @@
 # map1.py
-import pygame
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
-from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, SPACING
+from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, SPACING, DARK_RED
 
 class Map1(Map):
-    def __init__(self):
+    def __init__(self, num_players):
         super().__init__()  # Call the parent class constructor
         self.cities = []
         self.routes = []
         self.upgrade_cities = []
+        self.east_west_cities = ['Stendal', 'Arnheim']
         self.specialprestigepoints = None
         self.max_full_cities = 10
         self.max_full_cities_x_pos = 77
         self.max_full_cities_y_pos = 52
 
-        self.create_cities_and_routes()  # Populate cities, offices, and routes etc., specifically for Map1
+        self.create_cities_and_routes(num_players)  # Populate cities, offices, and routes etc., specifically for Map1
         self.assign_starting_bonus_markers()
 
         self.map_width = 1800
@@ -55,8 +55,11 @@ class Map1(Map):
             ('Halle', 'Quedlinburg'): (1519, 1083),
             ('Gottingen', 'Quedlinburg'): (1194, 1066),
         }
+        if num_players != 3:
+            self.bonus_marker_positions[('Emden', 'Stade')] = (723, 127)
+            self.bonus_marker_positions[('Gottingen', 'Warburg')] = (869, 1084)
 
-    def create_cities_and_routes(self):
+    def create_cities_and_routes(self, num_players):
         # Define Map1-specific cities and offices
         # Define cities
         Groningen = City('Groningen', 115, 210, BLACKISH_BROWN)
@@ -77,8 +80,12 @@ class Map1(Map):
         self.cities.append(Osnabruck)
 
         Kampen = City('Kampen', 107, 385, BLACKISH_BROWN)
-        Kampen.add_office(Office("square", "ORANGE", 0))
-        Kampen.add_office(Office("square", "BLACK", 0))
+        if num_players == 3:
+            Kampen.add_office(Office("square", "ORANGE", 0))
+            Kampen.add_office(Office("square", "BLACK", 0))
+        else:
+            Kampen.add_office(Office("circle", "ORANGE", 0))
+            Kampen.add_office(Office("square", "BLACK", 0))
         self.cities.append(Kampen)
 
         Arnheim = City('Arnheim', 65, 655, BLACKISH_BROWN)
@@ -86,6 +93,7 @@ class Map1(Map):
         Arnheim.add_office(Office("circle", "WHITE", 0))
         Arnheim.add_office(Office("square", "ORANGE", 0))
         Arnheim.add_office(Office("square", "PINK", 0))
+        Arnheim.change_color(DARK_RED)
         self.cities.append(Arnheim)
 
         Duisburg = City('Duisburg', 179, 911, BLACKISH_BROWN)
@@ -93,8 +101,13 @@ class Map1(Map):
         self.cities.append(Duisburg)
 
         Dortmund = City('Dortmund', 432, 894, BLACKISH_BROWN)
-        Dortmund.add_office(Office("circle", "WHITE", 0))
-        Dortmund.add_office(Office("square", "ORANGE", 0))
+        if num_players == 3:
+            Dortmund.add_office(Office("circle", "WHITE", 0))
+            Dortmund.add_office(Office("square", "ORANGE", 0))
+        else:
+            Dortmund.add_office(Office("circle", "WHITE", 0))
+            Dortmund.add_office(Office("square", "ORANGE", 0))
+            Dortmund.add_office(Office("square", "PINK", 0))
         self.cities.append(Dortmund)
 
         Munster = City('Munster', 464, 697, BLACKISH_BROWN)
@@ -109,8 +122,12 @@ class Map1(Map):
         self.cities.append(Coellen)
 
         Warburg = City('Warburg', 625, 1139, BLACKISH_BROWN)
-        Warburg.add_office(Office("square", "ORANGE", 1))
-        Warburg.add_office(Office("square", "PINK", 0))
+        if num_players == 3:
+            Warburg.add_office(Office("square", "ORANGE", 1))
+            Warburg.add_office(Office("square", "PINK", 0))
+        else:
+            Warburg.add_office(Office("square", "ORANGE", 0))
+            Warburg.add_office(Office("square", "PINK", 0))
         self.cities.append(Warburg)
 
         Paderborn = City('Paderborn', 766, 893, BLACKISH_BROWN)
@@ -126,11 +143,18 @@ class Map1(Map):
         self.cities.append(Minden)
 
         Bremen = City('Bremen', 865, 283, BLACKISH_BROWN)
-        Bremen.add_office(Office("square", "PINK", 0))
+        if num_players == 3:
+            Bremen.add_office(Office("square", "PINK", 0))
+        else:
+            Bremen.add_office(Office("circle", "WHITE", 0))
+            Bremen.add_office(Office("square", "PINK", 0))
         self.cities.append(Bremen)
 
         Stade = City('Stade', 914, 118, BLACKISH_BROWN)
-        Stade.add_office(Office("circle", "WHITE", 1))
+        if num_players == 3:
+            Stade.add_office(Office("circle", "WHITE", 1))
+        else:
+            Stade.add_office(Office("circle", "WHITE", 0))
         Stade.assign_upgrade_type('Privilege')
         self.cities.append(Stade)
 
@@ -145,8 +169,13 @@ class Map1(Map):
         self.cities.append(Hildesheim)
 
         Gottingen = City('Gottingen', 989, 1075, BLACKISH_BROWN)
-        Gottingen.add_office(Office("square", "WHITE", 0))
-        Gottingen.add_office(Office("square", "ORANGE", 0))
+        if num_players == 3:
+            Gottingen.add_office(Office("square", "WHITE", 0))
+            Gottingen.add_office(Office("square", "ORANGE", 0))
+        else:
+            Gottingen.add_office(Office("square", "WHITE", 0))
+            Gottingen.add_office(Office("circle", "WHITE", 0))
+            Gottingen.add_office(Office("square", "PINK", 0))
         Gottingen.assign_upgrade_type('Actions')
         self.cities.append(Gottingen)
 
@@ -156,7 +185,11 @@ class Map1(Map):
         self.cities.append(Quedlinburg)
 
         Goslar = City('Goslar', 1387, 793, BLACKISH_BROWN)
-        Goslar.add_office(Office("square", "WHITE", 0))
+        if num_players == 3:
+            Goslar.add_office(Office("square", "WHITE", 0))
+        else:
+            Goslar.add_office(Office("square", "WHITE", 0))
+            Goslar.add_office(Office("square", "BLACK", 0))
         self.cities.append(Goslar)
 
         Brunswick = City('Brunswick', 1253, 622, BLACKISH_BROWN)
@@ -164,7 +197,11 @@ class Map1(Map):
         self.cities.append(Brunswick)
 
         Luneburg = City('Luneburg', 1359, 390, BLACKISH_BROWN)
-        Luneburg.add_office(Office("circle", "WHITE", 0))
+        if num_players == 3:
+            Luneburg.add_office(Office("circle", "WHITE", 0))
+        else:
+            Luneburg.add_office(Office("circle", "ORANGE", 0))
+            Luneburg.add_office(Office("square", "BLACK", 0))
         self.cities.append(Luneburg)
 
         Hamburg = City('Hamburg', 1274, 80, BLACKISH_BROWN)
@@ -189,6 +226,7 @@ class Map1(Map):
         Stendal.add_office(Office("circle", "WHITE", 0))
         Stendal.add_office(Office("square", "ORANGE", 0))
         Stendal.add_office(Office("square", "PINK", 0))
+        Stendal.change_color(DARK_RED)
         self.cities.append(Stendal)
 
         Magdeburg = City('Magdeburg', 1598, 929, BLACKISH_BROWN)
@@ -207,12 +245,12 @@ class Map1(Map):
             city.update_city_size_based_on_offices()
 
         #Upgrades 
-        UPGRADE_Y_AXIS_OFFSET = 50
-        self.upgrade_cities.append(Upgrade('Halle', 'Keys', Halle.x_pos, Halle.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Halle.width, height=Halle.height))
-        self.upgrade_cities.append(Upgrade('Stade', 'Privilege', Stade.x_pos, Stade.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Stade.width, height=Stade.height))
-        self.upgrade_cities.append(Upgrade('Groningen', 'Book', Groningen.x_pos, Groningen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Groningen.width, height=Groningen.height))
-        self.upgrade_cities.append(Upgrade('Gottingen', 'Actions', Gottingen.x_pos, Gottingen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Gottingen.width, height=Gottingen.height))
-        self.upgrade_cities.append(Upgrade('Lubeck', 'Bank', Lubeck.x_pos, Lubeck.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Lubeck.width, height=Lubeck.height))
+        UPGRADE_Y_AXIS_OFFSET = 29
+        self.upgrade_cities.append(Upgrade('Halle', 'Keys', Halle.x_pos, Halle.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Halle.width, height=Halle.height-30))
+        self.upgrade_cities.append(Upgrade('Stade', 'Privilege', Stade.x_pos, Stade.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Stade.width, height=Stade.height-30))
+        self.upgrade_cities.append(Upgrade('Groningen', 'Book', Groningen.x_pos, Groningen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Groningen.width, height=Groningen.height-30))
+        self.upgrade_cities.append(Upgrade('Gottingen', 'Actions', Gottingen.x_pos, Gottingen.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Gottingen.width, height=Gottingen.height-30))
+        self.upgrade_cities.append(Upgrade('Lubeck', 'Bank', Lubeck.x_pos, Lubeck.y_pos-UPGRADE_Y_AXIS_OFFSET, width=Lubeck.width, height=Lubeck.height-30))
         
         #Upgrade - Coellen which has SpecialPrestigePoints
         circle_size = CIRCLE_RADIUS*2
@@ -262,3 +300,7 @@ class Map1(Map):
         self.routes.append(Route([Goslar, Hildesheim], 3, has_bonus_marker=True))
         self.routes.append(Route([Halle, Quedlinburg], 4))
         self.routes.append(Route([Gottingen, Quedlinburg], 3))
+
+        if num_players != 3:
+            self.routes.append(Route([Emden, Stade], 3))
+            self.routes.append(Route([Gottingen, Warburg], 3))
