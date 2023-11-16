@@ -73,7 +73,7 @@ def assign_new_bonus_marker_on_route(pos, button):
         print("Invalid BM Placement: Clicked position does not correspond to any route.")
         return
 
-    if route.bonus_marker:
+    if route.bonus_marker or route.permanent_bonus_marker:
         print(f"Invalid BM Placement: Route between {route.cities[0].name} and {route.cities[1].name} already has a bonus marker.")
         return
 
@@ -193,13 +193,20 @@ def check_if_route_claimed(pos, button):
                     else:
                         print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
                 elif button == 2: #middle click
-                    if city.upgrade_city_type == "SpecialPrestigePoints" and route.contains_a_circle():
+                    if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
                         if specialprestigepoints_city.claim_highest_prestige(game.current_player):
-                            # specialprestigepoints_city.draw_special_prestige_points(win)
                             score_route(route)
                             finalize_route_claim(route, "circle")
-                    elif city.upgrade_city_type in ["Keys", "Privilege", "Book", "Actions", "Bank"]:
-                        if game.current_player.perform_upgrade(city.upgrade_city_type):
+                    elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
+                        upgrade_choice = None
+                        if len(city.upgrade_city_type) > 1:
+                            print(f"Waiting for player to click on a valid upgrade in the city: {city.name}")
+                            upgrades_for_city = [upgrade for upgrade in game.selected_map.upgrade_cities if upgrade.city_name == city.name]
+                            upgrade_choice = get_upgrade_choice(upgrades_for_city)
+                        else:
+                            upgrade_choice = city.upgrade_city_type[0]  # Select the single upgrade type
+
+                        if upgrade_choice and game.current_player.perform_upgrade(upgrade_choice):
                             score_route(route)
                             finalize_route_claim(route, placed_piece_shape)
                     else:
@@ -213,7 +220,21 @@ def check_if_route_claimed(pos, button):
             else:
                 print(f"Route(s) not controlled by current_player: {COLOR_NAMES[game.current_player.color]}")
 
-# def upgrade_clicked(pos):
+def get_upgrade_choice(upgrade_options):
+    waiting_for_click = True
+    while waiting_for_click:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONUP:
+                for upgrade in upgrade_options:
+                    if check_bounds(upgrade, pygame.mouse.get_pos()) and game.current_player.actions > 0:
+                        return upgrade.upgrade_type
+                print (f"Please click on either {upgrade_options[0].upgrade_type} or {upgrade_options[1].upgrade_type}")
+        pygame.time.wait(10)  # Wait for a short period to prevent high CPU usage
+
+    return None
 
 # def claim_office_clicked(pos):
 
@@ -238,7 +259,8 @@ def handle_bonus_marker(player, route):
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
         game.replace_bonus_marker += 1
-
+    elif route.permanent_bonus_marker:
+        route.permanent_bonus_marker.use_perm_bm(game)
 # def check_if_route_claimed(pos, button):
 #     # if button == 1:
 #     #     if upgrade_clicked(pos):

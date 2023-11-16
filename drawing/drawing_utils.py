@@ -1,5 +1,5 @@
 import pygame
-from map_data.constants import TAN, COLOR_NAMES, WHITE, ORANGE, PINK, BLACK, YELLOW, BUFFER, SQUARE_SIZE, SPACING, CIRCLE_RADIUS, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES
+from map_data.constants import TAN, COLOR_NAMES, WHITE, ORANGE, PINK, BLACK, YELLOW, BUFFER, SQUARE_SIZE, SPACING, CIRCLE_RADIUS, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, BLUE
 
 pygame.init()
 
@@ -117,10 +117,20 @@ def draw_bonus_markers(win, selected_map):
                 # print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
             # else:
                 # print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")
+        if route.permanent_bonus_marker:
+            # Construct the key for the dictionary
+            city_pair = tuple(sorted([route.cities[0].name, route.cities[1].name]))
+            # Fetch the bonus marker position from the dictionary
+            bonus_marker_pos = selected_map.bonus_marker_positions.get(city_pair)
 
-def draw_board_bonus_markers(screen, bonus_marker, position):
+            # If the position exists, call the draw method on the bonus marker
+            if bonus_marker_pos:
+                draw_board_bonus_markers(win, route.permanent_bonus_marker, bonus_marker_pos, color=BLUE)
+
+
+def draw_board_bonus_markers(screen, bonus_marker, position, color=BLACK):
     # Draw the bonus marker as a simple shape (e.g., a circle)
-    pygame.draw.circle(screen, BLACK, position, 30)
+    pygame.draw.circle(screen, color, position, 30)
     # Draw the text for the bonus marker type
     font = pygame.font.SysFont(None, 24)
     text = font.render(bonus_marker.type, True, WHITE)  # Render the text with the bonus marker's type

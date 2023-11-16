@@ -6,6 +6,7 @@ class Map:
     def __init__(self):
         # This should never change
         self.initial_bonus_types = ['Move3', 'SwapOffice', 'PlaceAdjacent']
+        self.permanent_bm_types = ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
         self.bonus_marker_pool = []
         self.place_new_bonus_marker = False
         # Prepare the starting bonus markers
@@ -75,7 +76,7 @@ class City:
         self.width = 0
         self.height = 0
         self.midpoint = (0, 0)  # Initialize midpoint with (0, 0)
-        self.upgrade_city_type = None
+        self.upgrade_city_type = []
 
     def add_route(self, route):
         self.routes.append(route)
@@ -84,7 +85,8 @@ class City:
         self.color = new_color
 
     def assign_upgrade_type(self, upgrade_type):
-        self.upgrade_city_type = upgrade_type
+        if upgrade_type not in self.upgrade_city_type:
+            self.upgrade_city_type.append(upgrade_type)
 
     def add_office(self, office):
         self.offices.append(office)
@@ -349,14 +351,19 @@ class Office:
         return self.controller is None
 
 class Route:
-    def __init__(self, cities, num_posts, has_bonus_marker=False):
+    def __init__(self, cities, num_posts, has_bonus_marker=False, permanent_bm_type=None):
         self.cities = cities
         for city in cities:
             city.add_route(self)
         self.num_posts = num_posts
         self.has_bonus_marker = has_bonus_marker
+        self.has_permanent_bm_type = permanent_bm_type
         self.bonus_marker = None  # Don't assign it yet
+        self.permanent_bonus_marker = None  # Don't assign it yet
         self.posts = self.create_posts()
+        
+        if self.has_permanent_bm_type:
+            self.assign_map_permanent_bonus_marker(self.has_permanent_bm_type)
 
     def create_posts(self, buffer=0.12):  # Increase the buffer value as needed
         city1, city2 = self.cities
@@ -411,6 +418,13 @@ class Route:
         if not self.bonus_marker:  # Only assign if there's no bonus marker already
             # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
             self.bonus_marker = BonusMarker(bm_type)
+        else:
+            print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
+
+    def assign_map_permanent_bonus_marker(self, bm_type):
+        if not self.bonus_marker:  # Only assign if there's no bonus marker already
+            # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
+            self.permanent_bonus_marker = BonusMarker(bm_type)
         else:
             print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
 
@@ -475,6 +489,20 @@ class BonusMarker:
     def handle_4_actions(self, current_player):
         current_player.actions_remaining += 4
 
+    ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
+    def use_perm_bm(self, game):
+        if self.type == 'MoveAny2':
+            return
+        elif self.type == '+1Priv':
+            game.current_player.upgrade_privilege()
+        elif self.type == 'ClaimGreenCity':
+            return
+        elif self.type == 'Place2TradesmenFromRoute':
+            return
+        elif self.type == 'Place2ScotlandOrWales':
+            return
+        else:
+            print(f"Unknown bonus marker type: {self.type}")
 class Post:
     def __init__(self, position, owner=None, required_shape=None):
         self.pos = position

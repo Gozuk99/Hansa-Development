@@ -32,7 +32,7 @@ class Map2(Map):
             ('Danzig', 'Munster'): (1163, 365),
             ('Danzig', 'Konigsberg'): (1569, 265),
             ('Braunsberg', 'Danzig'): (1568, 394),
-            ('Braunsberg', 'Elbing'): (1524, 585),
+            ('Braunsberg', 'Elbing'): (1524, 600),
             ('Elbing', 'Kulm'): (1321, 571),
             ('Kulm', 'Munster'): (1180, 568),
             ('Kulm', 'Stettin'): (991, 612),
@@ -50,6 +50,11 @@ class Map2(Map):
             ('Krackau', 'Thorn'): (1689, 992),
             ('Allenstein', 'Thorn'): (1641, 772),
             ('Allenstein', 'Braunsberg'): (1660, 670),
+            #permanent bonus market locations:
+            ('Mismar', 'Stralsund'): (474, 153),
+            ('Malmo', 'Stralsund'): (773, 90),
+            ('Malmo', 'Visby'): (1196, 72),
+            ('Danzig', 'Malmo'): (1106, 253),
         }
 
     def create_cities_and_routes(self):
@@ -156,7 +161,7 @@ class Map2(Map):
         Braunsberg.add_office(Office("circle", "ORANGE", 0))
         self.cities.append(Braunsberg)
 
-        Allenstein = City('Allenstein', 1443, 750, BLACKISH_BROWN)
+        Allenstein = City('Allenstein', 1435, 750, BLACKISH_BROWN)
         Allenstein.add_office(Office("square", "WHITE", 0))
         Allenstein.add_office(Office("square", "PINK", 0))
         self.cities.append(Allenstein)
@@ -253,10 +258,10 @@ class Map2(Map):
 
         # Routes
         self.routes.append(Route([Lubeck, Mismar], 3))
-        self.routes.append(Route([Mismar, Stralsund], 3)) #2 must be circles
-        self.routes.append(Route([Stralsund, Malmo], 3)) #2 must be circles
-        self.routes.append(Route([Malmo, Visby], 3)) #1 must be circle
-        self.routes.append(Route([Malmo, Danzig], 4)) #1 must be circle
+        self.routes.append(Route([Mismar, Stralsund], 3, permanent_bm_type="MoveAny2")) #2 must be circles
+        self.routes.append(Route([Stralsund, Malmo], 3, permanent_bm_type="+1Priv")) #2 must be circles
+        self.routes.append(Route([Malmo, Visby], 3, permanent_bm_type="ClaimGreenCity")) #1 must be circle
+        self.routes.append(Route([Malmo, Danzig], 4, permanent_bm_type="Place2TradesmenFromRoute")) #1 must be circle
         self.routes.append(Route([Danzig, Konigsberg], 4))
         self.routes.append(Route([Danzig, Belgard], 4))
         self.routes.append(Route([Belgard, Anklam], 3))
