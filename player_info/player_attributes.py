@@ -78,7 +78,6 @@ class Player:
         # End the move process if no pieces are being held
         if not self.holding_pieces:
             print("Move completed.")
-            self.actions_remaining -= 1  # Deduct an action for the move
             self.pieces_to_place = None  # Clear the move commitment
         else:
             print("You still have pieces to place. Finish your move.")

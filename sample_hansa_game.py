@@ -118,7 +118,7 @@ def handle_move(pos, button):
         # If no pieces are left to place, finish the move
         if not game.current_player.holding_pieces:
             game.current_player.finish_move()
-            # game.switch_player_if_needed()  # Check if out of actions
+            game.current_player.actions_remaining -= 1  # Deduct an action for the move
 
 # And the corresponding changes in the handle_move_opponent function:
 def handle_move_opponent(pos, button):
@@ -290,19 +290,90 @@ def handle_bonus_marker(player, route):
         route.bonus_marker = None
         game.replace_bonus_marker += 1
     elif route.permanent_bonus_marker:
-        route.permanent_bonus_marker.use_perm_bm(game)
-# def check_if_route_claimed(pos, button):
-#     # if button == 1:
-#     #     if upgrade_clicked(pos):
-#     #         return
-#     #     if claim_office_clicked(pos):
-#     #         return
-#     #     if special_bonus_points_clicked(pos):
-#     #         return
-#     # elif button == 3:
-#     #     if claim_route_for_points_clicked(pos):
-#     #         return
-#     claim_route_clicked(pos, button)
+        # route.permanent_bonus_marker.use_perm_bm(game)
+        print(f"Waiting for Player to handle {route.permanent_bonus_marker.type} BM")
+        handle_permanent_bonus_marker(route.permanent_bonus_marker.type)
+
+def handle_permanent_bonus_marker(perm_bm_type):
+    waiting_for_click = True
+    if perm_bm_type == 'MoveAny2':
+        game.current_player.pieces_to_place = 2
+
+    while waiting_for_click:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if perm_bm_type == 'MoveAny2':
+                    handle_move_any_2_pieces(pygame.mouse.get_pos(), event.button)
+                    if (not game.current_player.pieces_to_place and
+                        not game.current_player.holding_pieces):
+                        waiting_for_click = False
+                elif perm_bm_type == '+1Priv':
+                    game.current_player.upgrade_privilege()
+                    waiting_for_click = False
+                elif perm_bm_type == 'ClaimGreenCity':
+                    print("perm_bm_type == 'ClaimGreenCity'")
+                    if claim_green_city_with_bm(pygame.mouse.get_pos()):
+                        waiting_for_click = False
+                elif perm_bm_type == 'Place2TradesmenFromRoute':
+                    return
+                elif perm_bm_type == 'Place2ScotlandOrWales':
+                    return
+                else:
+                    print("Please click on one of the available GREEN Cities.")
+        redraw_window(win, game)
+        pygame.display.flip()  # Update the screen
+        pygame.time.wait(100)  # Wait for a short period to prevent high CPU usage
+    return None
+
+# And the corresponding changes in the handle_move_opponent function:
+def handle_move_any_2_pieces(pos, button):
+    route, post = find_post_by_position(pos)
+
+    if post is None:
+        return
+
+    if button == 1 and post.is_owned():
+        if game.current_player.pieces_to_place > 0:
+            game.current_player.pick_up_piece(post)
+
+    elif game.current_player.holding_pieces:
+        if not post.is_owned():
+            game.current_player.place_piece(post, button)
+            if not game.current_player.holding_pieces:
+                game.current_player.finish_move()
+                game.waiting_for_bm_move_any2_choice = False
+        else:
+            print("Cannot place a piece here. The post is already occupied.")
+
+def claim_green_city_with_bm(pos):
+    for city in game.selected_map.cities:
+        if check_bounds(city, pos) and city.color == DARK_GREEN:
+            if game.current_player.personal_supply_squares == 0 and game.current_player.personal_supply_circles == 0:
+                print(f"Cannot claim GREEN City: {city.name}, because you have no Tradesmen in your Personal Supply")
+            else:
+                if city.city_all_offices_occupied():
+                    #create a new office
+                    #append it to city.offices
+                    city.add_office(Office("square", "WHITE", 0))
+
+                city.update_next_open_office_ownership(game.current_player, game.current_player.color)
+                
+                # Remove a square if available, otherwise remove a circle
+                if game.current_player.personal_supply_squares > 0:
+                    game.current_player.personal_supply_squares -= 1
+                elif game.current_player.personal_supply_circles > 0:
+                    game.current_player.personal_supply_circles -= 1
+                
+                print(f"Claimed office in GREEN City: {city.name}")
+
+                game.check_for_east_west_connection()
+                check_if_game_over()
+            return True
+    print("Please click on a GREEN City!")
+    return False
 
 def check_if_bm_clicked(pos):
     for bm in game.current_player.bonus_markers:
@@ -545,32 +616,6 @@ def reset_valid_posts_to_displace_to():
         post.reset_post()
     game.all_empty_posts.clear()
 
-def claim_green_city_with_bm(pos):
-    for city in game.selected_map.cities:
-        if check_bounds(city, pos) and city.color == DARK_GREEN:
-            if game.current_player.personal_supply_squares == 0 and game.current_player.personal_supply_circles == 0:
-                print(f"Cannot claim GREEN City: {city.name}, because you have no Tradesmen in your Personal Supply")
-                game.waiting_for_bm_claim_green_city = False
-            else:
-                if city.city_all_offices_occupied():
-                    #create a new office
-                    #append it to city.offices
-                    city.add_office(Office("square", "WHITE", 0))
-
-                city.update_next_open_office_ownership(game.current_player, game.current_player.color)
-                
-                # Remove a square if available, otherwise remove a circle
-                if game.current_player.personal_supply_squares > 0:
-                    game.current_player.personal_supply_squares -= 1
-                elif game.current_player.personal_supply_circles > 0:
-                    game.current_player.personal_supply_circles -= 1
-                
-                print(f"Claimed office in GREEN City: {city.name}")
-
-                game.check_for_east_west_connection()
-                game.waiting_for_bm_claim_green_city = False
-                check_if_game_over()
-
 def handle_end_turn_click(pos):
     if (game.selected_map.map_width+300 < pos[0] < game.selected_map.map_width+300 + 200 and
         game.selected_map.map_height-170 < pos[1] < game.selected_map.map_height-170 + 170):
@@ -637,9 +682,6 @@ while True:
                         else:
                             print("Invalid click when Upgrading via BM")
 
-            elif game.waiting_for_bm_claim_green_city:
-                claim_green_city_with_bm(pygame.mouse.get_pos())
-
             elif game.current_player.actions_remaining > 0:
                 handle_click(pygame.mouse.get_pos(), event.button)
 
@@ -678,4 +720,4 @@ while True:
     redraw_window(win, game)
 
     pygame.display.flip()  # Update the screen
-    pygame.time.delay(100)
+    pygame.time.delay(50)

@@ -496,7 +496,7 @@ class BonusMarker:
     def handle_4_actions(self, current_player):
         current_player.actions_remaining += 4
 
-    ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
+    # ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
     def use_perm_bm(self, game):
         if self.type == 'MoveAny2':
             return
@@ -511,6 +511,11 @@ class BonusMarker:
         else:
             print(f"Unknown bonus marker type: {self.type}")
     
+    def handle_move_any_2(self, game):
+        game.waiting_for_bm_move_any2_choice = True
+        game.current_player.pieces_to_place = 2  # Set the pieces to move to 2 as per the bonus marker
+        print("You can now move up to 2 pieces. Click on any piece to move it.")
+
     def handle_claim_green_city(self, game):
         game.waiting_for_bm_claim_green_city = True
         print("Click a GREEN City to claim.")

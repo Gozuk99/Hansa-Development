@@ -21,7 +21,6 @@ class Game:
         self.waiting_for_bm_swap_office = False
         self.waiting_for_bm_upgrade_choice = False
         self.waiting_for_bm_move3_choice = False
-        self.waiting_for_bm_claim_green_city = False
         self.all_empty_posts = []
 
         self.current_full_cities_count = 0
