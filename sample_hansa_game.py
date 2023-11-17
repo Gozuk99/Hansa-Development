@@ -1,6 +1,7 @@
 import pygame
 import sys
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
+from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from game_info.game_attributes import Game
 from drawing.drawing_utils import redraw_window, draw_end_game
 
@@ -146,17 +147,19 @@ def find_clicked_city(cities, pos):
             return city
     return None
 
+def check_if_game_over():
+    highest_scoring_players = game.check_for_game_end()
+    if highest_scoring_players:
+        redraw_window(win, game)
+        end_game(highest_scoring_players)
+
 def finalize_route_claim(route, placed_piece_shape):
     update_stock_and_reset(route, game.current_player, placed_piece_shape)
     handle_bonus_marker(game.current_player, route)
     game.current_player.actions_remaining -= 1
     game.check_for_east_west_connection()
     game.switch_player_if_needed()
-
-    highest_scoring_players = game.check_for_game_end()
-    if highest_scoring_players:
-        redraw_window(win, game)
-        end_game(highest_scoring_players)
+    check_if_game_over()
 
 def check_if_route_claimed(pos, button):
     placed_piece_shape = None
@@ -516,6 +519,32 @@ def reset_valid_posts_to_displace_to():
         post.reset_post()
     game.all_empty_posts.clear()
 
+def claim_green_city_with_bm(pos):
+    for city in game.selected_map.cities:
+        if check_bounds(city, pos) and city.color == DARK_GREEN:
+            if game.current_player.personal_supply_squares == 0 and game.current_player.personal_supply_circles == 0:
+                print(f"Cannot claim GREEN City: {city.name}, because you have no Tradesmen in your Personal Supply")
+                game.waiting_for_bm_claim_green_city = False
+            else:
+                if city.city_all_offices_occupied():
+                    #create a new office
+                    #append it to city.offices
+                    city.add_office(Office("square", "WHITE", 0))
+
+                city.update_next_open_office_ownership(game.current_player, game.current_player.color)
+                
+                # Remove a square if available, otherwise remove a circle
+                if game.current_player.personal_supply_squares > 0:
+                    game.current_player.personal_supply_squares -= 1
+                elif game.current_player.personal_supply_circles > 0:
+                    game.current_player.personal_supply_circles -= 1
+                
+                print(f"Claimed office in GREEN City: {city.name}")
+
+                game.check_for_east_west_connection()
+                game.waiting_for_bm_claim_green_city = False
+                check_if_game_over()
+
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -569,6 +598,8 @@ while True:
                             game.waiting_for_bm_upgrade_choice = False
                         else:
                             print("Invalid click when Upgrading via BM")
+            elif game.waiting_for_bm_claim_green_city:
+                claim_green_city_with_bm(pygame.mouse.get_pos())
                             
             elif game.current_player.actions_remaining == 0:
                 if game.replace_bonus_marker > 0:
@@ -583,3 +614,4 @@ while True:
 
     pygame.display.flip()  # Update the screen
     pygame.time.delay(100)
+

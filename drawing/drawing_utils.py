@@ -78,9 +78,9 @@ def draw_special_prestige_points(window, upgrade_type):
         # Adjust start_x for next circle
         start_x += CIRCLE_RADIUS * 2 + SPACING
     
-def draw_completed_cities_indicator(win, selected_map):
-    full_cities = [city for city in selected_map.cities if city.city_is_full()]
-    num_full_cities = len(full_cities)
+def draw_completed_cities_indicator(win, game):
+    selected_map = game.selected_map
+    num_full_cities = game.current_full_cities_count
 
     # Draw label below the boxes
     draw_text(win, "Completed Cities", selected_map.max_full_cities_x_pos, selected_map.max_full_cities_y_pos + SQUARE_SIZE + 5, FONT_SMALL, BLACK, centered=False)
@@ -126,7 +126,6 @@ def draw_bonus_markers(win, selected_map):
             # If the position exists, call the draw method on the bonus marker
             if bonus_marker_pos:
                 draw_board_bonus_markers(win, route.permanent_bonus_marker, bonus_marker_pos, color=BLUE)
-
 
 def draw_board_bonus_markers(screen, bonus_marker, position, color=BLACK):
     # Draw the bonus marker as a simple shape (e.g., a circle)
@@ -287,7 +286,7 @@ def redraw_window(win, game):
     draw_routes(win, selected_map.routes)
     draw_actions_remaining(win, game)
     draw_scoreboard(win, game.players, selected_map.map_width+600, selected_map.map_height-170)
-    draw_completed_cities_indicator(win, selected_map)
+    draw_completed_cities_indicator(win, game)
 
     for player in game.players:
         draw_player_board(win, player, game.current_player)

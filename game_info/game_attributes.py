@@ -21,7 +21,10 @@ class Game:
         self.waiting_for_bm_swap_office = False
         self.waiting_for_bm_upgrade_choice = False
         self.waiting_for_bm_move3_choice = False
+        self.waiting_for_bm_claim_green_city = False
         self.all_empty_posts = []
+
+        self.current_full_cities_count = 0
 
         self.east_west_completed_count = 0
         self.players_who_completed_east_west = set()  # Track players who have completed the connection
@@ -147,7 +150,7 @@ class Game:
 
         # If none of the routes lead to the end city, return False
         return False
-    
+        
     def get_bonus_marker_points(self, total_bms):
         if total_bms == 1:
             return 1
@@ -177,7 +180,8 @@ class Game:
             return 0  # This city is already part of the current network
 
         visited_cities.add(city)
-        network_size = 1  # Include current city in the network size
+        offices_in_city = sum(1 for office in city.offices if office.controller == player)
+        network_size = offices_in_city  # Count the number of offices instead of just the city
 
         for route in city.routes:
             for connected_city in route.cities:
@@ -188,14 +192,14 @@ class Game:
 
     def calculate_largest_network(self, player):
         largest_network = 0
-        all_visited_cities = set()  # To keep track of all visited cities across all networks
+        all_visited_cities = set()
 
         for city in self.selected_map.cities:
             if city.has_office_owned_by(player) and city not in all_visited_cities:
                 visited_cities = set()
                 network_size = self.dfs_network_size(player, city, visited_cities)
                 largest_network = max(largest_network, network_size)
-                all_visited_cities.update(visited_cities)  # Add the cities of this network to the total set of visited cities
+                all_visited_cities.update(visited_cities)
 
         return largest_network
 
@@ -224,7 +228,7 @@ class Game:
 
             # 6. Add points for control of cities
             for city in self.selected_map.cities:
-                if city.controller == player:
+                if city.get_controller() == player:
                     city_control_points += 2  # 2 points per city controlled
 
             # 7. Points for the largest network
@@ -250,8 +254,13 @@ class Game:
             print(f"Score breakdown for {COLOR_NAMES[player.color]}: {score_breakdown}")
 
     def check_for_game_end(self):
+
+        self.current_full_cities_count = sum(1 for city in self.selected_map.cities if city.city_is_full())
+        
         # Check if the bonus marker pool is empty or any player has reached the score threshold
-        end_conditions_met = not self.selected_map.bonus_marker_pool or any(player.score >= 1 for player in self.players)
+        end_conditions_met = (not self.selected_map.bonus_marker_pool or 
+                              any(player.score >= 2 for player in self.players) or
+                              self.current_full_cities_count >= self.selected_map.max_full_cities)
 
         if end_conditions_met:
             # Finalize points before determining the winner

@@ -130,7 +130,7 @@ class City:
                 player_counts[office.controller] = player_counts.get(office.controller, 0) + 1
 
         if not player_counts:
-            print(f"No players control any offices in {self.name}.")
+            # print(f"No players control any offices in {self.name}.")
             return None  # No offices controlled by any player in the city
 
         # Determine the player with the maximum number of offices controlled
@@ -140,7 +140,7 @@ class City:
         # If one player has more offices than the others, they control the city
         if len(players_with_max_offices) == 1:
             self.controller = players_with_max_offices[0]
-            print(f"Player {COLOR_NAMES[self.controller.color]} controls the most offices in {self.name}.")
+            # print(f"Player {COLOR_NAMES[self.controller.color]} controls the most offices in {self.name}.")
             return self.controller
 
         # If there's a tie for the number of offices, find the rightmost player among those tied
@@ -151,7 +151,7 @@ class City:
                     rightmost_office_index = i
                     self.controller = player
 
-        print(f"There is a tie. Rightmost player among tied players in {self.name} is Player {COLOR_NAMES[self.controller.color]}.")
+        # print(f"There is a tie. Rightmost player among tied players in {self.name} is Player {COLOR_NAMES[self.controller.color]}.")
         return self.controller
     
     def has_empty_office(self):
@@ -266,7 +266,14 @@ class City:
         print(f"{COLOR_NAMES[player.color]} used 'PlaceAdjacent' bonus marker to claim a new office in {self.name}.")
         
     def city_is_full(self):
-        # Check if all offices in the city are claimed
+        if self.color == DARK_GREEN:
+            # For DARK_GREEN cities, the city is full if any office is occupied
+            return any(office.controller is not None for office in self.offices)
+        else:
+            # For other cities, all offices must be occupied to be considered full
+            return self.city_all_offices_occupied()
+        
+    def city_all_offices_occupied(self):
         return all(office.controller is not None for office in self.offices)
     
     def create_new_office(self, color):
@@ -496,13 +503,18 @@ class BonusMarker:
         elif self.type == '+1Priv':
             game.current_player.upgrade_privilege()
         elif self.type == 'ClaimGreenCity':
-            return
+            self.handle_claim_green_city(game)
         elif self.type == 'Place2TradesmenFromRoute':
             return
         elif self.type == 'Place2ScotlandOrWales':
             return
         else:
             print(f"Unknown bonus marker type: {self.type}")
+    
+    def handle_claim_green_city(self, game):
+        game.waiting_for_bm_claim_green_city = True
+        print("Click a GREEN City to claim.")
+
 class Post:
     def __init__(self, position, owner=None, required_shape=None):
         self.pos = position
