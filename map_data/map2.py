@@ -23,7 +23,7 @@ class Map2(Map):
         #keep the cities in alphabetical order - helps when searching
         self.bonus_marker_positions = {
             ('Lubck', 'Mismar'): (198, 244),
-            ('Mismar', 'Waren'): (423, 363),
+            ('Mismar', 'Waren'): (435, 363),
             ('Havelberg', 'Waren'): (271, 647),
             ('Havelberg', 'Perleberg'): (135, 529),
             ('Stettin', 'Waren'): (622, 530),

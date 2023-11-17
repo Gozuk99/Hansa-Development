@@ -252,6 +252,22 @@ def draw_scoreboard(win, players, start_x, start_y):
         text_position = (start_x, start_y + y_offset + (index * 25))  # Y position adjusted here
         win.blit(text_surface, text_position)
 
+def draw_end_turn(win, game):
+    start_x = game.selected_map.map_width + 300
+    start_y = game.selected_map.map_height - 170
+    scoreboard_width = 200  # Set the width according to your requirements
+    scoreboard_height = 70  # Adjust based on text size and spacing
+
+    # Draw the End Turn rectangle background
+    draw_shape(win, "rectangle", TAN, start_x, start_y, scoreboard_width, scoreboard_height)
+
+    # Calculate center position for the End Turn label
+    label_center_x = start_x + scoreboard_width // 2
+    label_center_y = start_y + scoreboard_height // 2
+
+    # Draw the End Turn label centered
+    draw_text(win, "End Turn", label_center_x, label_center_y, FONT_LARGE, BLACK, centered=True)
+
 def draw_end_game(win, winning_players):
     # Create a semi-transparent surface
     transparent_surface = pygame.Surface(win.get_size(), pygame.SRCALPHA)
@@ -290,6 +306,10 @@ def redraw_window(win, game):
 
     for player in game.players:
         draw_player_board(win, player, game.current_player)
+
+    if game.current_player.actions_remaining == 0:
+        if game.current_player.bonus_markers and any(bm.type != 'PlaceAdjacent' for bm in game.current_player.bonus_markers): 
+            draw_end_turn(win, game)
 
 def draw_player_board(window, player, current_player):
     board = player.board

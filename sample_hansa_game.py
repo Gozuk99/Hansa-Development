@@ -3,7 +3,7 @@ import sys
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from game_info.game_attributes import Game
-from drawing.drawing_utils import redraw_window, draw_end_game
+from drawing.drawing_utils import redraw_window, draw_end_game, draw_end_turn
 
 game = Game(map_num=2, num_players=3)
 WIDTH = game.selected_map.map_width+800
@@ -58,7 +58,7 @@ def check_if_post_clicked(pos, button):
         elif button == 2:  # middle click
             post.DEBUG_print_post_details()
             return
-        game.switch_player_if_needed()
+        # game.switch_player_if_needed()
         return
 
 def assign_new_bonus_marker_on_route(pos, button):
@@ -118,7 +118,7 @@ def handle_move(pos, button):
         # If no pieces are left to place, finish the move
         if not game.current_player.holding_pieces:
             game.current_player.finish_move()
-            game.switch_player_if_needed()  # Check if out of actions
+            # game.switch_player_if_needed()  # Check if out of actions
 
 # And the corresponding changes in the handle_move_opponent function:
 def handle_move_opponent(pos, button):
@@ -158,7 +158,7 @@ def finalize_route_claim(route, placed_piece_shape):
     handle_bonus_marker(game.current_player, route)
     game.current_player.actions_remaining -= 1
     game.check_for_east_west_connection()
-    game.switch_player_if_needed()
+    # game.switch_player_if_needed()
     check_if_game_over()
 
 def check_if_route_claimed(pos, button):
@@ -168,60 +168,70 @@ def check_if_route_claimed(pos, button):
         return
 
     city = find_clicked_city(game.selected_map.cities, pos)
-
     if city:
-        for route in city.routes:
-            if route.is_controlled_by(game.current_player):
-                if button == 1: # leftclick
-                    next_open_office_color = city.get_next_open_office_color()
-                    print(f"Next open office color: {next_open_office_color}")
+        controlled_routes = [route for route in city.routes if route.is_controlled_by(game.current_player)]
+        if len(controlled_routes) > 1:
+            # More than one route controlled by the player, need to choose
+            print(f"Choose a Route to claim the city {city.name} with.")
+            selected_route = get_route_choice(controlled_routes)
+        elif controlled_routes:
+            # Only one route, proceed with it
+            selected_route = controlled_routes[0]
+        else:
+            print("No controlled routes available for this city.")
+            return
+        
+        if selected_route.is_controlled_by(game.current_player):
+            if button == 1: # leftclick
+                next_open_office_color = city.get_next_open_office_color()
+                print(f"Next open office color: {next_open_office_color}")
 
-                    if game.current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
-                        if not city.has_required_piece_shape(game.current_player, route, city):
-                            required_shape = city.get_next_open_office_shape()
-                            print(f"{COLOR_NAMES[game.current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
-                        else:
-                            score_route(route)
-                            placed_piece_shape = city.get_next_open_office_shape()
-                            print(f"{COLOR_NAMES[game.current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
-                            city.update_next_open_office_ownership(game.current_player, game.current_player.color)
-                            finalize_route_claim(route, placed_piece_shape)
-                    elif 'PlaceAdjacent' in (bm.type for bm in game.current_player.bonus_markers):
-                        score_route(route)
-                        city.claim_office_with_bonus_marker(game.current_player)
-                        print(f"{COLOR_NAMES[game.current_player.color]} placed a square into a NEW office of {city.name}.")
-                        finalize_route_claim(route, "square")
-                    elif city.color == DARK_GREEN:
-                        print(f"{COLOR_NAMES[game.current_player.color]} cannot claim a GREEN City ({city.name}) without a PlaceAdjacent BM.")
+                if game.current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
+                    if not city.has_required_piece_shape(game.current_player, selected_route, city):
+                        required_shape = city.get_next_open_office_shape()
+                        print(f"{COLOR_NAMES[game.current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
                     else:
-                        print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
-                elif button == 2: #middle click
-                    if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
-                        if specialprestigepoints_city.claim_highest_prestige(game.current_player):
-                            score_route(route)
-                            finalize_route_claim(route, "circle")
-                    elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
-                        upgrade_choice = None
-                        if len(city.upgrade_city_type) > 1:
-                            print(f"Waiting for player to click on a valid upgrade in the city: {city.name}")
-                            upgrades_for_city = [upgrade for upgrade in game.selected_map.upgrade_cities if upgrade.city_name == city.name]
-                            upgrade_choice = get_upgrade_choice(upgrades_for_city)
-                        else:
-                            upgrade_choice = city.upgrade_city_type[0]  # Select the single upgrade type
-
-                        if upgrade_choice and game.current_player.perform_upgrade(upgrade_choice):
-                            score_route(route)
-                            finalize_route_claim(route, placed_piece_shape)
-                    else:
-                        print(f"Cannot upgrade an ability by Middle clicking {city.name}")
-                elif button == 3: #right click
-                    score_route(route)
-                    finalize_route_claim(route, placed_piece_shape)
+                        score_route(selected_route)
+                        placed_piece_shape = city.get_next_open_office_shape()
+                        print(f"{COLOR_NAMES[game.current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
+                        city.update_next_open_office_ownership(game.current_player, game.current_player.color)
+                        finalize_route_claim(selected_route, placed_piece_shape)
+                elif 'PlaceAdjacent' in (bm.type for bm in game.current_player.bonus_markers):
+                    score_route(selected_route)
+                    city.claim_office_with_bonus_marker(game.current_player)
+                    print(f"{COLOR_NAMES[game.current_player.color]} placed a square into a NEW office of {city.name}.")
+                    finalize_route_claim(selected_route, "square")
+                elif city.color == DARK_GREEN:
+                    print(f"{COLOR_NAMES[game.current_player.color]} cannot claim a GREEN City ({city.name}) without a PlaceAdjacent BM.")
                 else:
-                    print(f"Invalid scenario with {city.name}")
-                return
+                    print(f"{COLOR_NAMES[game.current_player.color]} doesn't have the correct privilege - {game.current_player.privilege} - to claim an office in {city.name}.")
+            elif button == 2: #middle click
+                if "SpecialPrestigePoints" in city.upgrade_city_type and selected_route.contains_a_circle():
+                    if specialprestigepoints_city.claim_highest_prestige(game.current_player):
+                        score_route(selected_route)
+                        finalize_route_claim(selected_route, "circle")
+                elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
+                    upgrade_choice = None
+                    if len(city.upgrade_city_type) > 1:
+                        print(f"Waiting for player to click on a valid upgrade in the city: {city.name}")
+                        upgrades_for_city = [upgrade for upgrade in game.selected_map.upgrade_cities if upgrade.city_name == city.name]
+                        upgrade_choice = get_upgrade_choice(upgrades_for_city)
+                    else:
+                        upgrade_choice = city.upgrade_city_type[0]  # Select the single upgrade type
+
+                    if upgrade_choice and game.current_player.perform_upgrade(upgrade_choice):
+                        score_route(selected_route)
+                        finalize_route_claim(selected_route, placed_piece_shape)
+                else:
+                    print(f"Cannot upgrade an ability by Middle clicking {city.name}")
+            elif button == 3: #right click
+                score_route(selected_route)
+                finalize_route_claim(selected_route, placed_piece_shape)
             else:
-                print(f"Route(s) not controlled by current_player: {COLOR_NAMES[game.current_player.color]}")
+                print(f"Invalid scenario with {city.name}")
+            return
+        else:
+            print(f"Route(s) not controlled by current_player: {COLOR_NAMES[game.current_player.color]}")
 
 def get_upgrade_choice(upgrade_options):
     waiting_for_click = True
@@ -235,6 +245,23 @@ def get_upgrade_choice(upgrade_options):
                     if check_bounds(upgrade, pygame.mouse.get_pos()) and game.current_player.actions > 0:
                         return upgrade.upgrade_type
                 print (f"Please click on either {upgrade_options[0].upgrade_type} or {upgrade_options[1].upgrade_type}")
+        pygame.time.wait(10)  # Wait for a short period to prevent high CPU usage
+
+    return None
+
+def get_route_choice(route_options):
+    waiting_for_click = True
+    while waiting_for_click:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONUP:
+                for route in route_options:
+                    route, post = find_post_by_position(pygame.mouse.get_pos())
+                    if route:
+                        return route
+                print("Please click on one of the available routes.")
         pygame.time.wait(10)  # Wait for a short period to prevent high CPU usage
 
     return None
@@ -253,7 +280,7 @@ def check_if_income_clicked(pos):
             if button_rect.collidepoint(pos):
                 board.income_action_based_on_circle_count(idx)
                 game.current_player.actions_remaining -= 1
-                game.switch_player_if_needed()
+                # game.switch_player_if_needed()
                 return
 
 def handle_bonus_marker(player, route):
@@ -286,8 +313,7 @@ def check_if_bm_clicked(pos):
 def handle_click(pos, button):
     check_if_post_clicked(pos, button)
     check_if_route_claimed(pos,button)
-    check_if_income_clicked(pos)            
-    check_if_bm_clicked(pos)            
+    check_if_income_clicked(pos)                        
 
 def update_stock_and_reset(route, player, placed_piece_shape=None):
     """Update player's general stock based on pieces on the route and reset those posts."""
@@ -545,12 +571,24 @@ def claim_green_city_with_bm(pos):
                 game.waiting_for_bm_claim_green_city = False
                 check_if_game_over()
 
+def handle_end_turn_click(pos):
+    if (game.selected_map.map_width+300 < pos[0] < game.selected_map.map_width+300 + 200 and
+        game.selected_map.map_height-170 < pos[1] < game.selected_map.map_height-170 + 170):
+        print ("End Turn clicked!")
+        game.current_player.ending_turn = True
+    else:
+        print("Please click End Turn, or a Bonus Marker that you can use!")
+
+def check_if_player_has_usable_BMs():
+    return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
+
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
+            check_if_bm_clicked(pygame.mouse.get_pos())
             # while game_not_over:
             if game.waiting_for_displaced_player:
                 displaced_click(pygame.mouse.get_pos(), event.button)
@@ -571,7 +609,7 @@ while True:
                     game.displaced_player.reset_displaced_player()
                     game.waiting_for_displaced_player = False
                     game.current_player.actions_remaining -= 1
-                    game.switch_player_if_needed()
+                    # game.switch_player_if_needed()
 
             elif game.waiting_for_bm_swap_office:
                 for city in game.selected_map.cities:
@@ -598,20 +636,46 @@ while True:
                             game.waiting_for_bm_upgrade_choice = False
                         else:
                             print("Invalid click when Upgrading via BM")
+
             elif game.waiting_for_bm_claim_green_city:
                 claim_green_city_with_bm(pygame.mouse.get_pos())
-                            
-            elif game.current_player.actions_remaining == 0:
-                if game.replace_bonus_marker > 0:
-                    # If replace_bonus_marker > 0, the current player must place 1+ new bonus markers
-                    assign_new_bonus_marker_on_route(pygame.mouse.get_pos(), event.button)
-                game.switch_player_if_needed()
 
-            else:
+            elif game.current_player.actions_remaining > 0:
                 handle_click(pygame.mouse.get_pos(), event.button)
+
+            elif game.current_player.actions_remaining == 0:
+                 # Player has no actions remaining
+                usable_BMs = check_if_player_has_usable_BMs()
+                if (usable_BMs and not game.current_player.ending_turn):
+                    # Player has usable BMs (not 'PlaceAdjacent'), wait for them to either use a BM or click "end turn"
+                    handle_end_turn_click(pygame.mouse.get_pos())
+                    
+                elif ((game.current_player.ending_turn and game.replace_bonus_marker > 0) or
+                      (game.replace_bonus_marker > 0 and not usable_BMs)):
+                    # Player clicked "end turn" and needs to replace bonus marker(s)
+                    assign_new_bonus_marker_on_route(pygame.mouse.get_pos(), event.button)
+                    if game.replace_bonus_marker == 0:
+                        # After placing BM, switch player and reset ending_turn
+                        game.current_player.ending_turn = False
+                        game.switch_player_if_needed()
+                        break
+
+                elif not usable_BMs and game.replace_bonus_marker == 0:
+                    # Player has no BMs to use or only has 'PlaceAdjacent', switch player
+                    game.switch_player_if_needed()
+                    break
+            
+            if (game.current_player.actions_remaining == 0):
+                if check_if_player_has_usable_BMs() and not game.current_player.ending_turn:
+                    print ("Please use a BM or Select End Turn")
+                elif game.replace_bonus_marker > 0:
+                    print (f"Please Select a Route to place a BM. {game.replace_bonus_marker} remaining.")
+                elif not check_if_player_has_usable_BMs() and game.replace_bonus_marker == 0:
+                    # Player has no BMs to use or only has 'PlaceAdjacent', switch player
+                    game.switch_player_if_needed()
+                    break
 
     redraw_window(win, game)
 
     pygame.display.flip()  # Update the screen
     pygame.time.delay(100)
-

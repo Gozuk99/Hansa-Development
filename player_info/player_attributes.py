@@ -32,6 +32,7 @@ class Player:
         self.personal_supply_circles = 1 # Each player always starts with 1 circle in personal supply
 
         self.board = None
+        self.ending_turn = False
 
     def add_bonus_marker(self, marker):
         self.bonus_markers.append(marker)
