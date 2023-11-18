@@ -154,8 +154,8 @@ def check_if_game_over():
         end_game(highest_scoring_players)
 
 def finalize_route_claim(route, placed_piece_shape):
-    update_stock_and_reset(route, game.current_player, placed_piece_shape)
-    handle_bonus_marker(game.current_player, route)
+    reset_pieces = update_stock_and_reset(route, game.current_player, placed_piece_shape)
+    handle_bonus_marker(game.current_player, route, reset_pieces)
     game.current_player.actions_remaining -= 1
     game.check_for_east_west_connection()
     # game.switch_player_if_needed()
@@ -283,7 +283,7 @@ def check_if_income_clicked(pos):
                 # game.switch_player_if_needed()
                 return
 
-def handle_bonus_marker(player, route):
+def handle_bonus_marker(player, route, reset_pieces):
     if route.bonus_marker:
         route.bonus_marker.owner = player
         player.bonus_markers.append(route.bonus_marker)
@@ -292,12 +292,16 @@ def handle_bonus_marker(player, route):
     elif route.permanent_bonus_marker:
         # route.permanent_bonus_marker.use_perm_bm(game)
         print(f"Waiting for Player to handle {route.permanent_bonus_marker.type} BM")
-        handle_permanent_bonus_marker(route.permanent_bonus_marker.type)
+        handle_permanent_bonus_marker(route.permanent_bonus_marker.type, reset_pieces)
 
-def handle_permanent_bonus_marker(perm_bm_type):
+def handle_permanent_bonus_marker(perm_bm_type, reset_pieces):
     waiting_for_click = True
     if perm_bm_type == 'MoveAny2':
         game.current_player.pieces_to_place = 2
+        print(f"BM: Please pick up, upto {game.current_player.pieces_to_place} pieces to move!")
+    elif perm_bm_type == 'Place2TradesmenFromRoute':
+        game.current_player.pieces_to_place = 2
+        print(f"BM: Please place {game.current_player.pieces_to_place} pieces of {reset_pieces} on valid posts!")
 
     while waiting_for_click:
         for event in pygame.event.get():
@@ -305,8 +309,9 @@ def handle_permanent_bonus_marker(perm_bm_type):
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONUP:
+                mouse_position = pygame.mouse.get_pos()
                 if perm_bm_type == 'MoveAny2':
-                    handle_move_any_2_pieces(pygame.mouse.get_pos(), event.button)
+                    handle_move_any_2_pieces(mouse_position, event.button)
                     if (not game.current_player.pieces_to_place and
                         not game.current_player.holding_pieces):
                         waiting_for_click = False
@@ -314,18 +319,20 @@ def handle_permanent_bonus_marker(perm_bm_type):
                     game.current_player.upgrade_privilege()
                     waiting_for_click = False
                 elif perm_bm_type == 'ClaimGreenCity':
-                    print("perm_bm_type == 'ClaimGreenCity'")
-                    if claim_green_city_with_bm(pygame.mouse.get_pos()):
+                    if claim_green_city_with_bm(mouse_position):
                         waiting_for_click = False
                 elif perm_bm_type == 'Place2TradesmenFromRoute':
-                    return
+                    handle_place_two_tradesmen_from_route(mouse_position, event.button, reset_pieces)
+                    if not game.current_player.pieces_to_place:
+                        print(f"Finished placing pieces on valid posts!")
+                        waiting_for_click = False
                 elif perm_bm_type == 'Place2ScotlandOrWales':
                     return
                 else:
-                    print("Please click on one of the available GREEN Cities.")
+                    print("Invalid scenario.")
         redraw_window(win, game)
         pygame.display.flip()  # Update the screen
-        pygame.time.wait(100)  # Wait for a short period to prevent high CPU usage
+        pygame.time.wait(100)
     return None
 
 # And the corresponding changes in the handle_move_opponent function:
@@ -375,6 +382,31 @@ def claim_green_city_with_bm(pos):
     print("Please click on a GREEN City!")
     return False
 
+def handle_place_two_tradesmen_from_route(pos, button, reset_pieces):
+    _, post = find_post_by_position(pos)
+
+    # Check if a post was clicked and is empty
+    if post and not post.is_owned():
+        shape_clicked = 'circle' if button == 3 else 'square'
+
+        if shape_clicked in reset_pieces:
+            post.claim(game.current_player, shape_clicked)
+            reset_pieces.remove(shape_clicked)
+            game.current_player.pieces_to_place -= 1
+
+            # Update the general stock for the current player
+            if shape_clicked == 'circle':
+                game.current_player.general_stock_circles -= 1
+            else:
+                game.current_player.general_stock_squares -= 1
+
+            remaining_pieces = ', '.join(reset_pieces)
+            print(f"BM: Please place {game.current_player.pieces_to_place} more piece(s) of {remaining_pieces} on valid posts!")
+        else:
+            print(f"Cannot place {shape_clicked}. Available pieces: {', '.join(reset_pieces)}.")
+    elif not post:
+        print("No valid post was clicked.")
+
 def check_if_bm_clicked(pos):
     for bm in game.current_player.bonus_markers:
         if bm.is_clicked(pos):
@@ -400,9 +432,13 @@ def update_stock_and_reset(route, player, placed_piece_shape=None):
     player.general_stock_circles += circles_on_route
     player.general_stock_squares += squares_on_route
 
+    reset_pieces = ['circle' for _ in range(circles_on_route)] + ['square' for _ in range(squares_on_route)]
+
     for post in route.posts:
         if post.owner == player:
             post.reset_post()
+
+    return reset_pieces
 
 def displaced_click(pos, button):
     route, post = find_post_by_position(pos)  
@@ -633,10 +669,11 @@ while True:
             pygame.quit()
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
-            check_if_bm_clicked(pygame.mouse.get_pos())
+            mouse_position = pygame.mouse.get_pos()
+            check_if_bm_clicked(mouse_position)
             # while game_not_over:
             if game.waiting_for_displaced_player:
-                displaced_click(pygame.mouse.get_pos(), event.button)
+                displaced_click(mouse_position, event.button)
                 if not game.all_empty_posts:
                     print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
                     game.all_empty_posts = gather_empty_posts(game.original_route_of_displacement)
@@ -658,7 +695,7 @@ while True:
 
             elif game.waiting_for_bm_swap_office:
                 for city in game.selected_map.cities:
-                    if check_bounds(city, pygame.mouse.get_pos()):
+                    if check_bounds(city, mouse_position):
                         print(f"Clicked on city: {city.name}")
                         if city.check_if_eligible_to_swap_offices(game.current_player):
                             print ("Valid City to swap offices")
@@ -668,14 +705,14 @@ while True:
                             print ("Invalid City to Swap offices, please try another city.")
 
             elif game.waiting_for_bm_move3_choice:
-                handle_move_opponent(pygame.mouse.get_pos(), event.button)
+                handle_move_opponent(mouse_position, event.button)
 
             elif game.current_player.holding_pieces and not game.waiting_for_bm_move3_choice:
-                handle_move(pygame.mouse.get_pos(), event.button)
+                handle_move(mouse_position, event.button)
 
             elif game.waiting_for_bm_upgrade_choice:
                 for upgrade in game.selected_map.upgrade_cities:
-                    if check_bounds(upgrade, pygame.mouse.get_pos()):
+                    if check_bounds(upgrade, mouse_position):
                         if game.current_player.perform_upgrade(upgrade.upgrade_type):
                             print("Successfully used Upgrade BM")
                             game.waiting_for_bm_upgrade_choice = False
@@ -683,19 +720,19 @@ while True:
                             print("Invalid click when Upgrading via BM")
 
             elif game.current_player.actions_remaining > 0:
-                handle_click(pygame.mouse.get_pos(), event.button)
+                handle_click(mouse_position, event.button)
 
             elif game.current_player.actions_remaining == 0:
                  # Player has no actions remaining
                 usable_BMs = check_if_player_has_usable_BMs()
                 if (usable_BMs and not game.current_player.ending_turn):
                     # Player has usable BMs (not 'PlaceAdjacent'), wait for them to either use a BM or click "end turn"
-                    handle_end_turn_click(pygame.mouse.get_pos())
+                    handle_end_turn_click(mouse_position)
                     
                 elif ((game.current_player.ending_turn and game.replace_bonus_marker > 0) or
                       (game.replace_bonus_marker > 0 and not usable_BMs)):
                     # Player clicked "end turn" and needs to replace bonus marker(s)
-                    assign_new_bonus_marker_on_route(pygame.mouse.get_pos(), event.button)
+                    assign_new_bonus_marker_on_route(mouse_position, event.button)
                     if game.replace_bonus_marker == 0:
                         # After placing BM, switch player and reset ending_turn
                         game.current_player.ending_turn = False
