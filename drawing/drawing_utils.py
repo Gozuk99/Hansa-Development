@@ -204,9 +204,15 @@ def draw_routes(win, routes):
 
 def draw_route_post(win, post):
     post_x, post_y = post.pos
-    draw_shape(win, "circle", post.circle_color, post_x, post_y, CIRCLE_RADIUS)
-    if post.owner_piece_shape is None or post.owner_piece_shape == "square":
-        draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, SQUARE_SIZE, SQUARE_SIZE)
+
+    # If the post requires being a circle, draw only a circle
+    if post.required_shape == "circle":
+        draw_shape(win, "circle", post.circle_color, post_x, post_y, CIRCLE_RADIUS)
+    else:
+        # Draw a circle and a square (if the post is not owned or owned as a square)
+        draw_shape(win, "circle", post.circle_color, post_x, post_y, CIRCLE_RADIUS)
+        if post.owner_piece_shape is None or post.owner_piece_shape == "square":
+            draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, SQUARE_SIZE, SQUARE_SIZE)
 
 def draw_actions_remaining(win, game):
     padding = 5  # Define padding value for spacing around text

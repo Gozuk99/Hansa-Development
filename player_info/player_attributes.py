@@ -65,14 +65,18 @@ class Player:
         # Determine the shape based on the button clicked
         shape_clicked = 'circle' if button == 3 else 'square'
 
+        # Check if the post has a specific required shape
+        if post.required_shape and post.required_shape != shape_clicked:
+            print(f"Cannot place a {shape_clicked} on this post. This post requires a {post.required_shape}.")
+            return
+
         if shape_to_place == shape_clicked:
             # The shape matches, so place it and remove from holding_pieces
-            print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")  # Assuming owner has a 'color' attribute
+            print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
             post.claim(owner_to_place, shape_to_place)  # Note: The owner should be passed to the claim method
             self.holding_pieces.pop(0)
             print(f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board.")
-        else:
-            print(f"The next piece to place must be Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
+        print(f"The next piece to place must be Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
 
     def finish_move(self):
         # End the move process if no pieces are being held

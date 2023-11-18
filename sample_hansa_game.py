@@ -3,9 +3,9 @@ import sys
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from game_info.game_attributes import Game
-from drawing.drawing_utils import redraw_window, draw_end_game, draw_end_turn
+from drawing.drawing_utils import redraw_window, draw_end_game
 
-game = Game(map_num=2, num_players=3)
+game = Game(map_num=1, num_players=5)
 WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
 cities = game.selected_map.cities
@@ -120,7 +120,6 @@ def handle_move(pos, button):
             game.current_player.finish_move()
             game.current_player.actions_remaining -= 1  # Deduct an action for the move
 
-# And the corresponding changes in the handle_move_opponent function:
 def handle_move_opponent(pos, button):
     route, post = find_post_by_position(pos)
 
@@ -265,12 +264,6 @@ def get_route_choice(route_options):
         pygame.time.wait(10)  # Wait for a short period to prevent high CPU usage
 
     return None
-
-# def claim_office_clicked(pos):
-
-# def claim_route_for_points_clicked(pos):
-
-# def special_bonus_points_clicked(pos):
 
 def check_if_income_clicked(pos):
     # Check if any player board's Income Action button was clicked

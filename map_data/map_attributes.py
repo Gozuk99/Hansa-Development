@@ -358,26 +358,26 @@ class Office:
         return self.controller is None
 
 class Route:
-    def __init__(self, cities, num_posts, has_bonus_marker=False, permanent_bm_type=None):
+    def __init__(self, cities, num_posts, has_bonus_marker=False, permanent_bm_type=None, required_circles=0):
         self.cities = cities
         for city in cities:
             city.add_route(self)
         self.num_posts = num_posts
         self.has_bonus_marker = has_bonus_marker
         self.has_permanent_bm_type = permanent_bm_type
-        self.bonus_marker = None  # Don't assign it yet
-        self.permanent_bonus_marker = None  # Don't assign it yet
+        self.bonus_marker = None
+        self.permanent_bonus_marker = None
+        self.required_circles = required_circles  # Number of posts that must be circles
         self.posts = self.create_posts()
-        
+
         if self.has_permanent_bm_type:
             self.assign_map_permanent_bonus_marker(self.has_permanent_bm_type)
 
-    def create_posts(self, buffer=0.12):  # Increase the buffer value as needed
+    def create_posts(self, buffer=0.12):
         city1, city2 = self.cities
         posts = []
 
         for i in range(1, self.num_posts + 1):
-            # Adjust the buffer to control the post distribution
             t = i / (self.num_posts + 1)
             t = buffer + (1 - 2 * buffer) * t
 
@@ -385,8 +385,9 @@ class Route:
                 city1.midpoint[0] + t * (city2.midpoint[0] - city1.midpoint[0]),
                 city1.midpoint[1] + t * (city2.midpoint[1] - city1.midpoint[1])
             )
-            
-            posts.append(Post(pos))
+
+            required_shape = "circle" if i <= self.required_circles else None
+            posts.append(Post(pos, required_shape=required_shape))
 
         return posts
 

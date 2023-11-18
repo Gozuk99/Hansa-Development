@@ -258,10 +258,10 @@ class Map2(Map):
 
         # Routes
         self.routes.append(Route([Lubeck, Mismar], 3))
-        self.routes.append(Route([Mismar, Stralsund], 3, permanent_bm_type="MoveAny2")) #2 must be circles
-        self.routes.append(Route([Stralsund, Malmo], 3, permanent_bm_type="+1Priv")) #2 must be circles
-        self.routes.append(Route([Malmo, Visby], 3, permanent_bm_type="ClaimGreenCity")) #1 must be circle
-        self.routes.append(Route([Malmo, Danzig], 4, permanent_bm_type="Place2TradesmenFromRoute")) #1 must be circle
+        self.routes.append(Route([Mismar, Stralsund], 3, permanent_bm_type="MoveAny2", required_circles=2))
+        self.routes.append(Route([Stralsund, Malmo], 3, permanent_bm_type="+1Priv", required_circles=2))
+        self.routes.append(Route([Malmo, Visby], 3, permanent_bm_type="ClaimGreenCity", required_circles=1))
+        self.routes.append(Route([Malmo, Danzig], 4, permanent_bm_type="Place2TradesmenFromRoute", required_circles=1))
         self.routes.append(Route([Danzig, Konigsberg], 4))
         self.routes.append(Route([Danzig, Belgard], 4))
         self.routes.append(Route([Belgard, Anklam], 3))
