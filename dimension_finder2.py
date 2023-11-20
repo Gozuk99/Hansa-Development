@@ -24,12 +24,12 @@ def create_combo(x, y):
     combos.append(combo)
 
 def on_canvas_click(event):
-    # Calculate the actual x, y coordinates on the canvas
-    x = int(canvas.canvasx(event.x))  # Adjusted x coordinate
-    y = int(canvas.canvasy(event.y))  # Adjusted y coordinate
-
-    # Now use the adjusted x, y coordinates for further processing
+    x, y = canvas.canvasx(event.x), canvas.canvasy(event.y)
     create_combo(x, y)
+    update_scrollregion()
+
+def update_scrollregion():
+    canvas.config(scrollregion=canvas.bbox(tk.ALL))
 
 def toggle_coordinates():
     for combo in combos:
@@ -40,37 +40,45 @@ def toggle_coordinates():
         square_y = combo["square_y"]
 
         circle_coords_text = f"({circle_x}, {circle_y})"
-        square_coords_text = f"({square_x}, {square_y}"
+        square_coords_text = f"({square_x}, {square_y})"
 
         if combo["show_coords"]:
-            canvas.create_text(circle_x, circle_y - 30, text=circle_coords_text, fill="black")
-            canvas.create_text(square_x + 10, square_y + 40, text=square_coords_text, fill="black")
+            combo['coords_text'] = (canvas.create_text(circle_x, circle_y - 30, text=circle_coords_text, fill="black", tags="coords_text"),
+                                    canvas.create_text(square_x + 10, square_y + 40, text=square_coords_text, fill="black", tags="coords_text"))
         else:
             canvas.delete("coords_text")
+
+def duplicate_combo():
+    for combo in combos:
+        x, y = combo["circle_x"] + 30, combo["circle_y"] + 30
+        create_combo(x, y)
+    update_scrollregion()
 
 root = tk.Tk()
 root.title("Create, Move, Duplicate, and Toggle Coordinates")
 
-# Create a frame for buttons and pack it at the top
+# Create a frame for buttons
 button_frame = tk.Frame(root)
 button_frame.pack(side=tk.TOP, fill=tk.X)
 
-# Create and pack the Toggle Coordinates button in the button frame
+# Create and pack buttons into the button frame
+duplicate_button = tk.Button(button_frame, text="Duplicate", command=duplicate_combo)
+duplicate_button.pack(side=tk.LEFT)
+
 toggle_button = tk.Button(button_frame, text="Toggle Coordinates", command=toggle_coordinates)
 toggle_button.pack(side=tk.LEFT)
 
-# Create a frame to contain the canvas and scrollbars
+# Create a frame for the canvas and scrollbar
 canvas_frame = tk.Frame(root)
-canvas_frame.pack(fill=tk.BOTH, expand=True)
+canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-# Create canvas with specified size
+# Create a canvas with vertical scrollbar
 canvas = tk.Canvas(canvas_frame, bg="beige")
 canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-# Create vertical scrollbar linked to the canvas
-v_scroll = tk.Scrollbar(canvas_frame, orient='vertical', command=canvas.yview)
-v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-canvas.configure(yscrollcommand=v_scroll.set)
+scrollbar_y = tk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+canvas.config(yscrollcommand=scrollbar_y.set)
 
 # Load and process your image with reduced opacity
 image = Image.open('Map3_4-5p-resize.jpg')
@@ -82,12 +90,5 @@ translucent_image = ImageTk.PhotoImage(translucent_image)
 canvas.create_image(0, 0, anchor=tk.NW, image=translucent_image)
 
 canvas.bind("<Button-1>", on_canvas_click)
-
-# After all elements are created and packed, update the scrollregion
-def update_scrollregion():
-    canvas.config(scrollregion=canvas.bbox(tk.ALL))
-
-# Bind update_scrollregion to canvas changes
-canvas.bind('<Configure>', lambda event: update_scrollregion())
 
 root.mainloop()

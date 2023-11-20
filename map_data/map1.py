@@ -88,12 +88,11 @@ class Map1(Map):
             Kampen.add_office(Office("square", "BLACK", 0))
         self.cities.append(Kampen)
 
-        Arnheim = City('Arnheim', 65, 655, BLACKISH_BROWN)
+        Arnheim = City('Arnheim', 65, 655, DARK_RED)
         Arnheim.add_office(Office("square", "WHITE", 0))
         Arnheim.add_office(Office("circle", "WHITE", 0))
         Arnheim.add_office(Office("square", "ORANGE", 0))
         Arnheim.add_office(Office("square", "PINK", 0))
-        Arnheim.change_color(DARK_RED)
         self.cities.append(Arnheim)
 
         Duisburg = City('Duisburg', 179, 911, BLACKISH_BROWN)
@@ -221,12 +220,11 @@ class Map1(Map):
         Perleberg.add_office(Office("circle", "BLACK", 0))
         self.cities.append(Perleberg)
 
-        Stendal = City('Stendal', 1595, 645, BLACKISH_BROWN)
+        Stendal = City('Stendal', 1595, 645, DARK_RED)
         Stendal.add_office(Office("square", "WHITE", 0))
         Stendal.add_office(Office("circle", "WHITE", 0))
         Stendal.add_office(Office("square", "ORANGE", 0))
         Stendal.add_office(Office("square", "PINK", 0))
-        Stendal.change_color(DARK_RED)
         self.cities.append(Stendal)
 
         Magdeburg = City('Magdeburg', 1598, 929, BLACKISH_BROWN)

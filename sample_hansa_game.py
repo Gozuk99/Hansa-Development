@@ -5,14 +5,15 @@ from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from game_info.game_attributes import Game
 from drawing.drawing_utils import redraw_window, draw_end_game
 
-game = Game(map_num=1, num_players=5)
+game = Game(map_num=3, num_players=5)
 WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
 cities = game.selected_map.cities
 routes = game.selected_map.routes
 specialprestigepoints_city = game.selected_map.specialprestigepoints
 
-win = pygame.display.set_mode((WIDTH, HEIGHT))
+win = pygame.Surface((WIDTH, HEIGHT))
+viewable_window = pygame.display.set_mode((1800, 1350))
 pygame.display.set_caption('Hansa Sample Game')
 win.fill(TAN)
 
@@ -748,6 +749,10 @@ while True:
                     break
 
     redraw_window(win, game)
+    # Scale down the large surface to fit into the display surface
+    scaled_surface = pygame.transform.scale(win, (1800, 1350))
+    # Blit the scaled surface onto the display surface
+    viewable_window.blit(scaled_surface, (0, 0))
 
     pygame.display.flip()  # Update the screen
     pygame.time.delay(50)

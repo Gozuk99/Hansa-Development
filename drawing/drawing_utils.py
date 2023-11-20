@@ -103,7 +103,7 @@ def draw_bonus_markers(win, selected_map):
     win.fill(TAN)
 
     for route in routes:
-        draw_line(win, WHITE, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
+        draw_line(win, route.color, route.cities[0].midpoint, route.cities[1].midpoint, 10, 2)
         # Check if the route has a bonus marker and call its draw method
         if route.bonus_marker:
             # Construct the key for the dictionary

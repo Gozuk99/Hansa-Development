@@ -2,6 +2,7 @@
 
 from map_data.map1 import Map1
 from map_data.map2 import Map2
+from map_data.map3 import Map3
 from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
 
@@ -45,10 +46,10 @@ class Game:
         # Logic to assign a map based on map_num
         if map_num == 1:
             return Map1(num_players)
-        if map_num == 2:
+        elif map_num == 2:
             return Map2()
-        # Add additional maps as needed
-        # ...
+        elif map_num == 3:
+            return Map3()
     
     def claim_bonus_marker(self):
         # This method would be called when a player claims a new bonus marker

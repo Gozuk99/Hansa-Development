@@ -60,11 +60,10 @@ class Map2(Map):
     def create_cities_and_routes(self):
         # Define Map2-specific cities and offices
         # Define cities
-        Lubeck = City('Lubeck', 30, 120, BLACKISH_BROWN)
+        Lubeck = City('Lubeck', 30, 120, DARK_RED)
         Lubeck.add_office(Office("square", "WHITE", 0))
         Lubeck.add_office(Office("square", "ORANGE", 0))
         Lubeck.add_office(Office("square", "BLACK", 0))
-        Lubeck.change_color(DARK_RED)
         self.cities.append(Lubeck)
 
         Mismar = City('Mismar', 296, 210, BLACKISH_BROWN)
@@ -87,12 +86,11 @@ class Map2(Map):
         Visby.add_office(Office("circle", "WHITE", 0))
         self.cities.append(Visby)
 
-        Danzig = City('Danzig', 1290, 310, BLACKISH_BROWN)
+        Danzig = City('Danzig', 1290, 310, DARK_RED)
         Danzig.add_office(Office("square", "WHITE", 0))
         Danzig.add_office(Office("square", "ORANGE", 0))
         Danzig.add_office(Office("square", "PINK", 0))
         Danzig.add_office(Office("square", "BLACK", 0))
-        Danzig.change_color(DARK_RED)
         self.cities.append(Danzig)
 
         Konigsberg = City('Konigsberg', 1627, 100, BLACKISH_BROWN)
@@ -102,14 +100,13 @@ class Map2(Map):
         Konigsberg.assign_upgrade_type('SpecialPrestigePoints')
         self.cities.append(Konigsberg)
 
-        Belgard = City('Munster', 909, 450, BLACKISH_BROWN)
+        Belgard = City('Munster', 909, 450, DARK_GREEN)
         Belgard.add_office(Office("square", "WHITE", 0))
         Belgard.add_office(Office("square", "WHITE", 0))
         Belgard.add_office(Office("square", "WHITE", 0))
         Belgard.add_office(Office("square", "WHITE", 0))
         Belgard.add_office(Office("square", "WHITE", 0))
         Belgard.add_office(Office("square", "WHITE", 0))
-        Belgard.change_color(DARK_GREEN)
         self.cities.append(Belgard)
 
         Anklam = City('Anklam', 630, 270, BLACKISH_BROWN)
@@ -117,7 +114,7 @@ class Map2(Map):
         Anklam.add_office(Office("square", "PINK", 0))
         self.cities.append(Anklam)
 
-        Waren = City('Waren', 300, 485, BLACKISH_BROWN)
+        Waren = City('Waren', 300, 485, DARK_GREEN)
         Waren.assign_upgrade_type('Bank')
         Waren.assign_upgrade_type('Actions')
         Waren.add_office(Office("square", "WHITE", 0))
@@ -126,7 +123,6 @@ class Map2(Map):
         Waren.add_office(Office("square", "WHITE", 0))
         Waren.add_office(Office("square", "WHITE", 0))
         Waren.add_office(Office("square", "WHITE", 0))
-        Waren.change_color(DARK_GREEN)
         self.cities.append(Waren)
 
         Perleberg = City('Perleberg', 50, 366, BLACKISH_BROWN)
@@ -200,7 +196,7 @@ class Map2(Map):
         Mittenberg.add_office(Office("square", "PINK", 0))
         self.cities.append(Mittenberg)
 
-        Dresden = City('Dresden', 900, 1100, BLACKISH_BROWN)
+        Dresden = City('Dresden', 900, 1100, DARK_GREEN)
         Dresden.add_office(Office("square", "WHITE", 0))
         Dresden.add_office(Office("square", "WHITE", 0))
         Dresden.add_office(Office("square", "WHITE", 0))
@@ -208,7 +204,6 @@ class Map2(Map):
         Dresden.add_office(Office("square", "WHITE", 0))
         Dresden.add_office(Office("square", "WHITE", 0))
         Dresden.assign_upgrade_type('Keys')
-        Dresden.change_color(DARK_GREEN)
         self.cities.append(Dresden)
 
         Breslau = City('Breslau', 1290, 1000, BLACKISH_BROWN)

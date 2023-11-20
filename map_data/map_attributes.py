@@ -1,6 +1,6 @@
 # map.py
 import random
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN, DARK_BLUE, BLACKISH_BROWN
 
 class Map:
     def __init__(self):
@@ -80,9 +80,6 @@ class City:
 
     def add_route(self, route):
         self.routes.append(route)
-
-    def change_color(self, new_color):
-        self.color = new_color
 
     def assign_upgrade_type(self, upgrade_type):
         if upgrade_type not in self.upgrade_city_type:
@@ -358,7 +355,7 @@ class Office:
         return self.controller is None
 
 class Route:
-    def __init__(self, cities, num_posts, has_bonus_marker=False, permanent_bm_type=None, required_circles=0):
+    def __init__(self, cities, num_posts, has_bonus_marker=False, permanent_bm_type=None, required_circles=0, color=WHITE):
         self.cities = cities
         for city in cities:
             city.add_route(self)
@@ -368,6 +365,7 @@ class Route:
         self.bonus_marker = None
         self.permanent_bonus_marker = None
         self.required_circles = required_circles  # Number of posts that must be circles
+        self.color = color
         self.posts = self.create_posts()
 
         if self.has_permanent_bm_type:
@@ -376,18 +374,22 @@ class Route:
     def create_posts(self, buffer=0.12):
         city1, city2 = self.cities
         posts = []
+        region_colors = {DARK_BLUE: "Wales", BLACKISH_BROWN: "Scotland"}
+        region = region_colors.get(self.color)
+
+        # Pre-calculate differences for position calculation
+        x_diff = city2.midpoint[0] - city1.midpoint[0]
+        y_diff = city2.midpoint[1] - city1.midpoint[1]
 
         for i in range(1, self.num_posts + 1):
-            t = i / (self.num_posts + 1)
-            t = buffer + (1 - 2 * buffer) * t
+            t = buffer + (1 - 2 * buffer) * (i / (self.num_posts + 1))
 
-            pos = (
-                city1.midpoint[0] + t * (city2.midpoint[0] - city1.midpoint[0]),
-                city1.midpoint[1] + t * (city2.midpoint[1] - city1.midpoint[1])
-            )
+            # Calculate position based on interpolated values
+            pos = (city1.midpoint[0] + t * x_diff, city1.midpoint[1] + t * y_diff)
 
+            # Determine if the post requires a specific shape
             required_shape = "circle" if i <= self.required_circles else None
-            posts.append(Post(pos, required_shape=required_shape))
+            posts.append(Post(pos, required_shape=required_shape, region=region))
 
         return posts
 
@@ -522,13 +524,14 @@ class BonusMarker:
         print("Click a GREEN City to claim.")
 
 class Post:
-    def __init__(self, position, owner=None, required_shape=None):
+    def __init__(self, position, owner=None, required_shape=None, region=None):
         self.pos = position
         self.owner = owner  # This represents the player who owns the post.
         self.owner_piece_shape = None  # This represents the player who owns the post.
         self.circle_color = TAN
         self.square_color = TAN
         self.required_shape = required_shape  # can be "circle", "square", or None if no specific requirement
+        self.region = region
 
     def reset_post(self):
         self.circle_color = TAN
