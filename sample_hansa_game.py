@@ -6,14 +6,15 @@ from game_info.game_attributes import Game
 from drawing.drawing_utils import redraw_window, draw_end_game
 
 game = Game(map_num=3, num_players=5)
+
 WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
 cities = game.selected_map.cities
 routes = game.selected_map.routes
 specialprestigepoints_city = game.selected_map.specialprestigepoints
 
-win = pygame.Surface((WIDTH, HEIGHT))
-viewable_window = pygame.display.set_mode((1800, 1350))
+win = pygame.display.set_mode((WIDTH, HEIGHT))
+# viewable_window = pygame.display.set_mode((1800, 1350))
 pygame.display.set_caption('Hansa Sample Game')
 win.fill(TAN)
 
@@ -43,17 +44,18 @@ def check_bounds(item, pos):
 
 def check_if_post_clicked(pos, button):
     route, post = find_post_by_position(pos)
+
     if post:
         if button == 1:  # left click
             if post.can_be_claimed_by("square"):
-                claim_post(post, game.current_player, "square")
+                claim_post(route, post, game.current_player, "square")
             elif post.is_owned() and post.owner != game.current_player:
                 handle_displacement(post, route, "square")
             elif post.is_owned() and post.owner == game.current_player:
                 handle_move(pos, button)
         elif button == 3:  # right click
             if post.can_be_claimed_by("circle"):
-                claim_post(post, game.current_player, "circle")
+                claim_post(route, post, game.current_player, "circle")
             elif post.is_owned() and post.owner != game.current_player:
                 handle_displacement(post, route, "circle")
         elif button == 2:  # middle click
@@ -143,7 +145,7 @@ def handle_move_opponent(pos, button):
 def find_clicked_city(cities, pos):
     for city in cities:
         if check_bounds(city, pos):
-            print(f"Clicked on city: {city.name}")
+            # print(f"Clicked on city: {city.name}")
             return city
     return None
 
@@ -184,7 +186,7 @@ def check_if_route_claimed(pos, button):
         if selected_route.is_controlled_by(game.current_player):
             if button == 1: # leftclick
                 next_open_office_color = city.get_next_open_office_color()
-                print(f"Next open office color: {next_open_office_color}")
+                # print(f"Next open office color: {next_open_office_color}")
 
                 if game.current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
                     if not city.has_required_piece_shape(game.current_player, selected_route, city):
@@ -193,13 +195,13 @@ def check_if_route_claimed(pos, button):
                     else:
                         score_route(selected_route)
                         placed_piece_shape = city.get_next_open_office_shape()
-                        print(f"{COLOR_NAMES[game.current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}.")
-                        city.update_next_open_office_ownership(game.current_player, game.current_player.color)
+                        print(f"[{game.current_player.actions_remaining}] {COLOR_NAMES[game.current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}")
+                        city.update_next_open_office_ownership(game)
                         finalize_route_claim(selected_route, placed_piece_shape)
                 elif 'PlaceAdjacent' in (bm.type for bm in game.current_player.bonus_markers):
                     score_route(selected_route)
                     city.claim_office_with_bonus_marker(game.current_player)
-                    print(f"{COLOR_NAMES[game.current_player.color]} placed a square into a NEW office of {city.name}.")
+                    print(f"[{game.current_player.actions_remaining}] {COLOR_NAMES[game.current_player.color]} placed a square into a NEW office of {city.name}.")
                     finalize_route_claim(selected_route, "square")
                 elif city.color == DARK_GREEN:
                     print(f"{COLOR_NAMES[game.current_player.color]} cannot claim a GREEN City ({city.name}) without a PlaceAdjacent BM.")
@@ -220,11 +222,13 @@ def check_if_route_claimed(pos, button):
                         upgrade_choice = city.upgrade_city_type[0]  # Select the single upgrade type
 
                     if upgrade_choice and game.current_player.perform_upgrade(upgrade_choice):
+                        print(f"[{game.current_player.actions_remaining}] {COLOR_NAMES[game.current_player.color]} upgraded {upgrade_choice}!")
                         score_route(selected_route)
                         finalize_route_claim(selected_route, placed_piece_shape)
                 else:
                     print(f"Cannot upgrade an ability by Middle clicking {city.name}")
             elif button == 3: #right click
+                print(f"[{game.current_player.actions_remaining}] {COLOR_NAMES[game.current_player.color]} claimed a route for Points/BM!")
                 score_route(selected_route)
                 finalize_route_claim(selected_route, placed_piece_shape)
             else:
@@ -360,7 +364,7 @@ def claim_green_city_with_bm(pos):
                     #append it to city.offices
                     city.add_office(Office("square", "WHITE", 0))
 
-                city.update_next_open_office_ownership(game.current_player, game.current_player.color)
+                city.update_next_open_office_ownership(game)
                 
                 # Remove a square if available, otherwise remove a circle
                 if game.current_player.personal_supply_squares > 0:
@@ -473,27 +477,14 @@ def displace_to(post, displaced_player, shape, use_displaced_piece=False):
         print(f"Attempting to use displaced piece {shape} - no affect to the GS or PS")
         claim_and_update(post, displaced_player, shape, use_displaced_piece=True)
     else:
-        if has_general_stock(displaced_player, shape):
+        if displaced_player.has_general_stock(shape):
             print(f"Attempting to place a {shape} from general_stock, because use_displaced is false")
             claim_and_update(post, displaced_player, shape)
-        elif is_general_stock_empty(displaced_player) and has_personal_supply(displaced_player, shape):
+        elif displaced_player.is_general_stock_empty() and displaced_player.has_personal_supply(shape):
             print(f"Attempting to place a {shape} from personal_supply, because use_displaced is false")
             claim_and_update(post, displaced_player, shape, from_personal_supply=True)
         else:
             print(f"Cannot place a {shape} because the general stock and personal supply are empty.")
-
-def has_general_stock(displaced_player, shape):
-    if shape == "square":
-        return displaced_player.player.general_stock_squares > 0
-    return displaced_player.player.general_stock_circles > 0
-
-def is_general_stock_empty(displaced_player):
-    return displaced_player.player.general_stock_squares == 0 and displaced_player.player.general_stock_circles == 0
-
-def has_personal_supply(displaced_player, shape):
-    if shape == "square":
-        return displaced_player.player.personal_supply_squares > 0
-    return displaced_player.player.personal_supply_circles > 0
 
 def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, from_personal_supply=False):
     post.claim(displaced_player.player, shape)
@@ -514,7 +505,33 @@ def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, f
     
     displaced_player.total_pieces_to_place -= 1
 
+def check_brown_blue_priv(route):
+    if route.region is not None:
+        # Check for Wales region
+        if route.region == "Wales":
+            if not (game.cardiff_priv == game.current_player or game.london_priv == game.current_player):
+                print("Cannot claim post in BROWN - Incorrect Privilege")
+                return False
+            if game.current_player.brown_priv_count == 0:
+                print("Used all privilege already in Brown!")
+                return False
+            else:
+                game.current_player.brown_priv_count -= 1
+
+        # Check for Scotland region
+        elif route.region == "Scotland":
+            if not (game.carlisle_priv == game.current_player or game.london_priv == game.current_player):
+                print("Cannot claim post in BLUE - Incorrect Privilege")
+                return False
+            if game.current_player.blue_priv_count == 0:
+                print("Used all privilege already in Blue!")
+                return False
+            else:
+                game.current_player.blue_priv_count -= 1
+    return True
+
 def handle_displacement(post, route, displacing_piece_shape):
+
     # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
     current_displaced_player = post.owner
@@ -533,6 +550,9 @@ def handle_displacement(post, route, displacing_piece_shape):
     # Before displacing with a circle, check if the current player has a circle in their personal supply
     if displacing_piece_shape == "circle" and game.current_player.personal_supply_circles == 0:
         return  # Invalid move as there's no circle in the personal supply
+    
+    if not check_brown_blue_priv(route):
+        return
 
     # Handle the cost of displacement with priority to squares
     squares_to_pay = min(game.current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
@@ -573,49 +593,61 @@ def handle_displacement(post, route, displacing_piece_shape):
     print(f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}.")
 
 def gather_empty_posts(start_route):
-    visited_routes = [start_route]  # Mark the start route as visited immediately
-    queue = get_adjacent_routes(start_route)  # Start with the routes adjacent to the given route
+    if not start_route:
+        print("Error: start_route is None in gather_empty_posts")
+        return []
 
+    visited_routes = [start_route]  # Mark the start route as visited immediately
+    queue = get_adjacent_routes(start_route, start_route.region)  # Start with the routes adjacent to the given route, considering the region
+    
     while queue:
         level_size = len(queue)
         empty_posts = []
         next_level_routes = []  # Routes for the next level
-        
-        # Process each route in the current level
+
         for i in range(level_size):
             current_route = queue.pop(0)
             if current_route in visited_routes:
                 continue
             visited_routes.append(current_route)
 
-            # Add routes connected to current_route to the next level
-            adjacent_routes = get_adjacent_routes(current_route)
+            adjacent_routes = get_adjacent_routes(current_route, start_route.region)
             for route in adjacent_routes:
                 if route not in visited_routes and route not in next_level_routes:
                     next_level_routes.append(route)
-            
-            # Check for empty posts in the current route
+
             for post in current_route.posts:
                 if not post.is_owned():
                     empty_posts.append(post)
 
-        # If we've found empty posts at this level, return them
         if empty_posts:
             return empty_posts
-        
-        # Otherwise, continue to the next level
+
         queue.extend(next_level_routes)
 
-    return []  # If no empty posts are found after all levels are traversed
+    return []
 
-def get_adjacent_routes(current_route):
-    """Returns a list of routes adjacent to the given route."""
+def get_adjacent_routes(current_route, start_route_region):
+    if not current_route:
+        print("Error: current_route is None in get_adjacent_routes")
+        return []
+
     adjacent_routes = []
     for city in current_route.cities:
         for adjacent_route in city.routes:
             if adjacent_route != current_route and adjacent_route not in adjacent_routes:
-                adjacent_routes.append(adjacent_route)
+                if valid_region_transition(start_route_region, adjacent_route.region):
+                    adjacent_routes.append(adjacent_route)
     return adjacent_routes
+
+def valid_region_transition(start_region, target_region):
+    if start_region is None:
+        # Routes with no specific region can consider only routes with no specific region
+        return target_region is None
+    elif start_region in ["Scotland", "Wales"]:
+        # Brown and blue can consider their own and None regions
+        return target_region in [start_region, None]
+    return False
 
 def is_route_filled(route):
     """Checks if all posts on a route are filled."""
@@ -631,13 +663,22 @@ def find_post_by_position(pos):
                 return route, post
     return None, None
 
-def claim_post(post, player, piece_to_play):
+def claim_post(route, post, player, piece_to_play):
+    if not check_brown_blue_priv(route):
+        return
+
+    city_names = ' and '.join([city.name for city in route.cities])
+    region_info = f" in {route.region}" if route.region else ""
+
     if piece_to_play == "square" and player.personal_supply_squares > 0:
         post.claim(player, "square")
+        print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'square' between {city_names}{region_info}")
         player.actions_remaining -= 1
         player.personal_supply_squares -= 1
+
     elif piece_to_play == "circle" and player.personal_supply_circles > 0:
         post.claim(player, "circle")
+        print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'circle' between {city_names}{region_info}")
         player.actions_remaining -= 1
         player.personal_supply_circles -= 1
         
@@ -750,9 +791,10 @@ while True:
 
     redraw_window(win, game)
     # Scale down the large surface to fit into the display surface
-    scaled_surface = pygame.transform.scale(win, (1800, 1350))
+    # scaled_surface = pygame.transform.scale(win, (1800, 1350))
     # Blit the scaled surface onto the display surface
-    viewable_window.blit(scaled_surface, (0, 0))
+    # viewable_window.blit(scaled_surface, (0, 0))
+    # viewable_window.blit(win, (0, 0))
 
     pygame.display.flip()  # Update the screen
     pygame.time.delay(50)

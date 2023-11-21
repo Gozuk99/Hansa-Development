@@ -1,4 +1,4 @@
-# map.py
+# map_attributes.py
 import random
 from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN, DARK_BLUE, BLACKISH_BROWN
 
@@ -88,7 +88,10 @@ class City:
     def add_office(self, office):
         self.offices.append(office)
 
-    def update_next_open_office_ownership(self, player, color):
+    def update_next_open_office_ownership(self, game):
+        player = game.current_player
+        color = player.color
+
         for office in self.offices:
             if office.controller is None:
                 office.controller = player
@@ -96,6 +99,18 @@ class City:
                 if office.awards_points:
                     player.score += office.awards_points
                 break
+
+        # Update privilege count only if the player is gaining control for the first time
+        if self.name == "Cardiff" and game.cardiff_priv != player:
+            game.cardiff_priv = player
+            player.brown_priv_count += 1
+        elif self.name == "Carlisle" and game.carlisle_priv != player:
+            game.carlisle_priv = player
+            player.blue_priv_count += 1
+        elif self.name == "London" and game.london_priv != player:
+            game.london_priv = player
+            player.brown_priv_count += 1
+            player.blue_priv_count += 1
 
     def update_city_size_based_on_offices(self):
         num_offices = len(self.offices)
@@ -355,7 +370,7 @@ class Office:
         return self.controller is None
 
 class Route:
-    def __init__(self, cities, num_posts, has_bonus_marker=False, permanent_bm_type=None, required_circles=0, color=WHITE):
+    def __init__(self, cities, num_posts, has_bonus_marker=False, permanent_bm_type=None, required_circles=0, color=WHITE, region=None):
         self.cities = cities
         for city in cities:
             city.add_route(self)
@@ -367,6 +382,7 @@ class Route:
         self.required_circles = required_circles  # Number of posts that must be circles
         self.color = color
         self.posts = self.create_posts()
+        self.region = region
 
         if self.has_permanent_bm_type:
             self.assign_map_permanent_bonus_marker(self.has_permanent_bm_type)
@@ -548,6 +564,13 @@ class Post:
 
     def can_be_claimed_by(self, shape):
         return self.owner is None and (self.required_shape is None or self.required_shape == shape)
+    
+    def is_valid_for_displacement(self, player):
+        if self.owner is not None:
+            return False  # The post is already claimed
+        if self.required_shape is None or player.has_general_stock(self.required_shape):
+            return True  # The post is empty and the player has the required shape
+        return False
 
     def claim(self, player, shape):
         if shape == "circle":

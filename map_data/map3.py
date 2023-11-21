@@ -3,7 +3,7 @@ from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from map_data.constants import GREY, CIRCLE_RADIUS, SPACING, BLACKISH_BROWN, DARK_RED, DARK_BLUE
 
 class Map3(Map):
-    def __init__(self):
+    def __init__(self, num_players):
         super().__init__()  # Call the parent class constructor
         self.cities = []
         self.routes = []
@@ -14,11 +14,11 @@ class Map3(Map):
         self.max_full_cities_x_pos = 1000
         self.max_full_cities_y_pos = 52
 
-        self.create_cities_and_routes()  # Populate cities, offices, and routes etc., specifically for Map1
+        self.create_cities_and_routes(num_players)  # Populate cities, offices, and routes etc., specifically for Map1
         self.assign_starting_bonus_markers()
 
-        self.map_width = 1400
-        self.map_height = 1700
+        self.map_width = 1800
+        self.map_height = 1370
 
         #keep the cities in alphabetical order - helps when searching
         self.bonus_marker_positions = {
@@ -31,47 +31,66 @@ class Map3(Map):
             ('Danzig', 'Malmo'): (1106, 253),
         }
 
-    def create_cities_and_routes(self):
-        # Define Map2-specific cities and offices
+    def create_cities_and_routes(self, num_players):
+        # Define Map3-specific cities and offices
         # Define cities
-        Glasgom = City('Glasgom', 100, 105, DARK_BLUE)
-        Glasgom.add_office(Office("square", "ORANGE", 0))
-        self.cities.append(Glasgom)
+        if num_players > 3:
+            Glasgom = City('Glasgom', 100, 105, DARK_BLUE)
+            Glasgom.add_office(Office("square", "ORANGE", 0))
+            self.cities.append(Glasgom)
 
-        Edinbaurgh = City('Edinbaurgh', 400, 20, DARK_BLUE)
-        Edinbaurgh.add_office(Office("square", "WHITE", 0))
-        Edinbaurgh.add_office(Office("circle", "PINK", 0))
-        self.cities.append(Edinbaurgh)
+            Edinbaurgh = City('Edinbaurgh', 400, 20, DARK_BLUE)
+            Edinbaurgh.add_office(Office("square", "WHITE", 0))
+            Edinbaurgh.add_office(Office("circle", "PINK", 0))
+            self.cities.append(Edinbaurgh)
 
-        Dunbar = City('Dunbar', 750, 40, DARK_BLUE)
-        Dunbar.add_office(Office("square", "BLACK", 0))
-        self.cities.append(Dunbar)
+            Dunbar = City('Dunbar', 750, 40, DARK_BLUE)
+            Dunbar.add_office(Office("square", "BLACK", 0))
+            self.cities.append(Dunbar)
 
-        Falkirk = City('Falkirk', 415, 130, DARK_BLUE)
-        Falkirk.add_office(Office("square", "WHITE", 0))
-        Falkirk.add_office(Office("square", "PINK", 0))
-        Falkirk.add_office(Office("square", "BLACK", 0))
-        self.cities.append(Falkirk)
+            Falkirk = City('Falkirk', 415, 130, DARK_BLUE)
+            Falkirk.add_office(Office("square", "WHITE", 0))
+            Falkirk.add_office(Office("square", "PINK", 0))
+            Falkirk.add_office(Office("square", "BLACK", 0))
+            self.cities.append(Falkirk)
 
-        Carlisle = City('Carlisle', 350, 320, DARK_BLUE)
-        Carlisle.add_office(Office("square", "WHITE", 0))
-        Carlisle.add_office(Office("square", "ORANGE", 0))
-        Carlisle.add_office(Office("square", "PINK", 0))
-        Carlisle.add_office(Office("square", "BLACK", 0))
-        Carlisle.add_office(Office("circle", "BLACK", 0)) #BLUE CAPITAL CITY
-        self.cities.append(Carlisle)
+            Carlisle = City('Carlisle', 350, 320, DARK_BLUE)
+            Carlisle.add_office(Office("square", "WHITE", 0))
+            Carlisle.add_office(Office("square", "ORANGE", 0))
+            Carlisle.add_office(Office("square", "PINK", 0))
+            Carlisle.add_office(Office("square", "BLACK", 0))
+            Carlisle.add_office(Office("circle", "BLACK", 0)) #BLUE CAPITAL CITY
+            self.cities.append(Carlisle)
 
-        Newcastle = City('Newcastle', 1000, 190, DARK_BLUE)
-        Newcastle.add_office(Office("square", "WHITE", 0))
-        Newcastle.add_office(Office("square", "ORANGE", 0))
-        Newcastle.add_office(Office("circle", "PINK", 0))
-        Newcastle.assign_upgrade_type('Bank')
-        self.cities.append(Newcastle)
+            Newcastle = City('Newcastle', 1000, 190, DARK_BLUE)
+            Newcastle.add_office(Office("square", "WHITE", 0))
+            Newcastle.add_office(Office("square", "ORANGE", 0))
+            Newcastle.add_office(Office("circle", "PINK", 0))
+            Newcastle.assign_upgrade_type('Bank')
+            self.cities.append(Newcastle)
 
-        IsleOfMan = City('IsleOfMan', 60, 500, (65, 103, 114)) ##BLUE BROWN CITY
-        IsleOfMan.add_office(Office("circle", "WHITE", 0))
-        IsleOfMan.add_office(Office("circle", "PINK", 0))
-        self.cities.append(IsleOfMan)
+            IsleOfMan = City('IsleOfMan', 60, 500, (65, 103, 114)) ##BLUE BROWN CITY
+            IsleOfMan.add_office(Office("circle", "WHITE", 0))
+            IsleOfMan.add_office(Office("circle", "PINK", 0))
+            self.cities.append(IsleOfMan)
+        else:
+            Carlisle = City('Carlisle', 350, 320, GREY)
+            Carlisle.add_office(Office("square", "WHITE", 0))
+            Carlisle.add_office(Office("square", "ORANGE", 0))
+            Carlisle.add_office(Office("square", "BLACK", 0))
+            self.cities.append(Carlisle)
+
+            Newcastle = City('Newcastle', 1000, 190, GREY)
+            Newcastle.add_office(Office("square", "WHITE", 0))
+            Newcastle.add_office(Office("square", "ORANGE", 0))
+            Newcastle.add_office(Office("circle", "PINK", 0))
+            Newcastle.assign_upgrade_type('Bank')
+            self.cities.append(Newcastle)
+
+            IsleOfMan = City('IsleOfMan', 60, 500, BLACKISH_BROWN) ## BROWN CITY
+            IsleOfMan.add_office(Office("square", "WHITE", 0))
+            IsleOfMan.add_office(Office("square", "PINK", 0))
+            self.cities.append(IsleOfMan)
 
         Conway = City('Conway', 75, 740, BLACKISH_BROWN)
         Conway.add_office(Office("square", "WHITE", 0))
@@ -101,9 +120,11 @@ class Map3(Map):
         Cardiff.add_office(Office("square", "ORANGE", 0))
         Cardiff.add_office(Office("square", "PINK", 0))
         Cardiff.add_office(Office("circle", "PINK", 0))
-        Cardiff.add_office(Office("circle", "BLACK", 0))
+        if num_players > 3:
+            Cardiff.add_office(Office("circle", "BLACK", 0))
         self.cities.append(Cardiff)
 
+        # GREY
         Richmond = City('Richmond', 644, 500, GREY)
         Richmond.add_office(Office("square", "WHITE", 0))
         self.cities.append(Richmond)
@@ -161,8 +182,9 @@ class Map3(Map):
         London = City('London', 1200, 1300, GREY)
         London.add_office(Office("square", "WHITE", 0))
         London.add_office(Office("square", "ORANGE", 0))
-        London.add_office(Office("square", "ORANGE", 0))
-        London.add_office(Office("square", "PINK", 0))
+        if num_players > 3:
+            London.add_office(Office("square", "ORANGE", 0))
+            London.add_office(Office("square", "PINK", 0))
         London.add_office(Office("square", "PINK", 0))
         London.add_office(Office("circle", "PINK", 0))
         London.add_office(Office("square", "BLACK", 0))
@@ -230,24 +252,29 @@ class Map3(Map):
 
         # Routes
         #  BLUE
-        self.routes.append(Route([Glasgom, Edinbaurgh], 2, color=DARK_BLUE))
-        self.routes.append(Route([Dunbar, Edinbaurgh], 2, color=DARK_BLUE))
-        self.routes.append(Route([Dunbar, Newcastle], 3, color=DARK_BLUE))
-        self.routes.append(Route([Glasgom, Falkirk], 2, color=DARK_BLUE))
-        self.routes.append(Route([Carlisle, Falkirk], 2, color=DARK_BLUE))
-        self.routes.append(Route([Carlisle, IsleOfMan], 3, required_circles=2, color=DARK_BLUE))
+        if num_players > 3:
+            self.routes.append(Route([Glasgom, Edinbaurgh], 2, color=DARK_BLUE, region="Scotland"))
+            self.routes.append(Route([Dunbar, Edinbaurgh], 2, color=DARK_BLUE, region="Scotland"))
+            self.routes.append(Route([Dunbar, Newcastle], 3, color=DARK_BLUE, region="Scotland"))
+            self.routes.append(Route([Glasgom, Falkirk], 2, color=DARK_BLUE, region="Scotland"))
+            self.routes.append(Route([Carlisle, Falkirk], 2, color=DARK_BLUE, region="Scotland"))
+            self.routes.append(Route([Carlisle, IsleOfMan], 3, required_circles=2, color=DARK_BLUE, region="Scotland"))
+        else:
+            self.routes.append(Route([Carlisle, IsleOfMan], 3, required_circles=2, permanent_bm_type="MoveAny2"))
+            self.routes.append(Route([Carlisle, Newcastle], 4))
 
         #  BROWN
-        self.routes.append(Route([Conway, IsleOfMan], 3, required_circles=2, color=BLACKISH_BROWN))
-        self.routes.append(Route([Conway, Chester], 3, color=BLACKISH_BROWN))
-        self.routes.append(Route([Conway, Montgomery], 3, color=BLACKISH_BROWN))
-        self.routes.append(Route([Hereford, Montgomery], 3, color=BLACKISH_BROWN))
-        self.routes.append(Route([Pembroke, Montgomery], 3, color=BLACKISH_BROWN))
-        self.routes.append(Route([Pembroke, Cardiff], 3, color=BLACKISH_BROWN))
-        self.routes.append(Route([Cardiff, Montgomery], 3, color=BLACKISH_BROWN))
+        self.routes.append(Route([Conway, IsleOfMan], 3, required_circles=2, color=BLACKISH_BROWN, region="Wales"))
+        self.routes.append(Route([Conway, Chester], 3, color=BLACKISH_BROWN, region="Wales"))
+        self.routes.append(Route([Conway, Montgomery], 3, color=BLACKISH_BROWN, region="Wales"))
+        self.routes.append(Route([Hereford, Montgomery], 3, color=BLACKISH_BROWN, region="Wales"))
+        self.routes.append(Route([Pembroke, Montgomery], 3, color=BLACKISH_BROWN, region="Wales"))
+        self.routes.append(Route([Pembroke, Cardiff], 3, color=BLACKISH_BROWN, region="Wales"))
+        self.routes.append(Route([Cardiff, Montgomery], 3, color=BLACKISH_BROWN, region="Wales"))
 
         #  WHITE
-        self.routes.append(Route([Carlisle, Chester], 3, required_circles=2))
+        if num_players > 3:
+            self.routes.append(Route([Carlisle, Chester], 3, required_circles=2))
         self.routes.append(Route([Carlisle, Richmond], 3))
         self.routes.append(Route([Carlisle, Durham], 4))
         self.routes.append(Route([Lancaster, Richmond], 2, has_bonus_marker=True))

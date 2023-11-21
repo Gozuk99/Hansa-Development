@@ -34,6 +34,21 @@ class Player:
         self.board = None
         self.ending_turn = False
 
+        self.brown_priv_count = 0
+        self.blue_priv_count = 0
+
+    def refresh_map3_priv_actions(self, game):
+        self.brown_priv_count = 0
+        self.blue_priv_count = 0
+        
+        if game.cardiff_priv == self:
+            self.brown_priv_count += 1
+        if game.carlisle_priv == self:
+            self.blue_priv_count += 1
+        if game.london_priv == self:
+            self.brown_priv_count += 1
+            self.blue_priv_count += 1
+
     def add_bonus_marker(self, marker):
         self.bonus_markers.append(marker)
     
@@ -46,9 +61,9 @@ class Player:
     def pick_up_piece(self, post):
         # Pick up a piece from the post if under the limit
         if self.pieces_to_place > 0 and post.owner_piece_shape:
-            self.holding_pieces.append((post.owner_piece_shape, post.owner))
+            self.holding_pieces.append((post.owner_piece_shape, post.owner, post.region))
             self.pieces_to_place -= 1
-            print(f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape}. {self.pieces_to_place} moves left.")  # Assuming owner has a 'color' attribute
+            print(f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_place} moves left.")
             post.reset_post()
         else:
             message = "No more pieces can be picked up this turn." if self.pieces_to_place <= 0 else "This post is empty."
@@ -59,8 +74,7 @@ class Player:
             print("No pieces to place.")
             return
 
-        # Retrieve the shape and the owner of the next piece to be placed
-        shape_to_place, owner_to_place = self.holding_pieces[0]
+        shape_to_place, owner_to_place, origin_region = self.holding_pieces[0]
 
         # Determine the shape based on the button clicked
         shape_clicked = 'circle' if button == 3 else 'square'
@@ -70,13 +84,31 @@ class Player:
             print(f"Cannot place a {shape_clicked} on this post. This post requires a {post.required_shape}.")
             return
 
-        if shape_to_place == shape_clicked:
-            # The shape matches, so place it and remove from holding_pieces
-            print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
-            post.claim(owner_to_place, shape_to_place)  # Note: The owner should be passed to the claim method
-            self.holding_pieces.pop(0)
-            print(f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board.")
-        print(f"The next piece to place must be Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
+        # Check if the placement is valid based on the regions
+        if self.is_valid_region_transition(origin_region, post.region):
+            if shape_to_place == shape_clicked:
+                print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
+                post.claim(owner_to_place, shape_to_place)
+                self.holding_pieces.pop(0)
+                print(f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board.")
+        else:
+            print("Invalid placement: Cannot move piece between incompatible regions.")
+
+        # If the next piece to place is available
+        if self.holding_pieces:
+            next_shape, next_owner, _ = self.holding_pieces[0]
+            print(f"The next piece to place must be Player {COLOR_NAMES[next_owner.color]}'s {next_shape}.")
+
+    def is_valid_region_transition(self, start_region, target_region):
+        # If the piece was picked up from a white/None region, it can only be placed in a white/None region
+        if start_region is None:
+            return target_region is None
+
+        # If the piece was picked up from Wales or Scotland, it can be placed in the same or a white/None region
+        elif start_region in ["Wales", "Scotland"]:
+            return target_region in [start_region, None]
+
+        return False
 
     def finish_move(self):
         # End the move process if no pieces are being held
@@ -201,6 +233,13 @@ class Player:
         """Check if a player can claim an office of the specified color."""
         allowed_office_colors = PRIVILEGE_COLORS[:PRIVILEGE_COLORS.index(self.privilege) + 1]
         return office_color in allowed_office_colors
+    
+    def has_general_stock(self, shape):
+        if shape == "circle":
+            return self.general_stock_circles > 0
+        elif shape == "square":
+            return self.general_stock_squares > 0
+        return False
 
 class DisplacedPlayer:
     def __init__(self):
@@ -224,6 +263,19 @@ class DisplacedPlayer:
             
     def all_pieces_placed(self):
         return self.total_pieces_to_place == 0 and self.played_displaced_shape
+    
+    def has_general_stock(self, shape):
+        if shape == "square":
+            return self.player.general_stock_squares > 0
+        return self.player.general_stock_circles > 0
+
+    def is_general_stock_empty(self):
+        return self.player.general_stock_squares == 0 and self.player.general_stock_circles == 0
+
+    def has_personal_supply(self, shape):
+        if shape == "square":
+            return self.player.personal_supply_squares > 0
+        return self.player.personal_supply_circles > 0
 
 class PlayerBoard:
     def __init__(self, x, y, player):

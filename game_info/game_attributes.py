@@ -1,4 +1,4 @@
-# player_attributes.py
+# game_attributes.py
 
 from map_data.map1 import Map1
 from map_data.map2 import Map2
@@ -29,6 +29,9 @@ class Game:
         self.east_west_completed_count = 0
         self.players_who_completed_east_west = set()  # Track players who have completed the connection
 
+        self.cardiff_priv = None
+        self.carlisle_priv = None
+        self.london_priv = None
 
     def create_players(self, num_players):
         colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
@@ -49,7 +52,7 @@ class Game:
         elif map_num == 2:
             return Map2()
         elif map_num == 3:
-            return Map3()
+            return Map3(num_players)
     
     def claim_bonus_marker(self):
         # This method would be called when a player claims a new bonus marker
@@ -71,6 +74,10 @@ class Game:
             self.current_player_index = (self.current_player_index + 1) % len(self.players)
             self.current_player = self.players[self.current_player_index]
             self.current_player.actions_remaining = self.current_player.actions
+
+            if self.cardiff_priv or self.carlisle_priv or self.london_priv:
+                self.current_player.refresh_map3_priv_actions(self)
+
             print(f"Switched to Player {self.current_player_index+1} - {COLOR_NAMES[self.current_player.color]}.")
         elif self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
             print(f"{COLOR_NAMES[self.current_player.color]} - Place a Bonus Marker to Finish your Turn.")
