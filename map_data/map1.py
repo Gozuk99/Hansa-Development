@@ -302,3 +302,5 @@ class Map1(Map):
         if num_players != 3:
             self.routes.append(Route([Emden, Stade], 3))
             self.routes.append(Route([Gottingen, Warburg], 3))
+        #3p - 101 total posts, 32 routes, 27 cities
+        #4-5p - 107 total posts, 34 routes, 27 cities

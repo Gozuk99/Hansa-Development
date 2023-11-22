@@ -8,6 +8,7 @@ from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, 
 
 class Game:
     def __init__(self, map_num, num_players):
+        self.map_num = map_num
         self.selected_map = self.assign_map(map_num, num_players)
         self.num_players = num_players
 
@@ -19,9 +20,6 @@ class Game:
         self.displaced_player = DisplacedPlayer()
         self.waiting_for_displaced_player = False
         self.original_route_of_displacement = None
-        self.waiting_for_bm_swap_office = False
-        self.waiting_for_bm_upgrade_choice = False
-        self.waiting_for_bm_move3_choice = False
         self.all_empty_posts = []
 
         self.current_full_cities_count = 0
@@ -34,7 +32,7 @@ class Game:
         self.london_priv = None
 
     def create_players(self, num_players):
-        colors = [GREEN, BLUE, PURPLE, RED, YELLOW]  # Assume these are defined somewhere
+        colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
         players = []
         
         for i, color in enumerate(colors[:num_players]):

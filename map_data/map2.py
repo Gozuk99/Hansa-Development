@@ -284,3 +284,5 @@ class Map2(Map):
         self.routes.append(Route([Halle, Mittenberg], 2))
         self.routes.append(Route([Halle, Dresden], 4))
         self.routes.append(Route([Dresden, Krackau], 4))
+
+        #98 posts, 32 routes, 28 cities

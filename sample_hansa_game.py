@@ -2,6 +2,7 @@ import pygame
 import sys
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
+from ai.game_state import get_available_actions, get_get_game_state
 from game_info.game_attributes import Game
 from drawing.drawing_utils import redraw_window, draw_end_game
 
@@ -122,25 +123,6 @@ def handle_move(pos, button):
         if not game.current_player.holding_pieces:
             game.current_player.finish_move()
             game.current_player.actions_remaining -= 1  # Deduct an action for the move
-
-def handle_move_opponent(pos, button):
-    route, post = find_post_by_position(pos)
-
-    if post is None:
-        return
-
-    if button == 1 and post.is_owned() and post.owner != game.current_player:
-        if game.current_player.pieces_to_place > 0:
-            game.current_player.pick_up_piece(post)
-
-    elif game.current_player.holding_pieces:
-        if not post.is_owned():
-            game.current_player.place_piece(post, button)
-            if not game.current_player.holding_pieces:
-                game.current_player.finish_move()
-                game.waiting_for_bm_move3_choice = False
-        else:
-            print("Cannot place a piece here. The post is already occupied.")
 
 def find_clicked_city(cities, pos):
     for city in cities:
@@ -288,7 +270,6 @@ def handle_bonus_marker(player, route, reset_pieces):
         route.bonus_marker = None
         game.replace_bonus_marker += 1
     elif route.permanent_bonus_marker:
-        # route.permanent_bonus_marker.use_perm_bm(game)
         print(f"Waiting for Player to handle {route.permanent_bonus_marker.type} BM")
         handle_permanent_bonus_marker(route.permanent_bonus_marker.type, reset_pieces)
 
@@ -333,7 +314,6 @@ def handle_permanent_bonus_marker(perm_bm_type, reset_pieces):
         pygame.time.wait(100)
     return None
 
-# And the corresponding changes in the handle_move_opponent function:
 def handle_move_any_2_pieces(pos, button):
     route, post = find_post_by_position(pos)
 
@@ -409,7 +389,65 @@ def check_if_bm_clicked(pos):
     for bm in game.current_player.bonus_markers:
         if bm.is_clicked(pos):
             print(f"Clicked on bonus marker: {bm.type}")
-            bm.use_bm(game)
+            return use_bonus_marker(bm)
+
+    return False
+
+def use_bonus_marker(bm):
+    player = game.current_player
+    waiting_for_click = True
+    if bm.type == 'PlaceAdjacent':
+        print ("Only can be done if route is full.")
+        print ("If route is full, clicking on the city will automatically handle this.")
+        return True
+    
+    player.used_bonus_markers.append(bm)
+    player.bonus_markers.remove(bm)
+
+    if bm.type == 'SwapOffice':
+        print("Click a City to swap offices on.")
+    elif bm.type == 'Move3':
+        player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker
+        print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
+    elif bm.type == 'UpgradeAbility':
+        print("Please click on an upgrade to choose it.")
+    elif bm.type == '3Actions':
+        player.actions_remaining += 3
+        return True
+    elif bm.type == '4Actions':
+        player.actions_remaining += 4
+        return True
+    else:
+        return False
+
+    while waiting_for_click:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONUP:
+                mouse_position = pygame.mouse.get_pos()
+                if bm.type == 'SwapOffice':
+                    for city in game.selected_map.cities:
+                        if check_bounds(city, mouse_position):
+                            print(f"Clicked on city: {city.name}")
+                            if bm.handle_swap_office(city, player):
+                                waiting_for_click = False
+                elif bm.type == 'Move3':
+                    route, post = find_post_by_position(mouse_position)
+                    if bm.handle_move_3(post, event.button, player):
+                        waiting_for_click = False
+                elif bm.type == 'UpgradeAbility':
+                    for upgrade in game.selected_map.upgrade_cities:
+                        if check_bounds(upgrade, mouse_position):
+                            if bm.handle_upgrade_ability(upgrade, player):
+                                waiting_for_click = False
+                else:
+                    print("Invalid scenario.")
+        redraw_window(win, game)
+        pygame.display.flip()  # Update the screen
+        pygame.time.wait(100)
+    return True
 
 def handle_click(pos, button):
     check_if_post_clicked(pos, button)
@@ -698,16 +736,20 @@ def handle_end_turn_click(pos):
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
+get_get_game_state(game)
+exit()
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
+            get_available_actions(game)
             mouse_position = pygame.mouse.get_pos()
-            check_if_bm_clicked(mouse_position)
+            if(check_if_bm_clicked(mouse_position)):
+                print(f"Bonus Marker was used!")
             # while game_not_over:
-            if game.waiting_for_displaced_player:
+            elif game.waiting_for_displaced_player:
                 displaced_click(mouse_position, event.button)
                 if not game.all_empty_posts:
                     print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
@@ -728,31 +770,8 @@ while True:
                     game.current_player.actions_remaining -= 1
                     # game.switch_player_if_needed()
 
-            elif game.waiting_for_bm_swap_office:
-                for city in game.selected_map.cities:
-                    if check_bounds(city, mouse_position):
-                        print(f"Clicked on city: {city.name}")
-                        if city.check_if_eligible_to_swap_offices(game.current_player):
-                            print ("Valid City to swap offices")
-                            city.swap_offices(game.current_player)
-                            game.waiting_for_bm_swap_office = False
-                        else:
-                            print ("Invalid City to Swap offices, please try another city.")
-
-            elif game.waiting_for_bm_move3_choice:
-                handle_move_opponent(mouse_position, event.button)
-
-            elif game.current_player.holding_pieces and not game.waiting_for_bm_move3_choice:
+            elif game.current_player.holding_pieces :
                 handle_move(mouse_position, event.button)
-
-            elif game.waiting_for_bm_upgrade_choice:
-                for upgrade in game.selected_map.upgrade_cities:
-                    if check_bounds(upgrade, mouse_position):
-                        if game.current_player.perform_upgrade(upgrade.upgrade_type):
-                            print("Successfully used Upgrade BM")
-                            game.waiting_for_bm_upgrade_choice = False
-                        else:
-                            print("Invalid click when Upgrading via BM")
 
             elif game.current_player.actions_remaining > 0:
                 handle_click(mouse_position, event.button)

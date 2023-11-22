@@ -472,72 +472,46 @@ class BonusMarker:
         # Check if the mouse click is within the circle of the bonus marker
         distance_squared = (self.position[0] - mouse_pos[0]) ** 2 + (self.position[1] - mouse_pos[1]) ** 2
         return distance_squared <= CIRCLE_RADIUS ** 2
-    
-    def use_bm(self, game):
-        # Call a method depending on the type of the bonus marker
-        if self.type == 'PlaceAdjacent':
-            print ("Only can be done if route is full.")
-            print ("If route is full, clicking on the city will automatically handle this.")
-            return
-        elif self.type == 'SwapOffice':
-            self.handle_swap_office(game)
-        elif self.type == 'Move3':
-            self.handle_move_3(game)
-        elif self.type == 'UpgradeAbility':
-            self.handle_upgrade_ability(game)
-        elif self.type == '3Actions':
-            self.handle_3_actions(game.current_player)
-        elif self.type == '4Actions':
-            self.handle_4_actions(game.current_player)
+        
+    def handle_swap_office(self, city, player):    
+        if city.check_if_eligible_to_swap_offices(player):
+            print ("Valid City to swap offices")
+            city.swap_offices(player)
+            return True
         else:
-            print(f"Unknown bonus marker type: {self.type}")
+            print ("Invalid City to Swap offices, please try another city.")
+            return False
 
-        # Move the used bonus marker to the used list
-        game.current_player.used_bonus_markers.append(self)
-        game.current_player.bonus_markers.remove(self)
-        
-    def handle_swap_office(self, game):
-        game.waiting_for_bm_swap_office = True
-        print("Click a City to swap offices on.")
+    def handle_move_3(self, post, button, player):
+        if post is None:
+            return
 
-    def handle_move_3(self, game):
-        game.waiting_for_bm_move3_choice = True
-        game.current_player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker
-        print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
+        if button == 1 and post.is_owned() and post.owner != player:
+            if player.pieces_to_place > 0:
+                player.pick_up_piece(post)
+
+        elif player.holding_pieces:
+            if not post.is_owned():
+                player.place_piece(post, button)
+                if not player.holding_pieces:
+                    player.finish_move()
+                    return True
+            else:
+                print("Cannot place a piece here. The post is already occupied.")
         
-    def handle_upgrade_ability(self, game):
-        game.waiting_for_bm_upgrade_choice = True
-        print("Please click on an upgrade to choose it.")
+    def handle_upgrade_ability(self, upgrade, player):
+        if player.perform_upgrade(upgrade.upgrade_type):
+            print("Successfully used Upgrade BM")
+            return True
+        else:
+            print("Invalid click when Upgrading via BM")
+            return False
 
     def handle_3_actions(self, current_player):
         current_player.actions_remaining += 3
 
     def handle_4_actions(self, current_player):
         current_player.actions_remaining += 4
-
-    # ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
-    def use_perm_bm(self, game):
-        if self.type == 'MoveAny2':
-            return
-        elif self.type == '+1Priv':
-            game.current_player.upgrade_privilege()
-        elif self.type == 'ClaimGreenCity':
-            self.handle_claim_green_city(game)
-        elif self.type == 'Place2TradesmenFromRoute':
-            return
-        elif self.type == 'Place2ScotlandOrWales':
-            return
-        else:
-            print(f"Unknown bonus marker type: {self.type}")
-    
-    def handle_move_any_2(self, game):
-        game.waiting_for_bm_move_any2_choice = True
-        game.current_player.pieces_to_place = 2  # Set the pieces to move to 2 as per the bonus marker
-        print("You can now move up to 2 pieces. Click on any piece to move it.")
-
-    def handle_claim_green_city(self, game):
-        game.waiting_for_bm_claim_green_city = True
-        print("Click a GREEN City to claim.")
 
 class Post:
     def __init__(self, position, owner=None, required_shape=None, region=None):

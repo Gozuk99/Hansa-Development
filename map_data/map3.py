@@ -298,6 +298,9 @@ class Map3(Map):
         self.routes.append(Route([Bristol, Salisbury], 4))
         self.routes.append(Route([Plymouth, Salisbury], 4))
         self.routes.append(Route([Southhampton, Salisbury], 2, has_bonus_marker=True))
-        self.routes.append(Route([Southhampton, Calais], 3, permanent_bm_type="MoveAny2", required_circles=2))
+        self.routes.append(Route([Southhampton, Calais], 3, permanent_bm_type="Place2ScotlandOrWales", required_circles=2))
         self.routes.append(Route([Canterbury, Calais], 3, permanent_bm_type="MoveAny2", required_circles=1))
         self.routes.append(Route([Canterbury, London], 3))
+
+        #3P - 111 posts, 35 routes, 26 cities
+        #4-5P - 121 posts, 40 routes, 30 cities
