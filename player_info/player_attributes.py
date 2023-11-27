@@ -195,8 +195,8 @@ class Player:
         return self.actions_index > index
 
     def has_unlocked_bank(self, index):
-        # If the player's bank is "C", then all slots are unlocked
-        if self.bank == "C":
+        # If the player's bank is 50, then all slots are unlocked
+        if self.bank == 50:
             return True
         # For other bank values, compare only if the value at the given index is an integer
         if isinstance(BANK_MAX_VALUES[index], int):
@@ -216,7 +216,7 @@ class Player:
     def income_action_based_on_circle_count(self, max_circles, bank, general_stock_squares):
         button_labels = []
         
-        if bank == "C":
+        if bank == 50:
             label = f"{general_stock_squares}S/{max_circles}C"
             button_labels.append(label)
             return button_labels

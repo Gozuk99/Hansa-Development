@@ -4,60 +4,103 @@ from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN,
 
 # Check if CUDA (GPU support) is available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# print(f"Using device: {device}")
 
-def get_game_state(game):
-    # Type of Action:
-    # normal, displaced, use_bm, replace_bm, perm_bonus_marker
-    # 1-5, 1/0, 1/0, 1/0
 
-    # Game:
-    start_time = time.time()
-    game_tensor = fill_game_tensor(game)
-    end_time = time.time()
-    execution_time1 = end_time - start_time
+#create action space
+#1 INCOME - 5 valid options: 0-4 circles, and squares leftover - mask out options based on circles
+#2 CLAIM_POST - all posts claim with circle, or square - mask out options with incorrect region(blue or brown priv), incorrect personal_supply, occupied, incorrect shape
+#3 DISPLACE - all posts owned by opponents - mask out if invalid personal supply,
+#4 MOVE - query all posts -> add least desirable owned piece to array, loop for player.book -> when met, loop for player.book -> ONLY VALID ACTIONS are CLAIM, same rules.
+#5 CLAIM_ROUTE - query all routes owned by player - add claim city office, upgrade X, claim route for points
+#6 BM - ?
+#7 PERM BM - Use immediately
+#8 REPLACE BM - Choose a route?
+#9 PICK UP - all posts owned by me, mask out not owned, add to array.
+#10 END TURN - use BM or End Turn
 
-    # Map info:
-    start_time = time.time()
-    city_tensor = fill_city_tensor(game)
-    end_time = time.time()
-    execution_time2 = end_time - start_time
+# output = HansaNN(game_state_tensor)
+# valid_actions = mask_out_invalid_actions(output)
+
+def masking_out_invalid_actions(game, game_state):
     
-    # Route Info
-    start_time = time.time()
-    route_tensor = fill_route_tensor(game)
-    end_time = time.time()
-    execution_time3 = end_time - start_time
-    
-    #Player Info
-    start_time = time.time()
-    player_tensor = fill_player_info_tensor(game)
-    end_time = time.time()
-    execution_time4 = end_time - start_time
-    
-    print (f"game_tensor Execution Time: {execution_time1} seconds")
-    print (f"city_tensor Execution Time: {execution_time2} seconds")
-    print (f"route_tensor Execution Time: {execution_time3} seconds")
-    print (f"player_tensor Execution Time: {execution_time4} seconds")
+    income_tensor = mask_income_actions(game, game_state) #size 5 (0-4 circles + leftover squares)
+    claim_post_tensor = mask_claim_post(game, game_state) #size 242 (claiming with a square or circle))
+    displace_tensor = mask_displace(game, game_state) #size 242 (displacing with a square or circle)
+    move_tensor = mask_move(game, game_state)
+    claim_route_tensor = mask_claim_route(game, game_state)
+    bonus_marker_tensor = mask_bm(game, game_state)
+    permanent_bonus_marker_tensor = mask_perm_bm(game, game_state)
+    replace_bm_tensor = mask_replace_bm(game, game_state)
+    pick_up_tensor = mask_pick_up(game, game_state)
+    end_turn_tensor = mask_end_turn(game, game_state)
 
-def fill_game_tensor(game):
-    # Initial game info
-    initial_game_info = torch.tensor([game.map_num, game.num_players, 
-                                      game.current_player_index + 1, game.current_player.actions_remaining,
-                                      game.selected_map.max_full_cities, game.current_full_cities_count,
-                                      game.east_west_completed_count], device=device, dtype=torch.uint8)
+    # Concatenate all tensors into one big tensor representing all possible actions
+    all_actions_tensor = torch.cat([income_tensor, claim_post_tensor, displace_tensor, move_tensor, 
+                                    claim_route_tensor, bonus_marker_tensor, permanent_bonus_marker_tensor,
+                                    replace_bm_tensor, pick_up_tensor, end_turn_tensor], dim=0)
 
-    # Privileges info
-    cardiff_priv, carlisle_priv, london_priv = assign_blue_brown_priv_mapping(game)
-    privileges_info = torch.tensor([cardiff_priv, carlisle_priv, london_priv], device=device, dtype=torch.uint8)
-    
-    # Special Prestige Points info
-    special_prestige_points_info = assign_special_prestige_points_mapping(game)
+def mask_income_actions(game, game_state):
+    income_tensor = torch.zeros(5, device=device, dtype=torch.uint8)  # 5 options for income actions
 
-    # Concatenate all game info into one tensor
-    game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
-    print(f"game_info {game_info}")
-    return game_info
+    num_circles = game.current_player.general_stock_circles
+    num_squares = game.current_player.general_stock_squares
+    max_income = min(game.current_player.bank, 4)  # Limit to a maximum of 4 for circle income
+
+    # Check if the player has no general stock circles or squares
+    if num_circles == 0 and num_squares == 0:
+        return income_tensor  # Return all zeros if no general stock pieces are available
+
+    # Check if the player has no general stock circles
+    if num_circles == 0:
+        income_tensor[0] = 1  # Only valid action is to collect all squares
+        return income_tensor
+
+    # Set value for each possible income action
+    for i in range(max_income + 1):
+        if i <= num_circles:
+            income_tensor[i] = 1  # Valid action if the player has enough circles
+
+    return income_tensor
+
+def mask_claim_post(game, game_state):
+    claim_post_tensor = torch.zeros(121 * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
+
+    post_idx = 0
+    for route in game.selected_map.routes:
+        for post in route.posts:  # Make sure to iterate over posts in each route
+            if not post.is_owned() and check_brown_blue_priv(game, route):
+                if game.current_player.personal_supply_squares > 0 and (not post.required_shape or post.required_shape == "square"):
+                    claim_post_tensor[post_idx] = 1
+                if game.current_player.personal_supply_circles > 0 and (not post.required_shape or post.required_shape == "circle"):
+                    claim_post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
+            post_idx += 1
+
+    return claim_post_tensor
+
+def mask_displace(game, game_state):
+    displace_post_tensor = torch.zeros(121 * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
+
+    if game.current_player.personal_supply_squares + game.current_player.personal_supply_circles <= 1:
+        return displace_post_tensor  # Not enough pieces to displace any post
+
+    post_idx = 0
+    for route in game.selected_map.routes:
+        for post in route.posts:
+            if post.is_owned() and post.owner != game.current_player and check_brown_blue_priv(game, route):
+                # Calculate the cost to displace based on the shape of the post's piece
+                displacement_cost = 2 if post.owner_piece_shape == "square" else 3
+                
+                # Check if the player has enough pieces to displace
+                if game.current_player.personal_supply_squares + game.current_player.personal_supply_circles >= displacement_cost:
+                    # If the player can displace this post, mark it as a valid action
+                    if post.required_shape == "square" or post.required_shape is None:
+                        displace_post_tensor[post_idx] = 1
+                    if post.required_shape == "circle" or post.required_shape is None:
+                        displace_post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
+            post_idx += 1
+
+    return displace_post_tensor
+
 
 def assign_blue_brown_priv_mapping(game):
     colors = [GREEN, BLUE, PURPLE, RED, YELLOW]

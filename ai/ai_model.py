@@ -38,3 +38,19 @@ class HansaNet(nn.Module):
 
 #         if batch_idx % log_interval == 0:
 #             print(f"Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)} ({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}")
+
+
+
+
+
+#create action space
+#1 INCOME - 5 valid options: 0-4 circles, and squares leftover - mask out options based on circles
+#2 CLAIM - all posts claim with circle, or square - mask out options with incorrect region(blue or brown priv), incorrect personal_supply, occupied, incorrect shape
+#3 DISPLACE - all posts owned by opponents - mask out if invalid personal supply,
+#4 MOVE - query all posts -> add least desirable owned piece to array, loop for player.book -> when met, loop for player.book -> ONLY VALID ACTIONS are CLAIM, same rules.
+#5 CLAIM - query all routes owned by player - add claim city office, upgrade X, claim route for points
+#6 BM - ?
+#7 PERM BM - Use immediately
+#8 REPLACE BM - Choose a route?
+#9 PICK UP - all posts owned by me, mask out not owned, add to array.
+#10 END TURN - use BM or End Turn

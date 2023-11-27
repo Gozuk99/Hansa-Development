@@ -2,7 +2,7 @@ import pygame
 import sys
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
-from ai.game_state import get_available_actions, get_get_game_state
+from ai.game_state import get_available_actions, get_game_state
 from game_info.game_attributes import Game
 from drawing.drawing_utils import redraw_window, draw_end_game
 
@@ -736,7 +736,7 @@ def handle_end_turn_click(pos):
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
-get_get_game_state(game)
+get_game_state(game)
 exit()
 while True:
     for event in pygame.event.get():

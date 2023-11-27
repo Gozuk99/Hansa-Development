@@ -490,7 +490,7 @@ def draw_circle_selection_buttons(window, board):
     # Logic for determining which buttons to display based on the conditions
     board.button_labels = board.player.income_action_based_on_circle_count(min(board.player.general_stock_circles, 4), board.player.bank, board.player.general_stock_squares)
 
-    if len(board.button_labels) == 1 and board.player.bank == "C":  # Special case for "C"
+    if len(board.button_labels) == 1 and board.player.bank == 50:  #max bank
         button_x = income_x + horizontal_spacing
         button_y = income_y + vertical_spacing / 2
         button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
