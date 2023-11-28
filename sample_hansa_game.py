@@ -171,7 +171,7 @@ def check_if_route_claimed(pos, button):
                 # print(f"Next open office color: {next_open_office_color}")
 
                 if game.current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
-                    if not city.has_required_piece_shape(game.current_player, selected_route, city):
+                    if not city.has_required_piece_shape(game.current_player, selected_route):
                         required_shape = city.get_next_open_office_shape()
                         print(f"{COLOR_NAMES[game.current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
                     else:
@@ -277,10 +277,12 @@ def handle_permanent_bonus_marker(perm_bm_type, reset_pieces):
     waiting_for_click = True
     if perm_bm_type == 'MoveAny2':
         game.current_player.pieces_to_place = 2
+        game.waiting_for_bm_move_any_2 = True
         print(f"BM: Please pick up, upto {game.current_player.pieces_to_place} pieces to move!")
     elif perm_bm_type == 'Place2TradesmenFromRoute':
         game.current_player.pieces_to_place = 2
         print(f"BM: Please place {game.current_player.pieces_to_place} pieces of {reset_pieces} on valid posts!")
+        game.waiting_for_bm_move_any_2 = True
 
     while waiting_for_click:
         for event in pygame.event.get():
@@ -294,6 +296,7 @@ def handle_permanent_bonus_marker(perm_bm_type, reset_pieces):
                     if (not game.current_player.pieces_to_place and
                         not game.current_player.holding_pieces):
                         waiting_for_click = False
+                        game.waiting_for_bm_move_any_2 = False
                 elif perm_bm_type == '+1Priv':
                     game.current_player.upgrade_privilege()
                     waiting_for_click = False
@@ -305,6 +308,7 @@ def handle_permanent_bonus_marker(perm_bm_type, reset_pieces):
                     if not game.current_player.pieces_to_place:
                         print(f"Finished placing pieces on valid posts!")
                         waiting_for_click = False
+                        game.waiting_for_bm_move_any_2 = False
                 elif perm_bm_type == 'Place2ScotlandOrWales':
                     return
                 else:
@@ -329,7 +333,7 @@ def handle_move_any_2_pieces(pos, button):
             game.current_player.place_piece(post, button)
             if not game.current_player.holding_pieces:
                 game.current_player.finish_move()
-                game.waiting_for_bm_move_any2_choice = False
+                game.waiting_for_bm_move_any_2 = False
         else:
             print("Cannot place a piece here. The post is already occupied.")
 
@@ -409,6 +413,7 @@ def use_bonus_marker(bm):
     elif bm.type == 'Move3':
         player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker
         print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
+        game.waiting_for_bm_move3 = True
     elif bm.type == 'UpgradeAbility':
         print("Please click on an upgrade to choose it.")
     elif bm.type == '3Actions':
@@ -437,6 +442,7 @@ def use_bonus_marker(bm):
                     route, post = find_post_by_position(mouse_position)
                     if bm.handle_move_3(post, event.button, player):
                         waiting_for_click = False
+                        game.waiting_for_bm_move3 = False
                 elif bm.type == 'UpgradeAbility':
                     for upgrade in game.selected_map.upgrade_cities:
                         if check_bounds(upgrade, mouse_position):

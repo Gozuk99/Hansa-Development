@@ -172,9 +172,9 @@ class City:
                 return True
         return False
 
-    def has_required_piece_shape(self, player, route, city):
+    def has_required_piece_shape(self, player, route):
         """Returns True if the player has the required piece shape on the route to claim an office in the city."""
-        required_shape = city.get_next_open_office_shape()
+        required_shape = self.get_next_open_office_shape()
 
         return any(post.owner_piece_shape == required_shape and post.owner == player for post in route.posts)
     

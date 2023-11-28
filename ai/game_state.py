@@ -35,10 +35,14 @@ def get_game_state(game):
     end_time = time.time()
     execution_time4 = end_time - start_time
     
-    print (f"game_tensor Execution Time: {execution_time1} seconds")
-    print (f"city_tensor Execution Time: {execution_time2} seconds")
-    print (f"route_tensor Execution Time: {execution_time3} seconds")
-    print (f"player_tensor Execution Time: {execution_time4} seconds")
+    print(f"game_tensor Execution Time: {execution_time1} seconds, Size: {game_tensor.size()}")
+    print(f"city_tensor Execution Time: {execution_time2} seconds, Size: {city_tensor.size()}")
+    print(f"route_tensor Execution Time: {execution_time3} seconds, Size: {route_tensor.size()}")
+    print(f"player_tensor Execution Time: {execution_time4} seconds, Size: {player_tensor.size()}")
+
+    flattened_game_state = torch.cat([game_tensor.flatten(), city_tensor.flatten(), route_tensor.flatten(), player_tensor.flatten()], dim=0)
+
+    print(f"All Game State Size: {flattened_game_state.size()}")
 
 def fill_game_tensor(game):
     # Initial game info
@@ -427,7 +431,7 @@ def can_player_claim_office_in_city(game, player, route, city):
     next_open_office_color = city.get_next_open_office_color()
 
     if player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
-        if city.has_required_piece_shape(player, route, city):
+        if city.has_required_piece_shape(player, route):
             placed_piece_shape = city.get_next_open_office_shape()
             print(f"Can place a {placed_piece_shape.upper()} into an office of {city.name}")
     elif 'PlaceAdjacent' in (bm.type for bm in player.bonus_markers):
