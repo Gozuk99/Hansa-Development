@@ -420,15 +420,15 @@ class Route:
             if post.owner is not None:
                 # print(f"Route check: Tradesman found at post {self.posts.index(post)+1}/{self.num_posts} on the route between {self.cities[0].name} and {self.cities[1].name}.")
                 return True
-        print(f"Route check: No tradesmen found on the route between {self.cities[0].name} and {self.cities[1].name}.")
+        # print(f"Route check: No tradesmen found on the route between {self.cities[0].name} and {self.cities[1].name}.")
         return False
 
     def has_empty_office_in_cities(self):
         city1, city2 = self.cities
         if city1.has_empty_office() or city2.has_empty_office():
-            print(f"Route check: At least one empty office found in cities {city1.name} or {city2.name}.")
+            # print(f"Route check: At least one empty office found in cities {city1.name} or {city2.name}.")
             return True
-        print(f"Route check: No empty offices found in cities {city1.name} and {city2.name}.")
+        # print(f"Route check: No empty offices found in cities {city1.name} and {city2.name}.")
         return False
     
     def is_controlled_by(self, player):
@@ -481,23 +481,6 @@ class BonusMarker:
         else:
             print ("Invalid City to Swap offices, please try another city.")
             return False
-
-    def handle_move_3(self, post, button, player):
-        if post is None:
-            return
-
-        if button == 1 and post.is_owned() and post.owner != player:
-            if player.pieces_to_place > 0:
-                player.pick_up_piece(post)
-
-        elif player.holding_pieces:
-            if not post.is_owned():
-                player.place_piece(post, button)
-                if not player.holding_pieces:
-                    player.finish_move()
-                    return True
-            else:
-                print("Cannot place a piece here. The post is already occupied.")
         
     def handle_upgrade_ability(self, upgrade, player):
         if player.perform_upgrade(upgrade.upgrade_type):

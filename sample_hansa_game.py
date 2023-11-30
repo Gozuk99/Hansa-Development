@@ -1,9 +1,13 @@
 import pygame
 import sys
+import torch
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
+from ai.ai_model import HansaNN
 from ai.game_state import get_available_actions, get_game_state
-from game_info.game_attributes import Game
+from ai.action_options import perform_action_from_index, masking_out_invalid_actions
+from game.game_info import Game
+from game.game_actions import claim_post_action, displace_action, gather_empty_posts, move_action, displace_claim
 from drawing.drawing_utils import redraw_window, draw_end_game
 
 game = Game(map_num=3, num_players=5)
@@ -49,16 +53,16 @@ def check_if_post_clicked(pos, button):
     if post:
         if button == 1:  # left click
             if post.can_be_claimed_by("square"):
-                claim_post(route, post, game.current_player, "square")
+                claim_post_action(game, route, post, "square")
             elif post.is_owned() and post.owner != game.current_player:
-                handle_displacement(post, route, "square")
+                displace_action(game, post, route, "square")
             elif post.is_owned() and post.owner == game.current_player:
                 handle_move(pos, button)
         elif button == 3:  # right click
             if post.can_be_claimed_by("circle"):
-                claim_post(route, post, game.current_player, "circle")
+                claim_post_action(game, route, post, "circle")
             elif post.is_owned() and post.owner != game.current_player:
-                handle_displacement(post, route, "circle")
+                displace_action(game, post, route, "circle")
         elif button == 2:  # middle click
             post.DEBUG_print_post_details()
             return
@@ -101,28 +105,9 @@ def assign_new_bonus_marker_on_route(pos, button):
 def handle_move(pos, button):
     # Find the clicked post based on position
     route, post = find_post_by_position(pos)
+    shape_clicked = 'circle' if button == 3 else 'square'
 
-    # If no post was found, simply return without doing anything
-    if post is None:
-        return
-
-    # If the player is picking up pieces
-    if button == 1 and post.owner == game.current_player:
-        # If we have not started a move yet, start one
-        if game.current_player.pieces_to_place is None:
-            game.current_player.start_move()
-        # Attempt to pick up a piece if within the pieces to move limit (book)
-        game.current_player.pick_up_piece(post)
-
-    # If the player has pieces in hand to place
-    elif game.current_player.holding_pieces:
-        if not post.is_owned():
-            game.current_player.place_piece(post, button)
-
-        # If no pieces are left to place, finish the move
-        if not game.current_player.holding_pieces:
-            game.current_player.finish_move()
-            game.current_player.actions_remaining -= 1  # Deduct an action for the move
+    move_action(game, post, shape_clicked)
 
 def find_clicked_city(cities, pos):
     for city in cities:
@@ -292,7 +277,7 @@ def handle_permanent_bonus_marker(perm_bm_type, reset_pieces):
             elif event.type == pygame.MOUSEBUTTONUP:
                 mouse_position = pygame.mouse.get_pos()
                 if perm_bm_type == 'MoveAny2':
-                    handle_move_any_2_pieces(mouse_position, event.button)
+                    handle_move(mouse_position, event.button)
                     if (not game.current_player.pieces_to_place and
                         not game.current_player.holding_pieces):
                         waiting_for_click = False
@@ -317,25 +302,6 @@ def handle_permanent_bonus_marker(perm_bm_type, reset_pieces):
         pygame.display.flip()  # Update the screen
         pygame.time.wait(100)
     return None
-
-def handle_move_any_2_pieces(pos, button):
-    route, post = find_post_by_position(pos)
-
-    if post is None:
-        return
-
-    if button == 1 and post.is_owned():
-        if game.current_player.pieces_to_place > 0:
-            game.current_player.pick_up_piece(post)
-
-    elif game.current_player.holding_pieces:
-        if not post.is_owned():
-            game.current_player.place_piece(post, button)
-            if not game.current_player.holding_pieces:
-                game.current_player.finish_move()
-                game.waiting_for_bm_move_any_2 = False
-        else:
-            print("Cannot place a piece here. The post is already occupied.")
 
 def claim_green_city_with_bm(pos):
     for city in game.selected_map.cities:
@@ -439,8 +405,9 @@ def use_bonus_marker(bm):
                             if bm.handle_swap_office(city, player):
                                 waiting_for_click = False
                 elif bm.type == 'Move3':
-                    route, post = find_post_by_position(mouse_position)
-                    if bm.handle_move_3(post, event.button, player):
+                    handle_move(mouse_position, event.button)
+                    if (not game.current_player.pieces_to_place and
+                        not game.current_player.holding_pieces):
                         waiting_for_click = False
                         game.waiting_for_bm_move3 = False
                 elif bm.type == 'UpgradeAbility':
@@ -489,209 +456,9 @@ def displaced_click(pos, button):
         return
 
     # Determine which shape the player wants to place based on the button they clicked
-    if button == 1:
-        desired_shape = "square"
-    elif button == 3:
-        desired_shape = "circle"
-    else:
-        return
-
-    # Check if the player is forced to use the displaced shape
-    must_use_displaced_piece = False
-    if not game.displaced_player.played_displaced_shape:
-        if game.displaced_player.displaced_shape == "circle" and game.displaced_player.total_pieces_to_place == 1:
-            must_use_displaced_piece = True
-        elif game.displaced_player.displaced_shape == "square" and game.displaced_player.total_pieces_to_place == 1:
-            must_use_displaced_piece = True
-
-    if must_use_displaced_piece and desired_shape != game.displaced_player.displaced_shape:
-        print("Invalid action. Must use the displaced piece.")
-        return
-
-    wants_to_use_displaced_piece = (not game.displaced_player.played_displaced_shape) and (desired_shape == game.displaced_player.displaced_shape)
+    desired_shape = 'circle' if button == 3 else 'square'
     
-    if wants_to_use_displaced_piece:
-        print(f"Attempting to place a {desired_shape} while Displaced Shape has NOT been played yet")
-        displace_to(post, game.displaced_player, desired_shape, use_displaced_piece=True)
-    else:
-        displace_to(post, game.displaced_player, desired_shape)
-
-def displace_to(post, displaced_player, shape, use_displaced_piece=False):
-    if use_displaced_piece:
-        print(f"Attempting to use displaced piece {shape} - no affect to the GS or PS")
-        claim_and_update(post, displaced_player, shape, use_displaced_piece=True)
-    else:
-        if displaced_player.has_general_stock(shape):
-            print(f"Attempting to place a {shape} from general_stock, because use_displaced is false")
-            claim_and_update(post, displaced_player, shape)
-        elif displaced_player.is_general_stock_empty() and displaced_player.has_personal_supply(shape):
-            print(f"Attempting to place a {shape} from personal_supply, because use_displaced is false")
-            claim_and_update(post, displaced_player, shape, from_personal_supply=True)
-        else:
-            print(f"Cannot place a {shape} because the general stock and personal supply are empty.")
-
-def claim_and_update(post, displaced_player, shape, use_displaced_piece=False, from_personal_supply=False):
-    post.claim(displaced_player.player, shape)
-    game.all_empty_posts.remove(post)
-    
-    if use_displaced_piece:
-        displaced_player.played_displaced_shape = True
-    elif not from_personal_supply:
-        if shape == "square":
-            displaced_player.player.general_stock_squares -= 1
-        else:
-            displaced_player.player.general_stock_circles -= 1
-    else:
-        if shape == "square":
-            displaced_player.player.personal_supply_squares -= 1
-        else:
-            displaced_player.player.personal_supply_circles -= 1
-    
-    displaced_player.total_pieces_to_place -= 1
-
-def check_brown_blue_priv(route):
-    if route.region is not None:
-        # Check for Wales region
-        if route.region == "Wales":
-            if not (game.cardiff_priv == game.current_player or game.london_priv == game.current_player):
-                print("Cannot claim post in BROWN - Incorrect Privilege")
-                return False
-            if game.current_player.brown_priv_count == 0:
-                print("Used all privilege already in Brown!")
-                return False
-            else:
-                game.current_player.brown_priv_count -= 1
-
-        # Check for Scotland region
-        elif route.region == "Scotland":
-            if not (game.carlisle_priv == game.current_player or game.london_priv == game.current_player):
-                print("Cannot claim post in BLUE - Incorrect Privilege")
-                return False
-            if game.current_player.blue_priv_count == 0:
-                print("Used all privilege already in Blue!")
-                return False
-            else:
-                game.current_player.blue_priv_count -= 1
-    return True
-
-def handle_displacement(post, route, displacing_piece_shape):
-
-    # Determine the shape of the piece that will be displaced
-    displaced_piece_shape = post.owner_piece_shape
-    current_displaced_player = post.owner
-
-    # Calculate the cost to displace
-    cost = 2 if displaced_piece_shape == "square" else 3
-
-    # Check if the current player has enough tradesmen
-    if game.current_player.personal_supply_squares + game.current_player.personal_supply_circles < cost:
-        return  # Not enough tradesmen, action cannot be performed
-
-    # Before displacing with a square, check if the current player has a square in their personal supply
-    if displacing_piece_shape == "square" and game.current_player.personal_supply_squares == 0:
-        return  # Invalid move as there's no square in the personal supply
-
-    # Before displacing with a circle, check if the current player has a circle in their personal supply
-    if displacing_piece_shape == "circle" and game.current_player.personal_supply_circles == 0:
-        return  # Invalid move as there's no circle in the personal supply
-    
-    if not check_brown_blue_priv(route):
-        return
-
-    # Handle the cost of displacement with priority to squares
-    squares_to_pay = min(game.current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
-    circles_to_pay = cost - 1 - squares_to_pay
-
-    game.current_player.personal_supply_squares -= squares_to_pay
-    game.current_player.personal_supply_circles -= circles_to_pay
-
-    game.current_player.general_stock_squares += squares_to_pay
-    game.current_player.general_stock_circles += circles_to_pay
-
-    # Handle the piece being placed
-    if displacing_piece_shape == "square":
-        game.current_player.personal_supply_squares -= 1
-        post.circle_color = TAN
-        post.square_color = game.current_player.color
-    elif displacing_piece_shape == "circle":
-        game.current_player.personal_supply_circles -= 1
-        post.circle_color = game.current_player.color
-        post.square_color = TAN
-    else:
-        sys.exit()
-
-    post.owner_piece_shape = displacing_piece_shape
-    post.owner = game.current_player
-
-    # Find empty posts on adjacent routes
-    game.all_empty_posts = gather_empty_posts(route)
-    for post in game.all_empty_posts:
-        post.valid_post_to_displace_to()
-    # Check conditions based on displaced_piece_shape and number of game.all_empty_posts
-    if ((displaced_piece_shape == "square" and len(game.all_empty_posts) == 1) or
-        (displaced_piece_shape == "circle" and 1 <= len(game.all_empty_posts) <= 2)):
-        game.original_route_of_displacement = route
-
-    game.waiting_for_displaced_player = True
-    game.displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
-    print(f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}.")
-
-def gather_empty_posts(start_route):
-    if not start_route:
-        print("Error: start_route is None in gather_empty_posts")
-        return []
-
-    visited_routes = [start_route]  # Mark the start route as visited immediately
-    queue = get_adjacent_routes(start_route, start_route.region)  # Start with the routes adjacent to the given route, considering the region
-    
-    while queue:
-        level_size = len(queue)
-        empty_posts = []
-        next_level_routes = []  # Routes for the next level
-
-        for i in range(level_size):
-            current_route = queue.pop(0)
-            if current_route in visited_routes:
-                continue
-            visited_routes.append(current_route)
-
-            adjacent_routes = get_adjacent_routes(current_route, start_route.region)
-            for route in adjacent_routes:
-                if route not in visited_routes and route not in next_level_routes:
-                    next_level_routes.append(route)
-
-            for post in current_route.posts:
-                if not post.is_owned():
-                    empty_posts.append(post)
-
-        if empty_posts:
-            return empty_posts
-
-        queue.extend(next_level_routes)
-
-    return []
-
-def get_adjacent_routes(current_route, start_route_region):
-    if not current_route:
-        print("Error: current_route is None in get_adjacent_routes")
-        return []
-
-    adjacent_routes = []
-    for city in current_route.cities:
-        for adjacent_route in city.routes:
-            if adjacent_route != current_route and adjacent_route not in adjacent_routes:
-                if valid_region_transition(start_route_region, adjacent_route.region):
-                    adjacent_routes.append(adjacent_route)
-    return adjacent_routes
-
-def valid_region_transition(start_region, target_region):
-    if start_region is None:
-        # Routes with no specific region can consider only routes with no specific region
-        return target_region is None
-    elif start_region in ["Scotland", "Wales"]:
-        # Brown and blue can consider their own and None regions
-        return target_region in [start_region, None]
-    return False
+    displace_claim(game, post, desired_shape)
 
 def is_route_filled(route):
     """Checks if all posts on a route are filled."""
@@ -706,25 +473,6 @@ def find_post_by_position(pos):
             if abs(post.pos[0] - pos[0]) < CIRCLE_RADIUS and abs(post.pos[1] - pos[1]) < CIRCLE_RADIUS:
                 return route, post
     return None, None
-
-def claim_post(route, post, player, piece_to_play):
-    if not check_brown_blue_priv(route):
-        return
-
-    city_names = ' and '.join([city.name for city in route.cities])
-    region_info = f" in {route.region}" if route.region else ""
-
-    if piece_to_play == "square" and player.personal_supply_squares > 0:
-        post.claim(player, "square")
-        print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'square' between {city_names}{region_info}")
-        player.actions_remaining -= 1
-        player.personal_supply_squares -= 1
-
-    elif piece_to_play == "circle" and player.personal_supply_circles > 0:
-        post.claim(player, "circle")
-        print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'circle' between {city_names}{region_info}")
-        player.actions_remaining -= 1
-        player.personal_supply_circles -= 1
         
 def reset_valid_posts_to_displace_to():
     for post in game.all_empty_posts:
@@ -742,8 +490,42 @@ def handle_end_turn_click(pos):
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
-get_game_state(game)
-exit()
+# Constants for input and output sizes
+INPUT_SIZE = 2309
+OUTPUT_SIZE = 581
+
+game_state_tensor = get_game_state(game)
+game_state_size = game_state_tensor.numel()
+game_state_tensor = game_state_tensor.float()   # Convert to float if not already
+print(f"Game State Size: {game_state_size}")
+
+# Create the neural network instance
+hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE)
+
+# Forward pass through the neural network to get the action probabilities
+action_probabilities = hansa_nn(game_state_tensor.unsqueeze(0))  # Adding an extra dimension for batch
+print(f"Action probabilities size: {action_probabilities.size()}")
+
+# Print the action probabilities before masking
+print("Action probabilities before masking:")
+print(action_probabilities)
+
+# Apply masking to filter out invalid actions
+valid_actions = masking_out_invalid_actions(game)
+print(f"Valid Actions size: {valid_actions.size()}")
+masked_action_probabilities = action_probabilities * valid_actions
+
+# Print the action probabilities after masking
+print("Action probabilities after masking:")
+print(masked_action_probabilities)
+
+# Find the index of the maximum value in the masked probabilities
+max_prob_index = torch.argmax(masked_action_probabilities).item()
+print(f"Action with highest probability index: {max_prob_index}")
+
+perform_action_from_index(game, max_prob_index)
+
+# exit()
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:

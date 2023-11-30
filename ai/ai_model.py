@@ -2,36 +2,41 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class HansaNet(nn.Module):
-    def __init__(self, num_channels, board_height, board_width, num_actions):
-        super(HansaNet, self).__init__()
-        self.conv1 = nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.fc1 = nn.Linear(64 * board_height * board_width, 128)
-        self.fc2 = nn.Linear(128, num_actions)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = x.view(x.size(0), -1)  # Flatten the tensor
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.softmax(x, dim=1)
-
-# class HansaNN(nn.Module):
-#     def __init__(self, input_size, output_size):
-#         super(HansaNN, self).__init__()
-#         self.layer1 = nn.Linear(input_size, 128)
-#         self.layer2 = nn.Linear(128, 64)
-#         self.layer3 = nn.Linear(64, output_size)
-#         self.relu = nn.ReLU()
+# class HansaNet(nn.Module):
+#     def __init__(self, num_channels, board_height, board_width, num_actions):
+#         super(HansaNet, self).__init__()
+#         self.conv1 = nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1)
+#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+#         self.fc1 = nn.Linear(64 * board_height * board_width, 128)
+#         self.fc2 = nn.Linear(128, num_actions)
 
 #     def forward(self, x):
-#         x = self.relu(self.layer1(x))
-#         x = self.relu(self.layer2(x))
-#         x = self.layer3(x)  # No activation here as this is your output layer
-#         return x
+#         x = F.relu(self.conv1(x))
+#         x = F.relu(self.conv2(x))
+#         x = x.view(x.size(0), -1)  # Flatten the tensor
+#         x = F.relu(self.fc1(x))
+#         x = self.fc2(x)
+#         return F.softmax(x, dim=1)
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#current input size is 2309
+#current output size is 681
+class HansaNN(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(HansaNN, self).__init__()
+        self.layer1 = nn.Linear(input_size, 2048).to(device)
+        self.layer2 = nn.Linear(2048, 1024).to(device)
+        self.layer3 = nn.Linear(1024, output_size).to(device)
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        x = self.relu(self.layer1(x))
+        x = self.relu(self.layer2(x))
+        x = self.layer3(x)
+        x = self.softmax(x)  # Apply softmax to the output layer
+        return x
 
 # # # Assuming you've defined the dimensions and number of actions
 # # num_channels = ...  # Number of channels in input (e.g., different aspects of game state)

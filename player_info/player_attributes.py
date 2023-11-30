@@ -12,7 +12,7 @@ class Player:
         self.bonus_markers = []
         self.used_bonus_markers = []
         self.holding_pieces = []
-        self.pieces_to_place = None
+        self.pieces_to_place = 0
 
         # The available abilities with their starting values
         self.keys = 1
@@ -114,7 +114,7 @@ class Player:
         # End the move process if no pieces are being held
         if not self.holding_pieces:
             print("Move completed.")
-            self.pieces_to_place = None  # Clear the move commitment
+            self.pieces_to_place = 0  # Clear the move commitment
         else:
             print("You still have pieces to place. Finish your move.")
 
@@ -239,6 +239,12 @@ class Player:
             return self.general_stock_circles > 0
         elif shape == "square":
             return self.general_stock_squares > 0
+        return False
+    def has_personal_supply(self, shape):
+        if shape == "circle":
+            return self.personal_supply_circles > 0
+        elif shape == "square":
+            return self.personal_supply_squares > 0
         return False
 
 class DisplacedPlayer:

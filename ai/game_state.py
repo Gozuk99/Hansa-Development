@@ -43,6 +43,7 @@ def get_game_state(game):
     flattened_game_state = torch.cat([game_tensor.flatten(), city_tensor.flatten(), route_tensor.flatten(), player_tensor.flatten()], dim=0)
 
     print(f"All Game State Size: {flattened_game_state.size()}")
+    return flattened_game_state
 
 def fill_game_tensor(game):
     # Initial game info
@@ -344,7 +345,7 @@ def fill_player_info_tensor(game):
 
         # Combine all info into a single tensor
         player_info[i] = torch.tensor(player_data + list(player_unused_bm[i]) + list(player_used_bm[i]), dtype=torch.uint8, device=device)
-        print (f"player_info[{i}] {player_info[i]}")
+        # print (f"player_info[{i}] {player_info[i]}")
     
     return player_info
 

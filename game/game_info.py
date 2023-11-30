@@ -87,6 +87,31 @@ class Game:
             post.reset_post()
         self.all_empty_posts.clear()
 
+    def check_brown_blue_priv(self, route):
+        if route.region is not None:
+            # Check for Wales region
+            if route.region == "Wales":
+                if not (self.cardiff_priv == self.current_player or self.london_priv == self.current_player):
+                    print("Cannot claim post in BROWN - Incorrect Privilege")
+                    return False
+                if self.current_player.brown_priv_count == 0:
+                    print("Used all privilege already in Brown!")
+                    return False
+                else:
+                    self.current_player.brown_priv_count -= 1
+
+            # Check for Scotland region
+            elif route.region == "Scotland":
+                if not (self.carlisle_priv == self.current_player or self.london_priv == self.current_player):
+                    print("Cannot claim post in BLUE - Incorrect Privilege")
+                    return False
+                if self.current_player.blue_priv_count == 0:
+                    print("Used all privilege already in Blue!")
+                    return False
+                else:
+                    self.current_player.blue_priv_count -= 1
+        return True
+
     def check_for_east_west_connection(self):
         if self.current_player in self.players_who_completed_east_west:
             print(f"{COLOR_NAMES[self.current_player.color]} has already completed the East-West Connection.")
