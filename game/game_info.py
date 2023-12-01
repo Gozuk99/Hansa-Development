@@ -20,7 +20,7 @@ class Game:
         self.displaced_player = DisplacedPlayer()
         self.waiting_for_displaced_player = False
         self.waiting_for_bm_move_any_2 = False
-        self.waiting_for_bm_move = False
+        self.waiting_for_bm_move3 = False
         self.original_route_of_displacement = None
         self.all_empty_posts = []
 

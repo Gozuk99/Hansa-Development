@@ -69,24 +69,21 @@ class Player:
             message = "No more pieces can be picked up this turn." if self.pieces_to_place <= 0 else "This post is empty."
             print(message)
 
-    def place_piece(self, post, button):
+    def place_piece(self, post, shape):
         if not self.holding_pieces:
             print("No pieces to place.")
             return
 
         shape_to_place, owner_to_place, origin_region = self.holding_pieces[0]
 
-        # Determine the shape based on the button clicked
-        shape_clicked = 'circle' if button == 3 else 'square'
-
         # Check if the post has a specific required shape
-        if post.required_shape and post.required_shape != shape_clicked:
-            print(f"Cannot place a {shape_clicked} on this post. This post requires a {post.required_shape}.")
+        if post.required_shape and post.required_shape != shape:
+            print(f"Cannot place a {shape} on this post. This post requires a {post.required_shape}.")
             return
 
         # Check if the placement is valid based on the regions
         if self.is_valid_region_transition(origin_region, post.region):
-            if shape_to_place == shape_clicked:
+            if shape_to_place == shape:
                 print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
                 post.claim(owner_to_place, shape_to_place)
                 self.holding_pieces.pop(0)
@@ -210,6 +207,7 @@ class Player:
             
             self.general_stock_squares -= num_squares
             self.personal_supply_squares += num_squares
+            self.actions_remaining -= 1
         elif self.general_stock_circles + self.general_stock_squares > self.bank:
             raise Exception("The sum of general stock circles and squares exceeds the bank value.")
     
@@ -240,6 +238,7 @@ class Player:
         elif shape == "square":
             return self.general_stock_squares > 0
         return False
+    
     def has_personal_supply(self, shape):
         if shape == "circle":
             return self.personal_supply_circles > 0

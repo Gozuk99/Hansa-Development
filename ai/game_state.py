@@ -35,14 +35,14 @@ def get_game_state(game):
     end_time = time.time()
     execution_time4 = end_time - start_time
     
-    print(f"game_tensor Execution Time: {execution_time1} seconds, Size: {game_tensor.size()}")
-    print(f"city_tensor Execution Time: {execution_time2} seconds, Size: {city_tensor.size()}")
-    print(f"route_tensor Execution Time: {execution_time3} seconds, Size: {route_tensor.size()}")
-    print(f"player_tensor Execution Time: {execution_time4} seconds, Size: {player_tensor.size()}")
+    # print(f"game_tensor Execution Time: {execution_time1} seconds, Size: {game_tensor.size()}")
+    # print(f"city_tensor Execution Time: {execution_time2} seconds, Size: {city_tensor.size()}")
+    # print(f"route_tensor Execution Time: {execution_time3} seconds, Size: {route_tensor.size()}")
+    # print(f"player_tensor Execution Time: {execution_time4} seconds, Size: {player_tensor.size()}")
 
     flattened_game_state = torch.cat([game_tensor.flatten(), city_tensor.flatten(), route_tensor.flatten(), player_tensor.flatten()], dim=0)
 
-    print(f"All Game State Size: {flattened_game_state.size()}")
+    # print(f"All Game State Size: {flattened_game_state.size()}")
     return flattened_game_state
 
 def fill_game_tensor(game):
@@ -61,7 +61,7 @@ def fill_game_tensor(game):
 
     # Concatenate all game info into one tensor
     game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
-    print(f"game_info {game_info}")
+    # print(f"game_info {game_info}")
     return game_info
 
 def assign_blue_brown_priv_mapping(game):
