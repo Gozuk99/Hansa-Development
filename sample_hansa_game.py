@@ -1,10 +1,11 @@
 import pygame
 import sys
+import random
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
+from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN, INPUT_SIZE, OUTPUT_SIZE
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from ai.ai_model import HansaNN
 from ai.game_state import get_available_actions, get_game_state
@@ -362,11 +363,6 @@ def find_post_by_position(pos):
             if abs(post.pos[0] - pos[0]) < CIRCLE_RADIUS and abs(post.pos[1] - pos[1]) < CIRCLE_RADIUS:
                 return route, post
     return None, None
-        
-def reset_valid_posts_to_displace_to():
-    for post in game.all_empty_posts:
-        post.reset_post()
-    game.all_empty_posts.clear()
 
 def handle_end_turn_click(pos):
     if (game.selected_map.map_width+300 < pos[0] < game.selected_map.map_width+300 + 200 and
@@ -379,9 +375,6 @@ def handle_end_turn_click(pos):
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
-# Constants for input and output sizes
-INPUT_SIZE = 2309
-OUTPUT_SIZE = 671
 
 # Create the neural network instance
 hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE)
@@ -390,28 +383,42 @@ hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE)
 optimizer = optim.Adam(hansa_nn.parameters(), lr=0.001)
 
 # Loop 5 times
-for _ in range(10):
+for i in range(100):
     # Get the current game state tensor
     game_state_tensor = get_game_state(game)
     game_state_tensor = game_state_tensor.float()   # Convert to float if not already
 
     # Forward pass through the neural network to get the action probabilities
-    action_probabilities = hansa_nn(game_state_tensor.unsqueeze(0))  # Adding an extra dimension for batch
+    action_probabilities = game.players[game.active_player].hansa_nn(game_state_tensor.unsqueeze(0))  # Adding an extra dimension for batch
 
     # Apply masking to filter out invalid actions
     valid_actions = masking_out_invalid_actions(game)
     masked_action_probabilities = action_probabilities * valid_actions
 
     # Print the action probabilities after masking
-    print("Action probabilities after masking:")
-    print(masked_action_probabilities)
+    # print("Action probabilities after masking:")
+    # print(masked_action_probabilities)
 
     # Find the index of the maximum value in the masked probabilities
-    max_prob_index = torch.argmax(masked_action_probabilities).item()
+    # max_prob_index = torch.argmax(masked_action_probabilities).item()
 
-    # Perform the action corresponding to the maximum probability index
-    print(f"Iteration {_ + 1}, Action with highest probability index: {max_prob_index}")
-    perform_action_from_index(game, max_prob_index)
+    # # Perform the action corresponding to the maximum probability index
+    # print(f"Iteration {_ + 1}, Action with highest probability index: {max_prob_index}")
+    # perform_action_from_index(game, max_prob_index)
+
+    # Get the top 3 indices with highest probabilities
+    topk_values, topk_indices = torch.topk(masked_action_probabilities, 3)
+
+    topk_values = topk_values.flatten()
+    top3_choices = topk_indices.flatten()
+    # Generate a random number between 0 and 2 (inclusive)
+    random_index = random.randint(0, 2)
+
+    # Use the random index to select one of the top 3 action indices
+    selected_index = top3_choices[random_index]
+    print(f"Iteration {i + 1}, top3 probability index: {selected_index}") #Action with highest probability index: {max_prob_index}")
+    # Perform the action corresponding to the selected index
+    perform_action_from_index(game, selected_index)
 
     # Calculate reward (or penalty) for the action
     # reward = ... (This should be determined based on your game's mechanics)
@@ -441,24 +448,6 @@ while True:
             # while game_not_over:
             elif game.waiting_for_displaced_player:
                 displaced_click(mouse_position, event.button)
-                if not game.all_empty_posts:
-                    print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
-                    game.all_empty_posts = gather_empty_posts(game.original_route_of_displacement)
-                    if not game.all_empty_posts:
-                        print("No empty posts found in adjacent routes either!")  # Debugging log
-                    
-                    post_count = 0  # Counter for the number of posts processed
-                    for post in game.all_empty_posts:
-                        post.valid_post_to_displace_to()
-                        post_count += 1
-                    print(f"Processed {post_count} posts.")  # Debugging log
-                if game.displaced_player.all_pieces_placed():
-                    reset_valid_posts_to_displace_to()
-                    game.original_route_of_displacement = None
-                    game.displaced_player.reset_displaced_player()
-                    game.waiting_for_displaced_player = False
-                    game.current_player.actions_remaining -= 1
-                    # game.switch_player_if_needed()
 
             elif game.current_player.holding_pieces :
                 handle_move(mouse_position, event.button)

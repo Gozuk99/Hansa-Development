@@ -15,6 +15,7 @@ class Game:
         self.players = self.create_players(num_players)
         self.current_player_index = 0
         self.current_player = self.players[self.current_player_index]
+        self.active_player = self.current_player_index
         self.replace_bonus_marker = 0
 
         self.displaced_player = DisplacedPlayer()
@@ -74,6 +75,7 @@ class Game:
             self.current_player_index = (self.current_player_index + 1) % len(self.players)
             self.current_player = self.players[self.current_player_index]
             self.current_player.actions_remaining = self.current_player.actions
+            self.active_player = self.current_player_index
 
             if self.cardiff_priv or self.carlisle_priv or self.london_priv:
                 self.current_player.refresh_map3_priv_actions(self)

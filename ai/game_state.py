@@ -47,7 +47,7 @@ def get_game_state(game):
 
 def fill_game_tensor(game):
     # Initial game info
-    initial_game_info = torch.tensor([game.map_num, game.num_players, 
+    initial_game_info = torch.tensor([game.map_num, game.num_players, game.active_player,
                                       game.current_player_index + 1, game.current_player.actions_remaining,
                                       game.selected_map.max_full_cities, game.current_full_cities_count,
                                       game.east_west_completed_count], device=device, dtype=torch.uint8)

@@ -1,11 +1,15 @@
 # player_attributes.py
 
 import sys
-from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
+from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, INPUT_SIZE, OUTPUT_SIZE
+from ai.ai_model import HansaNN
 
 class Player:
     def __init__(self, color, order):
         self.color = color
+        self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE)
+        self.order = order
+
         self.score = 0  # Initial score
         self.final_score = 0
         # The silver plate to store bonus markers for the end of the turn

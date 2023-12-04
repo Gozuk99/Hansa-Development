@@ -28,6 +28,7 @@ def displace_action(game, post, route, displacing_piece_shape):
     # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
     current_displaced_player = post.owner
+    game.active_player = current_displaced_player.order
 
     # Calculate the cost to displace
     cost = 2 if displaced_piece_shape == "square" else 3
@@ -199,6 +200,29 @@ def displace_claim(game, post, desired_shape):
         displace_to(game, post, desired_shape, use_displaced_piece=True)
     else:
         displace_to(game, post, desired_shape)
+    
+    if not game.all_empty_posts:
+        print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
+        game.all_empty_posts = gather_empty_posts(game.original_route_of_displacement)
+        if not game.all_empty_posts:
+            print("ERROR::No empty posts found in adjacent routes either!")  # Debugging log
+            sys.exit()
+        
+        post_count = 0  # Counter for the number of posts processed
+        for post in game.all_empty_posts:
+            post.valid_post_to_displace_to()
+            post_count += 1
+        print(f"Processed {post_count} posts.")  # Debugging log
+    if game.displaced_player.all_pieces_placed():
+        for post in game.all_empty_posts:
+            post.reset_post()
+        game.all_empty_posts.clear()
+        game.original_route_of_displacement = None
+        game.displaced_player.reset_displaced_player()
+        game.waiting_for_displaced_player = False
+        game.current_player.actions_remaining -= 1
+        game.active_player = game.current_player.order
+        # game.switch_player_if_needed()
 
 def displace_to(game, post, shape, use_displaced_piece=False):
     displaced_player = game.displaced_player

@@ -20,20 +20,21 @@ TOTAL_ACTIONS = (NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_A
 
 def perform_action_from_index(game, max_prob_index):
     if max_prob_index < NUM_CLAIM_POST_ACTIONS:
-        return map_claim_post_action(game, max_prob_index)
+        map_claim_post_action(game, max_prob_index)
     elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS:
-        return map_claim_route_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS)
+        map_claim_route_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS)
     elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS:
-        return map_income_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS)
+        map_income_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS)
     elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS:
-        return map_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS)
+        map_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS)
     elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_PERM_BM_ACTIONS:
-        return map_perm_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS)
+        map_perm_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS)
     elif max_prob_index < TOTAL_ACTIONS - NUM_END_TURN_ACTIONS:
-        return map_replace_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_PERM_BM_ACTIONS)
+        map_replace_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_PERM_BM_ACTIONS)
     elif max_prob_index == TOTAL_ACTIONS - 1:
-        return map_end_turn_action(game)
+        map_end_turn_action(game)
 
+    game.switch_player_if_needed()
     # Handle default or error case
     return None
 
@@ -58,7 +59,7 @@ def map_claim_post_action(game, index):
             break
 
     if not selected_post:
-        print("Error: Post not found for index", index)
+        print(f"ERROR: This should have been masked out index:{index}, ai_post_index: {ai_post_selection}")
         return
 
     is_post_owned = selected_post.is_owned()
@@ -78,19 +79,28 @@ def map_claim_post_action(game, index):
     elif is_post_owned and ((game.waiting_for_bm_move_any_2) or (game.waiting_for_bm_move3 and selected_post.owner != current_player)):
         print(f"Performing BM Move action for {post_type} on post {post_idx}")
         move_action(game, selected_post, post_type)
+
     else:
         # Claim post with MOVE action: check if the post is empty
         # Check if the desired post type is available in holding pieces
         post_type_available = any(piece[0] == post_type for piece in current_player.holding_pieces)
 
         # Now use this condition in your if statement
-        if game.current_player.holding_pieces and is_post_empty and post_type_available:
-            # print(f"MOVE - Attempting to claim empty post {post_idx} with type {post_type}")
-            if selected_post.required_shape is None or selected_post.required_shape == post_type:
-                move_action(game, post, post_type)
-            else:
-                print(f"MOVE CLAIM ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
-                print(f"MOVE CLAIM ERROR: holding_pieces {current_player.holding_pieces[0]}")            
+        if current_player.holding_pieces:
+            if is_post_empty and post_type_available:
+                # print(f"MOVE - Attempting to claim empty post {post_idx} with type {post_type}")
+                if selected_post.required_shape is None or selected_post.required_shape == post_type:
+                    move_action(game, post, post_type)
+                else:
+                    print(f"MOVE CLAIM ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
+                    print(f"MOVE CLAIM ERROR: holding_pieces {current_player.holding_pieces[0]}")            
+            # MOVE - if post is owned by current_player:
+            elif is_post_owned and selected_post.owner == current_player:
+                # print(f"MOVE - Attempting MOVE action on owned post {post_idx} with type {post_type}")
+                if len(current_player.holding_pieces) < current_player.book:
+                    move_action(game, selected_post, post_type)
+                else:
+                    print(f"MOVE PICKUP ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
 
         # MOVE - if post is owned by current_player:
         elif is_post_owned and selected_post.owner == current_player:
@@ -101,12 +111,16 @@ def map_claim_post_action(game, index):
                 print(f"MOVE PICKUP ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
 
         # Claim post if it's empty
-        elif is_post_empty:
+        elif is_post_empty and check_brown_blue_priv(game, route):
             # print(f"CLAIM - Attempting to claim empty post {post_idx} with type {post_type}")
             if current_player.has_personal_supply(post_type) and (selected_post.required_shape is None or selected_post.required_shape == post_type):
                 claim_post_action(game, route, selected_post, post_type)
             else:
-                print(f"CLAIM ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
+                print(f"CLAIM ERROR: Trying to claim with {post_type}, shape: {selected_post.required_shape}")
+                print(f"CLAIM ERROR: current_player.personal_supply_squares {current_player.personal_supply_squares}")
+                print(f"CLAIM ERROR: current_player.personal_supply_circles {current_player.personal_supply_circles}")
+                print(f"CLAIM ERROR: selected_post.required_shape {selected_post.required_shape}")
+                print(f"CLAIM ERROR: post_type {post_type}")
         # DISPLACE - if post is owned by a different player:
         elif is_post_owned and selected_post.owner != current_player and check_brown_blue_priv(game, route) and can_displace:
             print(f"Attempting DISPLACE action on post {post_idx} owned by another player")
@@ -188,10 +202,12 @@ def map_bm_action(index):
     # Logic to map index to a specific Claim Post action
     # Example: return claim_post_actions[index]
     pass
+
 def map_perm_bm_action(index):
     # Logic to map index to a specific Claim Post action
     # Example: return claim_post_actions[index]
     pass
+
 def map_replace_bm_action(game, index):
     max_num_routes = 40  # Maximum number of routes
     current_player = game.current_player
@@ -248,10 +264,7 @@ def mask_post_action(game):
     if current_player.actions_remaining == 0:
         return post_tensor
     
-    can_displace = False
-
-    if current_player.personal_supply_squares + current_player.personal_supply_circles > 1:
-        can_displace = True
+    can_displace = current_player.personal_supply_squares + current_player.personal_supply_circles > 1
 
     post_idx = 0
     for route in game.selected_map.routes:
@@ -265,34 +278,45 @@ def mask_post_action(game):
                 displaced_player = game.displaced_player
                 if post in game.all_empty_posts:
                     must_use_displaced_piece = (not displaced_player.played_displaced_shape) and (displaced_player.total_pieces_to_place == 1)
-                    can_place_displaced_piece = displaced_player.holding_pieces > 0 and (not post.required_shape or post.required_shape == displaced_player.displaced_shape)
+                    can_place_displaced_piece = len(displaced_player.player.holding_pieces) > 0 and (not post.required_shape or post.required_shape == displaced_player.displaced_shape)
 
                     if must_use_displaced_piece:
                         if post.required_shape == displaced_player.displaced_shape or post.required_shape is None:
                             post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
                     elif can_place_displaced_piece:
-                        if displaced_player.has_general_stock("square"):
+                        if displaced_player.player.has_general_stock("square"):
                             post_tensor[post_idx] = 1
-                        if displaced_player.has_general_stock("circle"):
+                        if displaced_player.player.has_general_stock("circle"):
                             post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
+                # else:
+                #     print(f"DISPLACE MASK ERROR: Post Type {post.required_shape}, index: {post_idx}")
             #handle BM Move any2 or #handle BM Move 3:
             elif is_post_owned and ((game.waiting_for_bm_move_any_2) or (game.waiting_for_bm_move3 and post.owner != current_player)):
                 if len(current_player.holding_pieces) < current_player.pieces_to_place:
                     post_tensor[post_idx] = 1
+
             else:
-                # Claim post action: check if the post is empty and region is valid
-                if len(current_player.holding_pieces) < current_player.pieces_to_place and is_post_empty:
-                    if game.current_player.is_valid_region_transition(current_player.holding_pieces[0].region, post.region):
-                        if 'square' in current_player.holding_pieces and (not post.required_shape or post.required_shape == 'square'):
+                # Now use this condition in your if statement
+                if current_player.holding_pieces:
+                    if is_post_empty:
+                        shape_to_place, owner_to_place, origin_region = current_player.holding_pieces[0]
+                        if current_player.is_valid_region_transition(origin_region, post.region):
+                            if 'square' in current_player.holding_pieces and (not post.required_shape or post.required_shape == 'square'):
+                                post_tensor[post_idx] = 1
+                            if 'circle' in current_player.holding_pieces and (not post.required_shape or post.required_shape == 'circle'):
+                                post_tensor[121 + post_idx] = 1  # Offset for circle posts
+                        else:
+                            # Invalid action scenario, handle accordingly
+                            print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
+                    elif is_post_owned and post.owner == current_player:
+                        if len(current_player.holding_pieces) < current_player.book:
                             post_tensor[post_idx] = 1
-                        if 'circle' in current_player.holding_pieces and (not post.required_shape or post.required_shape == 'circle'):
-                            post_tensor[121 + post_idx] = 1  # Offset for circle posts
 
                 # MOVE - if post is owned by current_player:
                 elif is_post_owned and post.owner == current_player:
                     if len(current_player.holding_pieces) < current_player.book:
                         post_tensor[post_idx] = 1
-
+                ## Claim post action: check if the post is empty and region is valid
                 elif is_post_empty and check_brown_blue_priv(game, route):
                     if current_player.personal_supply_squares > 0 and (not post.required_shape or post.required_shape == "square"):
                         post_tensor[post_idx] = 1
@@ -313,6 +337,7 @@ def mask_post_action(game):
                 # else:
                 #     print (f"Invalid scenario detected. Post Info - Circle Color: {COLOR_NAMES[post.circle_color]}, Square Color: {COLOR_NAMES[post.square_color]}, Owner: {post.owner}, Region: {post.region}, ReqShape: {post.required_shape}")
             post_idx += 1
+    # print(f"mask_post_action: {post_tensor}")
 
     return post_tensor
 
@@ -327,7 +352,6 @@ def mask_claim_route(game):
     # Initializing tensors for different actions
     claim_route_for_points_tensor = torch.zeros(max_num_routes, device=device, dtype=torch.uint8)
     claim_route_for_office_tensor = torch.zeros(max_num_cities * max_routes_per_city, device=device, dtype=torch.uint8)
-    # Adjusted for multiple upgrades per city
     claim_route_for_upgrade_tensor = torch.zeros(max_num_cities * max_routes_per_upgrade_city * max_upgrades_per_city, device=device, dtype=torch.uint8)
 
     if game.current_player.actions_remaining == 0:
