@@ -6,13 +6,13 @@ from game.game_actions import claim_post_action, displace_action, move_action, d
 # Check if CUDA (GPU support) is available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-NUM_CLAIM_POST_ACTIONS = 242
-NUM_CLAIM_ROUTE_ACTIONS = 370
-NUM_INCOME_ACTIONS = 5
-NUM_BM_ACTIONS = 8
-NUM_PERM_BM_ACTIONS = 5
-NUM_REPLACE_BM_ACTIONS = 40
-NUM_END_TURN_ACTIONS = 1
+NUM_CLAIM_POST_ACTIONS = 242   # Actions for claiming posts, index range: 0 - 241
+NUM_CLAIM_ROUTE_ACTIONS = 370  # Actions for claiming routes, index range: 242 - 611
+NUM_INCOME_ACTIONS = 5         # Actions for income, index range: 612 - 616
+NUM_BM_ACTIONS = 8             # Actions for BM, index range: 617 - 624
+NUM_PERM_BM_ACTIONS = 5        # Actions for permanent BM changes, index range: 625 - 629
+NUM_REPLACE_BM_ACTIONS = 40    # Actions for replacing BM, index range: 630 - 669
+NUM_END_TURN_ACTIONS = 1       # Action to end turn, index range: 670
 
 # Calculating the total actions
 TOTAL_ACTIONS = (NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + 
@@ -75,6 +75,8 @@ def map_claim_post_action(game, index):
         if selected_post in game.all_empty_posts:
             print(f"DISPLACE - Performing displaced claim action for {post_type} on post {post_idx}")
             displace_claim(game, selected_post, post_type)
+        else:
+            print(f"DISPLACE ERROR - Selected Post NOT in game.all_empty_posts")
     # Handle BM Move any2 or #handle BM Move 3:
     elif is_post_owned and ((game.waiting_for_bm_move_any_2) or (game.waiting_for_bm_move3 and selected_post.owner != current_player)):
         print(f"Performing BM Move action for {post_type} on post {post_idx}")
@@ -95,12 +97,15 @@ def map_claim_post_action(game, index):
                     print(f"MOVE CLAIM ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
                     print(f"MOVE CLAIM ERROR: holding_pieces {current_player.holding_pieces[0]}")            
             # MOVE - if post is owned by current_player:
-            elif is_post_owned and selected_post.owner == current_player:
+            elif is_post_owned and selected_post.owner == current_player and current_player.pieces_to_place > 0:
                 # print(f"MOVE - Attempting MOVE action on owned post {post_idx} with type {post_type}")
                 if len(current_player.holding_pieces) < current_player.book:
                     move_action(game, selected_post, post_type)
                 else:
                     print(f"MOVE PICKUP ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
+            else:
+                print(f"MOVE ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
+                print(f"MOVE ERROR: Pieces held {len(current_player.holding_pieces)}")
 
         # MOVE - if post is owned by current_player:
         elif is_post_owned and selected_post.owner == current_player:
@@ -123,7 +128,7 @@ def map_claim_post_action(game, index):
                 print(f"CLAIM ERROR: post_type {post_type}")
         # DISPLACE - if post is owned by a different player:
         elif is_post_owned and selected_post.owner != current_player and check_brown_blue_priv(game, route) and can_displace:
-            print(f"Attempting DISPLACE action on post {post_idx} owned by another player")
+            print(f"Attempting DISPLACE action on post {post_idx} owned by {COLOR_NAMES[selected_post.owner.color]}")
             displace_action(game, selected_post, route, post_type)
         else:
             print(f"something invalid happened with post index {post_idx} of shape {post_type}")
@@ -140,7 +145,7 @@ def map_claim_route_action(game, index):
         route_idx = index
         route = game.selected_map.routes[route_idx]
         if route.is_controlled_by(game.current_player):
-            claim_route_for_points(route)
+            claim_route_for_points(game, route)
         else:
             print(f"Route {route_idx} not controlled by {COLOR_NAMES[game.current_player.color]}.")
 
@@ -184,6 +189,7 @@ def map_income_action(game, index):
 
     # Check if the player has no general stock circles
     if num_circles == 0:
+        print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} INCOME - Squares: {min(num_squares, current_player.bank)}, Circles: 0.")
         current_player.income_action(min(num_squares, current_player.bank), 0)
         return
 
@@ -196,6 +202,7 @@ def map_income_action(game, index):
         circles_to_take = min(num_circles, index)
 
     # Perform the income action
+    print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} INCOME - Squares: {squares_to_take}, Circles: {circles_to_take}.")
     current_player.income_action(squares_to_take, circles_to_take)
 
 def map_bm_action(index):
@@ -251,8 +258,7 @@ def masking_out_invalid_actions(game):
     end_turn_tensor = mask_end_turn(game) #size 1 (allowed to end turn if no bonus markers to replace)
 
     # Concatenate all tensors into one big tensor representing all possible actions
-    all_actions_tensor = torch.cat([income_tensor, claim_post_tensor, 
-                                    claim_route_tensor, bonus_marker_tensor, permanent_bonus_marker_tensor,
+    all_actions_tensor = torch.cat([claim_post_tensor, claim_route_tensor, income_tensor, bonus_marker_tensor, permanent_bonus_marker_tensor,
                                     replace_bm_tensor, end_turn_tensor], dim=0)
     
     return all_actions_tensor
@@ -275,19 +281,52 @@ def mask_post_action(game):
 
             # CLAIM AS DISPLACED PLAYER - if post is empty
             if game.waiting_for_displaced_player:
-                displaced_player = game.displaced_player
                 if post in game.all_empty_posts:
+                    displaced_player = game.displaced_player
                     must_use_displaced_piece = (not displaced_player.played_displaced_shape) and (displaced_player.total_pieces_to_place == 1)
-                    can_place_displaced_piece = len(displaced_player.player.holding_pieces) > 0 and (not post.required_shape or post.required_shape == displaced_player.displaced_shape)
-
+                    has_pieces_in_general_stock = (displaced_player.player.general_stock_squares + displaced_player.player.general_stock_circles) > 0
+                    has_pieces_in_personal_supply = (displaced_player.player.personal_supply_squares + displaced_player.player.personal_supply_circles) > 0
+                    
                     if must_use_displaced_piece:
-                        if post.required_shape == displaced_player.displaced_shape or post.required_shape is None:
+                        if displaced_player.displaced_shape == "square" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
                             post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
-                    elif can_place_displaced_piece:
-                        if displaced_player.player.has_general_stock("square"):
+                        elif displaced_player.displaced_shape == "circle" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
+                            post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts if necessary
+                    
+                    elif displaced_player.played_displaced_shape:
+                        if has_pieces_in_general_stock:
+                            if displaced_player.player.has_general_stock("square") and (not post.required_shape or post.required_shape == "square"):
+                                post_tensor[post_idx] = 1
+                            if displaced_player.player.has_general_stock("circle") and (not post.required_shape or post.required_shape == "circle"):
+                                post_tensor[121 + post_idx] = 1
+                        elif has_pieces_in_personal_supply:
+                            if displaced_player.player.has_personal_supply("square") and (not post.required_shape or post.required_shape == "square"):
+                                post_tensor[post_idx] = 1
+                            if displaced_player.player.has_personal_supply("circle") and (not post.required_shape or post.required_shape == "circle"):
+                                post_tensor[121 + post_idx] = 1
+                        else:
+                            print (f"1If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
+
+                    elif not displaced_player.played_displaced_shape:
+                        if displaced_player.displaced_shape == "square" and (not post.required_shape or post.required_shape == "square"):
                             post_tensor[post_idx] = 1
-                        if displaced_player.player.has_general_stock("circle"):
+                        elif displaced_player.displaced_shape == "circle" and (not post.required_shape or post.required_shape == "circle"):
                             post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
+                        
+                        if has_pieces_in_general_stock:
+                            if displaced_player.player.has_general_stock("square") and (not post.required_shape or post.required_shape == "square"):
+                                post_tensor[post_idx] = 1
+                            if displaced_player.player.has_general_stock("circle") and (not post.required_shape or post.required_shape == "circle"):
+                                post_tensor[121 + post_idx] = 1
+                        elif has_pieces_in_personal_supply:
+                            if displaced_player.player.has_personal_supply("square") and (not post.required_shape or post.required_shape == "square"):
+                                post_tensor[post_idx] = 1
+                            if displaced_player.player.has_personal_supply("circle") and (not post.required_shape or post.required_shape == "circle"):
+                                post_tensor[121 + post_idx] = 1
+                        else:
+                            print (f"2If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
+                    else:
+                      print(f"DISPLACE MASK ERROR: Displaced Shape: {displaced_player.displaced_shape}, index: {post_idx}")  
                 # else:
                 #     print(f"DISPLACE MASK ERROR: Post Type {post.required_shape}, index: {post_idx}")
             #handle BM Move any2 or #handle BM Move 3:
@@ -301,16 +340,19 @@ def mask_post_action(game):
                     if is_post_empty:
                         shape_to_place, owner_to_place, origin_region = current_player.holding_pieces[0]
                         if current_player.is_valid_region_transition(origin_region, post.region):
-                            if 'square' in current_player.holding_pieces and (not post.required_shape or post.required_shape == 'square'):
+                            if shape_to_place == 'square' and (not post.required_shape or post.required_shape == 'square'):
                                 post_tensor[post_idx] = 1
-                            if 'circle' in current_player.holding_pieces and (not post.required_shape or post.required_shape == 'circle'):
+                            elif shape_to_place == 'circle' and (not post.required_shape or post.required_shape == 'circle'):
                                 post_tensor[121 + post_idx] = 1  # Offset for circle posts
                         else:
                             # Invalid action scenario, handle accordingly
                             print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
-                    elif is_post_owned and post.owner == current_player:
+                    elif is_post_owned and post.owner == current_player and current_player.pieces_to_place > 0:
                         if len(current_player.holding_pieces) < current_player.book:
                             post_tensor[post_idx] = 1
+                    # else:
+                    #     print(f"MOVE ERROR: Next Shape to place: {shape_to_place}, shape: {post.required_shape}")
+                    #     print(f"MOVE ERROR: Pieces held {len(current_player.holding_pieces)}")
 
                 # MOVE - if post is owned by current_player:
                 elif is_post_owned and post.owner == current_player:
@@ -330,9 +372,9 @@ def mask_post_action(game):
                     # Check if the player has enough pieces to displace
                     if current_player.personal_supply_squares + current_player.personal_supply_circles >= displacement_cost:
                         # If the player can displace this post, mark it as a valid action
-                        if post.required_shape == "square" or post.required_shape is None:
+                        if post.required_shape == "square" or post.required_shape is None and current_player.personal_supply_squares > 0:
                             post_tensor[post_idx] = 1
-                        if post.required_shape == "circle" or post.required_shape is None:
+                        if post.required_shape == "circle" or post.required_shape is None and current_player.personal_supply_circles > 0:
                             post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
                 # else:
                 #     print (f"Invalid scenario detected. Post Info - Circle Color: {COLOR_NAMES[post.circle_color]}, Square Color: {COLOR_NAMES[post.square_color]}, Owner: {post.owner}, Region: {post.region}, ReqShape: {post.required_shape}")
@@ -354,7 +396,7 @@ def mask_claim_route(game):
     claim_route_for_office_tensor = torch.zeros(max_num_cities * max_routes_per_city, device=device, dtype=torch.uint8)
     claim_route_for_upgrade_tensor = torch.zeros(max_num_cities * max_routes_per_upgrade_city * max_upgrades_per_city, device=device, dtype=torch.uint8)
 
-    if game.current_player.actions_remaining == 0:
+    if game.current_player.actions_remaining == 0 or game.waiting_for_displaced_player:
         claim_route_tensor = torch.cat([claim_route_for_points_tensor, claim_route_for_office_tensor, claim_route_for_upgrade_tensor])
         return claim_route_tensor
 
@@ -397,7 +439,7 @@ def get_city_index(city, game):
 def mask_income_actions(game):
     income_tensor = torch.zeros(5, device=device, dtype=torch.uint8)  # 5 options for income actions
 
-    if game.current_player.actions_remaining == 0:
+    if game.current_player.actions_remaining == 0 or game.waiting_for_displaced_player or game.current_player.holding_pieces:
         return income_tensor
 
     num_circles = game.current_player.general_stock_circles

@@ -111,7 +111,7 @@ def check_if_route_claimed(pos, button):
                     upgrade_choice = city.upgrade_city_type[0]  # Select the single upgrade type
                 claim_route_for_upgrade(game, city, selected_route, upgrade_choice)
             elif button == 3: #right click
-                claim_route_for_points(selected_route)
+                claim_route_for_points(game, selected_route)
             else:
                 print(f"Invalid scenario with {city.name}")
             if selected_route.permanent_bonus_marker:
@@ -383,7 +383,7 @@ hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE)
 optimizer = optim.Adam(hansa_nn.parameters(), lr=0.001)
 
 # Loop 5 times
-for i in range(100):
+for i in range(1000):
     # Get the current game state tensor
     game_state_tensor = get_game_state(game)
     game_state_tensor = game_state_tensor.float()   # Convert to float if not already
@@ -411,14 +411,24 @@ for i in range(100):
 
     topk_values = topk_values.flatten()
     top3_choices = topk_indices.flatten()
-    # Generate a random number between 0 and 2 (inclusive)
-    random_index = random.randint(0, 2)
 
-    # Use the random index to select one of the top 3 action indices
-    selected_index = top3_choices[random_index]
-    print(f"Iteration {i + 1}, top3 probability index: {selected_index}") #Action with highest probability index: {max_prob_index}")
-    # Perform the action corresponding to the selected index
-    perform_action_from_index(game, selected_index)
+    # Filter out indices that correspond to zero probabilities
+    valid_top3_choices = [index for index, value in zip(top3_choices, topk_values) if value > 0]
+
+    # If there are no valid choices (all probabilities are zero), handle this case separately
+    if not valid_top3_choices:
+        print("No valid actions available")
+        # Handle this scenario, possibly skip the action or choose a default action
+    else:
+        # Generate a random index within the range of valid choices
+        random_index = random.randint(0, len(valid_top3_choices) - 1)
+
+        # Use the random index to select one of the valid action indices
+        selected_index = valid_top3_choices[random_index]
+        print(f"Iteration {i + 1}, top3 probability index: {selected_index}")
+
+        # Perform the action corresponding to the selected index
+        perform_action_from_index(game, selected_index)
 
     # Calculate reward (or penalty) for the action
     # reward = ... (This should be determined based on your game's mechanics)

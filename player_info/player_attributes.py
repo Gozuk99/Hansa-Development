@@ -89,6 +89,7 @@ class Player:
         if self.is_valid_region_transition(origin_region, post.region):
             if shape_to_place == shape:
                 print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
+                print(f"[{self.actions_remaining}] {COLOR_NAMES[self.color]} placed a piece")
                 post.claim(owner_to_place, shape_to_place)
                 self.holding_pieces.pop(0)
                 print(f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board.")

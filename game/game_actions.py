@@ -28,20 +28,23 @@ def displace_action(game, post, route, displacing_piece_shape):
     # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
     current_displaced_player = post.owner
-    game.active_player = current_displaced_player.order
+    game.active_player = current_displaced_player.order-1
 
     # Calculate the cost to displace
     cost = 2 if displaced_piece_shape == "square" else 3
 
     # Check if the current player has enough tradesmen
     if current_player.personal_supply_squares + current_player.personal_supply_circles < cost:
+        print(f"DISPLACE ERROR - Not enough tradesmen! PS Squares: {current_player.personal_supply_squares} PS Circles: {current_player.personal_supply_circles}")
         return  # Not enough tradesmen, action cannot be performed
 
     # Before displacing with a square or circle, check if the current player has that shape in their personal supply
     if not current_player.has_personal_supply(displacing_piece_shape):
+        print(f"DISPLACE ERROR - Cannot displace with a {displaced_piece_shape} as current_player has PS Squares: {current_player.personal_supply_squares} PS Circles: {current_player.personal_supply_circles}")
         return  # Invalid move as there's no circle in the personal supply
     
     if not game.check_brown_blue_priv(route):
+        print(f"DISPLACE ERROR - Incorrect Privilige to displace in brown or blue")
         return
 
     # Handle the cost of displacement with priority to squares
@@ -165,7 +168,7 @@ def move_action(game, post, shape):
     elif player.holding_pieces:
         if not post.is_owned():
             player.place_piece(post, shape)
-            print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a piece")
+            
             # If no pieces are left to place, finish the move
             if not player.holding_pieces:
                 player.finish_move()
@@ -196,12 +199,22 @@ def displace_claim(game, post, desired_shape):
     wants_to_use_displaced_piece = (not displaced_player.played_displaced_shape) and (desired_shape == displaced_player.displaced_shape)
     
     if wants_to_use_displaced_piece:
-        print(f"Attempting to place a {desired_shape} while Displaced Shape has NOT been played yet")
+        print(f"Attempting to place the Displaced Piece '{desired_shape}' while Displaced Shape has NOT been played yet.")
         displace_to(game, post, desired_shape, use_displaced_piece=True)
     else:
         displace_to(game, post, desired_shape)
     
-    if not game.all_empty_posts:
+    if game.displaced_player.all_pieces_placed():
+        for post in game.all_empty_posts:
+            post.reset_post()
+        game.all_empty_posts.clear()
+        game.original_route_of_displacement = None
+        game.displaced_player.reset_displaced_player()
+        game.waiting_for_displaced_player = False
+        game.current_player.actions_remaining -= 1
+        game.active_player = game.current_player.order-1
+        # game.switch_player_if_needed()
+    elif not game.all_empty_posts:
         print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
         game.all_empty_posts = gather_empty_posts(game.original_route_of_displacement)
         if not game.all_empty_posts:
@@ -213,28 +226,18 @@ def displace_claim(game, post, desired_shape):
             post.valid_post_to_displace_to()
             post_count += 1
         print(f"Processed {post_count} posts.")  # Debugging log
-    if game.displaced_player.all_pieces_placed():
-        for post in game.all_empty_posts:
-            post.reset_post()
-        game.all_empty_posts.clear()
-        game.original_route_of_displacement = None
-        game.displaced_player.reset_displaced_player()
-        game.waiting_for_displaced_player = False
-        game.current_player.actions_remaining -= 1
-        game.active_player = game.current_player.order
-        # game.switch_player_if_needed()
 
 def displace_to(game, post, shape, use_displaced_piece=False):
     displaced_player = game.displaced_player
     if use_displaced_piece:
-        print(f"Attempting to use displaced piece {shape} - no affect to the GS or PS")
+        print(f"Placed the displaced piece {shape} - no affect to the GS or PS.")
         claim_and_update(game, post, shape, use_displaced_piece=True)
     else:
         if displaced_player.has_general_stock(shape):
-            print(f"Attempting to place a {shape} from general_stock, because use_displaced is false")
+            print(f"Placed a {shape} from general_stock, because use_displaced is false.")
             claim_and_update(game, post, shape)
         elif displaced_player.is_general_stock_empty() and displaced_player.has_personal_supply(shape):
-            print(f"Attempting to place a {shape} from personal_supply, because use_displaced is false")
+            print(f"Placed a {shape} from personal_supply, because use_displaced is false and general stock is empty.")
             claim_and_update(game, post, shape, from_personal_supply=True)
         else:
             print(f"Cannot place a {shape} because the general stock and personal supply are empty.")
@@ -324,12 +327,12 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice):
     if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
         if specialprestigepoints_city.claim_highest_prestige(route):
             score_route(route)
-            finalize_route_claim(route, "circle")
+            finalize_route_claim(game, route, "circle")
     elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
         if upgrade_choice and current_player.perform_upgrade(upgrade_choice):
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} upgraded {upgrade_choice}!")
             score_route(route)
-            finalize_route_claim(route)
+            finalize_route_claim(game, route)
     else:
         print(f"Upgrade not detected")
 
@@ -337,7 +340,7 @@ def claim_route_for_points(game, route):
     current_player = game.current_player
     print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} claimed a route for Points/BM!")
     score_route(route)
-    finalize_route_claim(route)
+    finalize_route_claim(game, route)
 
 def finalize_route_claim(game, route, placed_piece_shape=None):
     reset_pieces = update_stock_and_reset(route, game.current_player, placed_piece_shape)
@@ -382,8 +385,18 @@ def update_stock_and_reset(route, player, placed_piece_shape=None):
     player.general_stock_circles += circles_on_route
     player.general_stock_squares += squares_on_route
 
-    # reset_pieces = ['circle' for _ in range(circles_on_route)] + ['square' for _ in range(squares_on_route)]
-    reset_pieces = [(post.shape, player, post.region) for post in route.posts if post.owner == player and post.owner_piece_shape != placed_piece_shape]
+    # Create reset_pieces list
+    reset_pieces = []
+    for post in route.posts:
+        if post.owner == player:
+            reset_pieces.append((post.owner_piece_shape, player, post.region))
+
+    # Remove one piece of placed_piece_shape (if not None) from reset_pieces
+    if placed_piece_shape:
+        for i, piece in enumerate(reset_pieces):
+            if piece[0] == placed_piece_shape:
+                reset_pieces.pop(i)
+                break
 
     for post in route.posts:
         if post.owner == player:
