@@ -7,7 +7,8 @@ from ai.ai_model import HansaNN
 class Player:
     def __init__(self, color, order):
         self.color = color
-        self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE)
+        self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{order}.pth")
+        self.reward = 0
         self.order = order
 
         self.score = 0  # Initial score
@@ -23,7 +24,7 @@ class Player:
         self.privilege = "WHITE"
         self.book = 2
         self.actions_index = 0
-        self.actions = ACTIONS_MAX_VALUES[5]
+        self.actions = ACTIONS_MAX_VALUES[0]
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
         self.bank = 3
 
@@ -207,6 +208,13 @@ class Player:
     
     def income_action(self, num_squares=0, num_circles=0):
         if num_circles <= self.general_stock_circles and num_squares <= self.general_stock_squares:
+
+            if num_circles + num_squares < self.bank and self.bank == 3:
+                print(f"Inefficient use of income action while bank is at {self.bank}")
+                self.reward -=10
+            else:
+                self.reward += 1
+
             self.general_stock_circles -= num_circles
             self.personal_supply_circles += num_circles
             

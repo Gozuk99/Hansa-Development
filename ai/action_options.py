@@ -1,3 +1,4 @@
+import sys
 import torch
 import time
 from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, COLOR_NAMES
@@ -148,6 +149,7 @@ def map_claim_route_action(game, index):
             claim_route_for_points(game, route)
         else:
             print(f"Route {route_idx} not controlled by {COLOR_NAMES[game.current_player.color]}.")
+            sys.exit()
 
     elif index < max_num_routes + (max_num_cities * max_routes_per_city):
         # Claim an office in a city
@@ -159,6 +161,7 @@ def map_claim_route_action(game, index):
             claim_route_for_office(game, city, route)
         else:
             print(f"Route not controlled by {COLOR_NAMES[game.current_player.color]}: Route between {route.cities[0].name} and {route.cities[1].name}.")
+            sys.exit()
 
     elif index < max_num_routes + (max_num_cities * max_routes_per_city) + (max_num_cities * max_routes_per_upgrade_city * max_upgrades_per_city):
         # Upgrade in a city
@@ -173,8 +176,10 @@ def map_claim_route_action(game, index):
             claim_route_for_upgrade(game, city, route, upgrade_choice)
         else:
             print(f"Route not controlled by {COLOR_NAMES[game.current_player.color]}: Route between {route.cities[0].name} and {route.cities[1].name}.") 
+            sys.exit()
     else:
         print("Invalid index for claim route action.")
+        sys.exit()
 
 def map_income_action(game, index):
     current_player = game.current_player
@@ -304,8 +309,8 @@ def mask_post_action(game):
                                 post_tensor[post_idx] = 1
                             if displaced_player.player.has_personal_supply("circle") and (not post.required_shape or post.required_shape == "circle"):
                                 post_tensor[121 + post_idx] = 1
-                        else:
-                            print (f"1If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
+                        # else:
+                        #     print (f"1If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
 
                     elif not displaced_player.played_displaced_shape:
                         if displaced_player.displaced_shape == "square" and (not post.required_shape or post.required_shape == "square"):
@@ -323,8 +328,8 @@ def mask_post_action(game):
                                 post_tensor[post_idx] = 1
                             if displaced_player.player.has_personal_supply("circle") and (not post.required_shape or post.required_shape == "circle"):
                                 post_tensor[121 + post_idx] = 1
-                        else:
-                            print (f"2If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
+                        # else:
+                        #     print (f"2If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
                     else:
                       print(f"DISPLACE MASK ERROR: Displaced Shape: {displaced_player.displaced_shape}, index: {post_idx}")  
                 # else:
@@ -344,9 +349,9 @@ def mask_post_action(game):
                                 post_tensor[post_idx] = 1
                             elif shape_to_place == 'circle' and (not post.required_shape or post.required_shape == 'circle'):
                                 post_tensor[121 + post_idx] = 1  # Offset for circle posts
-                        else:
+                        # else:
                             # Invalid action scenario, handle accordingly
-                            print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
+                            # print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
                     elif is_post_owned and post.owner == current_player and current_player.pieces_to_place > 0:
                         if len(current_player.holding_pieces) < current_player.book:
                             post_tensor[post_idx] = 1

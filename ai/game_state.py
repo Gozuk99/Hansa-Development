@@ -14,25 +14,33 @@ def get_game_state(game):
     # Game:
     start_time = time.time()
     game_tensor = fill_game_tensor(game)
+    game_tensor = game_tensor.flatten()
     end_time = time.time()
+    # print(f"game_tensor Size: {game_tensor.size()}")
     execution_time1 = end_time - start_time
 
     # Map info:
     start_time = time.time()
     city_tensor = fill_city_tensor(game)
+    city_tensor = city_tensor.flatten()
     end_time = time.time()
+    # print(f"city_tensor Size: {city_tensor.size()}")
     execution_time2 = end_time - start_time
     
     # Route Info
     start_time = time.time()
     route_tensor = fill_route_tensor(game)
+    route_tensor = route_tensor.flatten()
     end_time = time.time()
+    # print(f"route_tensor Size: {route_tensor.size()}")
     execution_time3 = end_time - start_time
     
     #Player Info
     start_time = time.time()
     player_tensor = fill_player_info_tensor(game)
+    player_tensor = player_tensor.flatten()
     end_time = time.time()
+    # print(f"player_tensor Size: {route_tensor.size()}")
     execution_time4 = end_time - start_time
     
     # print(f"game_tensor Execution Time: {execution_time1} seconds, Size: {game_tensor.size()}")
@@ -40,7 +48,7 @@ def get_game_state(game):
     # print(f"route_tensor Execution Time: {execution_time3} seconds, Size: {route_tensor.size()}")
     # print(f"player_tensor Execution Time: {execution_time4} seconds, Size: {player_tensor.size()}")
 
-    flattened_game_state = torch.cat([game_tensor.flatten(), city_tensor.flatten(), route_tensor.flatten(), player_tensor.flatten()], dim=0)
+    flattened_game_state = torch.cat([game_tensor, city_tensor, route_tensor, player_tensor], dim=0)
 
     # print(f"All Game State Size: {flattened_game_state.size()}")
     return flattened_game_state

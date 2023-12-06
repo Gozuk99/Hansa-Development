@@ -1,35 +1,41 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-# class HansaNet(nn.Module):
-#     def __init__(self, num_channels, board_height, board_width, num_actions):
-#         super(HansaNet, self).__init__()
-#         self.conv1 = nn.Conv2d(num_channels, 32, kernel_size=3, stride=1, padding=1)
-#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-#         self.fc1 = nn.Linear(64 * board_height * board_width, 128)
-#         self.fc2 = nn.Linear(128, num_actions)
-
-#     def forward(self, x):
-#         x = F.relu(self.conv1(x))
-#         x = F.relu(self.conv2(x))
-#         x = x.view(x.size(0), -1)  # Flatten the tensor
-#         x = F.relu(self.fc1(x))
-#         x = self.fc2(x)
-#         return F.softmax(x, dim=1)
+import torch.optim as optim
+import numpy as np
+import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+SEED = 1234
+
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(SEED)
 
 #current input size is 2309
 #current output size is 681
 class HansaNN(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, model_file=None):
         super(HansaNN, self).__init__()
         self.layer1 = nn.Linear(input_size, 2048).to(device)
         self.layer2 = nn.Linear(2048, 1024).to(device)
         self.layer3 = nn.Linear(1024, output_size).to(device)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=-1)
+
+        # Define the optimizer
+        self.optimizer = optim.Adam(self.parameters(), lr=0.001)
+
+        if model_file and os.path.isfile(model_file):
+            self.load_state_dict(torch.load(model_file, map_location=device))
+            print(f"Model loaded from {model_file}")
+        else:
+            if model_file:
+                print(f"No saved model found at {model_file}. Initializing new model.")
 
     def forward(self, x):
         x = self.relu(self.layer1(x))
@@ -38,55 +44,13 @@ class HansaNN(nn.Module):
         x = self.softmax(x)  # Apply softmax to the output layer
         return x
 
-# # # Assuming you've defined the dimensions and number of actions
-# # num_channels = ...  # Number of channels in input (e.g., different aspects of game state)
-# # board_height = ...
-# # board_width = ...
-# # num_actions = ...
-
-# # model = HansaNet(num_channels, board_height, board_width, num_actions)
-# # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-# # for epoch in range(num_epochs):
-# #     for batch_idx, (data, target) in enumerate(train_loader):
-# #         optimizer.zero_grad()  # Clear gradients
-# #         output = model(data)  # Forward pass
-# #         loss = F.cross_entropy(output, target)  # Compute loss
-# #         loss.backward()  # Backpropagation
-# #         optimizer.step()  # Update weights
-
-# #         if batch_idx % log_interval == 0:
-# #             print(f"Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)} ({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}")
-
-# # Initialize neural network instances for each AI agent
-# nn_agents = [NeuralNetwork() for _ in range(5)]
-
-# # Game loop
-# while not game_over:
-#     current_player_index = game.get_current_player_index()
-#     current_nn = nn_agents[current_player_index]
-
-#     action = current_nn.decide_action(game_state)
-#     game.execute_action(action)
-
-#     reward = calculate_reward_for_agent(current_player_index)
-#     current_nn.update(action, game_state, reward)
-
-#     game_state = get_current_state(game)
-
-# # Initialize a single neural network for shared learning
-# shared_nn = NeuralNetwork()
-
-# # Game loop
-# while not game_over:
-#     if current_player in [agent1, agent2]:
-#         action = shared_nn.decide_action(game_state)
-#         game.execute_action(action)
-#         reward = calculate_reward(current_player)
-#         shared_nn.update(action, game_state, reward)
-
-#     game_state = get_current_state(game)
-
+    def print_weights(self, layer_name, n=50, precision=4):
+        """Print the first n weights of a specified layer of the model, with limited precision."""
+        with torch.no_grad():  # Ensure no gradients are calculated
+            layer = getattr(self, layer_name)
+            weights = layer.weight.data.flatten()[:n]
+            formatted_weights = torch.round(weights * (10 ** precision)) / (10 ** precision)
+            print(f"{layer_name} first {n} weights: {formatted_weights.cpu().numpy()}")  # Convert to CPU and NumPy array for printing
 
 # # Step 1: Displacement Decision
 # state = get_current_state(game)
@@ -120,17 +84,3 @@ class HansaNN(nn.Module):
 #         total_reward += reward
 
 #     print(f"Episode {episode}: Total Reward: {total_reward}")
-
-
-
-# #create action space
-# #1 INCOME - 5 valid options: 0-4 circles, and squares leftover - mask out options based on circles
-# #2 CLAIM - all posts claim with circle, or square - mask out options with incorrect region(blue or brown priv), incorrect personal_supply, occupied, incorrect shape
-# #3 DISPLACE - all posts owned by opponents - mask out if invalid personal supply,
-# #4 MOVE - query all posts -> add least desirable owned piece to array, loop for player.book -> when met, loop for player.book -> ONLY VALID ACTIONS are CLAIM, same rules.
-# #5 CLAIM - query all routes owned by player - add claim city office, upgrade X, claim route for points
-# #6 BM - ?
-# #7 PERM BM - Use immediately
-# #8 REPLACE BM - Choose a route?
-# #9 PICK UP - all posts owned by me, mask out not owned, add to array.
-# #10 END TURN - use BM or End Turn

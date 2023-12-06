@@ -2,8 +2,8 @@ import pygame
 import sys
 import random
 import torch
-import torch.optim as optim
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN, INPUT_SIZE, OUTPUT_SIZE
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
@@ -14,7 +14,7 @@ from game.game_info import Game
 from game.game_actions import claim_post_action, displace_action, gather_empty_posts, move_action, displace_claim, assign_new_bonus_marker_on_route, score_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
 from drawing.drawing_utils import redraw_window, draw_end_game
 
-game = Game(map_num=1, num_players=5)
+game = Game(map_num=1, num_players=3)
 
 WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
@@ -376,35 +376,31 @@ def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
 
-# Create the neural network instance
-hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE)
-
-# Define the optimizer
-optimizer = optim.Adam(hansa_nn.parameters(), lr=0.001)
+# Print initial weights
+# print("Initial weights of layer1:")
+# game.players[game.active_player].hansa_nn.print_weights('layer1')
+initial_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()
+epsilon_start = 1.0
+epsilon_end = 0.1
+decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
+epsilon = epsilon_start
 
 # Loop 5 times
 for i in range(1000):
+    active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
+    hansa_nn = active_player.hansa_nn
+
     # Get the current game state tensor
     game_state_tensor = get_game_state(game)
     game_state_tensor = game_state_tensor.float()   # Convert to float if not already
 
     # Forward pass through the neural network to get the action probabilities
-    action_probabilities = game.players[game.active_player].hansa_nn(game_state_tensor.unsqueeze(0))  # Adding an extra dimension for batch
+    action_probabilities = hansa_nn(game_state_tensor.unsqueeze(0))  # Adding an extra dimension for batch
 
     # Apply masking to filter out invalid actions
     valid_actions = masking_out_invalid_actions(game)
     masked_action_probabilities = action_probabilities * valid_actions
-
-    # Print the action probabilities after masking
-    # print("Action probabilities after masking:")
-    # print(masked_action_probabilities)
-
-    # Find the index of the maximum value in the masked probabilities
-    # max_prob_index = torch.argmax(masked_action_probabilities).item()
-
-    # # Perform the action corresponding to the maximum probability index
-    # print(f"Iteration {_ + 1}, Action with highest probability index: {max_prob_index}")
-    # perform_action_from_index(game, max_prob_index)
+    masked_action_probabilities = masked_action_probabilities.flatten()
 
     # Get the top 3 indices with highest probabilities
     topk_values, topk_indices = torch.topk(masked_action_probabilities, 3)
@@ -418,31 +414,50 @@ for i in range(1000):
     # If there are no valid choices (all probabilities are zero), handle this case separately
     if not valid_top3_choices:
         print("No valid actions available")
-        # Handle this scenario, possibly skip the action or choose a default action
+        break
     else:
-        # Generate a random index within the range of valid choices
-        random_index = random.randint(0, len(valid_top3_choices) - 1)
-
-        # Use the random index to select one of the valid action indices
-        selected_index = valid_top3_choices[random_index]
-        print(f"Iteration {i + 1}, top3 probability index: {selected_index}")
+        if random.random() < epsilon:
+            # Exploration: Randomly select from valid actions
+            selected_index = random.choice(valid_top3_choices)
+            print("Exploration: Selected random action")
+        else:
+            # Exploitation: Select the best action
+            selected_index = valid_top3_choices[0]  # Assuming top3_choices are sorted by probability
+            print("Exploitation: Selected best action")
 
         # Perform the action corresponding to the selected index
         perform_action_from_index(game, selected_index)
 
-    # Calculate reward (or penalty) for the action
-    # reward = ... (This should be determined based on your game's mechanics)
+        # Calculate loss and update network
+        hansa_nn.optimizer.zero_grad()
+        prob = masked_action_probabilities[selected_index].item()
+        if prob > 0:
+            log_prob = torch.log(masked_action_probabilities[selected_index])
+            loss = -log_prob * active_player.reward
+            loss.backward()
+            hansa_nn.optimizer.step()
+            print(f"[{COLOR_NAMES[active_player.color]}] Reward: {active_player.reward}, Log Prob: {log_prob}, Loss: {loss.item()}")
+            
+        else:
+            print("Invalid probability value, skipping update")
+            break
+        active_player.reward = 0
+        epsilon = max(epsilon_end, epsilon - decay_rate)
 
-    # Loss calculation (using MSE loss as an example)
-    # Note: You might need to adjust this depending on how you define rewards and outputs
-    # loss = F.mse_loss(masked_action_probabilities, reward)
+final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()
+# Plot histograms
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.hist(initial_weights, bins=50, alpha=0.7)
+plt.title("Initial Weights Distribution")
+plt.subplot(1, 2, 2)
+plt.hist(final_weights, bins=50, alpha=0.7)
+plt.title("Final Weights Distribution")
+plt.show()
 
-    # # Zero gradients, perform a backward pass, and update the weights.
-    # optimizer.zero_grad()
-    # loss.backward()
-    # optimizer.step()
-
-    # Print information for each iteration
+for i, player in enumerate(game.players):
+    print(f"Saving model for Player: {player.order} as hansa_nn_model{i+1}.pth")
+    torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{i+1}.pth")
 
 # exit()
 while True:

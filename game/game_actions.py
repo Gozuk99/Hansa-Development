@@ -6,6 +6,11 @@ def claim_post_action(game, route, post, piece_to_play):
 
     if not game.check_brown_blue_priv(route):
         return
+    
+    if route.has_bonus_marker or route.has_permanent_bm_type or route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
+        player.reward += 30
+    else:
+        player.reward += 0
 
     city_names = ' and '.join([city.name for city in route.cities])
     region_info = f" in {route.region}" if route.region else ""
@@ -21,6 +26,9 @@ def claim_post_action(game, route, post, piece_to_play):
         print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'circle' between {city_names}{region_info}")
         player.actions_remaining -= 1
         player.personal_supply_circles -= 1
+    else:
+        print("ERROR in claim_post_action")
+        sys.exit()
 
 def displace_action(game, post, route, displacing_piece_shape):
     current_player = game.current_player
@@ -46,6 +54,11 @@ def displace_action(game, post, route, displacing_piece_shape):
     if not game.check_brown_blue_priv(route):
         print(f"DISPLACE ERROR - Incorrect Privilige to displace in brown or blue")
         return
+    
+    if route.has_bonus_marker or route.has_permanent_bm_type or route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
+        current_player.reward += 30
+    else:
+        current_player.reward += 0
 
     # Handle the cost of displacement with priority to squares
     squares_to_pay = min(current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
@@ -149,6 +162,8 @@ def move_action(game, post, shape):
     if post is None:
         print("No post found!")
         return
+    
+    player.reward += 0
 
     if ((game.waiting_for_bm_move3 and post.is_owned() and post.owner != player) or
         (game.waiting_for_bm_move_any_2 and post.is_owned())):
@@ -171,6 +186,10 @@ def move_action(game, post, shape):
             
             # If no pieces are left to place, finish the move
             if not player.holding_pieces:
+                if player.pieces_to_place > 0:
+                    player.reward -= 2
+                else:
+                    player.reward += 0
                 player.finish_move()
                 # Deduct an action if it's a standard move (not a BM Move3 or MoveAny2)
                 if not (game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2):
@@ -293,6 +312,7 @@ def score_route(route):
         player = city.get_controller()
         if player is not None:
             player.score += 1
+            player.reward += 30
             print(f"Player {COLOR_NAMES[player.color]} scored for controlling {city.name}, total score: {player.score}")
 
 def claim_route_for_office(game, city, route):
@@ -305,12 +325,14 @@ def claim_route_for_office(game, city, route):
             required_shape = city.get_next_open_office_shape()
             print(f"{COLOR_NAMES[current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
         else:
+            current_player.reward += 30
             score_route(route)
             placed_piece_shape = city.get_next_open_office_shape()
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}")
             city.update_next_open_office_ownership(game)
             finalize_route_claim(game, route, placed_piece_shape)
     elif 'PlaceAdjacent' in (bm.type for bm in current_player.bonus_markers):
+        current_player.reward += 10
         score_route(route)
         city.claim_office_with_bonus_marker(current_player)
         print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a square into a NEW office of {city.name}.")
@@ -326,11 +348,13 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice):
 
     if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
         if specialprestigepoints_city.claim_highest_prestige(route):
+            current_player.reward += 100
             score_route(route)
             finalize_route_claim(game, route, "circle")
     elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
         if upgrade_choice and current_player.perform_upgrade(upgrade_choice):
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} upgraded {upgrade_choice}!")
+            current_player.reward += 100
             score_route(route)
             finalize_route_claim(game, route)
     else:
@@ -351,11 +375,13 @@ def finalize_route_claim(game, route, placed_piece_shape=None):
 
 def handle_bonus_marker(game, player, route, reset_pieces):
     if route.bonus_marker:
+        player.reward += 100
         route.bonus_marker.owner = player
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
         game.replace_bonus_marker += 1
     elif route.permanent_bonus_marker:
+        player.reward += 70
         perm_bm_type = route.permanent_bonus_marker.type
         print(f"Waiting for Player to handle {route.permanent_bonus_marker.type} BM")
         if perm_bm_type == 'MoveAny2':
