@@ -4,11 +4,15 @@ import time
 from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, COLOR_NAMES
 from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, score_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
 
+#debugging
+from drawing.drawing_utils import redraw_window
+import pygame
+
 # Check if CUDA (GPU support) is available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 NUM_CLAIM_POST_ACTIONS = 242   # Actions for claiming posts, index range: 0 - 241
-NUM_CLAIM_ROUTE_ACTIONS = 370  # Actions for claiming routes, index range: 242 - 611
+NUM_CLAIM_ROUTE_ACTIONS = 280  # Actions for claiming routes, index range: 242 - 611
 NUM_INCOME_ACTIONS = 5         # Actions for income, index range: 612 - 616
 NUM_BM_ACTIONS = 8             # Actions for BM, index range: 617 - 624
 NUM_PERM_BM_ACTIONS = 5        # Actions for permanent BM changes, index range: 625 - 629
@@ -38,6 +42,28 @@ def perform_action_from_index(game, max_prob_index):
     game.switch_player_if_needed()
     # Handle default or error case
     return None
+
+def error_exit(game, route):
+    win = pygame.display.set_mode((game.selected_map.map_width+800, game.selected_map.map_height))
+    # viewable_window = pygame.display.set_mode((1800, 1350))
+    pygame.display.set_caption('Hansa Sample Game')
+    win.fill((210, 180, 140))
+
+    for i, post in enumerate(route.posts):
+        if post.owner:
+            print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
+        else:
+            print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
+    # Redraw the window (if necessary)
+    redraw_window(win, game)
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()      
+
+        # Update the display
+        pygame.display.update()
 
 def map_claim_post_action(game, index):
     current_player = game.current_player
@@ -134,52 +160,63 @@ def map_claim_post_action(game, index):
         else:
             print(f"something invalid happened with post index {post_idx} of shape {post_type}")
 
+# 40+80+160=280
 def map_claim_route_action(game, index):
-    max_num_routes = 40
-    max_num_cities = 30
-    max_routes_per_city = 5
-    max_routes_per_upgrade_city = 3
-    max_upgrades_per_city = 2
+    # Size of each action type
+    num_points_actions = 40  # e.g., 40
+    num_office_actions = 40 * 2  # e.g., 80
+    num_upgrade_actions = 40 * 2 * 2  # e.g., 160
 
-    if index < max_num_routes:
-        # Claim route for points
+    # Claim route for points
+    if index < num_points_actions:
         route_idx = index
         route = game.selected_map.routes[route_idx]
         if route.is_controlled_by(game.current_player):
             claim_route_for_points(game, route)
         else:
-            print(f"Route {route_idx} not controlled by {COLOR_NAMES[game.current_player.color]}.")
-            sys.exit()
+            print(f"ERROR - Cannot claim route for points! Route {route_idx} not controlled by {COLOR_NAMES[game.current_player.color]}.")
+            error_exit(game, route)
 
-    elif index < max_num_routes + (max_num_cities * max_routes_per_city):
-        # Claim an office in a city
-        city_index = (index - max_num_routes) // max_routes_per_city
-        city_route_index = (index - max_num_routes) % max_routes_per_city
-        city = game.selected_map.cities[city_index]
-        route = city.routes[city_route_index]
-        if route.is_controlled_by(game.current_player):
+    # Claim an office in a city
+    elif index < num_points_actions + num_office_actions:
+        adjusted_index = index - num_points_actions
+        route_idx = adjusted_index // 2  # Two cities per route
+        city_idx = adjusted_index % 2  # Which city on the route
+        route = game.selected_map.routes[route_idx]
+        city = route.cities[city_idx]
+        if city.has_empty_office() and route.is_controlled_by(game.current_player):
             claim_route_for_office(game, city, route)
         else:
-            print(f"Route not controlled by {COLOR_NAMES[game.current_player.color]}: Route between {route.cities[0].name} and {route.cities[1].name}.")
-            sys.exit()
+            print(f"ERROR - Cannot claim office in {city.name}! Route not controlled or no empty office.")
+            error_exit(game, route)
 
-    elif index < max_num_routes + (max_num_cities * max_routes_per_city) + (max_num_cities * max_routes_per_upgrade_city * max_upgrades_per_city):
-        # Upgrade in a city
-        adjusted_index = index - max_num_routes - (max_num_cities * max_routes_per_city)
-        city_route_index = (adjusted_index // max_upgrades_per_city) % max_routes_per_upgrade_city
-        city_index = adjusted_index // (max_routes_per_upgrade_city * max_upgrades_per_city)
-        upgrade_index = adjusted_index % max_upgrades_per_city
-        city = game.selected_map.cities[city_index]
-        route = city.routes[city_route_index]
-        if route.is_controlled_by(game.current_player):
-            upgrade_choice = city.upgrade_city_type[upgrade_index]
-            claim_route_for_upgrade(game, city, route, upgrade_choice)
+    # Upgrade in a city
+    elif index < num_points_actions + num_office_actions + num_upgrade_actions:
+        adjusted_index = index - (num_points_actions + num_office_actions)
+        route_idx = adjusted_index // 4  # Four upgrade possibilities per route (2 cities × 2 upgrades each)
+        city_idx = (adjusted_index // 2) % 2  # Which city on the route
+        upgrade_idx = adjusted_index % 2  # Which upgrade in the city
+        print(f"adjusted_index {adjusted_index}.")
+        print(f"route_idx {route_idx}.")
+        print(f"city_idx {city_idx}.")
+        print(f"upgrade_idx {upgrade_idx}.")
+        route = game.selected_map.routes[route_idx]
+        city = route.cities[city_idx]
+        if city.upgrade_city_type and len(city.upgrade_city_type) > upgrade_idx:
+            upgrade_choice = city.upgrade_city_type[upgrade_idx]
+            if route.is_controlled_by(game.current_player):
+                claim_route_for_upgrade(game, city, route, upgrade_choice)
+            else:
+                print(f"ERROR - Cannot upgrade in {city.name}! Route not controlled.")
+                error_exit(game, route)
         else:
-            print(f"Route not controlled by {COLOR_NAMES[game.current_player.color]}: Route between {route.cities[0].name} and {route.cities[1].name}.") 
-            sys.exit()
+            print(f"ERROR - Invalid upgrade index or no upgrades available in {city.name}.")
+            error_exit(game, route)
+
     else:
         print("Invalid index for claim route action.")
-        sys.exit()
+        error_exit(game)
+
 
 def map_income_action(game, index):
     current_player = game.current_player
@@ -256,6 +293,7 @@ def masking_out_invalid_actions(game):
     
     claim_post_tensor = mask_post_action(game) #size 242 (claiming with a square or circle))
     claim_route_tensor = mask_claim_route(game) #size 280 (claim for points, office, or upgrade)
+    # print(f"claim_route_tensor - {claim_route_tensor.size()}")
     income_tensor = mask_income_actions(game) #size 5 (0-4 circles + leftover squares)
     bonus_marker_tensor = mask_bm(game) #size 8 (8 total BM types to use)
     permanent_bonus_marker_tensor = mask_perm_bm(game) #size 5
@@ -265,6 +303,7 @@ def masking_out_invalid_actions(game):
     # Concatenate all tensors into one big tensor representing all possible actions
     all_actions_tensor = torch.cat([claim_post_tensor, claim_route_tensor, income_tensor, bonus_marker_tensor, permanent_bonus_marker_tensor,
                                     replace_bm_tensor, end_turn_tensor], dim=0)
+    # print(f"all_actions_tensor.size - {all_actions_tensor.size()}")
     
     return all_actions_tensor
 
@@ -341,30 +380,30 @@ def mask_post_action(game):
 
             else:
                 # Now use this condition in your if statement
-                if current_player.holding_pieces:
-                    if is_post_empty:
-                        shape_to_place, owner_to_place, origin_region = current_player.holding_pieces[0]
-                        if current_player.is_valid_region_transition(origin_region, post.region):
-                            if shape_to_place == 'square' and (not post.required_shape or post.required_shape == 'square'):
-                                post_tensor[post_idx] = 1
-                            elif shape_to_place == 'circle' and (not post.required_shape or post.required_shape == 'circle'):
-                                post_tensor[121 + post_idx] = 1  # Offset for circle posts
-                        # else:
-                            # Invalid action scenario, handle accordingly
-                            # print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
-                    elif is_post_owned and post.owner == current_player and current_player.pieces_to_place > 0:
-                        if len(current_player.holding_pieces) < current_player.book:
-                            post_tensor[post_idx] = 1
-                    # else:
-                    #     print(f"MOVE ERROR: Next Shape to place: {shape_to_place}, shape: {post.required_shape}")
-                    #     print(f"MOVE ERROR: Pieces held {len(current_player.holding_pieces)}")
+                # if current_player.holding_pieces:
+                #     if is_post_empty:
+                #         shape_to_place, owner_to_place, origin_region = current_player.holding_pieces[0]
+                #         if current_player.is_valid_region_transition(origin_region, post.region):
+                #             if shape_to_place == 'square' and (not post.required_shape or post.required_shape == 'square'):
+                #                 post_tensor[post_idx] = 1
+                #             elif shape_to_place == 'circle' and (not post.required_shape or post.required_shape == 'circle'):
+                #                 post_tensor[121 + post_idx] = 1  # Offset for circle posts
+                #         # else:
+                #             # Invalid action scenario, handle accordingly
+                #             # print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
+                #     elif is_post_owned and post.owner == current_player and current_player.pieces_to_place > 0:
+                #         if len(current_player.holding_pieces) < current_player.book:
+                #             post_tensor[post_idx] = 1
+                #     # else:
+                #     #     print(f"MOVE ERROR: Next Shape to place: {shape_to_place}, shape: {post.required_shape}")
+                #     #     print(f"MOVE ERROR: Pieces held {len(current_player.holding_pieces)}")
 
-                # MOVE - if post is owned by current_player:
-                elif is_post_owned and post.owner == current_player:
-                    if len(current_player.holding_pieces) < current_player.book:
-                        post_tensor[post_idx] = 1
+                # # MOVE - if post is owned by current_player:
+                # elif is_post_owned and post.owner == current_player:
+                #     if len(current_player.holding_pieces) < current_player.book:
+                #         post_tensor[post_idx] = 1
                 ## Claim post action: check if the post is empty and region is valid
-                elif is_post_empty and check_brown_blue_priv(game, route):
+                if is_post_empty and check_brown_blue_priv(game, route):
                     if current_player.personal_supply_squares > 0 and (not post.required_shape or post.required_shape == "square"):
                         post_tensor[post_idx] = 1
                     if current_player.personal_supply_circles > 0 and (not post.required_shape or post.required_shape == "circle"):
@@ -388,18 +427,16 @@ def mask_post_action(game):
 
     return post_tensor
 
-#should return - 40+150+180
+#should return - 40+80+160=280
 def mask_claim_route(game):
     max_num_routes = 40  # Maximum number of routes
-    max_num_cities = 30  # Maximum number of cities
-    max_routes_per_city = 5  # Maximum number of routes per city
-    max_routes_per_upgrade_city = 3  # Maximum routes for cities with upgrades
+    two_cities_per_route = 2  # Maximum number of routes per city
     max_upgrades_per_city = 2  # Maximum upgrades per city
 
     # Initializing tensors for different actions
     claim_route_for_points_tensor = torch.zeros(max_num_routes, device=device, dtype=torch.uint8)
-    claim_route_for_office_tensor = torch.zeros(max_num_cities * max_routes_per_city, device=device, dtype=torch.uint8)
-    claim_route_for_upgrade_tensor = torch.zeros(max_num_cities * max_routes_per_upgrade_city * max_upgrades_per_city, device=device, dtype=torch.uint8)
+    claim_route_for_office_tensor = torch.zeros(max_num_routes * two_cities_per_route, device=device, dtype=torch.uint8)
+    claim_route_for_upgrade_tensor = torch.zeros(max_num_routes * two_cities_per_route * max_upgrades_per_city, device=device, dtype=torch.uint8)
 
     if game.current_player.actions_remaining == 0 or game.waiting_for_displaced_player:
         claim_route_tensor = torch.cat([claim_route_for_points_tensor, claim_route_for_office_tensor, claim_route_for_upgrade_tensor])
@@ -413,28 +450,41 @@ def mask_claim_route(game):
 
             for city_idx, city in enumerate(route.cities):
                 # Calculate indices for tensor
-                base_index_office = city_idx * max_routes_per_city
-                base_index_upgrade = city_idx * max_routes_per_upgrade_city * max_upgrades_per_city
+                base_index_upgrade = city_idx + route_idx
 
                 # Check for office claim
                 if city.has_empty_office():
                     next_open_office_color = city.get_next_open_office_color()
                     if game.current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
                         if not city.has_required_piece_shape(game.current_player, route):
-                            action_index_office = base_index_office + route_idx
-                            claim_route_for_office_tensor[action_index_office] = 1
+                            claim_route_for_office_tensor[base_index_upgrade] = 1
+                            print(f"{route_idx} City: {city.name}")
+                            print(f"{city_idx} Route between {route.cities[0].name} and {route.cities[1].name}")
+                            for i, post in enumerate(route.posts):
+                                if post.owner:
+                                    print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
+                                else:
+                                    print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
 
                 # Check for upgrade options
                 if city.upgrade_city_type:
                     for upgrade_idx, upgrade in enumerate(city.upgrade_city_type):
                         if upgrade_idx < max_upgrades_per_city:  # Limit to maximum upgrades
-                            action_index_upgrade = base_index_upgrade + upgrade_idx * max_routes_per_upgrade_city + route_idx
+                            action_index_upgrade = base_index_upgrade + upgrade_idx
                             claim_route_for_upgrade_tensor[action_index_upgrade] = 1
+                            print(f"{route_idx} City: {city.name}")
+                            print(f"{city_idx} Route between {route.cities[0].name} and {route.cities[1].name}")
+                            for i, post in enumerate(route.posts):
+                                if post.owner:
+                                    print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
+                                else:
+                                    print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
 
         route_idx += 1
 
     # Concatenate tensors to form a single tensor representing all claim route actions
     claim_route_tensor = torch.cat([claim_route_for_points_tensor, claim_route_for_office_tensor, claim_route_for_upgrade_tensor])
+    print(f"{claim_route_for_upgrade_tensor}")
     return claim_route_tensor
 
 def get_city_index(city, game):

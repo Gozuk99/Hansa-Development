@@ -82,10 +82,9 @@ class Map1(Map):
         Kampen = City('Kampen', 107, 385, BLACKISH_BROWN)
         if num_players == 3:
             Kampen.add_office(Office("square", "ORANGE", 0))
-            Kampen.add_office(Office("square", "BLACK", 0))
         else:
             Kampen.add_office(Office("circle", "ORANGE", 0))
-            Kampen.add_office(Office("square", "BLACK", 0))
+        Kampen.add_office(Office("square", "BLACK", 0))
         self.cities.append(Kampen)
 
         Arnheim = City('Arnheim', 65, 655, DARK_RED)

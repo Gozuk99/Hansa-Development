@@ -3,12 +3,15 @@
 import sys
 from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, INPUT_SIZE, OUTPUT_SIZE
 from ai.ai_model import HansaNN
+from player_info.reward_options import Rewards
 
 class Player:
     def __init__(self, color, order):
         self.color = color
         self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{order}.pth")
         self.reward = 0
+        self.reward_structure = Rewards(1)
+
         self.order = order
 
         self.score = 0  # Initial score
@@ -212,8 +215,8 @@ class Player:
             if num_circles + num_squares < self.bank and self.bank == 3:
                 print(f"Inefficient use of income action while bank is at {self.bank}")
                 self.reward -=10
-            else:
-                self.reward += 1
+            # else:
+            #     self.reward += 0.1
 
             self.general_stock_circles -= num_circles
             self.personal_supply_circles += num_circles

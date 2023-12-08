@@ -6,7 +6,7 @@ SPACING = 10  # Increased spacing between the shapes
 
 # Constants for input and output sizes
 INPUT_SIZE = 2310
-OUTPUT_SIZE = 671
+OUTPUT_SIZE = 581
 
 # Alphabetized Color variables
 BLACK = (0, 0, 0)
@@ -63,3 +63,4 @@ UPGRADE_MAX_VALUES = {
     'actions': ACTIONS_MAX_VALUES[-1],
     'bank': BANK_MAX_VALUES[-1]
 }
+
