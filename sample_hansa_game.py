@@ -58,7 +58,7 @@ def handle_move(pos, button):
     route, post = find_post_by_position(pos)
     shape_clicked = 'circle' if button == 3 else 'square'
 
-    move_action(game, post, shape_clicked)
+    move_action(game, route, post, shape_clicked)
 
 def find_clicked_city(cities, pos):
     for city in cities:
@@ -367,11 +367,6 @@ def check_if_player_has_usable_BMs():
 
 game = Game(map_num=1, num_players=3)
 
-WIDTH = game.selected_map.map_width+800
-HEIGHT = game.selected_map.map_height
-cities = game.selected_map.cities
-routes = game.selected_map.routes
-
 # Print initial weights
 # print("Initial weights of layer1:")
 # game.players[game.active_player].hansa_nn.print_weights('layer1')
@@ -382,8 +377,8 @@ epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(50):
-    game = Game(map_num=random.randint(1, 3), num_players=random.randint(3, 5))
+for j in range(100):
+    game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
     for i in range(100):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
         hansa_nn = active_player.hansa_nn
@@ -453,6 +448,10 @@ for j in range(50):
                 break
             active_player.reward = 0
             epsilon = max(epsilon_end, epsilon - decay_rate)
+
+    for player in game.players:
+        print(f"Saving model for Player: {player.order} as hansa_nn_model{player.order}.pth")
+        torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{player.order}.pth")
     gc.collect()
 
 final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()
@@ -467,9 +466,10 @@ plt.hist(final_weights_layer3, bins=50, alpha=0.7)
 plt.title("Final Weights Distribution")
 plt.show()
 
-for i, player in enumerate(game.players):
-    print(f"Saving model for Player: {player.order} as hansa_nn_model{i+1}.pth")
-    torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{i+1}.pth")
+WIDTH = game.selected_map.map_width+800
+HEIGHT = game.selected_map.map_height
+cities = game.selected_map.cities
+routes = game.selected_map.routes
 
 win = pygame.display.set_mode((WIDTH, HEIGHT))
 # viewable_window = pygame.display.set_mode((1800, 1350))

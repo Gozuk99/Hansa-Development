@@ -55,19 +55,6 @@ class Game:
         elif map_num == 3:
             return Map3(num_players)
     
-    def claim_bonus_marker(self):
-        # This method would be called when a player claims a new bonus marker
-        self.bonus_markers_to_place += 1
-        print(f"Player has claimed a bonus marker. {self.bonus_markers_to_place} bonus marker(s) to place.")
-    
-    def place_bonus_marker(self):
-        # This method would be called when a bonus marker is successfully placed on the map
-        if self.bonus_markers_to_place > 0:
-            self.bonus_markers_to_place -= 1
-            print(f"Bonus marker placed. {self.bonus_markers_to_place} bonus marker(s) left to place.")
-        else:
-            print("No bonus markers to place.")
-
     def switch_player_if_needed(self):
         # print(f"Attempting to switch player. Replace Bonus Marker: {self.replace_bonus_marker}, Actions Remaining: {self.current_player.actions_remaining}")
         if self.replace_bonus_marker == 0 and self.current_player.actions_remaining == 0:

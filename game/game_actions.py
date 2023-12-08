@@ -59,10 +59,14 @@ def displace_action(game, post, route, displacing_piece_shape):
         print(f"DISPLACE ERROR - Incorrect Privilige to displace in brown or blue")
         return
     
-    # if route.has_bonus_marker or route.has_permanent_bm_type or route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
-    #     current_player.reward += 0.1
-    # else:
-    #     current_player.reward += 0.1
+    if route.has_bonus_marker:
+        current_player.reward += current_player.reward_structure.post_with_bm-2
+    elif route.has_permanent_bm_type:
+        current_player.reward += current_player.reward_structure.post_with_perm_bm-2
+    if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
+        current_player.reward += current_player.reward_structure.post_adjacent_to_upgrade_city-2
+    else:
+        current_player.reward += current_player.reward_structure.post_with_nothing
 
     # Handle the cost of displacement with priority to squares
     squares_to_pay = min(current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
@@ -159,7 +163,7 @@ def valid_region_transition(start_region, target_region):
         return target_region in [start_region, None]
     return False
 
-def move_action(game, post, shape):
+def move_action(game, route, post, shape):
     player = game.current_player
 
      # If no post was found, simply return without doing anything
@@ -181,12 +185,33 @@ def move_action(game, post, shape):
             player.start_move()
         # Attempt to pick up a piece if within the pieces to move limit (book)
         player.pick_up_piece(post)
+
+        if route.has_bonus_marker:
+            player.reward -= player.reward_structure.post_with_bm
+        elif route.has_permanent_bm_type:
+            player.reward -= player.reward_structure.post_with_perm_bm
+        if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
+            player.reward -= player.reward_structure.post_adjacent_to_upgrade_city
+        # else:
+        #     player.reward -= player.reward_structure.post_with_nothing
+
         print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} MOVE - picked up a piece")
 
     # If the player has pieces in hand to place
     elif player.holding_pieces:
         if not post.is_owned():
+            shape_to_place, owner_to_place, origin_region = player.holding_pieces[0]
             player.place_piece(post, shape)
+
+            if owner_to_place == player:
+                if route.has_bonus_marker:
+                    player.reward += player.reward_structure.post_with_bm
+                elif route.has_permanent_bm_type:
+                    player.reward += player.reward_structure.post_with_perm_bm
+                if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
+                    player.reward += player.reward_structure.post_adjacent_to_upgrade_city
+                # else:
+                #     player.reward -= player.reward_structure.post_with_nothing
             
             # If no pieces are left to place, finish the move
             if not player.holding_pieces:
