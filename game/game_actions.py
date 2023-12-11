@@ -5,6 +5,18 @@ def claim_post_action(game, route, post, piece_to_play):
     player = game.current_player
 
     if not game.check_brown_blue_priv(route):
+        print(f"CLAIM ERROR - Incorrect Privilige to claim in brown or blue")
+        return
+    else:
+        if route.region == "Wales":
+            game.current_player.brown_priv_count -= 1
+        elif route.region == "Scotland":
+            game.current_player.blue_priv_count -= 1
+    
+    if (player.personal_supply_squares + player.personal_supply_circles) == 0:
+        print("CLAIM ERROR - No pieces left to place!")
+        print(f"personal_supply_squares={player.personal_supply_squares} personal_supply_circles={player.personal_supply_circles}")
+        sys.exit()
         return
     
     if route.has_bonus_marker:
@@ -58,6 +70,11 @@ def displace_action(game, post, route, displacing_piece_shape):
     if not game.check_brown_blue_priv(route):
         print(f"DISPLACE ERROR - Incorrect Privilige to displace in brown or blue")
         return
+    else:
+        if route.region == "Wales":
+            game.current_player.brown_priv_count -= 1
+        elif route.region == "Scotland":
+            game.current_player.blue_priv_count -= 1
     
     if route.has_bonus_marker:
         current_player.reward += current_player.reward_structure.post_with_bm-2
@@ -67,6 +84,19 @@ def displace_action(game, post, route, displacing_piece_shape):
         current_player.reward += current_player.reward_structure.post_adjacent_to_upgrade_city-2
     else:
         current_player.reward += current_player.reward_structure.post_with_nothing
+
+    # Handle the piece being placed
+    if displacing_piece_shape == "square" and current_player.personal_supply_squares > 0:
+        current_player.personal_supply_squares -= 1
+        post.circle_color = TAN
+        post.square_color = current_player.color
+    elif displacing_piece_shape == "circle" and current_player.personal_supply_circles > 0:
+        current_player.personal_supply_circles -= 1
+        post.circle_color = current_player.color
+        post.square_color = TAN
+    else:
+        print("ERROR in displace_action")
+        sys.exit()
 
     # Handle the cost of displacement with priority to squares
     squares_to_pay = min(current_player.personal_supply_squares, cost - 1)  # Subtract 1 for the piece being placed
@@ -78,16 +108,8 @@ def displace_action(game, post, route, displacing_piece_shape):
     current_player.general_stock_squares += squares_to_pay
     current_player.general_stock_circles += circles_to_pay
 
-    # Handle the piece being placed
-    if displacing_piece_shape == "square":
-        current_player.personal_supply_squares -= 1
-        post.circle_color = TAN
-        post.square_color = current_player.color
-    elif displacing_piece_shape == "circle":
-        current_player.personal_supply_circles -= 1
-        post.circle_color = current_player.color
-        post.square_color = TAN
-    else:
+    if current_player.personal_supply_squares < 0 or current_player.personal_supply_circles < 0:
+        print(f"displace_action - personal_supply_squares={current_player.personal_supply_squares} personal_supply_circles={current_player.personal_supply_circles}")
         sys.exit()
 
     post.owner_piece_shape = displacing_piece_shape
@@ -259,6 +281,7 @@ def displace_claim(game, post, desired_shape):
         game.original_route_of_displacement = None
         game.displaced_player.reset_displaced_player()
         game.waiting_for_displaced_player = False
+        print("No longer waiting for the displaced player.")
         game.current_player.actions_remaining -= 1
         game.active_player = game.current_player.order-1
         # game.switch_player_if_needed()
@@ -307,6 +330,10 @@ def claim_and_update(game, post, shape, use_displaced_piece=False, from_personal
             displaced_player.player.personal_supply_squares -= 1
         else:
             displaced_player.player.personal_supply_circles -= 1
+    
+    if displaced_player.player.personal_supply_squares < 0 or displaced_player.player.personal_supply_circles < 0:
+        print(f"claim_and_update - personal_supply_squares={displaced_player.player.personal_supply_squares} personal_supply_circles={displaced_player.player.personal_supply_circles}")
+        sys.exit()
     
     displaced_player.total_pieces_to_place -= 1
 

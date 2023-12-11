@@ -303,7 +303,28 @@ class City:
             if office.controller == player:
                 return True
         return False
-        
+    
+    def claim_green_city(self, game):
+        if game.current_player.personal_supply_squares == 0 and game.current_player.personal_supply_circles == 0:
+            print(f"Cannot claim GREEN City: {self.name}, because you have no Tradesmen in your Personal Supply")
+            return False
+        else:
+            if self.city_all_offices_occupied():
+                #create a new office
+                #append it to city.offices
+                self.add_office(Office("square", "WHITE", 0))
+
+            self.update_next_open_office_ownership(game)
+            
+            # Remove a square if available, otherwise remove a circle
+            if game.current_player.personal_supply_squares > 0:
+                game.current_player.personal_supply_squares -= 1
+            elif game.current_player.personal_supply_circles > 0:
+                game.current_player.personal_supply_circles -= 1
+            
+            print(f"Claimed office in GREEN City: {self.name}")
+            return True
+
 class Upgrade:
     def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):
         self.city_name = city_name
@@ -481,6 +502,10 @@ class BonusMarker:
         else:
             print ("Invalid City to Swap offices, please try another city.")
             return False
+    def handle_move3(self, game):
+        game.waiting_for_bm_move3 = True
+        game.current_player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker
+        print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
         
     def handle_upgrade_ability(self, upgrade, player):
         if player.perform_upgrade(upgrade.upgrade_type):

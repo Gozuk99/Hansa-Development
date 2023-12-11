@@ -58,7 +58,9 @@ def fill_game_tensor(game):
     initial_game_info = torch.tensor([game.map_num, game.num_players, game.active_player,
                                       game.current_player_index + 1, game.current_player.actions_remaining,
                                       game.selected_map.max_full_cities, game.current_full_cities_count,
-                                      game.east_west_completed_count], device=device, dtype=torch.uint8)
+                                      game.east_west_completed_count,
+                                      game.waiting_for_bm_swap_office, game.waiting_for_bm_upgrade_ability,
+                                      game.waiting_for_bm_move_any_2, game.waiting_for_bm_move3], device=device, dtype=torch.uint8)
 
     # Privileges info
     cardiff_priv, carlisle_priv, london_priv = assign_blue_brown_priv_mapping(game)

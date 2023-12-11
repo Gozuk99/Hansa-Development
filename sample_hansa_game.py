@@ -206,27 +206,8 @@ def handle_permanent_bonus_marker(perm_bm_type):
 def claim_green_city_with_bm(pos):
     for city in game.selected_map.cities:
         if check_bounds(city, pos) and city.color == DARK_GREEN:
-            if game.current_player.personal_supply_squares == 0 and game.current_player.personal_supply_circles == 0:
-                print(f"Cannot claim GREEN City: {city.name}, because you have no Tradesmen in your Personal Supply")
-            else:
-                if city.city_all_offices_occupied():
-                    #create a new office
-                    #append it to city.offices
-                    city.add_office(Office("square", "WHITE", 0))
-
-                city.update_next_open_office_ownership(game)
-                
-                # Remove a square if available, otherwise remove a circle
-                if game.current_player.personal_supply_squares > 0:
-                    game.current_player.personal_supply_squares -= 1
-                elif game.current_player.personal_supply_circles > 0:
-                    game.current_player.personal_supply_circles -= 1
-                
-                print(f"Claimed office in GREEN City: {city.name}")
-
-                game.check_for_east_west_connection()
-                check_if_game_over()
-            return True
+            if city.claim_green_city(game):
+                return True
     print("Please click on a GREEN City!")
     return False
 
@@ -278,9 +259,7 @@ def use_bonus_marker(bm):
     if bm.type == 'SwapOffice':
         print("Click a City to swap offices on.")
     elif bm.type == 'Move3':
-        player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker
-        print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
-        game.waiting_for_bm_move3 = True
+        bm.handle_move3(game)
     elif bm.type == 'UpgradeAbility':
         print("Please click on an upgrade to choose it.")
     elif bm.type == '3Actions':
@@ -364,7 +343,6 @@ def handle_end_turn_click(pos):
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
-
 game = Game(map_num=1, num_players=3)
 
 # Print initial weights
@@ -377,9 +355,9 @@ epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(100):
+for j in range(5):
     game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
-    for i in range(100):
+    for i in range(200):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
         hansa_nn = active_player.hansa_nn
 

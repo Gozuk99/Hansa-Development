@@ -5,8 +5,8 @@ BUFFER = 10  # Buffer around the rectangle
 SPACING = 10  # Increased spacing between the shapes
 
 # Constants for input and output sizes
-INPUT_SIZE = 2310
-OUTPUT_SIZE = 581
+INPUT_SIZE = 2314
+OUTPUT_SIZE = 616
 
 # Alphabetized Color variables
 BLACK = (0, 0, 0)
