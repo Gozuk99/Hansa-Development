@@ -6,6 +6,9 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import gc
 
+# Set print options
+torch.set_printoptions(profile="full")
+
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN, INPUT_SIZE, OUTPUT_SIZE
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from ai.ai_model import HansaNN
@@ -231,9 +234,9 @@ def handle_place_two_tradesmen_from_route(pos, button):
                 game.current_player.general_stock_squares -= 1
 
             remaining_pieces = ', '.join(reset_pieces)
-            print(f"BM: Please place {game.current_player.pieces_to_place} more piece(s) of {remaining_pieces} on valid posts!")
+            print(f"BM: Please place {game.current_player.pieces_to_place} more piece(s) of {', '.join(remaining_pieces)} on valid posts!")
         else:
-            print(f"Cannot place {shape_clicked}. Available pieces: {', '.join(reset_pieces)}.")
+            print(f"Cannot place {shape_clicked}. Available pieces: {', '.join(str(piece) for piece in reset_pieces)}.")
     elif not post:
         print("No valid post was clicked.")
 
@@ -340,24 +343,29 @@ def handle_end_turn_click(pos):
     else:
         print("Please click End Turn, or a Bonus Marker that you can use!")
 
+def handle_get_game_state(pos):
+    if (game.selected_map.map_width+300 < pos[0] < game.selected_map.map_width+300 + 200 and
+        game.selected_map.map_height-170 < pos[1] < game.selected_map.map_height-170 + 170):
+        return True
+
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
-game = Game(map_num=1, num_players=3)
+# game = Game(map_num=2, num_players=5)
 
-# Print initial weights
-# print("Initial weights of layer1:")
-# game.players[game.active_player].hansa_nn.print_weights('layer1')
-initial_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()
-initial_weights_layer3 = game.players[0].hansa_nn.layer3.weight.data.cpu().numpy().flatten()
+# # Print initial weights
+# # print("Initial weights of layer1:")
+# # game.players[game.active_player].hansa_nn.print_weights('layer1')
+# initial_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()
+# initial_weights_layer3 = game.players[0].hansa_nn.layer3.weight.data.cpu().numpy().flatten()
 epsilon_start = 1.0
 epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(5):
+for j in range(1000):
     game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
-    for i in range(200):
+    for i in range(100):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
         hansa_nn = active_player.hansa_nn
 
@@ -427,22 +435,21 @@ for j in range(5):
             active_player.reward = 0
             epsilon = max(epsilon_end, epsilon - decay_rate)
 
-    for player in game.players:
-        print(f"Saving model for Player: {player.order} as hansa_nn_model{player.order}.pth")
-        torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{player.order}.pth")
+        print(f"Saving model for Player: {active_player.order} as hansa_nn_model{active_player.order}.pth")
+        torch.save(active_player.hansa_nn.state_dict(), f"hansa_nn_model{active_player.order}.pth")
     gc.collect()
 
-final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()
-final_weights_layer3 = game.players[0].hansa_nn.layer3.weight.data.cpu().numpy().flatten()
-# Plot histograms
-plt.figure(figsize=(12, 6))
-plt.subplot(1, 2, 1)
-plt.hist(initial_weights_layer3, bins=50, alpha=0.7)
-plt.title("Initial Weights Distribution")
-plt.subplot(1, 2, 2)
-plt.hist(final_weights_layer3, bins=50, alpha=0.7)
-plt.title("Final Weights Distribution")
-plt.show()
+# final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()
+# final_weights_layer3 = game.players[0].hansa_nn.layer3.weight.data.cpu().numpy().flatten()
+# # Plot histograms
+# plt.figure(figsize=(12, 6))
+# plt.subplot(1, 2, 1)
+# plt.hist(initial_weights_layer3, bins=50, alpha=0.7)
+# plt.title("Initial Weights Distribution")
+# plt.subplot(1, 2, 2)
+# plt.hist(final_weights_layer3, bins=50, alpha=0.7)
+# plt.title("Final Weights Distribution")
+# plt.show()
 
 WIDTH = game.selected_map.map_width+800
 HEIGHT = game.selected_map.map_height
@@ -463,13 +470,20 @@ while True:
         elif event.type == pygame.MOUSEBUTTONUP:
             get_available_actions(game)
             mouse_position = pygame.mouse.get_pos()
-            if(check_if_bm_clicked(mouse_position)):
+
+            if handle_get_game_state(mouse_position):
+                game_state = get_game_state(game)
+                with open('game_states_for_training.txt', 'w') as f:
+                    print(f"Game State:", file=f)
+                    print(game_state, file=f)
+
+            elif(check_if_bm_clicked(mouse_position)):
                 print(f"Bonus Marker was used!")
             # while game_not_over:
             elif game.waiting_for_displaced_player:
                 displaced_click(mouse_position, event.button)
 
-            elif game.current_player.holding_pieces :
+            elif game.current_player.holding_pieces:
                 handle_move(mouse_position, event.button)
 
             elif game.current_player.actions_remaining > 0:

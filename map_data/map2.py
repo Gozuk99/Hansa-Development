@@ -34,7 +34,7 @@ class Map2(Map):
             ('Braunsberg', 'Danzig'): (1568, 394),
             ('Braunsberg', 'Elbing'): (1524, 600),
             ('Elbing', 'Kulm'): (1321, 571),
-            ('Kulm', 'Munster'): (1180, 568),
+            ('Belgard', 'Kulm'): (1180, 568),
             ('Kulm', 'Stettin'): (991, 612),
             ('Brandenburg', 'Stettin'): (592, 669),
             ('Brandenburg', 'Tangermunde'): (293, 758),
@@ -100,7 +100,7 @@ class Map2(Map):
         Konigsberg.assign_upgrade_type('SpecialPrestigePoints')
         self.cities.append(Konigsberg)
 
-        Belgard = City('Munster', 909, 450, DARK_GREEN)
+        Belgard = City('Belgard', 909, 450, DARK_GREEN)
         Belgard.add_office(Office("square", "WHITE", 0))
         Belgard.add_office(Office("square", "WHITE", 0))
         Belgard.add_office(Office("square", "WHITE", 0))

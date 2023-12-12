@@ -1,11 +1,10 @@
-# player_attributes.py
+# reward_attributes.py
 
 import sys
 from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, INPUT_SIZE, OUTPUT_SIZE
 
 WIN_REWARD = 2000
 NEUTRAL = 0
-
 
 class Rewards:
     def __init__(self, selection):

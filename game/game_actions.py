@@ -31,13 +31,13 @@ def claim_post_action(game, route, post, piece_to_play):
     city_names = ' and '.join([city.name for city in route.cities])
     region_info = f" in {route.region}" if route.region else ""
 
-    if piece_to_play == "square" and player.personal_supply_squares > 0:
+    if piece_to_play == "square" and player.has_personal_supply("square"):
         post.claim(player, "square")
         print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'square' between {city_names}{region_info}")
         player.actions_remaining -= 1
         player.personal_supply_squares -= 1
 
-    elif piece_to_play == "circle" and player.personal_supply_circles > 0:
+    elif piece_to_play == "circle" and player.has_personal_supply("circle"):
         post.claim(player, "circle")
         print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'circle' between {city_names}{region_info}")
         player.actions_remaining -= 1
@@ -359,6 +359,7 @@ def assign_new_bonus_marker_on_route(game, route):
         route.assign_map_new_bonus_marker(bm_type)  # Create a new BonusMarker instance with the type
         print(f"Bonus marker '{bm_type}' has been placed on the route between {route.cities[0].name} and {route.cities[1].name}.")
         game.replace_bonus_marker -= 1
+        game.switch_player_if_needed()
     else:
         print("No action taken: No bonus markers available in the pool.")
 
@@ -447,7 +448,7 @@ def handle_bonus_marker(game, player, route, reset_pieces):
         elif perm_bm_type == 'Place2TradesmenFromRoute':
             game.current_player.pieces_to_place = 2
             game.current_player.holding_pieces = reset_pieces
-            print(f"BM: Please place {game.current_player.pieces_to_place} pieces of {reset_pieces} on valid posts!")
+            print(f"BM: Please place {game.current_player.pieces_to_place} pieces on valid posts!")
             game.waiting_for_bm_move_any_2 = True
         elif perm_bm_type == '+1Priv':
             game.current_player.upgrade_privilege()

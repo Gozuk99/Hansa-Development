@@ -63,6 +63,7 @@ class Game:
         # print(f"Attempting to switch player. Replace Bonus Marker: {self.replace_bonus_marker}, Actions Remaining: {self.current_player.actions_remaining}")
         if self.replace_bonus_marker == 0 and self.current_player.actions_remaining == 0:
             print(f"Conditions met. Switching from Player {self.current_player_index+1} - {COLOR_NAMES[self.current_player.color]}.")
+            self.current_player.ending_turn = False
             self.current_player_index = (self.current_player_index + 1) % len(self.players)
             self.current_player = self.players[self.current_player_index]
             self.current_player.actions_remaining = self.current_player.actions

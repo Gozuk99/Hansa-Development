@@ -1,7 +1,7 @@
 import sys
 import torch
 import time
-from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, COLOR_NAMES, UPGRADE_MAX_VALUES
+from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, COLOR_NAMES, UPGRADE_MAX_VALUES, MAX_CITIES, MAX_ROUTES, MAX_POSTS
 from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, score_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
 
 #debugging
@@ -11,15 +11,15 @@ import pygame
 # Check if CUDA (GPU support) is available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-NUM_CLAIM_POST_ACTIONS = 242    # Actions for claiming posts, index range: 0 - 241
-NUM_CLAIM_ROUTE_ACTIONS = 280   # Actions for claiming routes, index range: 242 - 521
-NUM_INCOME_ACTIONS = 5          # Actions for income, index range: 522 - 526
-NUM_BM_ACTIONS = 8              # Actions for BM, index range: 527 - 534
-NUM_PERM_BM_ACTIONS = 5         # Actions for permanent BM changes, index range: 535 - 539
-NUM_REPLACE_BM_ACTIONS = 40     # Actions for replacing BM, index range: 540 - 579
-NUM_BM_CITY_ACTIONS = 30        # Actions for BM related to cities, index range: 580 - 609
-NUM_BM_UPGRADE = 5              # Actions for BM upgrades, index range: 610 - 614
-NUM_END_TURN_ACTIONS = 1        # Action to end turn, index range: 615
+NUM_CLAIM_POST_ACTIONS = 242        # Actions for claiming posts, index range: 0 - 241
+NUM_CLAIM_ROUTE_ACTIONS = 280       # Actions for claiming routes, index range: 242 - 521
+NUM_INCOME_ACTIONS = 5              # Actions for income, index range: 522 - 526
+NUM_BM_ACTIONS = 8                  # Actions for BM, index range: 527 - 534
+NUM_PERM_BM_ACTIONS = 5             # Actions for permanent BM changes, index range: 535 - 539
+NUM_REPLACE_BM_ACTIONS = MAX_ROUTES # Actions for replacing BM, index range: 540 - 579
+NUM_BM_CITY_ACTIONS = MAX_CITIES    # Actions for BM related to cities, index range: 580 - 609
+NUM_BM_UPGRADE = 5                  # Actions for BM upgrades, index range: 610 - 614
+NUM_END_TURN_ACTIONS = 1            # Action to end turn, index range: 615
 
 # Calculating the total actions
 TOTAL_ACTIONS = (NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + 
@@ -50,18 +50,18 @@ def perform_action_from_index(game, max_prob_index):
     # Handle default or error case
     return None
 
-
 def error_exit(game, route):
     win = pygame.display.set_mode((game.selected_map.map_width+800, game.selected_map.map_height))
     # viewable_window = pygame.display.set_mode((1800, 1350))
     pygame.display.set_caption('Hansa Sample Game')
     win.fill((210, 180, 140))
 
-    for i, post in enumerate(route.posts):
-        if post.owner:
-            print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
-        else:
-            print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
+    if route:
+        for i, post in enumerate(route.posts):
+            if post.owner:
+                print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
+            else:
+                print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
     # Redraw the window (if necessary)
     redraw_window(win, game)
     while True:
@@ -75,8 +75,8 @@ def error_exit(game, route):
 
 def map_claim_post_action(game, index):
     current_player = game.current_player
-    post_type = 'square' if index < 121 else 'circle'
-    ai_post_selection = index % 121  # Get the actual post index
+    post_type = 'square' if index < MAX_POSTS else 'circle'
+    ai_post_selection = index % MAX_POSTS  # Get the actual post index
     selected_post = None
     selected_route = None
 
@@ -177,9 +177,9 @@ def map_claim_post_action(game, index):
 # 40+80+160=280
 def map_claim_route_action(game, index):
     # Size of each action type
-    num_points_actions = 40  # e.g., 40
-    num_office_actions = 40 * 2  # e.g., 80
-    num_upgrade_actions = 40 * 2 * 2  # e.g., 160
+    num_points_actions = MAX_ROUTES  #40
+    num_office_actions = MAX_ROUTES * 2  # e.g., 80
+    num_upgrade_actions = MAX_ROUTES * 2 * 2  # e.g., 160
 
     # Claim route for points
     if index < num_points_actions:
@@ -306,13 +306,12 @@ def map_perm_bm_action(game, index):
     pass
 
 def map_replace_bm_action(game, index):
-    max_num_routes = 40  # Maximum number of routes
     current_player = game.current_player
 
     # Check if the conditions are met to replace a bonus marker
     if current_player.actions_remaining == 0 and current_player.ending_turn and game.replace_bonus_marker > 0:
         # Check if the index is within the range of the number of routes
-        if index < max_num_routes:
+        if index < MAX_ROUTES:
             route = game.selected_map.routes[index]
             if not (route.bonus_marker or route.permanent_bonus_marker) and \
                     not route.has_tradesmen() and route.has_empty_office_in_cities():
@@ -335,7 +334,7 @@ def map_bm_city_actions(game, index):
     for city_idx, city in enumerate(game.cities):
         if city_idx == index:
             if game.waiting_for_bm_swap_office:
-                if city.check_if_eligible_to_swap_offices(city, game.current_player):
+                if city.check_if_eligible_to_swap_offices(game.current_player):
                     print ("Valid City to swap offices")
                     city.swap_offices(game.current_player)
                     game.waiting_for_bm_swap_office = False
@@ -353,11 +352,12 @@ def map_bm_upgrade_ability(game, index):
                 game.current_player.perform_upgrade(upgrade_type) 
 
 def map_end_turn_action(game):
-    if game.replace_bonus_marker == 0:
+    if check_if_player_has_usable_BMs(game) and game.current_player.actions_remaining == 0:
         game.current_player.ending_turn = True
         game.switch_player_if_needed()
     else:
         print("Cannot end the turn as Bonus Markers need to be replaced on the Map!")
+        error_exit(game, None)
 
 def masking_out_invalid_actions(game):
     
@@ -382,7 +382,7 @@ def masking_out_invalid_actions(game):
 def mask_post_action(game):
     current_player = game.current_player
 
-    post_tensor = torch.zeros(121 * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
+    post_tensor = torch.zeros(MAX_POSTS * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
     if current_player.actions_remaining == 0:
         return post_tensor
     
@@ -407,19 +407,19 @@ def mask_post_action(game):
                         if displaced_player.displaced_shape == "square" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
                             post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
                         elif displaced_player.displaced_shape == "circle" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
-                            post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts if necessary
+                            post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
                     
                     elif displaced_player.played_displaced_shape:
                         if has_pieces_in_general_stock:
                             if displaced_player.player.has_general_stock("square") and (not post.required_shape or post.required_shape == "square"):
                                 post_tensor[post_idx] = 1
                             if displaced_player.player.has_general_stock("circle") and (not post.required_shape or post.required_shape == "circle"):
-                                post_tensor[121 + post_idx] = 1
+                                post_tensor[MAX_POSTS + post_idx] = 1
                         elif has_pieces_in_personal_supply:
                             if displaced_player.player.has_personal_supply("square") and (not post.required_shape or post.required_shape == "square"):
                                 post_tensor[post_idx] = 1
                             if displaced_player.player.has_personal_supply("circle") and (not post.required_shape or post.required_shape == "circle"):
-                                post_tensor[121 + post_idx] = 1
+                                post_tensor[MAX_POSTS + post_idx] = 1
                         # else:
                         #     print (f"1If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
 
@@ -427,18 +427,18 @@ def mask_post_action(game):
                         if displaced_player.displaced_shape == "square" and (not post.required_shape or post.required_shape == "square"):
                             post_tensor[post_idx] = 1
                         elif displaced_player.displaced_shape == "circle" and (not post.required_shape or post.required_shape == "circle"):
-                            post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
+                            post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts
                         
                         if has_pieces_in_general_stock:
                             if displaced_player.player.has_general_stock("square") and (not post.required_shape or post.required_shape == "square"):
                                 post_tensor[post_idx] = 1
                             if displaced_player.player.has_general_stock("circle") and (not post.required_shape or post.required_shape == "circle"):
-                                post_tensor[121 + post_idx] = 1
+                                post_tensor[MAX_POSTS + post_idx] = 1
                         elif has_pieces_in_personal_supply:
                             if displaced_player.player.has_personal_supply("square") and (not post.required_shape or post.required_shape == "square"):
                                 post_tensor[post_idx] = 1
                             if displaced_player.player.has_personal_supply("circle") and (not post.required_shape or post.required_shape == "circle"):
-                                post_tensor[121 + post_idx] = 1
+                                post_tensor[MAX_POSTS + post_idx] = 1
                         # else:
                         #     print (f"2If displaced player has an empty GS and PS, eventually need to handle moving pieces.")
                     else:
@@ -459,7 +459,7 @@ def mask_post_action(game):
                 #             if shape_to_place == 'square' and (not post.required_shape or post.required_shape == 'square'):
                 #                 post_tensor[post_idx] = 1
                 #             elif shape_to_place == 'circle' and (not post.required_shape or post.required_shape == 'circle'):
-                #                 post_tensor[121 + post_idx] = 1  # Offset for circle posts
+                #                 post_tensor[MAX_POSTS + post_idx] = 1  # Offset for circle posts
                 #         # else:
                 #             # Invalid action scenario, handle accordingly
                 #             # print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
@@ -479,7 +479,7 @@ def mask_post_action(game):
                     if current_player.personal_supply_squares > 0 and (not post.required_shape or post.required_shape == "square"):
                         post_tensor[post_idx] = 1
                     if current_player.personal_supply_circles > 0 and (not post.required_shape or post.required_shape == "circle"):
-                        post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
+                        post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts
                 # DISPLACE - if post is owned by a different player:
                 elif is_post_owned and post.owner != current_player and check_brown_blue_priv(game, route) and can_displace:
                     # Calculate the cost to displace based on the shape of the post's piece
@@ -491,7 +491,7 @@ def mask_post_action(game):
                         if post.required_shape == "square" or post.required_shape is None and current_player.personal_supply_squares > 0:
                             post_tensor[post_idx] = 1
                         if post.required_shape == "circle" or post.required_shape is None and current_player.personal_supply_circles > 0:
-                            post_tensor[121 + post_idx] = 1  # Offset by 121 for circle posts
+                            post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts
                 # else:
                 #     print (f"Invalid scenario detected. Post Info - Circle Color: {COLOR_NAMES[post.circle_color]}, Square Color: {COLOR_NAMES[post.square_color]}, Owner: {post.owner}, Region: {post.region}, ReqShape: {post.required_shape}")
             post_idx += 1
@@ -501,7 +501,7 @@ def mask_post_action(game):
 
 #should return - 40+80+160=280
 def mask_claim_route(game):
-    max_num_routes = 40  # Maximum number of routes
+    max_num_routes = MAX_ROUTES  # Maximum number of routes
     two_cities_per_route = 2  # Maximum number of routes per city
     max_upgrades_per_city = 2  # Maximum upgrades per city
 
@@ -527,15 +527,15 @@ def mask_claim_route(game):
                 if city.has_empty_office():
                     next_open_office_color = city.get_next_open_office_color()
                     if game.current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
-                        if not city.has_required_piece_shape(game.current_player, route):
+                        if city.has_required_piece_shape(game.current_player, route):
                             claim_route_for_office_tensor[base_index_office] = 1
-                            print(f"{route_idx} City: {city.name}")
-                            print(f"{city_idx} Route between {route.cities[0].name} and {route.cities[1].name}")
-                            for i, post in enumerate(route.posts):
-                                if post.owner:
-                                    print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
-                                else:
-                                    print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
+                            # print(f"{route_idx} City: {city.name}")
+                            # print(f"{city_idx} Route between {route.cities[0].name} and {route.cities[1].name}")
+                            # for i, post in enumerate(route.posts):
+                            #     if post.owner:
+                            #         print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
+                            #     else:
+                            #         print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
 
                 # Check for upgrade options
                 if city.upgrade_city_type:
@@ -544,14 +544,14 @@ def mask_claim_route(game):
                             # Calculate the unique index for this upgrade option
                             action_index_upgrade = (route_idx * two_cities_per_route * max_upgrades_per_city) + (city_idx * max_upgrades_per_city) + upgrade_idx
                             claim_route_for_upgrade_tensor[action_index_upgrade] = 1
-                            print(f"action_index_upgrade: {action_index_upgrade}")
-                            print(f"{route_idx} City: {city.name}")
-                            print(f"{city_idx} Route between {route.cities[0].name} and {route.cities[1].name}")
-                            for i, post in enumerate(route.posts):
-                                if post.owner:
-                                    print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
-                                else:
-                                    print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
+                            # print(f"action_index_upgrade: {action_index_upgrade}")
+                            # print(f"{route_idx} City: {city.name}")
+                            # print(f"{city_idx} Route between {route.cities[0].name} and {route.cities[1].name}")
+                            # for i, post in enumerate(route.posts):
+                            #     if post.owner:
+                            #         print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
+                            #     else:
+                            #         print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
 
         route_idx += 1
 
@@ -642,14 +642,14 @@ def mask_replace_bm(game):
     return replace_bm_tensor
 
 def mask_bm_city_actions(game):
-    bm_city_tensor = torch.zeros(30, device=device, dtype=torch.uint8)  # 30 possible cities to claim a green city or swap office
+    bm_city_tensor = torch.zeros(MAX_CITIES, device=device, dtype=torch.uint8)  # 30 possible cities to claim a green city or swap office
     if not game.waiting_for_bm_swap_office or game.waiting_for_bm_green_city:
         return bm_city_tensor
     
     city_idx = 0
     for city in game.selected_map.cities:
         if game.waiting_for_bm_swap_office:
-            if city.check_if_eligible_to_swap_offices(city, game.current_player):
+            if city.check_if_eligible_to_swap_offices(game.current_player):
                 bm_city_tensor[city_idx] = 1
         elif game.waiting_for_bm_green_city:
             if city.color == DARK_GREEN:
@@ -679,7 +679,7 @@ def mask_bm_upgrade_ability(game):
 def mask_end_turn(game):
     end_turn_tensor = torch.zeros(1, device=device, dtype=torch.uint8)
 
-    if game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3 or game.waiting_for_bm_swap_office or game.waiting_for_bm_upgrade_ability:
+    if game.current_player.ending_turn or game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3 or game.waiting_for_bm_swap_office or game.waiting_for_bm_upgrade_ability:
         return end_turn_tensor
 
     if check_if_player_has_usable_BMs(game) and game.current_player.actions_remaining == 0:

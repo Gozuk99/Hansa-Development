@@ -8,7 +8,7 @@ import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-SEED = 1234
+SEED = 124
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
@@ -16,8 +16,8 @@ random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-#current input size is 2309
-#current output size is 681
+#current input size is 2314
+#current output size is 616
 class HansaNN(nn.Module):
     def __init__(self, input_size, output_size, model_file=None):
         super(HansaNN, self).__init__()

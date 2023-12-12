@@ -8,6 +8,10 @@ SPACING = 10  # Increased spacing between the shapes
 INPUT_SIZE = 2314
 OUTPUT_SIZE = 616
 
+MAX_CITIES = 30
+MAX_ROUTES = 40
+MAX_POSTS = 121
+
 # Alphabetized Color variables
 BLACK = (0, 0, 0)
 BLACKISH_BROWN = (130, 100, 80)

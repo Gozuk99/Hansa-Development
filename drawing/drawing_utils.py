@@ -299,6 +299,20 @@ def draw_end_game(win, winning_players):
     # Update the display to show the changes
     pygame.display.update()
 
+def draw_get_game_state_button(win, game):
+    start_x = game.selected_map.map_width + 300
+    start_y = game.selected_map.map_height - 170
+    scoreboard_width = 200  # Set the width according to your requirements
+    scoreboard_height = 70  # Adjust based on text size and spacing
+
+    draw_shape(win, "rectangle", TAN, start_x, start_y, scoreboard_width, scoreboard_height)
+    # Calculate center position for the End Turn label
+    label_center_x = start_x + scoreboard_width // 2
+    label_center_y = start_y + scoreboard_height // 2
+
+    # Draw the End Turn label centered
+    draw_text(win, "Get Game State", label_center_x, label_center_y, FONT_LARGE, BLACK, centered=True)
+
 def redraw_window(win, game):
     selected_map = game.selected_map
 
@@ -316,6 +330,8 @@ def redraw_window(win, game):
     if game.current_player.actions_remaining == 0:
         if game.current_player.bonus_markers and any(bm.type != 'PlaceAdjacent' for bm in game.current_player.bonus_markers): 
             draw_end_turn(win, game)
+    
+    draw_get_game_state_button(win, game)
 
 def draw_player_board(window, player, current_player):
     board = player.board

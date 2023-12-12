@@ -1,6 +1,6 @@
 import torch
 import time
-from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY
+from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, MAX_CITIES, MAX_ROUTES
 
 # Check if CUDA (GPU support) is available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -40,7 +40,7 @@ def get_game_state(game):
     player_tensor = fill_player_info_tensor(game)
     player_tensor = player_tensor.flatten()
     end_time = time.time()
-    # print(f"player_tensor Size: {route_tensor.size()}")
+    # print(f"player_tensor Size: {player_tensor.size()}")
     execution_time4 = end_time - start_time
     
     # print(f"game_tensor Execution Time: {execution_time1} seconds, Size: {game_tensor.size()}")
@@ -98,9 +98,8 @@ def assign_special_prestige_points_mapping(game):
     return special_prestige_points_info
 
 def fill_city_tensor(game):
-    max_cities = 30
     num_attributes = 49  # 4 attributes for city + 10 offices * 4 attributes each + 5 adjacent city numbers
-    all_city_info = torch.zeros(max_cities, num_attributes, device=device, dtype=torch.uint8)
+    all_city_info = torch.zeros(MAX_CITIES, num_attributes, device=device, dtype=torch.uint8)
 
     for i, city in enumerate(game.selected_map.cities):
         city_num, city_color = assign_city_name_and_color_mapping(game, city)
@@ -261,14 +260,13 @@ def assign_office_mapping(office):
         }
     office_shape = office_shape_mapping.get(office.shape, 0)
     office_color = office_color_mapping.get(office.color, 0)
-    office_controller = colors.index(office.controller) + 1 if office.controller else 0
+    office_controller = colors.index(office.controller.color) + 1 if office.controller else 0
     office_points = office.awards_points
     return office_shape, office_color, office_controller, office_points
 
 def fill_route_tensor(game):
-    max_routes = 40
     num_attributes = 6 + 5 * 2  # 6 route attributes + 2 post attributes * 5 posts
-    all_route_info = torch.zeros(max_routes, num_attributes, device=device, dtype=torch.uint8)
+    all_route_info = torch.zeros(MAX_ROUTES, num_attributes, device=device, dtype=torch.uint8)
 
     for i, route in enumerate(game.selected_map.routes):
         # Get numerical values for route attributes
@@ -355,8 +353,7 @@ def fill_player_info_tensor(game):
 
         # Combine all info into a single tensor
         player_info[i] = torch.tensor(player_data + list(player_unused_bm[i]) + list(player_used_bm[i]), dtype=torch.uint8, device=device)
-        # print (f"player_info[{i}] {player_info[i]}")
-    
+
     return player_info
 
 def assign_priv_mapping(player):
