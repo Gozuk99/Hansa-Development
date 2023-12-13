@@ -2,20 +2,18 @@ import pygame
 import sys
 import random
 import torch
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import gc
 
 # Set print options
 torch.set_printoptions(profile="full")
 
-from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN, INPUT_SIZE, OUTPUT_SIZE
-from map_data.map_attributes import Map, City, Upgrade, Office, Route
-from ai.ai_model import HansaNN
-from ai.game_state import get_available_actions, get_game_state
+from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
+# from map_data.map_attributes import Map, City, Upgrade, Office, Route
+# from ai.ai_model import HansaNN
+from ai.game_state import get_game_state, save_game_state_to_file, load_game_from_file
 from ai.action_options import perform_action_from_index, masking_out_invalid_actions
 from game.game_info import Game
-from game.game_actions import claim_post_action, displace_action, gather_empty_posts, move_action, displace_claim, assign_new_bonus_marker_on_route, score_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
+from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
 from drawing.drawing_utils import redraw_window, draw_end_game
 
 def end_game(winning_players):
@@ -345,13 +343,14 @@ def handle_end_turn_click(pos):
 
 def handle_get_game_state(pos):
     if (game.selected_map.map_width+300 < pos[0] < game.selected_map.map_width+300 + 200 and
-        game.selected_map.map_height-170 < pos[1] < game.selected_map.map_height-170 + 170):
+        game.selected_map.map_height-100 < pos[1] < game.selected_map.map_height):
         return True
 
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
 # game = Game(map_num=2, num_players=5)
+game = load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights
 # # print("Initial weights of layer1:")
@@ -363,7 +362,7 @@ epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(1000):
+for j in range(0):
     game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
     for i in range(100):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
@@ -468,14 +467,10 @@ while True:
             pygame.quit()
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
-            get_available_actions(game)
             mouse_position = pygame.mouse.get_pos()
 
             if handle_get_game_state(mouse_position):
-                game_state = get_game_state(game)
-                with open('game_states_for_training.txt', 'w') as f:
-                    print(f"Game State:", file=f)
-                    print(game_state, file=f)
+                save_game_state_to_file(game)
 
             elif(check_if_bm_clicked(mouse_position)):
                 print(f"Bonus Marker was used!")

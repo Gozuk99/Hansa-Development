@@ -301,7 +301,7 @@ def draw_end_game(win, winning_players):
 
 def draw_get_game_state_button(win, game):
     start_x = game.selected_map.map_width + 300
-    start_y = game.selected_map.map_height - 170
+    start_y = game.selected_map.map_height - 100
     scoreboard_width = 200  # Set the width according to your requirements
     scoreboard_height = 70  # Adjust based on text size and spacing
 

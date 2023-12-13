@@ -1,5 +1,7 @@
 import torch
 import time
+import sys
+from game.game_info import Game
 from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, MAX_CITIES, MAX_ROUTES
 
 # Check if CUDA (GPU support) is available
@@ -7,16 +9,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(f"Using device: {device}")
 
 def get_game_state(game):
-    # Type of Action:
-    # normal, displaced, use_bm, replace_bm, perm_bonus_marker
-    # 1-5, 1/0, 1/0, 1/0
+    # game_tensor Size: torch.Size([19])
+    # city_tensor Size: torch.Size([1470])
+    # route_tensor Size: torch.Size([640])
+    # player_tensor Size: torch.Size([185])
 
     # Game:
     start_time = time.time()
     game_tensor = fill_game_tensor(game)
     game_tensor = game_tensor.flatten()
     end_time = time.time()
-    # print(f"game_tensor Size: {game_tensor.size()}")
+    print(f"game_tensor Size: {game_tensor.size()}")
     execution_time1 = end_time - start_time
 
     # Map info:
@@ -24,7 +27,7 @@ def get_game_state(game):
     city_tensor = fill_city_tensor(game)
     city_tensor = city_tensor.flatten()
     end_time = time.time()
-    # print(f"city_tensor Size: {city_tensor.size()}")
+    print(f"city_tensor Size: {city_tensor.size()}")
     execution_time2 = end_time - start_time
     
     # Route Info
@@ -32,7 +35,7 @@ def get_game_state(game):
     route_tensor = fill_route_tensor(game)
     route_tensor = route_tensor.flatten()
     end_time = time.time()
-    # print(f"route_tensor Size: {route_tensor.size()}")
+    print(f"route_tensor Size: {route_tensor.size()}")
     execution_time3 = end_time - start_time
     
     #Player Info
@@ -40,7 +43,7 @@ def get_game_state(game):
     player_tensor = fill_player_info_tensor(game)
     player_tensor = player_tensor.flatten()
     end_time = time.time()
-    # print(f"player_tensor Size: {player_tensor.size()}")
+    print(f"player_tensor Size: {player_tensor.size()}")
     execution_time4 = end_time - start_time
     
     # print(f"game_tensor Execution Time: {execution_time1} seconds, Size: {game_tensor.size()}")
@@ -83,6 +86,15 @@ def assign_blue_brown_priv_mapping(game):
 
     return cardiff_priv, carlisle_priv, london_priv
 
+def unmap_blue_brown_priv_mapping(cardiff_priv, carlisle_priv, london_priv):
+    colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
+
+    cardiff_priv = colors[cardiff_priv - 1] if cardiff_priv else None
+    carlisle_priv = colors[carlisle_priv - 1] if carlisle_priv else None
+    london_priv = colors[london_priv - 1] if london_priv else None
+
+    return cardiff_priv, carlisle_priv, london_priv
+
 def assign_special_prestige_points_mapping(game):
     circle_mappings = []
     for circle in game.selected_map.specialprestigepoints.circle_data:
@@ -96,6 +108,20 @@ def assign_special_prestige_points_mapping(game):
     # Convert to tensor and ensure it's on the correct device
     special_prestige_points_info = torch.tensor(circle_mappings, device=device, dtype=torch.uint8)
     return special_prestige_points_info
+
+def unmap_special_prestige_points_mapping(special_prestige_points_info, game):
+    if len(special_prestige_points_info) != len(game.selected_map.specialprestigepoints.circle_data):
+        print(f"Error: Mismatch in the size of special prestige points info and circle data.")
+        print(f"special_prestige_points_info {len(special_prestige_points_info)}, circle_data {len(game.selected_map.specialprestigepoints.circle_data)}")
+        return  # or handle this situation appropriately
+    
+    for i, circle in enumerate(game.selected_map.specialprestigepoints.circle_data):
+        if special_prestige_points_info[i] != 0:
+            # Find the player object based on the index
+            owner_player = game.players[special_prestige_points_info[i] - 1]  # -1 to handle zero-based indexing
+            circle["owner"] = owner_player
+        else:
+            circle["owner"] = None
 
 def fill_city_tensor(game):
     num_attributes = 49  # 4 attributes for city + 10 offices * 4 attributes each + 5 adjacent city numbers
@@ -123,6 +149,33 @@ def fill_city_tensor(game):
         all_city_info[i] = city_tensor
 
     return all_city_info
+
+def unmap_city_tensor(city_tensor, game, city):
+    # Split the tensor into its parts
+    city_data_list = list(map(int, city_tensor))
+    city_data = city_data_list[:4]
+    office_data = city_data_list[4:44]
+    adjacent_city_numbers = city_data_list[44:49]
+
+    # Unpack the office data into a list of tuples
+    office_data = [tuple(office_data[i:i + 4]) for i in range(0, len(office_data), 4)]
+
+    # Convert city data to their original values
+    city_name, city_color = unmap_city_name_and_color_mapping(city_data[0], city_data[1], game)
+
+    # Convert office data to their original values
+    office_data = [unmap_office_mapping(office) for office in office_data]
+
+    if city.name == city_name:
+        # Ensure the number of offices in the tensor matches the number of offices in the city
+        for office, new_office_data in zip(city.offices, office_data):
+            office_shape, office_color, office_controller_index, office_points = new_office_data
+            # office.shape = office_shape
+            # office.color = office_color
+            office.controller = game.players[office_controller_index - 1] if office_controller_index else None
+            # office.awards_points = office_points
+    else:
+        sys.exit(f"City name: {city.name} does not match city name in tensor: {city_name}")
 
 def assign_city_name_and_color_mapping(game, city):
     map1_cities_mapping = {
@@ -162,7 +215,7 @@ def assign_city_name_and_color_mapping(game, city):
             'Visby': 5,
             'Danzig': 6,
             'Konigsberg': 7,
-            'Munster': 8,
+            'Belgard': 8,
             'Anklam': 9,
             'Waren': 10,
             'Perleberg': 11,
@@ -227,6 +280,109 @@ def assign_city_name_and_color_mapping(game, city):
     city_color = city_colors.index(city.color) + 1
     return city_num, city_color
 
+def unmap_city_name_and_color_mapping(city_num, city_color, game):
+    map1_cities_mapping = {
+            1: 'Groningen',
+            2: 'Emden',
+            3: 'Osnabruck',
+            4: 'Kampen',
+            5: 'Arnheim',
+            6: 'Duisburg',
+            7: 'Dortmund',
+            8: 'Munster',
+            9: 'Coellen',
+            10: 'Warburg',
+            11: 'Paderborn',
+            12: 'Minden',
+            13: 'Bremen',
+            14: 'Stade',
+            15: 'Hannover',
+            16: 'Hildesheim',
+            17: 'Gottingen',
+            18: 'Quedlinburg',
+            19: 'Goslar',
+            20: 'Brunswick',
+            21: 'Luneburg',
+            22: 'Hamburg',
+            23: 'Lubeck',
+            24: 'Perleberg',
+            25: 'Stendal',
+            26: 'Magdeburg',
+            27: 'Halle'
+        }
+    map2_cities_mapping = {
+            1: 'Lubeck',
+            2: 'Mismar',
+            3: 'Stralsund',
+            4: 'Malmo',
+            5: 'Visby',
+            6: 'Danzig',
+            7: 'Konigsberg',
+            8: 'Belgard',
+            9: 'Anklam',
+            10: 'Waren',
+            11: 'Perleberg',
+            12: 'Havelberg',
+            13: 'Stettin',
+            14: 'Kulm',
+            15: 'Elbing',
+            16: 'Braunsberg',
+            17: 'Allenstein',
+            18: 'Frankfurt',
+            19: 'BerlinColln',
+            20: 'Brandenburg',
+            21: 'Tangermunde',
+            22: 'Magdeburg',
+            23: 'Halle',
+            24: 'Mittenberg',
+            25: 'Dresden',
+            26: 'Breslau',
+            27: 'Thorn',
+            28: 'Krackau'
+    }
+    map3_cities_mapping = {
+            1: 'Glasgom',
+            2: 'Edinbaurgh',
+            3: 'Dunbar',
+            4: 'Falkirk',
+            5: 'Carlisle',
+            6: 'Newcastle',
+            7: 'IsleOfMan',
+            8: 'Conway',
+            9: 'Chester',
+            10: 'Montgomery',
+            11: 'Pembroke',
+            12: 'Cardiff',
+            13: 'Richmond',
+            14: 'Durham',
+            15: 'Lancaster',
+            16: 'York',
+            17: 'Hereford',
+            18: 'Coventry',
+            19: 'Nottingham',
+            20: 'Norwich',
+            21: 'Cambridge',
+            22: 'Ipswich',
+            23: 'Oxford',
+            24: 'London',
+            25: 'Canterbury',
+            26: 'Calais',
+            27: 'Southhampton',
+            28: 'Salisbury',
+            29: 'Plymouth',
+            30: 'Bristol'
+        }
+    city_colors = [GREY, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, (65, 103, 114)]
+
+    if game.map_num == 1:
+        city_name = map1_cities_mapping.get(city_num, 0)
+    elif game.map_num == 2:
+        city_name = map2_cities_mapping.get(city_num, 0)
+    elif game.map_num == 3:
+        city_name = map3_cities_mapping.get(city_num, 0)
+    city_color = city_colors[city_color - 1]
+    return city_name, city_color
+
 def assign_city_upgrade_type_mapping(city):
     city1_upgrade = 0
     city2_upgrade = 0
@@ -264,6 +420,30 @@ def assign_office_mapping(office):
     office_points = office.awards_points
     return office_shape, office_color, office_controller, office_points
 
+def unmap_office_mapping(office):
+    if len(office) != 4:
+        print(f"Error: Office data does not have 4 attributes.")
+        return 0, 0, 0, 0
+    colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
+    office_shape_mapping = {
+            0: None,
+            1: 'square',
+            2: 'circle'
+        }
+    office_color_mapping = {
+            0: None,
+            1: 'WHITE',
+            2: 'ORANGE',
+            3: 'PINK',
+            4: 'BLACK'
+        }
+    # print("Office Tuple:", office)
+    office_shape = office_shape_mapping.get(office[0], None)
+    office_color = office_color_mapping.get(office[1], None)
+    office_controller = colors[office[2] - 1] if office[2] else None
+    office_points = office[3]
+    return office_shape, office_color, office_controller, office_points
+
 def fill_route_tensor(game):
     num_attributes = 6 + 5 * 2  # 6 route attributes + 2 post attributes * 5 posts
     all_route_info = torch.zeros(MAX_ROUTES, num_attributes, device=device, dtype=torch.uint8)
@@ -293,6 +473,31 @@ def fill_route_tensor(game):
 
     return all_route_info
 
+def unmap_route_tensor(route_tensor, route, game):
+    # Split the tensor into its parts
+    route_info = route_tensor[:6]
+    post_info = route_tensor[6:]
+
+    # Convert route data to their original values
+    city1_name, city1_color = unmap_city_name_and_color_mapping(route_info[0], route_info[1], game)
+    city2_name, city2_color = unmap_city_name_and_color_mapping(route_info[2], route_info[3], game)
+    route_region = unmap_region_mapping(route_info[4])
+    route_bm = unmap_bonus_marker_mapping(route_info[5])
+    route_perm_bm = unmap_permanent_bm_mapping(route_info[6])
+
+    # Convert post data to their original values
+    post_info = [tuple(post_info[i:i + 2]) for i in range(0, len(post_info), 2)]
+    post_shapes = [unmap_post_shape_mapping(post[0]) for post in post_info]
+    post_owners = [unmap_player_mapping(post[1], game) for post in post_info]  # You need to create this function
+
+    if  route.cities[0].name == city1_name and route.cities[0].color == city1_color and \
+        route.cities[1].name == city2_name and route.cities[1].color == city2_color and \
+        route.region == route_region:
+        route.has_bonus_marker = route_bm
+        for i, post in enumerate(route.posts):
+            post.required_shape = post_shapes[i]
+            post.owner = post_owners[i]
+
 def assign_region_mapping(region):
     region_mapping = {
         'Scotland': 1,
@@ -301,8 +506,19 @@ def assign_region_mapping(region):
     }
     return region_mapping.get(region, 0)
 
+def unmap_region_mapping(region):
+    region_mapping = {
+        1: 'Scotland',
+        2: 'Wales',
+        0: None  # No specific region
+    }
+    return region_mapping.get(region, None)
+
 def assign_bonus_marker_mapping(has_bonus_marker):
     return 1 if has_bonus_marker else 0
+
+def unmap_bonus_marker_mapping(has_bonus_marker):
+    return True if has_bonus_marker == 1 else False
 
 def assign_permanent_bm_mapping(permanent_bm_type):
     # Example mapping, modify based on your game's permanent bonus markers
@@ -316,6 +532,18 @@ def assign_permanent_bm_mapping(permanent_bm_type):
     }
     return permanent_bm_mapping.get(permanent_bm_type, 0)
 
+def unmap_permanent_bm_mapping(permanent_bm_type):
+    # Example mapping, modify based on your game's permanent bonus markers
+    permanent_bm_mapping = {
+        1: 'MoveAny2',
+        2: '+1Priv',
+        3: 'ClaimGreenCity',
+        4: 'Place2TradesmenFromRoute',
+        5: 'Place2ScotlandOrWales',
+        0: None
+    }
+    return permanent_bm_mapping.get(permanent_bm_type, None)
+
 def assign_post_shape_mapping(shape):
     shape_mapping = {
         'circle': 1,
@@ -324,12 +552,27 @@ def assign_post_shape_mapping(shape):
     }
     return shape_mapping.get(shape, 0)
 
+def unmap_post_shape_mapping(shape):
+    shape_mapping = {
+        1: 'circle',
+        2: 'square',
+        0: None
+    }
+    return shape_mapping.get(shape, None)
+
 def assign_player_mapping(game, player):
     # Map player objects to a unique identifier (e.g., player index)
     if player is None:
         return 0
     else:
         return game.players.index(player) + 1  # Assuming game.players is a list of players
+
+def unmap_player_mapping(player_index, game):
+    # Map unique identifier (e.g., player index) to player object
+    if player_index == 0:
+        return None
+    else:
+        return game.players[player_index - 1]  # Assuming game.players is a list of players
 
 def fill_player_info_tensor(game):
     max_players = 5 
@@ -356,6 +599,35 @@ def fill_player_info_tensor(game):
 
     return player_info
 
+def unmap_player_tensor(player_tensor, player):
+    # Split the tensor into its parts
+    player_data = player_tensor[:14]
+    player_unused_bm = player_tensor[14:26]
+    player_used_bm = player_tensor[26:]
+
+    # Convert player data to their original values
+    player.score = player_data[0]
+    player.keys = player_data[1]
+    player.privilege = unmap_priv_mapping(player_data[2])
+    player.book = player_data[3]
+    player.actions_index = player_data[4]
+    player.actions = player_data[5]
+    player.bank = unmap_bank_mapping(player_data[6])
+    player.general_stock_squares = player_data[7]
+    player.general_stock_circles = player_data[8]
+    player.personal_supply_squares = player_data[9]
+    player.personal_supply_circles = player_data[10]
+    player.brown_priv_count = player_data[11]
+    player.blue_priv_count = player_data[12]
+
+    # Convert bonus markers to their original values
+    player_unused_bm = [unmap_bm_mapping(bm) for bm in player_unused_bm]
+    player_used_bm = [unmap_bm_mapping(bm) for bm in player_used_bm]
+
+    # Create new bonus marker objects with the original values
+    player.bonus_markers = [bm for bm in player_unused_bm if bm is not None]
+    player.used_bonus_markers = [bm for bm in player_used_bm if bm is not None]
+
 def assign_priv_mapping(player):
     priv_mapping = {
             'WHITE': 1,
@@ -365,14 +637,32 @@ def assign_priv_mapping(player):
         }
     return priv_mapping.get(player.privilege, 0)
 
+def unmap_priv_mapping(priv):
+    priv_mapping = {
+            1: 'WHITE',
+            2: 'ORANGE',
+            3: 'PINK',
+            4: 'BLACK'
+        }
+    return priv_mapping.get(priv, None)
+
 def assign_bank_mapping(player):
     bank_mapping = {
             '3': 1,
             '5': 2,
             '7': 3,
-            'E': 4
+            '50': 4
         }
     return bank_mapping.get(player.bank, 0)
+
+def unmap_bank_mapping(bank):
+    bank_mapping = {
+            1: '3',
+            2: '5',
+            3: '7',
+            4: '50'
+        }
+    return bank_mapping.get(bank, None)
 
 def assign_bm_mapping(player):
     bm_mapping = {
@@ -397,79 +687,125 @@ def assign_bm_mapping(player):
 
     return player_unused_bm, player_used_bm
 
-def get_available_actions(game):
-    player = game.current_player
-    actions = []
-
-    all_bonus_markers = {
-            'PlaceAdjacent': 3,
-            'SwapOffice': 2,
-            'Move3': 1,
-            'UpgradeAbility': 2,
-            '3Actions': 2,
-            '4Actions': 2,
-            'Exchange Bonus Marker': 2,
-            'Tribute for Establish a Trading Post': 2,
-            'Block Trade Route': 2
+def unmap_bm_mapping(bm):
+    bm_mapping = {
+            1: 'PlaceAdjacent',
+            2: 'SwapOffice',
+            3: 'Move3',
+            4: 'UpgradeAbility',
+            5: '3Actions',
+            6: '4Actions',
+            7: 'Exchange Bonus Marker',
+            8: 'Tribute for Establish a Trading Post',
+            9: 'Block Trade Route'
         }
+    return bm_mapping.get(bm, None)
 
-    for route in game.selected_map.routes:
-        if route.is_controlled_by(player):
-            if can_player_claim_office_in_city(game, player, route, route.cities[0]):
-                print(f"Can claim {route.cities[0].name} with route")
-            if can_player_claim_office_in_city(game, player, route, route.cities[1]):
-                print(f"Can claim {route.cities[1].name} with route")
-            print(f"Can claim route between {route.cities[0].name} and {route.cities[1].name} for points")
+def save_game_state_to_file(game):
+    game_state = get_game_state(game)
+    with open('game_states_for_training.txt', 'a') as f:
+        # Split the game state tensor into its parts
+        game_tensor = game_state[:19]
+        city_tensor = game_state[19:19+1470]
+        route_tensor = game_state[19+1470:19+1470+640]
+        player_tensor = game_state[19+1470+640:]
 
-        for post in route.posts:
-            if check_brown_blue_priv(game, route):
-                if player.personal_supply_squares > 0:
-                    if post.can_be_claimed_by("square"):
-                        # print(f"Can claim post between {route.cities[0].name} and {route.cities[1].name} with square.")
-                        actions.append(post)
-                if player.personal_supply_circles > 0:
-                    if post.can_be_claimed_by("circle"):
-                        # print(f"Can claim post between {route.cities[0].name} and {route.cities[1].name} with circle.")
-                        actions.append(post)
-    if player.bonus_markers:
-        for bm in player.bonus_markers:
-            actions.append(bm)
+        # Convert each tensor to a list and join the elements into a string
+        game_tensor_str = ', '.join(map(str, game_tensor.flatten().tolist()))
+        city_tensor_str = ', '.join(map(str, city_tensor.flatten().tolist()))
+        route_tensor_str = ', '.join(map(str, route_tensor.flatten().tolist()))
+        player_tensor_str = ', '.join(map(str, player_tensor.flatten().tolist()))
 
-def can_player_claim_office_in_city(game, player, route, city):
-    next_open_office_color = city.get_next_open_office_color()
+        # Print each string to the file
+        print(f"Game Tensor: {game_tensor_str}", file=f)
+        print(f"City Tensor: {city_tensor_str}", file=f)
+        print(f"Route Tensor: {route_tensor_str}", file=f)
+        print(f"Player Tensor: {player_tensor_str}", file=f)
 
-    if player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
-        if city.has_required_piece_shape(player, route):
-            placed_piece_shape = city.get_next_open_office_shape()
-            print(f"Can place a {placed_piece_shape.upper()} into an office of {city.name}")
-    elif 'PlaceAdjacent' in (bm.type for bm in player.bonus_markers):
-        print(f"Can place a square into a NEW office of {city.name}.")
+def load_game_from_file(filename):
+    game = get_game_info(filename)
+    get_city_info(filename, game)
+    get_route_info(filename, game)
+    get_player_info(filename, game)
 
-    if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
-        if game.selected_map.specialprestigepoints.claim_highest_prestige(player):
-            print(f"Can claim route for Special Prestige at {city.name}")
-    elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
-        for upgrade in game.selected_map.upgrade_cities:
-            if upgrade.city_name == city.name:
-                print(f"Can claim route to UPGRADE {city.upgrade_city_type} in {city.name}.")
+    return game
 
-def check_brown_blue_priv(game, route):
-    if route.region is not None:
-        # Check for Wales region
-        if route.region == "Wales":
-            if not (game.cardiff_priv == game.current_player or game.london_priv == game.current_player):
-                # print("Cannot claim post in BROWN - Incorrect Privilege")
-                return False
-            if game.current_player.brown_priv_count == 0:
-                # print("Used all privilege already in Brown!")
-                return False
+def get_game_info(filename):
+    open_file = open(filename, "r")
+    lines = open_file.readlines()
+    for line in lines:
+        if line.startswith("Game Tensor:"):
+            game_str = line.split("Game Tensor: ")[1]
+            game_list = game_str.split(", ")
+            int_game_list = list(map(int, game_list))
 
-        # Check for Scotland region
-        elif route.region == "Scotland":
-            if not (game.carlisle_priv == game.current_player or game.london_priv == game.current_player):
-                # print("Cannot claim post in BLUE - Incorrect Privilege")
-                return False
-            if game.current_player.blue_priv_count == 0:
-                # print("Used all privilege already in Blue!")
-                return False
-    return True
+            map_num = int_game_list[0]
+            print(f"Map Num: {map_num}")
+            num_players = int_game_list[1]
+            print(f"Num Players: {num_players}")
+            active_player = int_game_list[2]
+            current_player_index = int_game_list[3]
+            actions_remaining = int_game_list[4]
+            # max_full_cities = int_game_list[5]
+            current_full_cities_count = int_game_list[6]
+            east_west_completed_count = int_game_list[7]
+            waiting_for_bm_swap_office = int_game_list[8]
+            waiting_for_bm_upgrade_ability = int_game_list[9]
+            waiting_for_bm_move_any_2 = int_game_list[10]
+            waiting_for_bm_move3 = int_game_list[11]
+            cardiff_priv = int_game_list[12]
+            carlisle_priv = int_game_list[13]
+            london_priv = int_game_list[14]
+            special_prestige_points = int_game_list[15:19]
+
+            break
+    
+    game = Game(map_num, num_players)
+    game.active_player = active_player
+    game.current_player_index = current_player_index
+    game.current_player.actions_remaining = actions_remaining
+    # game.selected_map.max_full_cities = max_full_cities - Creating the map will assign this value
+    game.current_full_cities_count = current_full_cities_count
+    game.east_west_completed_count = east_west_completed_count
+    game.waiting_for_bm_swap_office = waiting_for_bm_swap_office
+    game.waiting_for_bm_upgrade_ability = waiting_for_bm_upgrade_ability
+    game.waiting_for_bm_move_any_2 = waiting_for_bm_move_any_2
+    game.waiting_for_bm_move3 = waiting_for_bm_move3
+    game.cardiff_priv, game.carlisle_priv, game.london_priv = unmap_blue_brown_priv_mapping(cardiff_priv, carlisle_priv, london_priv)
+    game.selected_map.specialprestigepoints = unmap_special_prestige_points_mapping(special_prestige_points, game)
+    
+    return game
+
+def get_city_info(filename, game):
+    with open(filename, "r") as open_file:
+        lines = open_file.readlines()
+
+    for line in lines:
+        if line.startswith("City Tensor:"):
+            city_str = line.split("City Tensor: ")[1].strip()
+            city_data_list = city_str.split(", ")
+            num_attributes_per_city = 49  # number of attributes for each city
+
+            for i, city in enumerate(game.selected_map.cities):
+                start_index = i * num_attributes_per_city
+                end_index = start_index + num_attributes_per_city
+                city_tensor = city_data_list[start_index:end_index]
+                unmap_city_tensor(city_tensor, game, city)
+
+def get_route_info(filename, game):
+    open_file = open(filename, "r")
+    lines = open_file.readlines()
+    for line in lines:
+        if line.startswith("Route Tensor:"):
+            route_str = line.split("Route Tensor: ")[1]
+            for i, route in enumerate(game.selected_map.routes):
+                unmap_route_tensor(route_str[i*64:(i+1)*64], game, route)
+
+def get_player_info(filename, game):
+    open_file = open(filename, "r")
+    lines = open_file.readlines()
+    for line in lines:
+        if line.startswith("Player Tensor:"):
+            player_str = line.split("Player Tensor: ")[1]
+            for i, player in enumerate(game.players):
+                unmap_player_tensor(player_str[i*37:(i+1)*37], player)
