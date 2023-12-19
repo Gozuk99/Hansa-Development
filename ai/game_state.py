@@ -11,7 +11,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def get_game_state(game):
     # game_tensor Size: torch.Size([19])
     # city_tensor Size: torch.Size([1470])
-    # route_tensor Size: torch.Size([640])
+    # route_tensor Size: torch.Size([680])
     # player_tensor Size: torch.Size([185])
 
     # Game:
@@ -453,7 +453,7 @@ def unmap_office_mapping(office, game):
     return office_shape, office_color, office_controller, office_points
 
 def fill_route_tensor(game):
-    num_attributes = 6 + 5 * 2  # 6 route attributes + 2 post attributes * 5 posts
+    num_attributes = 7 + 5 * 2  # 6 route attributes + 2 post attributes * 5 posts
     all_route_info = torch.zeros(MAX_ROUTES, num_attributes, device=device, dtype=torch.uint8)
 
     for i, route in enumerate(game.selected_map.routes):
@@ -461,10 +461,11 @@ def fill_route_tensor(game):
         city1_num, _ = assign_city_name_and_color_mapping(game, route.cities[0])
         city2_num, _ = assign_city_name_and_color_mapping(game, route.cities[1])
         route_region = assign_region_mapping(route.region)
-        route_bm = assign_bonus_marker_mapping(route.has_bonus_marker)
+        route_has_bm, route_bm_type = assign_bonus_marker_mapping(route.has_bonus_marker, route.bonus_marker)
         route_perm_bm = assign_permanent_bm_mapping(route.has_permanent_bm_type)
 
-        route_info = [city1_num, city2_num, route.num_posts, route_region, route_bm, route_perm_bm]
+        # print(f"city1_num {city1_num}, city2_num {city2_num}, route_has_bm {route_has_bm}, route_bm_type {route_bm_type}")
+        route_info = [city1_num, city2_num, route.num_posts, route_region, route_has_bm, route_bm_type, route_perm_bm]
 
         # Get post information
         post_info = []
@@ -486,16 +487,19 @@ def unmap_route_tensor(route_tensor, route, game):
     route_info_list = list(map(int, route_tensor))
 
     # Split the tensor into route and post information
-    route_info = route_info_list[:6]
-    post_info = route_info_list[6:]
+    route_info = route_info_list[:7]
+    post_info = route_info_list[7:]
 
     # Convert route data to original values
     city1_name = unmap_city_name_and_color_mapping(route_info[0], game)
     city2_name = unmap_city_name_and_color_mapping(route_info[1], game)
     num_posts = route_info[2]  # Number of posts on the route
     route_region = unmap_region_mapping(route_info[3])
-    route_bm = unmap_bonus_marker_mapping(route_info[4])
-    route_perm_bm = unmap_permanent_bm_mapping(route_info[5])
+    route_has_bm = route_info[4]
+    route_bm_type = unmap_bonus_marker_mapping(route_info[5])
+    route_perm_bm = unmap_permanent_bm_mapping(route_info[6])
+
+    print(f"city1_name {city1_name}, city2_name {city2_name}, num_posts {num_posts}, route_has_bm {route_has_bm}, route_bm_type {route_bm_type}")
 
     # Convert post data to original values
     post_info = [tuple(post_info[i:i + 2]) for i in range(0, len(post_info), 2)]
@@ -505,7 +509,11 @@ def unmap_route_tensor(route_tensor, route, game):
     # Verify and update route attributes
     if route.cities[0].name == city1_name and route.cities[1].name == city2_name and \
        route.region == route_region and len(route.posts) == num_posts:
-        route.has_bonus_marker = route_bm
+        if route_bm_type:
+            route.assign_map_new_bonus_marker(route_bm_type)
+        else:
+            route.has_bonus_marker = False
+            route.bonus_marker = None
         route.has_permanent_bm_type = route_perm_bm
         for i, post in enumerate(route.posts):
             if post_owners[i] is not None:
@@ -529,11 +537,40 @@ def unmap_region_mapping(region):
     }
     return region_mapping.get(region, None)
 
-def assign_bonus_marker_mapping(has_bonus_marker):
-    return 1 if has_bonus_marker else 0
+def assign_bonus_marker_mapping(has_bonus_marker, bonus_marker):
+    bm_type = 0
+    bm_mapping = {
+        'PlaceAdjacent': 1,
+        'SwapOffice': 2,
+        'Move3': 3,
+        'UpgradeAbility': 4,
+        '3Actions': 5,
+        '4Actions': 6,
+        'Exchange Bonus Marker': 7,
+        'Tribute for Establish a Trading Post': 8,
+        'Block Trade Route': 9
+    }
+    if has_bonus_marker:
+        bm_type = bm_mapping.get(bonus_marker.type, 0)
 
-def unmap_bonus_marker_mapping(has_bonus_marker):
-    return True if has_bonus_marker == 1 else False
+    return has_bonus_marker, bm_type
+
+def unmap_bonus_marker_mapping(bonus_marker_type):
+    bm_mapping = {
+        1: 'PlaceAdjacent',
+        2: 'SwapOffice',
+        3: 'Move3',
+        4: 'UpgradeAbility',
+        5: '3Actions',
+        6: '4Actions',
+        7: 'Exchange Bonus Marker',
+        8: 'Tribute for Establish a Trading Post',
+        9: 'Block Trade Route',
+        0: None
+    }
+    bm_type = bm_mapping.get(bonus_marker_type, None)
+
+    return bm_type    
 
 def assign_permanent_bm_mapping(permanent_bm_type):
     # Example mapping, modify based on your game's permanent bonus markers
@@ -725,14 +762,19 @@ def save_game_state_to_file(game):
         # Split the game state tensor into its parts
         game_tensor = game_state[:19]
         city_tensor = game_state[19:19+1470]
-        route_tensor = game_state[19+1470:19+1470+640]
-        player_tensor = game_state[19+1470+640:]
+        route_tensor = game_state[19+1470:19+1470+680]
+        player_tensor = game_state[19+1470+680:]
 
         # Convert each tensor to a list and join the elements into a string
         game_tensor_str = ', '.join(map(str, game_tensor.flatten().tolist()))
         city_tensor_str = ', '.join(map(str, city_tensor.flatten().tolist()))
         route_tensor_str = ', '.join(map(str, route_tensor.flatten().tolist()))
         player_tensor_str = ', '.join(map(str, player_tensor.flatten().tolist()))
+
+        # game_tensor Size: torch.Size([19])
+        # city_tensor Size: torch.Size([1470])
+        # route_tensor Size: torch.Size([680])
+        # player_tensor Size: torch.Size([185])
 
         # Print each string to the file
         print(f"Game Tensor: {game_tensor_str}", file=f)
@@ -784,7 +826,6 @@ def get_game_info(filename):
     game.current_player = game.players[current_player_index - 1]
 
     game.current_player.actions_remaining = actions_remaining
-    # game.selected_map.max_full_cities = max_full_cities - Creating the map will assign this value
     game.current_full_cities_count = current_full_cities_count
     game.east_west_completed_count = east_west_completed_count
     game.waiting_for_bm_swap_office = waiting_for_bm_swap_office
@@ -792,7 +833,6 @@ def get_game_info(filename):
     game.waiting_for_bm_move_any_2 = waiting_for_bm_move_any_2
     game.waiting_for_bm_move3 = waiting_for_bm_move3
     game.cardiff_priv, game.carlisle_priv, game.london_priv = unmap_blue_brown_priv_mapping(cardiff_priv, carlisle_priv, london_priv)
-    # game.selected_map.specialprestigepoints = unmap_special_prestige_points_mapping(special_prestige_points, game)
     unmap_special_prestige_points_mapping(special_prestige_points, game)
     
     return game
@@ -840,7 +880,7 @@ def get_route_info(filename, game):
         if line.startswith("Route Tensor:"):
             route_str = line.split("Route Tensor: ")[1].strip()
             route_data_list = route_str.split(", ")
-            num_attributes_per_route = 16  # number of attributes for each route
+            num_attributes_per_route = 17  # number of attributes for each route
 
             for i, route in enumerate(game.selected_map.routes):
                 start_index = i * num_attributes_per_route

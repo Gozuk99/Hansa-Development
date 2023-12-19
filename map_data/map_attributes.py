@@ -465,6 +465,7 @@ class Route:
         if not self.bonus_marker:  # Only assign if there's no bonus marker already
             # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
             self.bonus_marker = BonusMarker(bm_type)
+            self.has_bonus_marker = True
         else:
             print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
 

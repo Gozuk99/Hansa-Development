@@ -438,6 +438,7 @@ def handle_bonus_marker(game, player, route, reset_pieces):
         route.bonus_marker.owner = player
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
+        route.has_bonus_marker = False
         game.replace_bonus_marker += 1
     elif route.permanent_bonus_marker:
         player.reward += player.reward_structure.route_complete_perm_bm
