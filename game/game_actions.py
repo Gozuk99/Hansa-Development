@@ -4,6 +4,9 @@ from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YEL
 def claim_post_action(game, route, post, piece_to_play):
     player = game.current_player
 
+    if not player.has_personal_supply(piece_to_play):
+        print(f"CLAIM ERROR - Cannot claim a {piece_to_play} as current_player has PS Squares: {player.personal_supply_squares} PS Circles: {player.personal_supply_circles}")
+        return
     if not game.check_brown_blue_priv(route):
         print(f"CLAIM ERROR - Incorrect Privilige to claim in brown or blue")
         return

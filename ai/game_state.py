@@ -3,6 +3,7 @@ import time
 import sys
 from game.game_info import Game
 from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, MAX_CITIES, MAX_ROUTES, COLOR_NAMES
+from map_data.map_attributes import BonusMarker
 
 # Check if CUDA (GPU support) is available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -499,8 +500,6 @@ def unmap_route_tensor(route_tensor, route, game):
     route_bm_type = unmap_bonus_marker_mapping(route_info[5])
     route_perm_bm = unmap_permanent_bm_mapping(route_info[6])
 
-    print(f"city1_name {city1_name}, city2_name {city2_name}, num_posts {num_posts}, route_has_bm {route_has_bm}, route_bm_type {route_bm_type}")
-
     # Convert post data to original values
     post_info = [tuple(post_info[i:i + 2]) for i in range(0, len(post_info), 2)]
     owner_shapes = [unmap_post_shape_mapping(post[0]) for post in post_info]
@@ -509,7 +508,7 @@ def unmap_route_tensor(route_tensor, route, game):
     # Verify and update route attributes
     if route.cities[0].name == city1_name and route.cities[1].name == city2_name and \
        route.region == route_region and len(route.posts) == num_posts:
-        if route_bm_type:
+        if route_has_bm:
             route.assign_map_new_bonus_marker(route_bm_type)
         else:
             route.has_bonus_marker = False
@@ -635,6 +634,8 @@ def fill_player_info_tensor(game):
     bank_mappings = [assign_bank_mapping(player) for player in game.players]
     bm_mappings = [assign_bm_mapping(player) for player in game.players]
     player_unused_bm, player_used_bm = zip(*bm_mappings)  # Unpack the tuples into two lists
+    print (f"Player Unused Bonus Markers: {player_unused_bm}")
+    print (f"Player Used Bonus Markers: {player_used_bm}")
 
     # Initialize the tensor on the appropriate device
     player_info = torch.zeros(max_players, num_attributes, device=device, dtype=torch.uint8)
@@ -656,9 +657,11 @@ def unmap_player_tensor(player_tensor, player):
     player_info_list = list(map(int, player_tensor))
 
     # Split the tensor into player data and bonus marker data
-    player_data = player_info_list[:14]
-    player_unused_bm = player_info_list[14:26]
-    player_used_bm = player_info_list[26:]
+    player_data = player_info_list[:13]
+    player_unused_bm = player_info_list[13:25]
+    print (f"Player {COLOR_NAMES[player.color]} - Unused Bonus Markers: {player_unused_bm}")
+    player_used_bm = player_info_list[25:]
+    print (f"Player {COLOR_NAMES[player.color]} - Used Bonus Markers: {player_used_bm}")
 
     # Convert player data to their original values
     player.score = player_data[0]
@@ -679,9 +682,15 @@ def unmap_player_tensor(player_tensor, player):
     player_unused_bm = [unmap_bm_mapping(bm) for bm in player_unused_bm]
     player_used_bm = [unmap_bm_mapping(bm) for bm in player_used_bm]
 
-    # Update player's bonus markers
-    player.bonus_markers = [bm for bm in player_unused_bm if bm is not None]
-    player.used_bonus_markers = [bm for bm in player_used_bm if bm is not None]
+    for bm in player_unused_bm:
+        if bm is not None:
+            player.bonus_markers.append(BonusMarker(bm))
+    for bm in player_used_bm:
+        if bm is not None:
+            player.used_bonus_markers.append(BonusMarker(bm))
+
+    print (f"Player {COLOR_NAMES[player.color]} - Bonus Markers: {player.bonus_markers}")
+    print (f"Player {COLOR_NAMES[player.color]} - Used Bonus Markers: {player.used_bonus_markers}")    
 
 def assign_priv_mapping(player):
     priv_mapping = {
@@ -721,18 +730,17 @@ def unmap_bank_mapping(bank):
 
 def assign_bm_mapping(player):
     bm_mapping = {
-            'PlaceAdjacent': 1,
-            'SwapOffice': 2,
-            'Move3': 3,
-            'UpgradeAbility': 4,
-            '3Actions': 5,
-            '4Actions': 6,
-            'Exchange Bonus Marker': 7,
-            'Tribute for Establish a Trading Post': 8,
-            'Block Trade Route': 9
-        }
+        'PlaceAdjacent': 1,
+        'SwapOffice': 2,
+        'Move3': 3,
+        'UpgradeAbility': 4,
+        '3Actions': 5,
+        '4Actions': 6,
+        'Exchange Bonus Marker': 7,
+        'Tribute for Establish a Trading Post': 8,
+        'Block Trade Route': 9
+    }
 
-    # Convert bonus markers to their numerical representations
     player_unused_bm = [bm_mapping.get(bm.type, 0) for bm in player.bonus_markers]
     player_used_bm = [bm_mapping.get(bm.type, 0) for bm in player.used_bonus_markers]
 
