@@ -93,7 +93,9 @@ def check_if_route_claimed(pos, button):
                 claim_route_for_office(game, city, selected_route)
             elif button == 2: #middle click
                 upgrade_choice = None
-                if len(city.upgrade_city_type) > 1:
+                if not city.upgrade_city_type:
+                    print(f"City: {city.name} does not contain any upgrades.")
+                elif len(city.upgrade_city_type) > 1:
                     print(f"Waiting for player to click on a valid upgrade in the city: {city.name}")
                     upgrades_for_city = [upgrade for upgrade in game.selected_map.upgrade_cities if upgrade.city_name == city.name]
                     upgrade_choice = get_upgrade_choice(upgrades_for_city)
@@ -364,7 +366,7 @@ epsilon = epsilon_start
 
 for j in range(0):
     game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
-    for i in range(100):
+    for i in range(1):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
         hansa_nn = active_player.hansa_nn
 

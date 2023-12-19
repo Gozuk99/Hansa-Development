@@ -404,10 +404,12 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice):
     specialprestigepoints_city = game.selected_map.specialprestigepoints
 
     if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
-        if specialprestigepoints_city.claim_highest_prestige(route):
+        if specialprestigepoints_city.claim_highest_prestige(current_player):
             current_player.reward += current_player.reward_structure.upgraded_bonus_points
             score_route(route)
             finalize_route_claim(game, route, "circle")
+        else:
+            print(f"{COLOR_NAMES[current_player.color]} cannot claim a SpecialPrestigePoints City ({city.name}) with a privilege of {current_player.privilege}.")
     elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
         if upgrade_choice and current_player.perform_upgrade(upgrade_choice):
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} upgraded {upgrade_choice}!")
