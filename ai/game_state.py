@@ -10,7 +10,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(f"Using device: {device}")
 
 def get_game_state(game):
-    # game_tensor Size: torch.Size([19])
+    # game_tensor Size: torch.Size([31])
     # city_tensor Size: torch.Size([1470])
     # route_tensor Size: torch.Size([680])
     # player_tensor Size: torch.Size([185])
@@ -72,9 +72,10 @@ def fill_game_tensor(game):
     
     # Special Prestige Points info
     special_prestige_points_info = assign_special_prestige_points_mapping(game)
+    bonus_marker_info = assign_bonus_marker_pool_mapping(game)
 
     # Concatenate all game info into one tensor
-    game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
+    game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info, bonus_marker_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
     # print(f"game_info {game_info}")
     return game_info
 
@@ -124,6 +125,54 @@ def unmap_special_prestige_points_mapping(special_prestige_points_info, game):
             circle["color"] = owner_player.color
         else:
             circle["owner"] = None
+
+def assign_bonus_marker_pool_mapping(game):
+    #12 max BMs in game.selected_map.bonus_marker_pool
+    bm_pool_mappings = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    bm_mapping = {
+        'PlaceAdjacent': 1,
+        'SwapOffice': 2,
+        'Move3': 3,
+        'UpgradeAbility': 4,
+        '3Actions': 5,
+        '4Actions': 6,
+        'Exchange Bonus Marker': 7,
+        'Tribute for Establish a Trading Post': 8,
+        'Block Trade Route': 9
+    }
+
+    for i, bm in enumerate(game.selected_map.bonus_marker_pool):
+        bm_pool_mappings[i] = bm_mapping.get(bm, 0)
+
+    print(f"bm_pool_mappings {bm_pool_mappings}")
+
+    # Convert to tensor and ensure it's on the correct device
+    bm_pool_mappings_info = torch.tensor(bm_pool_mappings, device=device, dtype=torch.uint8)
+    print (f"bm_pool_mappings_info {bm_pool_mappings_info}")
+    return bm_pool_mappings_info
+
+def unmap_bonus_marker_pool_mapping(bm_pool_mappings_info, game):
+    bm_mapping = {
+        1: 'PlaceAdjacent',
+        2: 'SwapOffice',
+        3: 'Move3',
+        4: 'UpgradeAbility',
+        5: '3Actions',
+        6: '4Actions',
+        7: 'Exchange Bonus Marker',
+        8: 'Tribute for Establish a Trading Post',
+        9: 'Block Trade Route',
+        0: None
+    }
+
+    bm_pool_mappings = [bm_mapping.get(bm, None) for bm in bm_pool_mappings_info]
+    for bm in bm_pool_mappings:
+        if bm is None:
+            continue
+        else:
+            game.selected_map.bonus_marker_pool.append(bm)
+
+    return bm_pool_mappings
 
 def fill_city_tensor(game):
     num_attributes = 49  # 4 attributes for city + 10 offices * 4 attributes each + 5 adjacent city numbers
@@ -634,8 +683,6 @@ def fill_player_info_tensor(game):
     bank_mappings = [assign_bank_mapping(player) for player in game.players]
     bm_mappings = [assign_bm_mapping(player) for player in game.players]
     player_unused_bm, player_used_bm = zip(*bm_mappings)  # Unpack the tuples into two lists
-    print (f"Player Unused Bonus Markers: {player_unused_bm}")
-    print (f"Player Used Bonus Markers: {player_used_bm}")
 
     # Initialize the tensor on the appropriate device
     player_info = torch.zeros(max_players, num_attributes, device=device, dtype=torch.uint8)
@@ -659,9 +706,7 @@ def unmap_player_tensor(player_tensor, player):
     # Split the tensor into player data and bonus marker data
     player_data = player_info_list[:13]
     player_unused_bm = player_info_list[13:25]
-    print (f"Player {COLOR_NAMES[player.color]} - Unused Bonus Markers: {player_unused_bm}")
     player_used_bm = player_info_list[25:]
-    print (f"Player {COLOR_NAMES[player.color]} - Used Bonus Markers: {player_used_bm}")
 
     # Convert player data to their original values
     player.score = player_data[0]
@@ -684,13 +729,10 @@ def unmap_player_tensor(player_tensor, player):
 
     for bm in player_unused_bm:
         if bm is not None:
-            player.bonus_markers.append(BonusMarker(bm))
+            player.bonus_markers.append(BonusMarker(type=bm, owner=player))
     for bm in player_used_bm:
         if bm is not None:
-            player.used_bonus_markers.append(BonusMarker(bm))
-
-    print (f"Player {COLOR_NAMES[player.color]} - Bonus Markers: {player.bonus_markers}")
-    print (f"Player {COLOR_NAMES[player.color]} - Used Bonus Markers: {player.used_bonus_markers}")    
+            player.used_bonus_markers.append(BonusMarker(type=bm, owner=player))
 
 def assign_priv_mapping(player):
     priv_mapping = {
@@ -768,21 +810,16 @@ def save_game_state_to_file(game):
     game_state = get_game_state(game)
     with open('game_states_for_training.txt', 'a') as f:
         # Split the game state tensor into its parts
-        game_tensor = game_state[:19]
-        city_tensor = game_state[19:19+1470]
-        route_tensor = game_state[19+1470:19+1470+680]
-        player_tensor = game_state[19+1470+680:]
+        game_tensor = game_state[:31]
+        city_tensor = game_state[31:31+1470]
+        route_tensor = game_state[31+1470:19+1470+680]
+        player_tensor = game_state[31+1470+680:]
 
         # Convert each tensor to a list and join the elements into a string
         game_tensor_str = ', '.join(map(str, game_tensor.flatten().tolist()))
         city_tensor_str = ', '.join(map(str, city_tensor.flatten().tolist()))
         route_tensor_str = ', '.join(map(str, route_tensor.flatten().tolist()))
         player_tensor_str = ', '.join(map(str, player_tensor.flatten().tolist()))
-
-        # game_tensor Size: torch.Size([19])
-        # city_tensor Size: torch.Size([1470])
-        # route_tensor Size: torch.Size([680])
-        # player_tensor Size: torch.Size([185])
 
         # Print each string to the file
         print(f"Game Tensor: {game_tensor_str}", file=f)
@@ -825,6 +862,7 @@ def get_game_info(filename):
             carlisle_priv = int_game_list[13]
             london_priv = int_game_list[14]
             special_prestige_points = int_game_list[15:19]
+            bonus_marker_pool = int_game_list[19:31]
 
             break
     
@@ -842,6 +880,7 @@ def get_game_info(filename):
     game.waiting_for_bm_move3 = waiting_for_bm_move3
     game.cardiff_priv, game.carlisle_priv, game.london_priv = unmap_blue_brown_priv_mapping(cardiff_priv, carlisle_priv, london_priv)
     unmap_special_prestige_points_mapping(special_prestige_points, game)
+    unmap_bonus_marker_pool_mapping(bonus_marker_pool, game)
     
     return game
 
