@@ -165,14 +165,7 @@ def unmap_bonus_marker_pool_mapping(bm_pool_mappings_info, game):
         0: None
     }
 
-    bm_pool_mappings = [bm_mapping.get(bm, None) for bm in bm_pool_mappings_info]
-    for bm in bm_pool_mappings:
-        if bm is None:
-            continue
-        else:
-            game.selected_map.bonus_marker_pool.append(bm)
-
-    return bm_pool_mappings
+    game.selected_map.bonus_marker_pool = [bm_mapping.get(bm, None) for bm in bm_pool_mappings_info]
 
 def fill_city_tensor(game):
     num_attributes = 49  # 4 attributes for city + 10 offices * 4 attributes each + 5 adjacent city numbers

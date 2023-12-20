@@ -259,17 +259,17 @@ def draw_scoreboard(win, players, start_x, start_y):
         win.blit(text_surface, text_position)
 
 def draw_end_turn(win, game):
-    start_x = game.selected_map.map_width + 300
+    start_x = game.selected_map.map_width + 320
     start_y = game.selected_map.map_height - 170
-    scoreboard_width = 200  # Set the width according to your requirements
-    scoreboard_height = 70  # Adjust based on text size and spacing
+    end_turn_width = 200  # Set the width according to your requirements
+    end_turn_height = 70  # Adjust based on text size and spacing
 
     # Draw the End Turn rectangle background
-    draw_shape(win, "rectangle", TAN, start_x, start_y, scoreboard_width, scoreboard_height)
+    draw_shape(win, "rectangle", TAN, start_x, start_y, end_turn_width, end_turn_height)
 
     # Calculate center position for the End Turn label
-    label_center_x = start_x + scoreboard_width // 2
-    label_center_y = start_y + scoreboard_height // 2
+    label_center_x = start_x + end_turn_width // 2
+    label_center_y = start_y + end_turn_height // 2
 
     # Draw the End Turn label centered
     draw_text(win, "End Turn", label_center_x, label_center_y, FONT_LARGE, BLACK, centered=True)
@@ -300,18 +300,69 @@ def draw_end_game(win, winning_players):
     pygame.display.update()
 
 def draw_get_game_state_button(win, game):
-    start_x = game.selected_map.map_width + 300
+    start_x = game.selected_map.map_width + 320
     start_y = game.selected_map.map_height - 100
-    scoreboard_width = 200  # Set the width according to your requirements
-    scoreboard_height = 70  # Adjust based on text size and spacing
+    games_state_width = 200  # Set the width according to your requirements
+    games_state_height = 70  # Adjust based on text size and spacing
 
-    draw_shape(win, "rectangle", TAN, start_x, start_y, scoreboard_width, scoreboard_height)
+    draw_shape(win, "rectangle", TAN, start_x, start_y, games_state_width, games_state_height)
     # Calculate center position for the End Turn label
-    label_center_x = start_x + scoreboard_width // 2
-    label_center_y = start_y + scoreboard_height // 2
+    label_center_x = start_x + games_state_width // 2
+    label_center_y = start_y + games_state_height // 2
 
     # Draw the End Turn label centered
     draw_text(win, "Get Game State", label_center_x, label_center_y, FONT_LARGE, BLACK, centered=True)
+
+def draw_bonus_marker_pool(win, game):
+    start_x = game.selected_map.map_width + 5
+    start_y = game.selected_map.map_height - 170
+    bonus_marker_pool_text_box_width = 295  # Set the width according to your requirements
+    bonus_marker_pool_text_box_height = 140  # Adjust based on text size and spacing
+
+    draw_shape(win, "rectangle", TAN, start_x, start_y, bonus_marker_pool_text_box_width, bonus_marker_pool_text_box_height)
+
+    # Define label details
+    label = "Bonus Marker Pool"
+    label_x = start_x + bonus_marker_pool_text_box_width // 2
+    label_y = start_y + 10  # 10 pixels from the top of the box
+
+    # Draw the label
+    draw_text(win, label, label_x, label_y, FONT_SMALL, BLACK, centered=True)
+
+    # Adjust start_y for bonus markers to be below the label
+    start_y += 30  # Space below the label
+
+    alphabatized_bonus_markers = sorted(game.selected_map.bonus_marker_pool, key=lambda bm: bm)
+    max_per_column = 6
+    vertical_space = 20  # Space between markers
+
+    if len(alphabatized_bonus_markers) > max_per_column:
+        # If more than 6, split into two columns
+        first_six_bonus_markers = alphabatized_bonus_markers[:max_per_column]
+        second_six_bonus_markers = alphabatized_bonus_markers[max_per_column:]
+
+        # Define starting positions for each column
+        column1_x = start_x + bonus_marker_pool_text_box_width // 4
+        column2_x = start_x + 3 * bonus_marker_pool_text_box_width // 4
+        column_y = start_y
+
+        # Draw first column
+        for bm in first_six_bonus_markers:
+            draw_text(win, bm, column1_x, column_y, FONT_SMALL, BLACK, centered=True)
+            column_y += vertical_space
+
+        # Draw second column
+        column_y = start_y  # Reset y for second column
+        for bm in second_six_bonus_markers:
+            draw_text(win, bm, column2_x, column_y, FONT_SMALL, BLACK, centered=True)
+            column_y += vertical_space
+    else:
+        # If 6 or less, keep in a single column and center
+        bm_start_x = start_x + bonus_marker_pool_text_box_width // 2
+        bm_start_y = start_y
+        for bm in alphabatized_bonus_markers:
+            draw_text(win, bm, bm_start_x, bm_start_y, FONT_SMALL, BLACK, centered=True)
+            bm_start_y += vertical_space
 
 def redraw_window(win, game):
     selected_map = game.selected_map
@@ -332,6 +383,7 @@ def redraw_window(win, game):
             draw_end_turn(win, game)
     
     draw_get_game_state_button(win, game)
+    draw_bonus_marker_pool(win, game)
 
 def draw_player_board(window, player, current_player):
     board = player.board
