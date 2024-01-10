@@ -351,6 +351,15 @@ def handle_get_game_state(pos):
 def check_if_player_has_usable_BMs():
     return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
 
+def handle_shift_click(mouse_position):
+    for upgrade in game.selected_map.upgrade_cities:
+        if check_bounds(upgrade, mouse_position):
+            if game.current_player.perform_upgrade(upgrade.upgrade_type):
+                print(f"ADMIN: Clicked on upgrade: {upgrade.upgrade_type}")
+            else:
+                print("ADMIN: Invalid click when Upgrading via BM")
+                return False
+            
 # game = Game(map_num=2, num_players=5)
 game = load_game_from_file('game_states_for_training.txt')
 
@@ -470,8 +479,14 @@ while True:
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONUP:
             mouse_position = pygame.mouse.get_pos()
+            
+            # Admin Mode
+            mods = pygame.key.get_mods()  # Get the current state of all keyboard modifiers
+            if mods & pygame.KMOD_SHIFT:
+                # Shift was held down when the mouse button was released
+                handle_shift_click(mouse_position)
 
-            if handle_get_game_state(mouse_position):
+            elif handle_get_game_state(mouse_position):
                 save_game_state_to_file(game)
 
             elif(check_if_bm_clicked(mouse_position)):
@@ -514,7 +529,8 @@ while True:
                     print ("Please use a BM or Select End Turn")
                 elif game.replace_bonus_marker > 0:
                     print (f"Please Select a Route to place a BM. {game.replace_bonus_marker} remaining.")
-                elif not check_if_player_has_usable_BMs() and game.replace_bonus_marker == 0:
+                elif ((not check_if_player_has_usable_BMs() and game.replace_bonus_marker == 0) or
+                      (game.current_player.ending_turn and game.replace_bonus_marker == 0)):
                     # Player has no BMs to use or only has 'PlaceAdjacent', switch player
                     game.switch_player_if_needed()
                     break

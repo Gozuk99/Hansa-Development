@@ -301,9 +301,40 @@ def map_bm_action(game, index):
     return
 
 def map_perm_bm_action(game, index):
-    # Logic to map index to a specific Claim Post action
-    # Example: return claim_post_actions[index]
-    pass
+
+    perm_bm_mapping = {
+        "MoveAny2" : 0,
+        "+1Priv" : 1,
+        "ClaimGreenCity" : 2,
+        "Place2TradesmenFromRoute" : 3,
+        "Place2ScotlandOrWales" : 4
+    }
+    # perm_bm_type = None
+    # for bm in game.selected_map.permanent_bm_types:
+    #     bm_index = perm_bm_mapping.get(bm.type)
+    #     if bm_index is not None:
+    #         if bm_index == index:
+    #             perm_bm_type = bm
+
+    # if perm_bm_type == 'MoveAny2':
+    #     handle_move(mouse_position, event.button)
+    #     if (not game.current_player.pieces_to_place and
+    #         not game.current_player.holding_pieces):
+    #         waiting_for_click = False
+    #         game.waiting_for_bm_move_any_2 = False
+    # elif perm_bm_type == '+1Priv':
+    #         game.current_player.upgrade_privilege()
+    # elif perm_bm_type == 'ClaimGreenCity':
+    #     if claim_green_city_with_bm(mouse_position):
+    #         waiting_for_click = False
+    # elif perm_bm_type == 'Place2TradesmenFromRoute':
+    #     handle_place_two_tradesmen_from_route(mouse_position, event.button)
+    #     if not game.current_player.pieces_to_place:
+    #         print(f"Finished placing pieces on valid posts!")
+    #         waiting_for_click = False
+    #         game.waiting_for_bm_move_any_2 = False
+    # elif perm_bm_type == 'Place2ScotlandOrWales':
+    return
 
 def map_replace_bm_action(game, index):
     current_player = game.current_player

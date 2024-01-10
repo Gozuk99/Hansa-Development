@@ -322,7 +322,7 @@ def draw_bonus_marker_pool(win, game):
     draw_shape(win, "rectangle", TAN, start_x, start_y, bonus_marker_pool_text_box_width, bonus_marker_pool_text_box_height)
 
     # Define label details
-    label = "Bonus Marker Pool"
+    label = f"Bonus Marker Pool - ({len(game.selected_map.bonus_marker_pool)} left):"
     label_x = start_x + bonus_marker_pool_text_box_width // 2
     label_y = start_y + 10  # 10 pixels from the top of the box
 

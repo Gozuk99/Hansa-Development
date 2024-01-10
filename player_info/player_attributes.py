@@ -23,6 +23,7 @@ class Player:
         self.pieces_to_place = 0
 
         # The available abilities with their starting values
+        self.keys_index = 0
         self.keys = 1
         self.privilege = "WHITE"
         self.book = 2
@@ -127,7 +128,8 @@ class Player:
     def upgrade_keys(self):
         print("Upgrade Keys called")
         if self.keys < max(CITY_KEYS_MAX_VALUES):
-            self.keys = CITY_KEYS_MAX_VALUES[CITY_KEYS_MAX_VALUES.index(self.keys) + 1]
+            self.keys_index += 1
+            self.keys = CITY_KEYS_MAX_VALUES[self.keys_index]
         else:
             print("City_Keys is already at its maximum level!")
 
@@ -188,7 +190,7 @@ class Player:
             return False
 
     def has_unlocked_key(self, index):
-        return self.keys > index
+        return self.keys_index + 1 > index
 
     def has_unlocked_privilege(self, index):
         privileges_order = ["WHITE", "ORANGE", "PINK", "BLACK"]

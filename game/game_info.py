@@ -285,7 +285,7 @@ class Game:
         
         # Check if the bonus marker pool is empty or any player has reached the score threshold
         end_conditions_met = (not self.selected_map.bonus_marker_pool or 
-                              any(player.score >= 2 for player in self.players) or
+                              any(player.score >= 20 for player in self.players) or
                               self.current_full_cities_count >= self.selected_map.max_full_cities)
 
         if end_conditions_met:
