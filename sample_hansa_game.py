@@ -357,7 +357,7 @@ def handle_shift_click(mouse_position):
             if game.current_player.perform_upgrade(upgrade.upgrade_type):
                 print(f"ADMIN: Clicked on upgrade: {upgrade.upgrade_type}")
             else:
-                print("ADMIN: Invalid click when Upgrading via BM")
+                print("ADMIN: Invalid click when Upgrading")
                 return False
             
 # game = Game(map_num=2, num_players=5)

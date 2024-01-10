@@ -1,5 +1,5 @@
 import sys
-from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW, TAN, DARK_GREEN
+from map_data.constants import COLOR_NAMES, TAN, DARK_GREEN
 
 def claim_post_action(game, route, post, piece_to_play):
     player = game.current_player
@@ -451,13 +451,18 @@ def handle_bonus_marker(game, player, route, reset_pieces):
             game.current_player.pieces_to_place = 2
             game.waiting_for_bm_move_any_2 = True
             print(f"BM: Please pick up, upto {game.current_player.pieces_to_place} pieces to move!")
+        elif perm_bm_type == '+1Priv':
+            game.current_player.upgrade_privilege()
+        elif perm_bm_type == "ClaimGreenCity":
+            game.waiting_for_bm_green_city = True
         elif perm_bm_type == 'Place2TradesmenFromRoute':
             game.current_player.pieces_to_place = 2
             game.current_player.holding_pieces = reset_pieces
             print(f"BM: Please place {game.current_player.pieces_to_place} pieces on valid posts!")
             game.waiting_for_bm_move_any_2 = True
-        elif perm_bm_type == '+1Priv':
-            game.current_player.upgrade_privilege()
+        elif perm_bm_type == "Place2ScotlandOrWales":
+            game.waiting_for_bm_green_city = True
+        
         # handle_permanent_bonus_marker(route.permanent_bonus_marker.type, reset_pieces)
 
 def update_stock_and_reset(route, player, placed_piece_shape=None):

@@ -1,8 +1,8 @@
 import sys
 import torch
 import time
-from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, COLOR_NAMES, UPGRADE_MAX_VALUES, MAX_CITIES, MAX_ROUTES, MAX_POSTS
-from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, score_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
+from map_data.constants import DARK_GREEN, COLOR_NAMES, UPGRADE_MAX_VALUES, MAX_CITIES, MAX_ROUTES, MAX_POSTS
+from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
 
 #debugging
 from drawing.drawing_utils import redraw_window
@@ -304,8 +304,6 @@ def map_perm_bm_action(game, index):
 
     perm_bm_mapping = {
         "MoveAny2" : 0,
-        "+1Priv" : 1,
-        "ClaimGreenCity" : 2,
         "Place2TradesmenFromRoute" : 3,
         "Place2ScotlandOrWales" : 4
     }
@@ -322,11 +320,6 @@ def map_perm_bm_action(game, index):
     #         not game.current_player.holding_pieces):
     #         waiting_for_click = False
     #         game.waiting_for_bm_move_any_2 = False
-    # elif perm_bm_type == '+1Priv':
-    #         game.current_player.upgrade_privilege()
-    # elif perm_bm_type == 'ClaimGreenCity':
-    #     if claim_green_city_with_bm(mouse_position):
-    #         waiting_for_click = False
     # elif perm_bm_type == 'Place2TradesmenFromRoute':
     #     handle_place_two_tradesmen_from_route(mouse_position, event.button)
     #     if not game.current_player.pieces_to_place:
