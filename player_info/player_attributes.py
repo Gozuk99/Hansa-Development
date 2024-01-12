@@ -20,6 +20,7 @@ class Player:
         self.bonus_markers = []
         self.used_bonus_markers = []
         self.holding_pieces = []
+        self.pieces_to_pickup = 0
         self.pieces_to_place = 0
 
         # The available abilities with their starting values
@@ -63,19 +64,19 @@ class Player:
     
     def start_move(self):
         # Start a new move by setting pieces to place equal to book value
-        self.pieces_to_place = self.book
+        self.pieces_to_pickup = self.book
         self.holding_pieces = []
         print(f"Starting move: you can move up to {self.book} pieces.")
 
     def pick_up_piece(self, post):
         # Pick up a piece from the post if under the limit
-        if self.pieces_to_place > 0 and post.owner_piece_shape:
+        if self.pieces_to_pickup > 0 and post.owner_piece_shape:
             self.holding_pieces.append((post.owner_piece_shape, post.owner, post.region))
-            self.pieces_to_place -= 1
-            print(f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_place} moves left.")
+            self.pieces_to_pickup -= 1
+            print(f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_pickup} moves left.")
             post.reset_post()
         else:
-            message = "No more pieces can be picked up this turn." if self.pieces_to_place <= 0 else "This post is empty."
+            message = "No more pieces can be picked up this turn." if self.pieces_to_pickup <= 0 else "This post is empty."
             print(message)
 
     def place_piece(self, post, shape):
@@ -121,6 +122,7 @@ class Player:
         # End the move process if no pieces are being held
         if not self.holding_pieces:
             print("Move completed.")
+            self.pieces_to_pickup = 0  # Clear the move commitment
             self.pieces_to_place = 0  # Clear the move commitment
         else:
             print("You still have pieces to place. Finish your move.")

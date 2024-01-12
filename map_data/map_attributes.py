@@ -505,7 +505,7 @@ class BonusMarker:
             return False
     def handle_move3(self, game):
         game.waiting_for_bm_move3 = True
-        game.current_player.pieces_to_place = 3  # Set the pieces to move to 3 as per the bonus marker
+        game.current_player.pieces_to_pickup = 3  # Set the pieces to move to 3 as per the bonus marker
         print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
         
     def handle_upgrade_ability(self, upgrade, player):

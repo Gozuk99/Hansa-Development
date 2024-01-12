@@ -200,13 +200,16 @@ def move_action(game, route, post, shape):
 
     if ((game.waiting_for_bm_move3 and post.is_owned() and post.owner != player) or
         (game.waiting_for_bm_move_any_2 and post.is_owned())):
-        if player.pieces_to_place > 0:
+        if player.pieces_to_pickup > 0:
             player.pick_up_piece(post)
             print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} BM - picked up a piece")
+        else:
+            print(f"ERROR: Cannot pick up a piece. No pieces left to pick up.")
+            sys.exit()
     # If the player is picking up pieces
     elif post.owner == player:
         # If we have not started a move yet, start one
-        if player.pieces_to_place == 0:
+        if player.pieces_to_pickup == 0:
             player.start_move()
         # Attempt to pick up a piece if within the pieces to move limit (book)
         player.pick_up_piece(post)
@@ -240,7 +243,7 @@ def move_action(game, route, post, shape):
             
             # If no pieces are left to place, finish the move
             if not player.holding_pieces:
-                if player.pieces_to_place > 0:
+                if player.pieces_to_pickup > 0:
                     player.reward -= 10
                 # else:
                 #     player.reward += 10
@@ -250,7 +253,7 @@ def move_action(game, route, post, shape):
                     print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} finished their move action.")
                     player.actions_remaining -= 1
         else:
-            print("Cannot place a piece here. The post is already occupied.")
+            print(f"ERROR: Cannot place a piece here. The post is already occupied.")
     else:
         print(f"ERROR: Holding pieces {len(player.holding_pieces)}, shape: {post.shape}")
 
@@ -311,10 +314,12 @@ def displace_to(game, post, shape, use_displaced_piece=False):
             print(f"Placed a {shape} from general_stock, because use_displaced is false.")
             claim_and_update(game, post, shape)
         elif displaced_player.is_general_stock_empty() and displaced_player.has_personal_supply(shape):
-            print(f"Placed a {shape} from personal_supply, because use_displaced is false and general stock is empty.")
+            print(f"Placed a {shape} from personal_supply, because use_displaced is false and GS is empty.")
             claim_and_update(game, post, shape, from_personal_supply=True)
         else:
-            print(f"Cannot place a {shape} because the general stock and personal supply are empty.")
+            print(f"Cannot place a {shape} because the GS does not contain it and the GS is not empty.")
+            if displaced_player.is_general_stock_empty():
+                print(f"Cannot place a {shape} because the PS does not contain it either.")
 
 def claim_and_update(game, post, shape, use_displaced_piece=False, from_personal_supply=False):
     displaced_player = game.displaced_player
@@ -448,9 +453,9 @@ def handle_bonus_marker(game, player, route, reset_pieces):
         perm_bm_type = route.permanent_bonus_marker.type
         print(f"Waiting for Player to handle {route.permanent_bonus_marker.type} BM")
         if perm_bm_type == 'MoveAny2':
-            game.current_player.pieces_to_place = 2
+            game.current_player.pieces_to_pickup = 2
             game.waiting_for_bm_move_any_2 = True
-            print(f"BM: Please pick up, upto {game.current_player.pieces_to_place} pieces to move!")
+            print(f"BM: Please pick up, upto {game.current_player.pieces_to_pickup} pieces to move!")
         elif perm_bm_type == '+1Priv':
             game.current_player.upgrade_privilege()
         elif perm_bm_type == "ClaimGreenCity":

@@ -184,7 +184,7 @@ def handle_permanent_bonus_marker(perm_bm_type):
                 mouse_position = pygame.mouse.get_pos()
                 if perm_bm_type == 'MoveAny2':
                     handle_move(mouse_position, event.button)
-                    if (not game.current_player.pieces_to_place and
+                    if (not game.current_player.pieces_to_pickup and
                         not game.current_player.holding_pieces):
                         waiting_for_click = False
                         game.waiting_for_bm_move_any_2 = False
@@ -221,10 +221,13 @@ def handle_place_two_tradesmen_from_route(pos, button):
     # Check if a post was clicked and is empty
     if post and not post.is_owned():
         shape_clicked = 'circle' if button == 3 else 'square'
-
-        if shape_clicked in game.current_player.holding_pieces:
+        
+        # Find the piece in reset_pieces that matches the shape_clicked
+        piece_to_remove = next((piece for piece in reset_pieces if piece[0] == shape_clicked), None)
+        
+        if piece_to_remove and (not post.required_shape or post.required_shape == shape_clicked):
             post.claim(game.current_player, shape_clicked)
-            reset_pieces.remove(shape_clicked)
+            reset_pieces.remove(piece_to_remove)
             game.current_player.pieces_to_place -= 1
 
             # Update the general stock for the current player
@@ -233,8 +236,8 @@ def handle_place_two_tradesmen_from_route(pos, button):
             else:
                 game.current_player.general_stock_squares -= 1
 
-            remaining_pieces = ', '.join(reset_pieces)
-            print(f"BM: Please place {game.current_player.pieces_to_place} more piece(s) of {', '.join(remaining_pieces)} on valid posts!")
+            remaining_pieces = ', '.join(piece[0] for piece in reset_pieces)
+            print(f"BM: Please place {game.current_player.pieces_to_place} more piece(s) of {remaining_pieces} on valid posts!")
         else:
             print(f"Cannot place {shape_clicked}. Available pieces: {', '.join(str(piece) for piece in reset_pieces)}.")
     elif not post:

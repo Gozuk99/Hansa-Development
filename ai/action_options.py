@@ -104,7 +104,7 @@ def map_claim_post_action(game, index):
 
     can_displace = current_player.personal_supply_squares + current_player.personal_supply_circles > 1
     # print(f"Player able to displace if post owned? {can_displace}")
-    # print(f"Holding pieces {len(current_player.holding_pieces)} and pieces to place: {current_player.pieces_to_place}")
+    # print(f"Holding pieces {len(current_player.holding_pieces)} and pieces to place: {current_player.pieces_to_pickup}")
 
     # CLAIM AS DISPLACED PLAYER - if post is empty
     if game.waiting_for_displaced_player:
@@ -114,9 +114,16 @@ def map_claim_post_action(game, index):
         else:
             print(f"DISPLACE ERROR - Selected Post NOT in game.all_empty_posts")
     # Handle BM Move any2 or #handle BM Move 3:
-    elif is_post_owned and ((game.waiting_for_bm_move_any_2) or (game.waiting_for_bm_move3 and selected_post.owner != current_player)):
-        print(f"Performing BM Move action for {post_type} on post {post_idx}")
+    elif game.waiting_for_bm_move_any_2:
+        print(f"Performing BM Move Any 2 action for {post_type} on post {post_idx}")
         move_action(game, selected_route, selected_post, post_type)
+    
+    elif game.waiting_for_bm_move3:
+        if selected_post.owner != current_player:
+            print(f"Performing BM Move3 action for {post_type} on post {post_idx}")
+            move_action(game, selected_route, selected_post, post_type)
+        else:
+            print(f"ERROR: This should have been masked out index:{index}, ai_post_index: {ai_post_selection}")
 
     else:
         # Claim post with MOVE action: check if the post is empty
@@ -134,7 +141,7 @@ def map_claim_post_action(game, index):
         #             print(f"MOVE CLAIM ERROR: holding_pieces {current_player.holding_pieces[0]}")            
         #             error_exit(game, selected_route)
         #     # MOVE - if post is owned by current_player:
-        #     elif is_post_owned and selected_post.owner == current_player and current_player.pieces_to_place > 0:
+        #     elif is_post_owned and selected_post.owner == current_player and current_player.pieces_to_pickup > 0:
         #         # print(f"MOVE - Attempting MOVE action on owned post {post_idx} with type {post_type}")
         #         if len(current_player.holding_pieces) < current_player.book:
         #             move_action(game, selected_route, selected_post, post_type)
@@ -301,32 +308,7 @@ def map_bm_action(game, index):
     return
 
 def map_perm_bm_action(game, index):
-
-    perm_bm_mapping = {
-        "MoveAny2" : 0,
-        "Place2TradesmenFromRoute" : 3,
-        "Place2ScotlandOrWales" : 4
-    }
-    # perm_bm_type = None
-    # for bm in game.selected_map.permanent_bm_types:
-    #     bm_index = perm_bm_mapping.get(bm.type)
-    #     if bm_index is not None:
-    #         if bm_index == index:
-    #             perm_bm_type = bm
-
-    # if perm_bm_type == 'MoveAny2':
-    #     handle_move(mouse_position, event.button)
-    #     if (not game.current_player.pieces_to_place and
-    #         not game.current_player.holding_pieces):
-    #         waiting_for_click = False
-    #         game.waiting_for_bm_move_any_2 = False
-    # elif perm_bm_type == 'Place2TradesmenFromRoute':
-    #     handle_place_two_tradesmen_from_route(mouse_position, event.button)
-    #     if not game.current_player.pieces_to_place:
-    #         print(f"Finished placing pieces on valid posts!")
-    #         waiting_for_click = False
-    #         game.waiting_for_bm_move_any_2 = False
-    # elif perm_bm_type == 'Place2ScotlandOrWales':
+    current_player = game.current_player
     return
 
 def map_replace_bm_action(game, index):
@@ -354,7 +336,6 @@ def map_replace_bm_action(game, index):
         print(f"{COLOR_NAMES[current_player.color]} has actions remaining or conditions not met for bonus marker replacement.")
 
 def map_bm_city_actions(game, index):
-
     for city_idx, city in enumerate(game.cities):
         if city_idx == index:
             if game.waiting_for_bm_swap_office:
@@ -403,11 +384,17 @@ def masking_out_invalid_actions(game):
     
     return all_actions_tensor
 
+def check_if_any_post_BM_flag_set(game):
+    return game.waiting_for_displaced_player or game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3
+
+def check_if_any_action_BM_flag_set(game):
+    return game.waiting_for_bm_swap_office or game.waiting_for_bm_upgrade_ability or game.waiting_for_bm_green_city
+
 def mask_post_action(game):
     current_player = game.current_player
 
     post_tensor = torch.zeros(MAX_POSTS * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
-    if current_player.actions_remaining == 0:
+    if current_player.actions_remaining == 0 or check_if_any_action_BM_flag_set(game):
         return post_tensor
     
     can_displace = current_player.personal_supply_squares + current_player.personal_supply_circles > 1
@@ -470,8 +457,11 @@ def mask_post_action(game):
                 # else:
                 #     print(f"DISPLACE MASK ERROR: Post Type {post.required_shape}, index: {post_idx}")
             #handle BM Move any2 or #handle BM Move 3:
-            elif is_post_owned and ((game.waiting_for_bm_move_any_2) or (game.waiting_for_bm_move3 and post.owner != current_player)):
-                if len(current_player.holding_pieces) < current_player.pieces_to_place:
+            elif game.waiting_for_bm_move_any_2:
+                post_tensor[post_idx] = 1
+            
+            elif game.waiting_for_bm_move3:
+                if post.owner != current_player:
                     post_tensor[post_idx] = 1
 
             else:
@@ -487,7 +477,7 @@ def mask_post_action(game):
                 #         # else:
                 #             # Invalid action scenario, handle accordingly
                 #             # print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
-                #     elif is_post_owned and post.owner == current_player and current_player.pieces_to_place > 0:
+                #     elif is_post_owned and post.owner == current_player and current_player.pieces_to_pickup > 0:
                 #         if len(current_player.holding_pieces) < current_player.book:
                 #             post_tensor[post_idx] = 1
                 #     # else:
@@ -534,7 +524,8 @@ def mask_claim_route(game):
     claim_route_for_office_tensor = torch.zeros(max_num_routes * two_cities_per_route, device=device, dtype=torch.uint8)
     claim_route_for_upgrade_tensor = torch.zeros(max_num_routes * two_cities_per_route * max_upgrades_per_city, device=device, dtype=torch.uint8)
 
-    if game.current_player.actions_remaining == 0 or game.waiting_for_displaced_player:
+    if game.current_player.actions_remaining == 0 or game.current_player.holding_pieces or \
+       check_if_any_post_BM_flag_set(game) or check_if_any_action_BM_flag_set(game):
         claim_route_tensor = torch.cat([claim_route_for_points_tensor, claim_route_for_office_tensor, claim_route_for_upgrade_tensor])
         return claim_route_tensor
 
@@ -591,7 +582,8 @@ def get_city_index(city, game):
 def mask_income_actions(game):
     income_tensor = torch.zeros(5, device=device, dtype=torch.uint8)  # 5 options for income actions
 
-    if game.current_player.actions_remaining == 0 or game.waiting_for_displaced_player or game.current_player.holding_pieces:
+    if game.current_player.actions_remaining == 0 or game.current_player.holding_pieces or \
+       check_if_any_post_BM_flag_set(game) or check_if_any_action_BM_flag_set(game):
         return income_tensor
 
     num_circles = game.current_player.general_stock_circles
@@ -703,7 +695,8 @@ def mask_bm_upgrade_ability(game):
 def mask_end_turn(game):
     end_turn_tensor = torch.zeros(1, device=device, dtype=torch.uint8)
 
-    if game.current_player.ending_turn or game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3 or game.waiting_for_bm_swap_office or game.waiting_for_bm_upgrade_ability:
+    if game.current_player.actions_remaining > 0 or game.current_player.ending_turn or game.current_player.holding_pieces or \
+       check_if_any_post_BM_flag_set(game) or check_if_any_action_BM_flag_set(game):
         return end_turn_tensor
 
     if check_if_player_has_usable_BMs(game) and game.current_player.actions_remaining == 0:
