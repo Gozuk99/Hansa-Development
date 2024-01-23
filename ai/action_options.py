@@ -113,10 +113,18 @@ def map_claim_post_action(game, index):
             displace_claim(game, selected_post, post_type)
         else:
             print(f"DISPLACE ERROR - Selected Post NOT in game.all_empty_posts")
-    # Handle BM Move any2 or #handle BM Move 3:
+
     elif game.waiting_for_bm_move_any_2:
         print(f"Performing BM Move Any 2 action for {post_type} on post {post_idx}")
         move_action(game, selected_route, selected_post, post_type)
+
+    elif game.waiting_for_place2_in_scotland_or_wales:
+        if selected_post in game.all_empty_posts:
+            print(f"Performing BM Place2 in Scotland or Wales action for {post_type} on post {post_idx}")
+            move_action(game, selected_route, selected_post, post_type)
+        else:
+            print(f"ERROR: This should have been masked out index:{index}, ai_post_index: {ai_post_selection}")
+            error_exit(game, selected_route)
     
     elif game.waiting_for_bm_move3:
         if selected_post.owner != current_player:
@@ -458,10 +466,20 @@ def mask_post_action(game):
                 #     print(f"DISPLACE MASK ERROR: Post Type {post.required_shape}, index: {post_idx}")
             #handle BM Move any2 or #handle BM Move 3:
             elif game.waiting_for_bm_move_any_2:
-                post_tensor[post_idx] = 1
+                if post.is_owned() and current_player.pieces_to_pickup > 0:
+                    post_tensor[post_idx] = 1
+                elif not post.is_owned() and current_player.pieces_to_pickup == 0:
+                    post_tensor[post_idx] = 1
+
+            elif game.waiting_for_place2_in_scotland_or_wales:
+                if post.region == "Scotland" or post.region == "Wales":
+                    if not post.is_owned() and current_player.pieces_to_place > 0:
+                        post_tensor[post_idx] = 1
             
             elif game.waiting_for_bm_move3:
-                if post.owner != current_player:
+                if post.owner != current_player and current_player.pieces_to_pickup > 0:
+                    post_tensor[post_idx] = 1
+                elif not post.is_owned() and current_player.pieces_to_pickup == 0:
                     post_tensor[post_idx] = 1
 
             else:
@@ -659,7 +677,7 @@ def mask_replace_bm(game):
 
 def mask_bm_city_actions(game):
     bm_city_tensor = torch.zeros(MAX_CITIES, device=device, dtype=torch.uint8)  # 30 possible cities to claim a green city or swap office
-    if not game.waiting_for_bm_swap_office or game.waiting_for_bm_green_city:
+    if not game.waiting_for_bm_swap_office or not game.waiting_for_bm_green_city:
         return bm_city_tensor
     
     city_idx = 0

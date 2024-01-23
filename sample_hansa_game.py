@@ -198,7 +198,11 @@ def handle_permanent_bonus_marker(perm_bm_type):
                         waiting_for_click = False
                         game.waiting_for_bm_move_any_2 = False
                 elif perm_bm_type == 'Place2ScotlandOrWales':
-                    return
+                    handle_place_two_tradesmen_from_route(mouse_position, event.button)
+                    if not game.current_player.pieces_to_place:
+                        print(f"Finished placing pieces on valid posts INSIDE Scotland or Wales!")
+                        waiting_for_click = False
+                        game.waiting_for_place2_in_scotland_or_wales = False
                 else:
                     print("Invalid scenario.")
         redraw_window(win, game)
@@ -216,8 +220,19 @@ def claim_green_city_with_bm(pos):
 
 def handle_place_two_tradesmen_from_route(pos, button):
     _, post = find_post_by_position(pos)
+
+    # Check if a post was found
+    if post is None:
+        print("No valid post was clicked.")
+        return
+
     reset_pieces = game.current_player.holding_pieces
 
+    if game.waiting_for_place2_in_scotland_or_wales:
+        if post.region != 'Scotland' and post.region != 'Wales':
+            print("Please click on a post in Scotland or Wales!")
+            return False
+            
     # Check if a post was clicked and is empty
     if post and not post.is_owned():
         shape_clicked = 'circle' if button == 3 else 'square'
@@ -239,7 +254,7 @@ def handle_place_two_tradesmen_from_route(pos, button):
             remaining_pieces = ', '.join(piece[0] for piece in reset_pieces)
             print(f"BM: Please place {game.current_player.pieces_to_place} more piece(s) of {remaining_pieces} on valid posts!")
         else:
-            print(f"Cannot place {shape_clicked}. Available pieces: {', '.join(str(piece) for piece in reset_pieces)}.")
+            print(f"ERROR: Cannot place {shape_clicked}. Available pieces: {', '.join(piece[0] for piece in reset_pieces)}.")
     elif not post:
         print("No valid post was clicked.")
 

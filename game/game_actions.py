@@ -195,8 +195,6 @@ def move_action(game, route, post, shape):
     if post is None:
         print("No post found!")
         return
-    
-    # player.reward += 0.1
 
     if ((game.waiting_for_bm_move3 and post.is_owned() and post.owner != player) or
         (game.waiting_for_bm_move_any_2 and post.is_owned())):
@@ -229,7 +227,7 @@ def move_action(game, route, post, shape):
     elif player.holding_pieces:
         if not post.is_owned():
             shape_to_place, owner_to_place, origin_region = player.holding_pieces[0]
-            player.place_piece(post, shape)
+            player.place_piece(post, shape_to_place)
 
             if owner_to_place == player:
                 if route.has_bonus_marker:
@@ -466,7 +464,10 @@ def handle_bonus_marker(game, player, route, reset_pieces):
             print(f"BM: Please place {game.current_player.pieces_to_place} pieces on valid posts!")
             game.waiting_for_bm_move_any_2 = True
         elif perm_bm_type == "Place2ScotlandOrWales":
-            game.waiting_for_bm_green_city = True
+            game.current_player.pieces_to_place = 2
+            game.current_player.holding_pieces = reset_pieces
+            print(f"BM: Please place {game.current_player.pieces_to_place} pieces on valid posts INSIDE Scotland or Wales!")
+            game.waiting_for_place2_in_scotland_or_wales = True
         
         # handle_permanent_bonus_marker(route.permanent_bonus_marker.type, reset_pieces)
 

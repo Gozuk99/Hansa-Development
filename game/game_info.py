@@ -26,6 +26,7 @@ class Game:
         self.waiting_for_bm_move3 = False
 
         self.waiting_for_bm_green_city = False
+        self.waiting_for_place2_in_scotland_or_wales = False
         self.original_route_of_displacement = None
         self.all_empty_posts = []
 
