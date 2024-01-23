@@ -1,6 +1,4 @@
-Project created to play Hansa Teutonica against an AI/Computer.
-
-Long Term goal is to have an evaluation bar, and the ability to load game states, and make suggestions.
+**Project created to play Hansa Teutonica against an AI/Computer.**
 
 Use and tested on:
 Python 3.11.4
@@ -18,6 +16,12 @@ Right Click to claim with circle.
 Shift-Click an Upgrade (yellow city), to auto upgrade an ability. Used for testing/training, calling it "Admin Mode".
 AI still needs to be trained, models not uploaded yet.
 
-Long term goals:
+**Long term goals:**
 Mini Expansion Bonus Markers
+Evaluation Bar
+Computer generated suggestion for move.
 Reward structure for more advanced scenarios (ex: blocking East/West Connection completion)
+
+Intro Screen to select players, maps, bonus markers.
+OR
+Load game state.
