@@ -378,8 +378,8 @@ def handle_shift_click(mouse_position):
                 print("ADMIN: Invalid click when Upgrading")
                 return False
             
-# game = Game(map_num=2, num_players=5)
-game = load_game_from_file('game_states_for_training.txt')
+game = Game(map_num=1, num_players=5)
+# game = load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights
 # # print("Initial weights of layer1:")
