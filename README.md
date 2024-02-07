@@ -1,4 +1,4 @@
-**Project created to play Hansa Teutonica against an AI/Computer.**
+**Project was created to play Hansa Teutonica against an AI/Computer using ONLY Python.**
 
 Use and tested on:
 Python 3.11.4
