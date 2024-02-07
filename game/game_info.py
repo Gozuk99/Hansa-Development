@@ -1,5 +1,5 @@
 # game_attributes.py
-
+import random
 from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
@@ -29,6 +29,9 @@ class Game:
         self.waiting_for_place2_in_scotland_or_wales = False
         self.original_route_of_displacement = None
         self.all_empty_posts = []
+        self.tile_pool = []
+        self.initialize_tile_pool()
+        print(f"Tile Pool: {self.tile_pool}")
 
         self.current_full_cities_count = 0
 
@@ -50,6 +53,16 @@ class Game:
             players.append(new_player)
         
         return players
+    
+    def initialize_tile_pool(self):
+        # 6 default tiles
+        tiles = ["DisplaceAnywhere", "+1Action", "+1IncomeIfOthersIncome", "+1DisplacedPiece", "+4PtsPerOwnedCity", "+7PtsPerCompletedAbility"]
+
+        num_tiles = self.num_players
+
+        for i in range(num_tiles):
+            tile = tiles.pop(random.randint(0, len(tiles)-1))
+            self.tile_pool.append(tile)
 
     def assign_map(self, map_num, num_players):
         # Logic to assign a map based on map_num

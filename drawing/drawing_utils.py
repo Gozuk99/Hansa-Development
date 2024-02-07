@@ -236,6 +236,27 @@ def draw_actions_remaining(win, game):
     win.blit(combined_text, (text_x + padding, text_y + padding))
     pygame.display.update((text_x, text_y, text_width, text_height))
 
+def draw_tiles(win, tile_pool, start_x, start_y):
+    tiles_pool_height = len(tile_pool) * 20 + 50  # Adjust based on text size and spacing
+    tiles_pool_width = 200  # Set the width according to your requirements
+    tiles_pool_rect = pygame.Rect(start_x, start_y, tiles_pool_width, tiles_pool_height)
+
+    # Fill the tiles_pool background
+    win.fill(TAN, tiles_pool_rect)
+
+    # Draw the tiles_pool label at the top
+    score_board_label = FONT_LARGE.render("Tile Pool:", True, BLACK)
+    win.blit(score_board_label, tiles_pool_rect.topleft)
+
+    # Set initial Y offset for player scores just below the label
+    y_offset = score_board_label.get_height() + 5
+
+    for index, tile in enumerate(tile_pool):
+        tile_text = f"{tile}"
+        text_surface = FONT_SMALL.render(tile_text, True, BLACK)
+        text_position = (start_x, start_y + y_offset + (index * 25))
+        win.blit(text_surface, text_position)
+
 def draw_scoreboard(win, players, start_x, start_y):
     scoreboard_height = len(players) * 20 + 50  # Adjust based on text size and spacing
     scoreboard_width = 200  # Set the width according to your requirements
@@ -245,7 +266,7 @@ def draw_scoreboard(win, players, start_x, start_y):
     win.fill(TAN, scoreboard_rect)
 
     # Draw the scoreboard label at the top
-    score_board_label = FONT_LARGE.render("Score Board:", True, BLACK)
+    score_board_label = FONT_PLAYERBOARD.render("Score Board:", True, BLACK)
     win.blit(score_board_label, scoreboard_rect.topleft)
 
     # Set initial Y offset for player scores just below the label
@@ -254,14 +275,14 @@ def draw_scoreboard(win, players, start_x, start_y):
     # Draw each player's score
     for index, player in enumerate(players):
         score_text = f"Player {index + 1}: {player.score}"
-        text_surface = FONT_LARGE.render(score_text, True, player.color)
-        text_position = (start_x, start_y + y_offset + (index * 25))  # Y position adjusted here
+        text_surface = FONT_PLAYERBOARD.render(score_text, True, player.color)
+        text_position = (start_x + 10, start_y + y_offset + (index * 25))  # Y position adjusted here
         win.blit(text_surface, text_position)
 
 def draw_end_turn(win, game):
-    start_x = game.selected_map.map_width + 320
+    start_x = game.selected_map.map_width + 305
     start_y = game.selected_map.map_height - 170
-    end_turn_width = 200  # Set the width according to your requirements
+    end_turn_width = 190  # Set the width according to your requirements
     end_turn_height = 70  # Adjust based on text size and spacing
 
     # Draw the End Turn rectangle background
@@ -300,9 +321,9 @@ def draw_end_game(win, winning_players):
     pygame.display.update()
 
 def draw_get_game_state_button(win, game):
-    start_x = game.selected_map.map_width + 320
+    start_x = game.selected_map.map_width + 305
     start_y = game.selected_map.map_height - 100
-    games_state_width = 200  # Set the width according to your requirements
+    games_state_width = 190  # Set the width according to your requirements
     games_state_height = 70  # Adjust based on text size and spacing
 
     draw_shape(win, "rectangle", TAN, start_x, start_y, games_state_width, games_state_height)
@@ -372,7 +393,8 @@ def redraw_window(win, game):
     draw_cities_and_offices(win, selected_map.cities)
     draw_routes(win, selected_map.routes)
     draw_actions_remaining(win, game)
-    draw_scoreboard(win, game.players, selected_map.map_width+600, selected_map.map_height-170)
+    draw_tiles(win, game.tile_pool, selected_map.map_width+500, selected_map.map_height-170)
+    draw_scoreboard(win, game.players, selected_map.map_width+650, selected_map.map_height-170)
     draw_completed_cities_indicator(win, game)
 
     for player in game.players:
