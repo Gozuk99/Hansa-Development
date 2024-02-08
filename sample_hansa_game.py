@@ -13,7 +13,7 @@ from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 from ai.game_state import get_game_state, save_game_state_to_file, load_game_from_file
 from ai.action_options import perform_action_from_index, masking_out_invalid_actions
 from game.game_info import Game
-from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
+from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
 from drawing.drawing_utils import redraw_window, draw_end_game
 
 def end_game(winning_players):
@@ -159,7 +159,9 @@ def check_if_income_clicked(pos):
         for idx, button_rect in enumerate(board.circle_buttons):
             if button_rect.collidepoint(pos):
                 board.income_action_based_on_circle_count(idx)
-                # game.switch_player_if_needed()
+                if game.OneIncomeIfOthersIncomeOwner:
+                    if game.current_player != game.OneIncomeIfOthersIncomeOwner:
+                        game.OneIncomeIfOthersIncomeOwner.add_1_income()
                 return
 
 def handle_bonus_marker(player, route, reset_pieces):
@@ -323,10 +325,17 @@ def use_bonus_marker(bm):
         pygame.time.wait(100)
     return True
 
+def check_if_tile_clicked(pos):
+    for tile, rect in game.tile_rects.items():
+        if rect.collidepoint(pos):
+            print(f"Tile {tile} was clicked.")
+            buy_tile(game, tile)
+
 def handle_click(pos, button):
     check_if_post_clicked(pos, button)
     check_if_route_claimed(pos,button)
-    check_if_income_clicked(pos)                        
+    check_if_income_clicked(pos)
+    check_if_tile_clicked(pos)                        
 
 def displaced_click(pos, button):
     route, post = find_post_by_position(pos)  
@@ -378,7 +387,7 @@ def handle_shift_click(mouse_position):
                 print("ADMIN: Invalid click when Upgrading")
                 return False
             
-game = Game(map_num=1, num_players=5)
+game = Game(map_num=2, num_players=5)
 # game = load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights

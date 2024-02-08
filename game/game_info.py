@@ -32,6 +32,7 @@ class Game:
         self.tile_pool = []
         self.initialize_tile_pool()
         print(f"Tile Pool: {self.tile_pool}")
+        self.tile_rects = []
 
         self.current_full_cities_count = 0
 
@@ -41,6 +42,13 @@ class Game:
         self.cardiff_priv = None
         self.carlisle_priv = None
         self.london_priv = None
+
+        self.DisplaceAnywhereOwner = None
+        self.OneActionOwner = None
+        self.OneIncomeIfOthersIncomeOwner = None
+        self.OneDisplacedPieceOwner = None
+        self.FourPtsPerOwnedCityOwner = None
+        self.SevenPtsPerCompletedAbilityOwner = None
 
     def create_players(self, num_players):
         colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
@@ -256,6 +264,8 @@ class Game:
             for ability in ['keys', 'book', 'actions', 'bank']: # exclude keys intentionally
                 if getattr(player, ability) == UPGRADE_MAX_VALUES[ability]:
                     ability_points += 4  # Assuming 4 points for each fully developed ability
+                    if self.SevenPtsPerCompletedAbilityOwner == player:
+                        ability_points += 3 # for a total of 7 points per fully developed ability
 
             # 3. Prestige points for total bonus markers collected
             total_bms = len(player.bonus_markers) + len(player.used_bonus_markers)
@@ -270,6 +280,8 @@ class Game:
             for city in self.selected_map.cities:
                 if city.get_controller() == player:
                     city_control_points += 2  # 2 points per city controlled
+                    if self.FourPtsPerOwnedCityOwner == player:
+                        city_control_points += 2  # for a total of 4 points per city controlled
 
             # 7. Points for the largest network
             largest_network_points += self.calculate_largest_network(player) * player.keys

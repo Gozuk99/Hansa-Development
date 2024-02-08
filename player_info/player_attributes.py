@@ -19,6 +19,7 @@ class Player:
         # The silver plate to store bonus markers for the end of the turn
         self.bonus_markers = []
         self.used_bonus_markers = []
+        self.tiles = []
         self.holding_pieces = []
         self.pieces_to_pickup = 0
         self.pieces_to_place = 0
@@ -246,6 +247,16 @@ class Player:
                 label = f"{squares}S/{circles}C"
                 button_labels.append(label)
         return button_labels
+    
+    def add_1_income(self):
+        if self.general_stock_circles > 0:
+            self.general_stock_circles -= 1
+            self.personal_supply_circles += 1
+        elif self.general_stock_squares > 0:
+            self.general_stock_squares -= 1
+            self.personal_supply_squares += 1
+        else:
+            print("General stock is empty, tile does not provide income.")
 
     def player_can_claim_office(self, office_color):
         """Check if a player can claim an office of the specified color."""

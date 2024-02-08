@@ -1,5 +1,5 @@
 import sys
-from map_data.constants import COLOR_NAMES, TAN, DARK_GREEN
+from map_data.constants import COLOR_NAMES, TAN, DARK_GREEN, ACTIONS_MAX_VALUES
 
 def claim_post_action(game, route, post, piece_to_play):
     player = game.current_player
@@ -503,3 +503,46 @@ def update_stock_and_reset(route, player, placed_piece_shape=None):
             post.reset_post()
 
     return reset_pieces
+
+def buy_tile(game, tile_type):
+    player = game.current_player
+
+    if len(game.tile_pool) == 0:
+        print("ERROR: No tiles left in the pool.")
+        return
+    if player.actions_remaining != ACTIONS_MAX_VALUES[player.actions_index]:
+        print(f"ERROR: Player {COLOR_NAMES[player.color]} already used an action.")
+        print("Must purchase at the beginning of the turn.")
+        return
+    if len(player.bonus_markers) < 2:
+        print(f"ERROR: Player {COLOR_NAMES[player.color]} has less than 2 bonus markers.")
+        return
+    
+    if len(player.bonus_markers) == 2:
+        # Remove the two bonus markers from the player's bonus_markers list
+        for bm in player.bonus_markers[:2]:
+            player.used_bonus_markers.append(bm)
+        player.bonus_markers = []
+        game.tile_pool.remove(tile_type)
+        player.tiles.append(tile_type)
+
+    if tile_type == "DisplaceAnywhere":
+        print(f"Player {COLOR_NAMES[player.color]} purchased a DisplaceAnywhere tile.")
+        game.DisplaceAnywhereOwner = player
+    elif tile_type == "+1Action":
+        print(f"Player {COLOR_NAMES[player.color]} purchased a +1Action tile.")
+        game.OneActionOwner = player
+    elif tile_type == "+1IncomeIfOthersIncome":
+        print(f"Player {COLOR_NAMES[player.color]} purchased a +1IncomeIfOthersIncome tile.")
+        game.OneIncomeIfOthersIncomeOwner = player
+    elif tile_type == "+1DisplacedPiece":
+        print(f"Player {COLOR_NAMES[player.color]} purchased a +1DisplacedPiece tile.")
+        game.OneDisplacedPieceOwner = player
+    elif tile_type == "+4PtsPerOwnedCity":
+        print(f"Player {COLOR_NAMES[player.color]} purchased a +4PtsPerOwnedCity tile.")
+        game.FourPtsPerOwnedCityOwner = player
+    elif tile_type == "+7PtsPerCompletedAbility":
+        print(f"Player {COLOR_NAMES[player.color]} purchased a +7PtsPerCompletedAbility tile.")
+        game.SevenPtsPerCompletedAbilityOwner = player
+
+    player.actions_remaining = 0

@@ -251,11 +251,18 @@ def draw_tiles(win, tile_pool, start_x, start_y):
     # Set initial Y offset for player scores just below the label
     y_offset = score_board_label.get_height() + 5
 
+    tile_rects = {}  # Dictionary to store the Rect for each tile's text box
+
     for index, tile in enumerate(tile_pool):
         tile_text = f"{tile}"
         text_surface = FONT_SMALL.render(tile_text, True, BLACK)
         text_position = (start_x, start_y + y_offset + (index * 25))
         win.blit(text_surface, text_position)
+
+        # Create a Rect for the tile's text box and store it in the dictionary
+        text_rect = pygame.Rect(text_position, text_surface.get_size())
+        tile_rects[tile] = text_rect
+    return tile_rects  # Return the dictionary of tile Rects
 
 def draw_scoreboard(win, players, start_x, start_y):
     scoreboard_height = len(players) * 20 + 50  # Adjust based on text size and spacing
@@ -393,7 +400,7 @@ def redraw_window(win, game):
     draw_cities_and_offices(win, selected_map.cities)
     draw_routes(win, selected_map.routes)
     draw_actions_remaining(win, game)
-    draw_tiles(win, game.tile_pool, selected_map.map_width+500, selected_map.map_height-170)
+    game.tile_rects = draw_tiles(win, game.tile_pool, selected_map.map_width+500, selected_map.map_height-170)
     draw_scoreboard(win, game.players, selected_map.map_width+650, selected_map.map_height-170)
     draw_completed_cities_indicator(win, game)
 
