@@ -504,7 +504,7 @@ def update_stock_and_reset(route, player, placed_piece_shape=None):
 
     return reset_pieces
 
-def buy_tile(game, tile_type):
+def buy_tile(game, tile_type, bm_payment1=None, bm_payment2=None):
     player = game.current_player
 
     if len(game.tile_pool) == 0:
@@ -526,6 +526,12 @@ def buy_tile(game, tile_type):
         game.tile_pool.remove(tile_type)
         player.tiles.append(tile_type)
 
+    elif len(player.bonus_markers) > 2:
+        for payment in [bm_payment1, bm_payment2]:
+            if payment in player.bonus_markers:
+                player.bonus_markers.remove(payment)
+                player.used_bonus_markers.append(payment)
+
     if tile_type == "DisplaceAnywhere":
         print(f"Player {COLOR_NAMES[player.color]} purchased a DisplaceAnywhere tile.")
         game.DisplaceAnywhereOwner = player
@@ -546,3 +552,4 @@ def buy_tile(game, tile_type):
         game.SevenPtsPerCompletedAbilityOwner = player
 
     player.actions_remaining = 0
+    game.switch_player_if_needed()

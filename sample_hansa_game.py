@@ -85,7 +85,7 @@ def check_if_route_claimed(pos, button):
             # Only one route, proceed with it
             selected_route = controlled_routes[0]
         else:
-            print("No controlled routes available for this city.")
+            print(f"No controlled routes available for city: {city.name}")
             return
         
         if selected_route.is_controlled_by(current_player):
@@ -326,10 +326,34 @@ def use_bonus_marker(bm):
     return True
 
 def check_if_tile_clicked(pos):
+    bm_payment1 = None
+    bm_payment2 = None
     for tile, rect in game.tile_rects.items():
         if rect.collidepoint(pos):
             print(f"Tile {tile} was clicked.")
-            buy_tile(game, tile)
+            if len(game.current_player.bonus_markers) > 2:
+                print(f"Player {COLOR_NAMES[game.current_player.color]} has more than 2 bonus markers, please select 2 to use to play for the tile.")
+                waiting_for_click = True
+
+                while waiting_for_click:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                        elif event.type == pygame.MOUSEBUTTONUP:
+                            mouse_position = pygame.mouse.get_pos()
+                            for bm in game.current_player.bonus_markers:
+                                if bm.is_clicked(mouse_position):
+                                    print(f"Selected BM: {bm.type}")
+                                    if bm_payment1 is None:
+                                        bm_payment1 = bm
+                                    elif bm_payment2 is None:
+                                        bm_payment2 = bm
+                                        waiting_for_click = False   
+                    pygame.display.flip()  # Update the screen
+                    pygame.time.wait(100)
+            buy_tile(game, tile, bm_payment1, bm_payment2)
+            redraw_window(win, game)
 
 def handle_click(pos, button):
     check_if_post_clicked(pos, button)
@@ -495,7 +519,7 @@ routes = game.selected_map.routes
 
 win = pygame.display.set_mode((WIDTH, HEIGHT))
 # viewable_window = pygame.display.set_mode((1800, 1350))
-pygame.display.set_caption('Hansa Sample Game')
+pygame.display.set_caption('Hansa Teutonica Sample Game')
 win.fill(TAN)
 
 # exit()
