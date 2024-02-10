@@ -287,11 +287,13 @@ class DisplacedPlayer:
         self.played_displaced_shape = False
         self.total_pieces_to_place = 0
 
-    def populate_displaced_player(self, player, displaced_shape):
+    def populate_displaced_player(self, game, player, displaced_shape):
         self.player = player
         self.displaced_shape = displaced_shape
         if self.displaced_shape == "square":
             self.total_pieces_to_place = 2
+            if game.OneDisplacedPieceOwner == self.player:
+                self.total_pieces_to_place = 3
         elif self.displaced_shape == "circle":
             self.total_pieces_to_place = 3
         else:

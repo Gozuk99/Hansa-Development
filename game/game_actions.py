@@ -128,7 +128,7 @@ def displace_action(game, post, route, displacing_piece_shape):
         game.original_route_of_displacement = route
 
     game.waiting_for_displaced_player = True
-    game.displaced_player.populate_displaced_player(current_displaced_player, displaced_piece_shape)
+    game.displaced_player.populate_displaced_player(game, current_displaced_player, displaced_piece_shape)
     print(f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}.")
 
 def gather_empty_posts(start_route):

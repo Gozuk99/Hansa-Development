@@ -89,6 +89,9 @@ class Game:
             self.current_player_index = (self.current_player_index + 1) % len(self.players)
             self.current_player = self.players[self.current_player_index]
             self.current_player.actions_remaining = self.current_player.actions
+            if self.OneActionOwner == self.current_player:
+                self.current_player.actions_remaining += 1
+
             self.active_player = self.current_player_index
 
             if self.cardiff_priv or self.carlisle_priv or self.london_priv:
