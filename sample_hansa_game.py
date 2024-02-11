@@ -362,9 +362,12 @@ def handle_click(pos, button):
     check_if_tile_clicked(pos)                        
 
 def displaced_click(pos, button):
-    route, post = find_post_by_position(pos)  
+    route, post = find_post_by_position(pos) 
 
-    if post not in game.all_empty_posts:
+    if game.DisplaceAnywhereOwner == game.displaced_player.player:
+        print (f"Displaced Player: {COLOR_NAMES[game.displaced_player.player.color]}")
+        print (f"Owner: {COLOR_NAMES[game.DisplaceAnywhereOwner.color]} can displace to any post.")
+    elif post not in game.all_empty_posts:
         return
 
     # Determine which shape the player wants to place based on the button they clicked
@@ -411,7 +414,7 @@ def handle_shift_click(mouse_position):
                 print("ADMIN: Invalid click when Upgrading")
                 return False
             
-game = Game(map_num=2, num_players=5)
+game = Game(map_num=1, num_players=5)
 # game = load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights

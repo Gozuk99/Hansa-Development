@@ -119,7 +119,11 @@ def displace_action(game, post, route, displacing_piece_shape):
     post.owner = current_player
 
     # Find empty posts on adjacent routes
-    game.all_empty_posts = gather_empty_posts(route)
+    if game.DisplaceAnywhereOwner == current_displaced_player:
+        game.all_empty_posts = gather_all_empty_posts(game)
+    else:
+        game.all_empty_posts = gather_empty_adjacent_posts(route)
+        
     for post in game.all_empty_posts:
         post.valid_post_to_displace_to()
     # Check conditions based on displaced_piece_shape and number of game.all_empty_posts
@@ -131,9 +135,17 @@ def displace_action(game, post, route, displacing_piece_shape):
     game.displaced_player.populate_displaced_player(game, current_displaced_player, displaced_piece_shape)
     print(f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}.")
 
-def gather_empty_posts(start_route):
+def gather_all_empty_posts(game):
+    all_empty_posts = []
+    for route in game.selected_map.routes:
+        for post in route.posts:
+            if not post.is_owned():
+                all_empty_posts.append(post)
+    return all_empty_posts
+
+def gather_empty_adjacent_posts(start_route):
     if not start_route:
-        print("Error: start_route is None in gather_empty_posts")
+        print("Error: start_route is None in gather_empty_adjacent_posts")
         return []
 
     visited_routes = [start_route]  # Mark the start route as visited immediately
@@ -291,7 +303,7 @@ def displace_claim(game, post, desired_shape):
         # game.switch_player_if_needed()
     elif not game.all_empty_posts:
         print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
-        game.all_empty_posts = gather_empty_posts(game.original_route_of_displacement)
+        game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement)
         if not game.all_empty_posts:
             print("ERROR::No empty posts found in adjacent routes either!")  # Debugging log
             sys.exit()
