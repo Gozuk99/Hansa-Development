@@ -1,4 +1,5 @@
 # map1.py
+import random
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, SPACING, DARK_RED
 
@@ -19,6 +20,19 @@ class Map1(Map):
 
         self.map_width = 1800
         self.map_height = 1255
+
+        self.mission_cards = [
+            ['Osnabruck', 'Stendal', 'Paderborn'],
+            ['Dortmund', 'Minden', 'Luneburg'],
+            ['Minden', 'Perleberg', 'Goslar'],
+            ['Arnheim', 'Perleberg', 'Hannover'],
+            ['Dortmund', 'Stendal', 'Kampen'],
+            ['Arnheim', 'Osnabruck', 'Hildesheim'],
+            ['Arnheim', 'Perleberg', 'Bremen'],
+            ['Minden', 'Osnabruck', 'Magdeburg'],
+            ['Dortmund', 'Stendal', 'Munster']
+        ]
+        random.shuffle(self.mission_cards)
 
         #keep the cities in alphabetical order - helps when searching
         self.bonus_marker_positions = {
@@ -301,5 +315,13 @@ class Map1(Map):
         if num_players != 3:
             self.routes.append(Route([Emden, Stade], 3))
             self.routes.append(Route([Gottingen, Warburg], 3))
+
+    def assign_mission_cards(self, player):
+        if not self.mission_cards:
+            return None
+        card = self.mission_cards.pop()
+        player.card = card
+
+
         #3p - 101 total posts, 32 routes, 27 cities
         #4-5p - 107 total posts, 34 routes, 27 cities

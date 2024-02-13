@@ -58,6 +58,10 @@ class Game:
             new_player = Player(color, i+1)
             new_player.board = PlayerBoard(self.selected_map.map_width, i * 220, new_player)  # Create and assign the board directly here
             new_player.actions_remaining = new_player.actions  # Initialize actions_remaining for the player
+
+            if self.map_num == 1:
+                self.selected_map.assign_mission_cards(new_player)  # Assign a mission card to the player
+
             players.append(new_player)
         
         return players

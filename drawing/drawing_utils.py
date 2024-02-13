@@ -431,6 +431,7 @@ def draw_player_board(window, player, current_player):
     draw_personal_supply(window, board)
 
     if player == current_player:
+        draw_player_card(window, board)
         draw_circle_selection_buttons(window, board)
 
 def draw_city_keys_section(window, board):
@@ -555,12 +556,12 @@ def draw_general_stock(window, board):
     # Draw square for squares count with the number inside
     x_offset += 50
     draw_shape(window, 'rectangle', board.player.color, x_offset, y_offset, 40, 40)
-    draw_text(window, str(board.player.general_stock_squares), x_offset + 20, y_offset + 20, font, (0, 0, 0), centered=True)  # Assuming black color for numbers
+    draw_text(window, str(board.player.general_stock_squares), x_offset + 20, y_offset + 20, font, BLACK, centered=True)  # Assuming black color for numbers
 
     # Draw circle next to square for circles count with number inside
     x_offset += 60
     draw_shape(window, 'circle', board.player.color, x_offset, y_offset + 20, 20) # Assuming radius is half of square side
-    draw_text(window, str(board.player.general_stock_circles), x_offset, y_offset + 20, font, (0, 0, 0), centered=True)  # Assuming black color for numbers
+    draw_text(window, str(board.player.general_stock_circles), x_offset, y_offset + 20, font, BLACK, centered=True)  # Assuming black color for numbers
     
 def draw_personal_supply(window, board):
     x_offset = board.x + 650  # Adjust this value based on exact positioning
@@ -573,12 +574,20 @@ def draw_personal_supply(window, board):
     # Draw square for squares count in personal supply with the number inside
     x_offset += 50
     draw_shape(window, 'rectangle', board.player.color, x_offset, y_offset, 40, 40)
-    draw_text(window, str(board.player.personal_supply_squares), x_offset + 20, y_offset + 20, font, (0, 0, 0), centered=True)
+    draw_text(window, str(board.player.personal_supply_squares), x_offset + 20, y_offset + 20, font, BLACK, centered=True)
 
     # Draw circle next to square for circles count in personal supply with number inside
     x_offset += 60
     draw_shape(window, 'circle', board.player.color, x_offset, y_offset + 20, 20)
-    draw_text(window, str(board.player.personal_supply_circles), x_offset, y_offset + 20, font, (0, 0, 0), centered=True)
+    draw_text(window, str(board.player.personal_supply_circles), x_offset, y_offset + 20, font, BLACK, centered=True)
+
+def draw_player_card(window, board):
+    x_offset = board.x + 700  # Adjust this value based on exact positioning
+    y_offset = board.y + 90  # Positioning it further down than GS for clarity
+    font = pygame.font.SysFont(None, 25)
+    #draw each city in the player card
+    for i, city in enumerate(board.player.card):
+        draw_text(window, str(city), x_offset+35, y_offset + 40 + i*25, font, BLACK, centered=True)
 
 def draw_circle_selection_buttons(window, board):
     # Starting position for the Income label
