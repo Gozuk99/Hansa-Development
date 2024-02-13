@@ -424,6 +424,7 @@ def draw_player_board(window, player, current_player):
     draw_privilegium_section(window, board)
     draw_bonus_markers_section(window, board)
     draw_liber_sophiae_section(window, board)
+    draw_tiles_section(window, board)
     draw_actiones_section(window, board)
     draw_bank_section(window, board)
     draw_general_stock(window, board)
@@ -491,7 +492,26 @@ def draw_liber_sophiae_section(window, board):
         draw_text(window, str(value), board.start_x + i*(CIRCLE_RADIUS*2 + 5), board.y + 10 + CIRCLE_RADIUS, FONT_PLAYERBOARD, BLACK, centered=True)
 
     draw_text(window, "Liber Sophiae", board.start_x-CIRCLE_RADIUS, board.y + 10 + CIRCLE_RADIUS*2 + 5, FONT_PLAYERBOARD, BLACK)
-            
+
+def draw_tiles_section(window, board):
+    # Calculate initial y-position for the "Tiles" section based on "Liber Sophiae" section height
+    tiles_y = board.y + 10 + CIRCLE_RADIUS*2 + 5 + FONT_PLAYERBOARD.get_height() + 5
+
+    # Calculate x-position for the "Tiles" section based on "Liber Sophiae" section
+    tiles_start_x = board.start_x - CIRCLE_RADIUS
+
+    # Draw "Tiles" section
+    for i, value in enumerate(board.player.tiles):
+        # Render the tile name to get its width
+        text = FONT_PLAYERBOARD.render(value, True, BLACK)
+        text_width = text.get_rect().width
+
+        # Draw the rectangle with the width of the rendered text
+        draw_shape(window, "rectangle", WHITE, tiles_start_x, tiles_y + i*(SQUARE_SIZE + 5), width=text_width, height=SQUARE_SIZE)
+
+        # Draw the text
+        draw_text(window, str(value), tiles_start_x, tiles_y + i*(SQUARE_SIZE + 5), FONT_PLAYERBOARD, BLACK)
+
     board.start_x += len(BOOK_OF_KNOWLEDGE_MAX_VALUES) * (CIRCLE_RADIUS * 2 + 5) + 10
 
 def draw_actiones_section(window, board):

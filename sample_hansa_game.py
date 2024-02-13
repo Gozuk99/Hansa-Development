@@ -410,11 +410,17 @@ def handle_shift_click(mouse_position):
         if check_bounds(upgrade, mouse_position):
             if game.current_player.perform_upgrade(upgrade.upgrade_type):
                 print(f"ADMIN: Clicked on upgrade: {upgrade.upgrade_type}")
+                return True
             else:
                 print("ADMIN: Invalid click when Upgrading")
                 return False
+    for tile, rect in game.tile_rects.items():
+        if rect.collidepoint(mouse_position):
+            print(f"ADMIN: Tile {tile} was clicked.")
+            game.tile_pool.remove(tile)
+            game.current_player.tiles.append(tile)
             
-game = Game(map_num=1, num_players=5)
+game = Game(map_num=1, num_players=3)
 # game = load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights

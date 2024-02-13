@@ -543,6 +543,8 @@ def buy_tile(game, tile_type, bm_payment1=None, bm_payment2=None):
             if payment in player.bonus_markers:
                 player.bonus_markers.remove(payment)
                 player.used_bonus_markers.append(payment)
+        game.tile_pool.remove(tile_type)
+        player.tiles.append(tile_type)
 
     if tile_type == "DisplaceAnywhere":
         print(f"Player {COLOR_NAMES[player.color]} purchased a DisplaceAnywhere tile.")
