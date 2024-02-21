@@ -152,6 +152,17 @@ def draw_city_rectangle(win, city):
     draw_shape(win, "rectangle", city.color, rect_x, rect_y, city.width, city.height)
     draw_text_below_rectangle(win, city.name, rect_x, rect_y, city.width, city.height)
 
+    if city.tributed_players:
+        square_size = 15
+        square_padding = 3
+        total_width = len(city.tributed_players) * (square_size + square_padding) - square_padding
+        square_x = rect_x + (city.width - total_width) // 2
+        square_y = rect_y - square_size - 3
+
+        for i, player in enumerate(city.tributed_players):
+            draw_shape(win, "rectangle", player.color, square_x, square_y, square_size, square_size)
+            square_x += square_size + square_padding
+
 def draw_text_below_rectangle(win, text, rect_x, rect_y, rect_width, rect_height):
     text_width, text_height = FONT_LARGE.size(text)
     text_x = rect_x + (rect_width - text_width) // 2

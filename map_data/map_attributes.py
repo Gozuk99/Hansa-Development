@@ -51,7 +51,7 @@ class Map:
             '3Actions': 2,
             '4Actions': 2,
             'Exchange Bonus Marker': 2,
-            'Tribute for Establish a Trading Post': 2,
+            'Tribute4EstablishingTP': 2, #tribute for establishing trade post
             'Block Trade Route': 2
         }
 
@@ -77,6 +77,7 @@ class City:
         self.height = 0
         self.midpoint = (0, 0)  # Initialize midpoint with (0, 0)
         self.upgrade_city_type = []
+        self.tributed_players = []
 
     def add_route(self, route):
         self.routes.append(route)
@@ -483,6 +484,21 @@ class Route:
         else:
             print("Route doesn't contain a circle!")
             return False
+        
+    def establish_tribute_on_route(self, player):
+        for city in self.cities:
+            city.tributed_players.append(player)
+    
+    def award_tributes(self):
+        for city in self.cities:
+            for player in city.tributed_players:
+                #optimal income action
+                if player.general_stock_circles >= 2:
+                    player.income_action(0, 2, True)
+                elif player.general_stock_circles == 1:
+                    player.income_action(1, 1, True)
+                else:
+                    player.income_action(2, 0, True)
 
 class BonusMarker:
     def __init__(self, type, owner=None):
@@ -503,6 +519,7 @@ class BonusMarker:
         else:
             print ("Invalid City to Swap offices, please try another city.")
             return False
+        
     def handle_move3(self, game):
         game.waiting_for_bm_move3 = True
         game.current_player.pieces_to_pickup = 3  # Set the pieces to move to 3 as per the bonus marker
@@ -521,6 +538,14 @@ class BonusMarker:
 
     def handle_4_actions(self, current_player):
         current_player.actions_remaining += 4
+
+    def handle_tribute4_establishing_tp(self, route, current_player):
+        if current_player.personal_supply_squares <= 0:
+            print("Player has no Tradesmen in their personal supply to establish a trade post.")
+            return False
+        current_player.personal_supply_squares -= 1
+        route.establish_tribute_on_route(current_player)
+        return True
 
 class Post:
     def __init__(self, position, owner=None, required_shape=None, region=None):

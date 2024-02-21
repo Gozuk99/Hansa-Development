@@ -215,14 +215,13 @@ class Player:
             return self.bank >= BANK_MAX_VALUES[index]
         return False  # For any other cases
     
-    def income_action(self, num_squares=0, num_circles=0):
+    def income_action(self, num_squares=0, num_circles=0, tribute_income=False):
         if num_circles <= self.general_stock_circles and num_squares <= self.general_stock_squares:
 
             if num_circles + num_squares < self.bank and self.bank == 3:
-                print(f"Inefficient use of income action while bank is at {self.bank}")
-                self.reward -=10
-            # else:
-            #     self.reward += 0.1
+                if not tribute_income:
+                    print(f"Inefficient use of income action while bank is at {self.bank}")
+                    self.reward -=10
 
             self.general_stock_circles -= num_circles
             self.personal_supply_circles += num_circles

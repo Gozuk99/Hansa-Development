@@ -270,16 +270,12 @@ def check_if_bm_clicked(pos):
 
 def use_bonus_marker(bm):
     player = game.current_player
-    waiting_for_click = True
+    
     if bm.type == 'PlaceAdjacent':
         print ("Only can be done if route is full.")
         print ("If route is full, clicking on the city will automatically handle this.")
         return True
-    
-    player.used_bonus_markers.append(bm)
-    player.bonus_markers.remove(bm)
-
-    if bm.type == 'SwapOffice':
+    elif bm.type == 'SwapOffice':
         print("Click a City to swap offices on.")
     elif bm.type == 'Move3':
         bm.handle_move3(game)
@@ -291,9 +287,24 @@ def use_bonus_marker(bm):
     elif bm.type == '4Actions':
         player.actions_remaining += 4
         return True
+    # elif bm.type == 'Exchange Bonus Marker':
+    #     placeholder
+    elif bm.type == 'Tribute4EstablishingTP':
+        if player.personal_supply_squares <= 0:
+            print("You have no squares in your personal supply to place on the board.")
+            return False
+        else:
+            print("Please click a trade route to establish this Bonus Marker.")
+    # elif bm.type == 'Block Trade Route':
+    #     player.actions_remaining += 4
+    #     return True
     else:
         return False
+    
+    player.used_bonus_markers.append(bm)
+    player.bonus_markers.remove(bm)
 
+    waiting_for_click = True
     while waiting_for_click:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -318,6 +329,12 @@ def use_bonus_marker(bm):
                         if check_bounds(upgrade, mouse_position):
                             if bm.handle_upgrade_ability(upgrade, player):
                                 waiting_for_click = False
+                elif bm.type == 'Tribute4EstablishingTP':
+                    route, _ = find_post_by_position(mouse_position)
+                    print(f"Clicked on route between cities of {route.cities[0].name} and {route.cities[1].name}")
+                    if route:
+                        if bm.handle_tribute4_establishing_tp(route, player):
+                            waiting_for_click = False
                 else:
                     print("Invalid scenario.")
         redraw_window(win, game)

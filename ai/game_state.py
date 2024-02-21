@@ -137,7 +137,7 @@ def assign_bonus_marker_pool_mapping(game):
         '3Actions': 5,
         '4Actions': 6,
         'Exchange Bonus Marker': 7,
-        'Tribute for Establish a Trading Post': 8,
+        'Tribute4EstablishingTP': 8,
         'Block Trade Route': 9
     }
 
@@ -160,7 +160,7 @@ def unmap_bonus_marker_pool_mapping(bm_pool_mappings_info, game):
         5: '3Actions',
         6: '4Actions',
         7: 'Exchange Bonus Marker',
-        8: 'Tribute for Establish a Trading Post',
+        8: 'Tribute4EstablishingTP',
         9: 'Block Trade Route',
         0: None
     }
@@ -588,7 +588,7 @@ def assign_bonus_marker_mapping(has_bonus_marker, bonus_marker):
         '3Actions': 5,
         '4Actions': 6,
         'Exchange Bonus Marker': 7,
-        'Tribute for Establish a Trading Post': 8,
+        'Tribute4EstablishingTP': 8,
         'Block Trade Route': 9
     }
     if has_bonus_marker:
@@ -605,7 +605,7 @@ def unmap_bonus_marker_mapping(bonus_marker_type):
         5: '3Actions',
         6: '4Actions',
         7: 'Exchange Bonus Marker',
-        8: 'Tribute for Establish a Trading Post',
+        8: 'Tribute4EstablishingTP',
         9: 'Block Trade Route',
         0: None
     }
@@ -772,7 +772,7 @@ def assign_bm_mapping(player):
         '3Actions': 5,
         '4Actions': 6,
         'Exchange Bonus Marker': 7,
-        'Tribute for Establish a Trading Post': 8,
+        'Tribute4EstablishingTP': 8,
         'Block Trade Route': 9
     }
 
@@ -794,7 +794,7 @@ def unmap_bm_mapping(bm):
             5: '3Actions',
             6: '4Actions',
             7: 'Exchange Bonus Marker',
-            8: 'Tribute for Establish a Trading Post',
+            8: 'TTribute4EstablishingTP',
             9: 'Block Trade Route'
         }
     return bm_mapping.get(bm, None)

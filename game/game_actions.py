@@ -448,7 +448,7 @@ def finalize_route_claim(game, route, placed_piece_shape=None):
     handle_bonus_marker(game, game.current_player, route, reset_pieces)
     game.current_player.actions_remaining -= 1
     game.check_for_east_west_connection()
-    # game.switch_player_if_needed()
+    route.award_tributes()
 
 def handle_bonus_marker(game, player, route, reset_pieces):
     if route.bonus_marker:
