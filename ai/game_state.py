@@ -138,7 +138,7 @@ def assign_bonus_marker_pool_mapping(game):
         '4Actions': 6,
         'Exchange Bonus Marker': 7,
         'Tribute4EstablishingTP': 8,
-        'Block Trade Route': 9
+        'BlockTradeRoute': 9
     }
 
     for i, bm in enumerate(game.selected_map.bonus_marker_pool):
@@ -161,7 +161,7 @@ def unmap_bonus_marker_pool_mapping(bm_pool_mappings_info, game):
         6: '4Actions',
         7: 'Exchange Bonus Marker',
         8: 'Tribute4EstablishingTP',
-        9: 'Block Trade Route',
+        9: 'BlockTradeRoute',
         0: None
     }
 
@@ -589,7 +589,7 @@ def assign_bonus_marker_mapping(has_bonus_marker, bonus_marker):
         '4Actions': 6,
         'Exchange Bonus Marker': 7,
         'Tribute4EstablishingTP': 8,
-        'Block Trade Route': 9
+        'BlockTradeRoute': 9
     }
     if has_bonus_marker:
         bm_type = bm_mapping.get(bonus_marker.type, 0)
@@ -606,7 +606,7 @@ def unmap_bonus_marker_mapping(bonus_marker_type):
         6: '4Actions',
         7: 'Exchange Bonus Marker',
         8: 'Tribute4EstablishingTP',
-        9: 'Block Trade Route',
+        9: 'BlockTradeRoute',
         0: None
     }
     bm_type = bm_mapping.get(bonus_marker_type, None)
@@ -773,7 +773,7 @@ def assign_bm_mapping(player):
         '4Actions': 6,
         'Exchange Bonus Marker': 7,
         'Tribute4EstablishingTP': 8,
-        'Block Trade Route': 9
+        'BlockTradeRoute': 9
     }
 
     player_unused_bm = [bm_mapping.get(bm.type, 0) for bm in player.bonus_markers]
@@ -795,7 +795,7 @@ def unmap_bm_mapping(bm):
             6: '4Actions',
             7: 'Exchange Bonus Marker',
             8: 'TTribute4EstablishingTP',
-            9: 'Block Trade Route'
+            9: 'BlockTradeRoute'
         }
     return bm_mapping.get(bm, None)
 

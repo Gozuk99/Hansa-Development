@@ -52,7 +52,7 @@ class Map:
             '4Actions': 2,
             'Exchange Bonus Marker': 2,
             'Tribute4EstablishingTP': 2, #tribute for establishing trade post
-            'Block Trade Route': 2
+            'BlockTradeRoute': 2
         }
 
         # Create a list of all bonus markers based on their maximum count
@@ -499,6 +499,10 @@ class Route:
                     player.income_action(1, 1, True)
                 else:
                     player.income_action(2, 0, True)
+    
+    def establish_blocked_route(self):
+        for post in self.posts:
+            post.blocked_post = True
 
 class BonusMarker:
     def __init__(self, type, owner=None):
@@ -546,6 +550,14 @@ class BonusMarker:
         current_player.personal_supply_squares -= 1
         route.establish_tribute_on_route(current_player)
         return True
+    
+    def handle_block_trade_route(self, route, current_player):
+        if current_player.personal_supply_squares <= 0:
+            print("Player has no Tradesmen in their personal supply to establish a trade post.")
+            return False
+        current_player.personal_supply_squares -= 1
+        route.establish_blocked_route()
+        return True
 
 class Post:
     def __init__(self, position, owner=None, required_shape=None, region=None):
@@ -556,6 +568,7 @@ class Post:
         self.square_color = TAN
         self.required_shape = required_shape  # can be "circle", "square", or None if no specific requirement
         self.region = region
+        self.blocked_post = False
 
     def reset_post(self):
         self.circle_color = TAN

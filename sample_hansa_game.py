@@ -289,15 +289,12 @@ def use_bonus_marker(bm):
         return True
     # elif bm.type == 'Exchange Bonus Marker':
     #     placeholder
-    elif bm.type == 'Tribute4EstablishingTP':
+    elif bm.type == 'Tribute4EstablishingTP' or bm.type == 'BlockTradeRoute':
         if player.personal_supply_squares <= 0:
             print("You have no squares in your personal supply to place on the board.")
             return False
         else:
             print("Please click a trade route to establish this Bonus Marker.")
-    # elif bm.type == 'Block Trade Route':
-    #     player.actions_remaining += 4
-    #     return True
     else:
         return False
     
@@ -331,9 +328,15 @@ def use_bonus_marker(bm):
                                 waiting_for_click = False
                 elif bm.type == 'Tribute4EstablishingTP':
                     route, _ = find_post_by_position(mouse_position)
-                    print(f"Clicked on route between cities of {route.cities[0].name} and {route.cities[1].name}")
                     if route:
+                        print(f"Clicked on route between cities of {route.cities[0].name} and {route.cities[1].name}")
                         if bm.handle_tribute4_establishing_tp(route, player):
+                            waiting_for_click = False
+                elif bm.type == 'BlockTradeRoute':
+                    route, _ = find_post_by_position(mouse_position)
+                    if route:
+                        print(f"Clicked on route between cities of {route.cities[0].name} and {route.cities[1].name}")
+                        if bm.handle_block_trade_route(route, player):
                             waiting_for_click = False
                 else:
                     print("Invalid scenario.")

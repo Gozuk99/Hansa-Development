@@ -285,7 +285,7 @@ def map_bm_action(game, index):
         "4Actions": 4,
         "Exchange Bonus Marker": 5,
         "Tribute4EstablishingTP": 6,
-        "Block Trade Route": 7
+        "BlockTradeRoute": 7
     }
     selected_bm = None
     for bm in game.current_player.bonus_markers:
@@ -309,7 +309,7 @@ def map_bm_action(game, index):
     #     game.exchange_bonus_marker = True
     # elif selected_bm.type == "Tribute4EstablishingTP":
     #     game.tribute_for_establish_trading_post = True
-    # elif selected_bm.type == "Block Trade Route":
+    # elif selected_bm.type == "BlockTradeRoute":
     #     game.block_trade_route = True
 
     game.current_player.bonus_markers.remove(selected_bm)
@@ -634,7 +634,7 @@ def mask_bm(game):
         "4Actions": 4,
         "Exchange Bonus Marker": 5,
         "Tribute4EstablishingTP": 6,
-        "Block Trade Route": 7
+        "BlockTradeRoute": 7
     }
 
     for bm in game.current_player.bonus_markers:

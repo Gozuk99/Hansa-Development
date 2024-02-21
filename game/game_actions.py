@@ -20,7 +20,6 @@ def claim_post_action(game, route, post, piece_to_play):
         print("CLAIM ERROR - No pieces left to place!")
         print(f"personal_supply_squares={player.personal_supply_squares} personal_supply_circles={player.personal_supply_circles}")
         sys.exit()
-        return
     
     if route.has_bonus_marker:
         player.reward += player.reward_structure.post_with_bm
@@ -33,6 +32,24 @@ def claim_post_action(game, route, post, piece_to_play):
 
     city_names = ' and '.join([city.name for city in route.cities])
     region_info = f" in {route.region}" if route.region else ""
+
+    if post.blocked_post:
+        if player.personal_supply_squares + player.personal_supply_circles == 1:
+            print(f"CLAIM ERROR - Cannot claim this blocked post with {piece_to_play} as current_player has PS Squares: {player.personal_supply_squares} PS Circles: {player.personal_supply_circles}")
+            return False
+        # Handle the cost of the blocked post with priority to squares
+        squares_to_pay = min(player.personal_supply_squares - 1, 1)  # Subtract 1 for the piece being placed
+        circles_to_pay = 1 - squares_to_pay
+
+        player.personal_supply_squares -= squares_to_pay
+        player.personal_supply_circles -= circles_to_pay
+
+        player.general_stock_squares += squares_to_pay
+        player.general_stock_circles += circles_to_pay
+
+        if player.personal_supply_squares < 0 or player.personal_supply_circles < 0:
+            print(f"ERROR: Claim BLOCKED Post - personal_supply_squares={player.personal_supply_squares} personal_supply_circles={player.personal_supply_circles}")
+            sys.exit()
 
     if piece_to_play == "square" and player.has_personal_supply("square"):
         post.claim(player, "square")

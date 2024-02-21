@@ -5,7 +5,7 @@ pygame.init()
 
 FONT_LARGE = pygame.font.Font(None, 36)  
 FONT_PLAYERBOARD = pygame.font.SysFont(None, 32)
-FONT_SMALL = pygame.font.Font(None, 24)  
+FONT_SMALL = pygame.font.Font(None, 24)   
 BORDER_WIDTH = 2 #black outline
 
 def draw_shape(window, shape_to_draw, color, x, y, width=None, height=None, points=None):
@@ -224,6 +224,8 @@ def draw_route_post(win, post):
         draw_shape(win, "circle", post.circle_color, post_x, post_y, CIRCLE_RADIUS)
         if post.owner_piece_shape is None or post.owner_piece_shape == "square":
             draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, SQUARE_SIZE, SQUARE_SIZE)
+    if post.blocked_post:
+        draw_text(win, "X", post_x, post_y, FONT_SMALL, color=BLACK, centered=True)
 
 def draw_actions_remaining(win, game):
     padding = 5  # Define padding value for spacing around text
