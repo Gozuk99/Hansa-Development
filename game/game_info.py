@@ -296,7 +296,24 @@ class Game:
             # Sum up the final score
             player.final_score = (initial_points + ability_points + bonus_marker_points + special_prestige_points + city_control_points + largest_network_points)
 
-            # Print or store the score breakdown for display
+            if self.map_num == 1 and player.mission_card:
+                mission_cities_controlled = 0
+                mission_city_points = 0
+
+                for city in self.selected_map.cities:
+                    if city.name in player.mission_card and city.get_controller() == player:
+                        mission_cities_controlled += 1
+                        if mission_cities_controlled == 3:
+                            break
+
+                if mission_cities_controlled == 3:
+                    mission_city_points += 5
+
+                mission_city_points += mission_cities_controlled
+
+                player.final_score += mission_city_points
+
+            # Update the score breakdown for display
             score_breakdown = {
                 'Initial Points': initial_points,
                 'Ability Points': ability_points,
@@ -306,8 +323,13 @@ class Game:
                 'Largest Network Points': largest_network_points
             }
 
+            if self.map_num == 1 and player.mission_card:
+                score_breakdown['Mission City Points'] = mission_city_points
+
             # Ensure final score is not less than the initial score
-            player.final_score = max(player.final_score, initial_points)
+            if player.final_score <= player.score:
+                print(f"ERROR: Player {COLOR_NAMES[player.color]}: Final score is less than or equal to the initial score. No change made.")
+                exit(1)
 
             # You can print the score breakdown here if needed
             print(f"Score breakdown for {COLOR_NAMES[player.color]}: {score_breakdown}")
