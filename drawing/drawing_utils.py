@@ -1,5 +1,5 @@
 import pygame
-from map_data.constants import TAN, COLOR_NAMES, WHITE, ORANGE, PINK, BLACK, YELLOW, BUFFER, SQUARE_SIZE, SPACING, CIRCLE_RADIUS, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, BLUE
+from map_data.constants import TAN, COLOR_NAMES, WHITE, ORANGE, PINK, BLACK, RED, YELLOW, BUFFER, SQUARE_SIZE, SPACING, CIRCLE_RADIUS, CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, BLUE
 
 pygame.init()
 
@@ -131,7 +131,7 @@ def draw_board_bonus_markers(screen, bonus_marker, position, color=BLACK):
     # Draw the bonus marker as a simple shape (e.g., a circle)
     pygame.draw.circle(screen, color, position, 30)
     # Draw the text for the bonus marker type
-    font = pygame.font.SysFont(None, 24)
+    font = pygame.font.SysFont(None, 20)
     text = font.render(bonus_marker.type, True, WHITE)  # Render the text with the bonus marker's type
     text_rect = text.get_rect(center=position)  # Get a rect object to center the text inside the circle
     screen.blit(text, text_rect)  # Draw the text to the screen at the specified position
@@ -224,7 +224,7 @@ def draw_route_post(win, post):
         draw_shape(win, "circle", post.circle_color, post_x, post_y, CIRCLE_RADIUS)
         if post.owner_piece_shape is None or post.owner_piece_shape == "square":
             draw_shape(win, "rectangle", post.square_color, post_x - SQUARE_SIZE // 2, post_y - SQUARE_SIZE // 2, SQUARE_SIZE, SQUARE_SIZE)
-    if post.blocked_post:
+    if post.blocked_bm:
         draw_text(win, "X", post_x, post_y, FONT_SMALL, color=BLACK, centered=True)
 
 def draw_actions_remaining(win, game):
@@ -300,9 +300,9 @@ def draw_scoreboard(win, players, start_x, start_y):
         win.blit(text_surface, text_position)
 
 def draw_end_turn(win, game):
-    start_x = game.selected_map.map_width + 305
+    start_x = game.selected_map.map_width + 415
     start_y = game.selected_map.map_height - 170
-    end_turn_width = 190  # Set the width according to your requirements
+    end_turn_width = 75  # Set the width according to your requirements
     end_turn_height = 70  # Adjust based on text size and spacing
 
     # Draw the End Turn rectangle background
@@ -310,10 +310,12 @@ def draw_end_turn(win, game):
 
     # Calculate center position for the End Turn label
     label_center_x = start_x + end_turn_width // 2
-    label_center_y = start_y + end_turn_height // 2
+    label_center_y = start_y + end_turn_height // 3
 
     # Draw the End Turn label centered
-    draw_text(win, "End Turn", label_center_x, label_center_y, FONT_LARGE, BLACK, centered=True)
+    draw_text(win, "End", label_center_x, label_center_y, FONT_LARGE, game.current_player.color, centered=True)
+    label_center_y += end_turn_height // 3
+    draw_text(win, "Turn", label_center_x, label_center_y, FONT_LARGE, game.current_player.color, centered=True)
 
 def draw_end_game(win, winning_players):
     # Create a semi-transparent surface
@@ -341,23 +343,27 @@ def draw_end_game(win, winning_players):
     pygame.display.update()
 
 def draw_get_game_state_button(win, game):
-    start_x = game.selected_map.map_width + 305
+    start_x = game.selected_map.map_width + 415
     start_y = game.selected_map.map_height - 100
-    games_state_width = 190  # Set the width according to your requirements
+    games_state_width = 75  # Set the width according to your requirements
     games_state_height = 70  # Adjust based on text size and spacing
 
     draw_shape(win, "rectangle", TAN, start_x, start_y, games_state_width, games_state_height)
     # Calculate center position for the End Turn label
     label_center_x = start_x + games_state_width // 2
-    label_center_y = start_y + games_state_height // 2
+    label_center_y = start_y + games_state_height // 4
 
     # Draw the End Turn label centered
-    draw_text(win, "Get Game State", label_center_x, label_center_y, FONT_LARGE, BLACK, centered=True)
+    draw_text(win, "Get", label_center_x, label_center_y, FONT_SMALL, BLACK, centered=True)
+    label_center_y += games_state_height // 4
+    draw_text(win, "Game", label_center_x, label_center_y, FONT_SMALL, BLACK, centered=True)
+    label_center_y += games_state_height // 4
+    draw_text(win, "State", label_center_x, label_center_y, FONT_SMALL, BLACK, centered=True)
 
 def draw_bonus_marker_pool(win, game):
     start_x = game.selected_map.map_width + 5
     start_y = game.selected_map.map_height - 170
-    bonus_marker_pool_text_box_width = 295  # Set the width according to your requirements
+    bonus_marker_pool_text_box_width = 250
     bonus_marker_pool_text_box_height = 140  # Adjust based on text size and spacing
 
     draw_shape(win, "rectangle", TAN, start_x, start_y, bonus_marker_pool_text_box_width, bonus_marker_pool_text_box_height)
@@ -405,6 +411,41 @@ def draw_bonus_marker_pool(win, game):
             draw_text(win, bm, bm_start_x, bm_start_y, FONT_SMALL, BLACK, centered=True)
             bm_start_y += vertical_space
 
+def draw_opponents_used_bms(win, game):
+    start_x = game.selected_map.map_width + 265
+    start_y = game.selected_map.map_height - 170
+    used_bm_text_box_width = 140
+    used_bm_text_box_height = 140
+    tiles_pool_rect = pygame.Rect(start_x, start_y, used_bm_text_box_width, used_bm_text_box_height)
+
+    # Draw the tiles_pool label at the top
+    label = FONT_SMALL.render("Opponents BMs:", True, BLACK)
+    win.blit(label, tiles_pool_rect.topleft)
+
+    opponents_bms = []
+    for player in game.players:
+        if player != game.current_player:
+            opponents_bms.extend(player.used_bonus_markers)
+
+    # Remove duplicates and sort alphabetically
+    opponents_bms = list(set(opponents_bms))
+    opponents_bms = sorted(opponents_bms, key=lambda bm: bm.type)
+
+    # Set initial Y offset for player scores just below the label
+    y_offset = label.get_height() + 5
+
+    game.opponents_used_bms_rects = {}
+
+    for index, bm in enumerate(opponents_bms):
+        opponent_bm_text = f"{bm.type}"
+        text_surface = FONT_SMALL.render(opponent_bm_text, True, BLACK)
+        text_position = (start_x, start_y + y_offset + (index * 25))
+        win.blit(text_surface, text_position)
+
+        # Create a Rect for the tile's text box and store it in the dictionary
+        text_rect = pygame.Rect(text_position, text_surface.get_size())
+        game.opponents_used_bms_rects[bm] = text_rect
+
 def redraw_window(win, game):
     selected_map = game.selected_map
 
@@ -426,6 +467,7 @@ def redraw_window(win, game):
     
     draw_get_game_state_button(win, game)
     draw_bonus_marker_pool(win, game)
+    draw_opponents_used_bms(win, game)
 
 def draw_player_board(window, player, current_player):
     board = player.board
@@ -440,6 +482,7 @@ def draw_player_board(window, player, current_player):
     draw_tiles_section(window, board)
     draw_actiones_section(window, board)
     draw_bank_section(window, board)
+    draw_used_bm_section(window, board)
     draw_general_stock(window, board)
     draw_personal_supply(window, board)
 
@@ -487,7 +530,7 @@ def draw_bonus_markers_section(window, board):
 def draw_liber_sophiae_section(window, board):
         # Draw "Liber Sophiae" section (circles)
     colors = [WHITE, ORANGE, PINK, BLACK]
-    board.start_x = board.x + 10 + len(colors)*50 + 5*(len(colors)-1) + 10  # buffer after Privilege
+    board.start_x = board.x + len(colors)*43  # buffer after Privilege
 
     circle_label = FONT_PLAYERBOARD.render("Liber Sophiae", True, BLACK)
     circle_section_width = len(BOOK_OF_KNOWLEDGE_MAX_VALUES) * (CIRCLE_RADIUS*2 + 5)  # total width of all circles combined
@@ -526,7 +569,7 @@ def draw_tiles_section(window, board):
         # Draw the text
         draw_text(window, str(value), tiles_start_x, tiles_y + i*(SQUARE_SIZE + 5), FONT_PLAYERBOARD, BLACK)
 
-    board.start_x += len(BOOK_OF_KNOWLEDGE_MAX_VALUES) * (CIRCLE_RADIUS * 2 + 5) + 10
+    board.start_x += len(BOOK_OF_KNOWLEDGE_MAX_VALUES) * (CIRCLE_RADIUS * 2 + 5)
 
 def draw_actiones_section(window, board):
     # Calculate y-position for the "Actiones" section first
@@ -557,6 +600,21 @@ def draw_bank_section(window, board):
         draw_text(window, str(value), board.start_x + i*(SQUARE_SIZE + 5) + SQUARE_SIZE // 2, bank_y + SQUARE_SIZE // 2, FONT_PLAYERBOARD, BLACK, centered=True)
 
     draw_text(window, "Bank", board.start_x, bank_y + SQUARE_SIZE + 5, FONT_PLAYERBOARD, BLACK)
+
+def draw_used_bm_section(window, board):
+    # Calculate initial y-position for the "Used BMs" section based on "Actiones" section height
+    used_bm_y = board.y + 10
+
+    # Calculate x-position for the "Used BMs" section based on "Actiones" section
+    used_bm_x = board.start_x + 6*(SQUARE_SIZE + 5)
+
+    # Draw the Used BMs text centered on both axes
+    draw_text(window, "Used BMs:", used_bm_x, used_bm_y, FONT_SMALL, BLACK)
+    used_bm_y += FONT_SMALL.get_height() + 5  # Adjust y-position for the first used BM
+
+    for i, bm in enumerate(board.player.used_bonus_markers):
+        # Draw the text
+        draw_text(window, bm.type, used_bm_x, used_bm_y + i*(SQUARE_SIZE + 5), FONT_SMALL, BLACK)
 
 def draw_general_stock(window, board):
     x_offset = board.x + 650  # Adjust this value based on exact positioning

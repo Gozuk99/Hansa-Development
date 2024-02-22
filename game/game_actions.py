@@ -33,7 +33,7 @@ def claim_post_action(game, route, post, piece_to_play):
     city_names = ' and '.join([city.name for city in route.cities])
     region_info = f" in {route.region}" if route.region else ""
 
-    if post.blocked_post:
+    if post.blocked_bm:
         if player.personal_supply_squares + player.personal_supply_circles == 1:
             print(f"CLAIM ERROR - Cannot claim this blocked post with {piece_to_play} as current_player has PS Squares: {player.personal_supply_squares} PS Circles: {player.personal_supply_circles}")
             return False
@@ -423,12 +423,14 @@ def claim_route_for_office(game, city, route):
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}")
             city.update_next_open_office_ownership(game)
             finalize_route_claim(game, route, placed_piece_shape)
+            route.award_tributes()
     elif 'PlaceAdjacent' in (bm.type for bm in current_player.bonus_markers):
         current_player.reward += current_player.reward_structure.bm_place_adjacent
         score_route(route)
         city.claim_office_with_bonus_marker(current_player)
         print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a square into a NEW office of {city.name}.")
         finalize_route_claim(game, route, "square")
+        route.award_tributes()
     elif city.color == DARK_GREEN:
         print(f"{COLOR_NAMES[current_player.color]} cannot claim a GREEN City ({city.name}) without a PlaceAdjacent BM.")
     else:
@@ -465,7 +467,6 @@ def finalize_route_claim(game, route, placed_piece_shape=None):
     handle_bonus_marker(game, game.current_player, route, reset_pieces)
     game.current_player.actions_remaining -= 1
     game.check_for_east_west_connection()
-    route.award_tributes()
 
 def handle_bonus_marker(game, player, route, reset_pieces):
     if route.bonus_marker:

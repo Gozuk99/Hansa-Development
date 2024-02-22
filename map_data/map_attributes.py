@@ -5,7 +5,7 @@ from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACIN
 class Map:
     def __init__(self):
         # This should never change
-        self.initial_bonus_types = ['Move3', 'SwapOffice', 'PlaceAdjacent']
+        self.initial_bonus_types = ['ExchangeBonusMarker', 'SwapOffice', 'PlaceAdjacent']
         self.permanent_bm_types = ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
         self.bonus_marker_pool = []
         self.place_new_bonus_marker = False
@@ -50,7 +50,7 @@ class Map:
             'UpgradeAbility': 2,
             '3Actions': 2,
             '4Actions': 2,
-            'Exchange Bonus Marker': 2,
+            'ExchangeBonusMarker': 2,
             'Tribute4EstablishingTP': 2, #tribute for establishing trade post
             'BlockTradeRoute': 2
         }
@@ -492,17 +492,20 @@ class Route:
     def award_tributes(self):
         for city in self.cities:
             for player in city.tributed_players:
+                num_circles = player.general_stock_circles
+                num_squares = player.general_stock_squares
+
                 #optimal income action
-                if player.general_stock_circles >= 2:
+                if num_circles >= 2:
                     player.income_action(0, 2, True)
                 elif player.general_stock_circles == 1:
-                    player.income_action(1, 1, True)
+                    player.income_action(min(1, num_squares), 1, True)
                 else:
-                    player.income_action(2, 0, True)
+                    player.income_action(min(2, num_squares), 0, True)
     
     def establish_blocked_route(self):
         for post in self.posts:
-            post.blocked_post = True
+            post.blocked_bm = True
 
 class BonusMarker:
     def __init__(self, type, owner=None):
@@ -558,6 +561,21 @@ class BonusMarker:
         current_player.personal_supply_squares -= 1
         route.establish_blocked_route()
         return True
+    
+    def handle_exchange_bonus_marker(self, game):
+        used_bm_owner = self.owner
+        current_player = game.current_player
+
+        current_player.bonus_markers.append(self)
+        used_bm_owner.used_bonus_markers.remove(self)
+        self.owner = current_player
+
+        for used_bms in current_player.used_bonus_markers:
+            if used_bms.type == "ExchangeBonusMarker":
+                used_bm_owner.used_bonus_markers.append(used_bms)
+                current_player.used_bonus_markers.remove(used_bms)
+                used_bms.owner = used_bm_owner
+                break
 
 class Post:
     def __init__(self, position, owner=None, required_shape=None, region=None):
@@ -568,7 +586,7 @@ class Post:
         self.square_color = TAN
         self.required_shape = required_shape  # can be "circle", "square", or None if no specific requirement
         self.region = region
-        self.blocked_post = False
+        self.blocked_bm = False
 
     def reset_post(self):
         self.circle_color = TAN

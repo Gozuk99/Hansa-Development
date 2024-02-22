@@ -59,6 +59,14 @@ def handle_move(pos, button):
     route, post = find_post_by_position(pos)
     shape_clicked = 'circle' if button == 3 else 'square'
 
+    if post is None:
+        print("No valid post was clicked.")
+        return
+    # Check if selecting an empty post when no pieces are held
+    elif not game.current_player.holding_pieces and not post.is_owned():
+        print("Cannot select an empty post, when holding no pieces.")
+        return
+
     move_action(game, route, post, shape_clicked)
 
 def find_clicked_city(cities, pos):
@@ -265,7 +273,6 @@ def check_if_bm_clicked(pos):
         if bm.is_clicked(pos):
             print(f"Clicked on bonus marker: {bm.type}")
             return use_bonus_marker(bm)
-
     return False
 
 def use_bonus_marker(bm):
@@ -283,12 +290,25 @@ def use_bonus_marker(bm):
         print("Please click on an upgrade to choose it.")
     elif bm.type == '3Actions':
         player.actions_remaining += 3
+        player.used_bonus_markers.append(bm)
+        player.bonus_markers.remove(bm)
         return True
     elif bm.type == '4Actions':
         player.actions_remaining += 4
+        player.used_bonus_markers.append(bm)
+        player.bonus_markers.remove(bm)
         return True
-    # elif bm.type == 'Exchange Bonus Marker':
-    #     placeholder
+    elif bm.type == 'ExchangeBonusMarker':
+        opponents_used_bms_exist = False
+        for opponents in game.players:
+            if opponents != game.current_player and len(opponents.used_bonus_markers) > 0:
+                opponents_used_bms_exist = True
+                break
+        if not opponents_used_bms_exist:
+            print("No opponents have used bonus markers to exchange.")
+            return False
+
+        print("Please click on a Used Bonus Marker - from any other player - to exchange this with it.")
     elif bm.type == 'Tribute4EstablishingTP' or bm.type == 'BlockTradeRoute':
         if player.personal_supply_squares <= 0:
             print("You have no squares in your personal supply to place on the board.")
@@ -337,6 +357,13 @@ def use_bonus_marker(bm):
                     if route:
                         print(f"Clicked on route between cities of {route.cities[0].name} and {route.cities[1].name}")
                         if bm.handle_block_trade_route(route, player):
+                            waiting_for_click = False
+                elif bm.type == 'ExchangeBonusMarker':
+                    for opponent_bm, rect in game.opponents_used_bms_rects.items():
+                        if rect.collidepoint(mouse_position):
+                            print(f"Used BM {opponent_bm.type} was clicked.")
+                            print(f"Exchanging {COLOR_NAMES[game.current_player.color]}'s BM 'ExchangeBonusMarker' with {COLOR_NAMES[opponent_bm.owner.color]}'s BM {opponent_bm.type}.")
+                            opponent_bm.handle_exchange_bonus_marker(game)
                             waiting_for_click = False
                 else:
                     print("Invalid scenario.")
@@ -410,7 +437,7 @@ def find_post_by_position(pos):
     return None, None
 
 def handle_end_turn_click(pos):
-    if (game.selected_map.map_width+300 < pos[0] < game.selected_map.map_width+300 + 200 and
+    if (game.selected_map.map_width+415 < pos[0] < game.selected_map.map_width+415 + 75 and
         game.selected_map.map_height-170 < pos[1] < game.selected_map.map_height-170 + 170):
         print ("End Turn clicked!")
         game.current_player.ending_turn = True
@@ -418,7 +445,7 @@ def handle_end_turn_click(pos):
         print("Please click End Turn, or a Bonus Marker that you can use!")
 
 def handle_get_game_state(pos):
-    if (game.selected_map.map_width+300 < pos[0] < game.selected_map.map_width+300 + 200 and
+    if (game.selected_map.map_width+415 < pos[0] < game.selected_map.map_width+415 + 75 and
         game.selected_map.map_height-100 < pos[1] < game.selected_map.map_height):
         return True
 
@@ -439,6 +466,7 @@ def handle_shift_click(mouse_position):
             print(f"ADMIN: Tile {tile} was clicked.")
             game.tile_pool.remove(tile)
             game.current_player.tiles.append(tile)
+            return True            
             
 game = Game(map_num=1, num_players=3)
 # game = load_game_from_file('game_states_for_training.txt')

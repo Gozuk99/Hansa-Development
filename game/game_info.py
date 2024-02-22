@@ -33,6 +33,7 @@ class Game:
         self.initialize_tile_pool()
         print(f"Tile Pool: {self.tile_pool}")
         self.tile_rects = []
+        self.opponents_bms = []
 
         self.current_full_cities_count = 0
 
