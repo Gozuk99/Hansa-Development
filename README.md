@@ -44,7 +44,7 @@ Admin Mode:
 
 ### Long Term Goals:
 - Train Models for all 5 players - **Cannot do until game logic is complete.**
-- Mini Expansion Bonus Markers - **Tribute4EstablishingTP finished**
+- ~~Mini Expansion Bonus Markers~~
 - Evaluation Bar
 - - Initially thinking to do just a breakdown of the score if the game ended immediately
 - Computer generated suggestion for move.
