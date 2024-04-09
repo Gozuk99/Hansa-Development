@@ -7,9 +7,9 @@ import gc
 # Set print options
 torch.set_printoptions(profile="full")
 
-from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
+from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN, INPUT_SIZE, OUTPUT_SIZE
 # from map_data.map_attributes import Map, City, Upgrade, Office, Route
-# from ai.ai_model import HansaNN
+from ai.ai_model import HansaNN
 from ai.game_state import BoardData
 from ai.action_options import perform_action_from_index, masking_out_invalid_actions
 from game.game_info import Game
@@ -414,7 +414,7 @@ def displaced_click(pos, button):
     if game.DisplaceAnywhereOwner == game.displaced_player.player:
         print (f"Displaced Player: {COLOR_NAMES[game.displaced_player.player.color]}")
         print (f"Owner: {COLOR_NAMES[game.DisplaceAnywhereOwner.color]} can displace to any post.")
-    elif post not in game.all_empty_posts:
+    elif post not in game.all_empty_posts and not game.displaced_player.is_general_stock_empty() and not game.displaced_player.is_personal_supply_empty():
         return
 
     # Determine which shape the player wants to place based on the button they clicked
@@ -470,6 +470,8 @@ def handle_shift_click(mouse_position):
             
 game = Game(map_num=1, num_players=3)
 board_data = BoardData()
+game_state_tensor = board_data.get_game_state(game)
+hansa_nn = HansaNN(board_data.all_game_state_size, OUTPUT_SIZE, model_file=f"hansa_nn_model.pth")
 # game = board_data.load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights
@@ -482,11 +484,10 @@ epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(0):
+for j in range(1):
     game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
     for i in range(1):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
-        hansa_nn = active_player.hansa_nn
 
         # Get the current game state tensor
         game_state_tensor = board_data.get_game_state(game)
@@ -554,8 +555,8 @@ for j in range(0):
             active_player.reward = 0
             epsilon = max(epsilon_end, epsilon - decay_rate)
 
-        print(f"Saving model for Player: {active_player.order} as hansa_nn_model{active_player.order}.pth")
-        torch.save(active_player.hansa_nn.state_dict(), f"hansa_nn_model{active_player.order}.pth")
+        print(f"Saving model for Player: {active_player.order} as hansa_nn_model.pth")
+        torch.save(hansa_nn.state_dict(), f"hansa_nn_model.pth")
     gc.collect()
 
 # final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()

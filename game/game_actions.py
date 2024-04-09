@@ -284,6 +284,37 @@ def move_action(game, route, post, shape):
     else:
         print(f"ERROR: Holding pieces {len(player.holding_pieces)}, shape: {post.shape}")
 
+def displace_move_action(game, post, desired_shape):
+    displaced_player = game.displaced_player.player
+    # If no post was found, simply return without doing anything
+    if post is None:
+        print("No post found!")
+        return
+
+    if post.owner == displaced_player and displaced_player.pieces_to_pickup > 0:
+        displaced_player.pick_up_piece(post)
+
+        print(f"{COLOR_NAMES[displaced_player.color]} DISPLACED MOVE - picked up a piece")
+
+        for post in game.all_empty_posts:
+            post.reset_post()
+        game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement)
+        if not game.all_empty_posts:
+            print("ERROR::No empty posts found in adjacent routes!")  # Debugging log
+            sys.exit()
+
+    # If the player has pieces in hand to place
+    elif displaced_player.holding_pieces:
+        if not post.is_owned() and post in game.all_empty_posts:
+            shape_to_place, owner_to_place, origin_region = displaced_player.holding_pieces[0]
+            displaced_player.place_piece(post, shape_to_place)
+            game.displaced_player.total_pieces_to_place -= 1
+            game.all_empty_posts.remove(post)                   
+        else:
+            print(f"ERROR: Cannot place a piece here. The post must be in all_empty_posts.")
+    # else:
+    #     print(f"ERROR: Holding pieces {len(displaced_player.holding_pieces)}, shape: {post.shape}")
+
 def displace_claim(game, post, desired_shape):
     displaced_player = game.displaced_player
 
@@ -304,6 +335,10 @@ def displace_claim(game, post, desired_shape):
     if wants_to_use_displaced_piece:
         print(f"Attempting to place the Displaced Piece '{desired_shape}' while Displaced Shape has NOT been played yet.")
         displace_to(game, post, desired_shape, use_displaced_piece=True)
+    elif must_use_displaced_piece == False and displaced_player.is_general_stock_empty() and displaced_player.is_personal_supply_empty():
+        print(f"Attempting to move ANY piece already on the board, because the GS and PS do not contain it.")
+        displaced_player.player.pieces_to_pickup = displaced_player.total_pieces_to_place - len(displaced_player.player.holding_pieces)
+        displace_move_action(game, post, desired_shape)
     else:
         displace_to(game, post, desired_shape)
     
@@ -340,7 +375,7 @@ def displace_to(game, post, shape, use_displaced_piece=False):
         if displaced_player.has_general_stock(shape):
             print(f"Placed a {shape} from general_stock, because use_displaced is false.")
             claim_and_update(game, post, shape)
-        elif displaced_player.is_general_stock_empty() and displaced_player.has_personal_supply(shape):
+        elif displaced_player.is_general_stock_empty() and displaced_player.is_personal_supply_empty():
             print(f"Placed a {shape} from personal_supply, because use_displaced is false and GS is empty.")
             claim_and_update(game, post, shape, from_personal_supply=True)
         else:

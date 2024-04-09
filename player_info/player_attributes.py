@@ -1,14 +1,13 @@
 # player_attributes.py
 
 import sys
-from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, INPUT_SIZE, OUTPUT_SIZE
+from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES
 from ai.ai_model import HansaNN
 from player_info.reward_options import Rewards
 
 class Player:
     def __init__(self, color, order):
         self.color = color
-        self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{order}.pth")
         self.reward = 0
         self.reward_structure = Rewards(1)
 
@@ -314,6 +313,9 @@ class DisplacedPlayer:
         if shape == "square":
             return self.player.personal_supply_squares > 0
         return self.player.personal_supply_circles > 0
+    
+    def is_personal_supply_empty(self):
+        return self.player.personal_supply_squares == 0 and self.player.personal_supply_circles == 0
 
 class PlayerBoard:
     def __init__(self, x, y, player):

@@ -35,7 +35,7 @@ class Game:
         self.all_empty_posts = []
         self.tile_pool = []
         self.initialize_tile_pool()
-        print(f"Tile Pool: {self.tile_pool}")
+        # print(f"Tile Pool: {self.tile_pool}")
         self.tile_rects = []
 
         self.current_full_cities_count = 0

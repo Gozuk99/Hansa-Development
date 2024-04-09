@@ -32,7 +32,7 @@ class BoardData:
         game_tensor = self.fill_game_tensor(game)
         game_tensor = game_tensor.flatten()
         end_time = time.time()
-        print(f"game_tensor Size: {game_tensor.size()[0]}")
+        # print(f"game_tensor Size: {game_tensor.size()[0]}")
         self.game_tensor_size = game_tensor.size()[0]
         execution_time1 = end_time - start_time
 
@@ -41,7 +41,7 @@ class BoardData:
         city_tensor = self.fill_city_tensor(game)
         city_tensor = city_tensor.flatten()
         end_time = time.time()
-        print(f"city_tensor Size: {city_tensor.size()[0]}")
+        # print(f"city_tensor Size: {city_tensor.size()[0]}")
         self.city_tensor_size = city_tensor.size()[0]
         execution_time2 = end_time - start_time
         
@@ -50,7 +50,7 @@ class BoardData:
         route_tensor = self.fill_route_tensor(game)
         route_tensor = route_tensor.flatten()
         end_time = time.time()
-        print(f"route_tensor Size: {route_tensor.size()[0]}")
+        # print(f"route_tensor Size: {route_tensor.size()[0]}")
         self.route_tensor_size = route_tensor.size()[0]
         execution_time3 = end_time - start_time
         
@@ -59,7 +59,7 @@ class BoardData:
         player_tensor = self.fill_player_info_tensor(game)
         player_tensor = player_tensor.flatten()
         end_time = time.time()
-        print(f"player_tensor Size: {player_tensor.size()[0]}")
+        # print(f"player_tensor Size: {player_tensor.size()[0]}")
         self.player_tensor_size = player_tensor.size()[0]
         execution_time4 = end_time - start_time
         
@@ -70,7 +70,7 @@ class BoardData:
 
         flattened_game_state = torch.cat([game_tensor, city_tensor, route_tensor, player_tensor], dim=0)
 
-        # print(f"All Game State Size: {flattened_game_state.size()}")
+        # print(f"All Game State Size: {flattened_game_state.size()[0]}")
         self.all_game_state_size = flattened_game_state.size()[0]
 
         return flattened_game_state
@@ -164,7 +164,7 @@ class BoardData:
         for i, bm in enumerate(game.selected_map.bonus_marker_pool):
             bm_pool_mappings[i] = bm_mapping.get(bm, 0)
 
-        print(f"bm_pool_mappings {bm_pool_mappings}")
+        # print(f"bm_pool_mappings {bm_pool_mappings}")
 
         # Convert to tensor and ensure it's on the correct device
         bm_pool_mappings_info = torch.tensor(bm_pool_mappings, device=device, dtype=torch.uint8)

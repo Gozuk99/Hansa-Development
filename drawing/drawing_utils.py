@@ -656,9 +656,11 @@ def draw_player_card(window, board):
     x_offset = board.x + 700  # Adjust this value based on exact positioning
     y_offset = board.y + 90  # Positioning it further down than GS for clarity
     font = pygame.font.SysFont(None, 25)
-    #draw each city in the player card
-    for i, city in enumerate(board.player.card):
-        draw_text(window, str(city), x_offset+35, y_offset + 40 + i*25, font, BLACK, centered=True)
+
+    if board.player.card:
+        #draw each city in the player card
+        for i, city in enumerate(board.player.card):
+            draw_text(window, str(city), x_offset+35, y_offset + 40 + i*25, font, BLACK, centered=True)
 
 def draw_circle_selection_buttons(window, board):
     # Starting position for the Income label
