@@ -20,25 +20,25 @@ class Game:
 
         self.displaced_player = DisplacedPlayer()
         self.waiting_for_displaced_player = False
+
+        self.east_west_completed_count = 0
+        self.players_who_completed_east_west = set()  # Track players who have completed the connection
+
         self.waiting_for_bm_swap_office = False
         self.waiting_for_bm_upgrade_ability = False
         self.waiting_for_bm_move_any_2 = False
         self.waiting_for_bm_move3 = False
-
         self.waiting_for_bm_green_city = False
         self.waiting_for_place2_in_scotland_or_wales = False
+
         self.original_route_of_displacement = None
         self.all_empty_posts = []
         self.tile_pool = []
         self.initialize_tile_pool()
         print(f"Tile Pool: {self.tile_pool}")
         self.tile_rects = []
-        self.opponents_bms = []
 
         self.current_full_cities_count = 0
-
-        self.east_west_completed_count = 0
-        self.players_who_completed_east_west = set()  # Track players who have completed the connection
 
         self.cardiff_priv = None
         self.carlisle_priv = None

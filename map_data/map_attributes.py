@@ -195,9 +195,9 @@ class City:
     
     def check_if_eligible_to_swap_offices(self, current_player):
         # Check if the current player has at least one office in the city
-        player_has_office = any(office.controller == current_player for office in self.offices)
+        player_has_office = any(office.controller == current_player and not office.place_adjacent_office for office in self.offices)
         if not player_has_office:
-            print(f"{COLOR_NAMES[current_player.color]} does not have an office in {self.name}.")
+            print(f"{COLOR_NAMES[current_player.color]} does not have a valid office in {self.name} to swap offices with.")
             return False
 
         # Check if other players have offices in the city
@@ -259,6 +259,7 @@ class City:
         new_office = self.create_new_office(player.color)
         new_office.controller = player
         new_office.color = player.color
+        new_office.place_adjacent_office = True
 
         if self.color == DARK_GREEN:
             # Check the number of owned offices and remove the last one if there are less than 6
@@ -387,6 +388,7 @@ class Office:
         self.color = color
         self.awards_points = awards_points
         self.controller = None  # Initialize controller as None
+        self.place_adjacent_office = False
     def is_open(self):
         """Return True if the office is unclaimed."""
         return self.controller is None
@@ -518,7 +520,7 @@ class BonusMarker:
         distance_squared = (self.position[0] - mouse_pos[0]) ** 2 + (self.position[1] - mouse_pos[1]) ** 2
         return distance_squared <= CIRCLE_RADIUS ** 2
         
-    def handle_swap_office(self, city, player):    
+    def handle_swap_office(self, city, player):
         if city.check_if_eligible_to_swap_offices(player):
             print ("Valid City to swap offices")
             city.swap_offices(player)

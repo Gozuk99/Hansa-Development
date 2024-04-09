@@ -10,7 +10,7 @@ torch.set_printoptions(profile="full")
 from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN
 # from map_data.map_attributes import Map, City, Upgrade, Office, Route
 # from ai.ai_model import HansaNN
-from ai.game_state import get_game_state, save_game_state_to_file, load_game_from_file
+from ai.game_state import BoardData
 from ai.action_options import perform_action_from_index, masking_out_invalid_actions
 from game.game_info import Game
 from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
@@ -469,7 +469,8 @@ def handle_shift_click(mouse_position):
             return True            
             
 game = Game(map_num=1, num_players=3)
-# game = load_game_from_file('game_states_for_training.txt')
+board_data = BoardData()
+# game = board_data.load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights
 # # print("Initial weights of layer1:")
@@ -488,7 +489,7 @@ for j in range(0):
         hansa_nn = active_player.hansa_nn
 
         # Get the current game state tensor
-        game_state_tensor = get_game_state(game)
+        game_state_tensor = board_data.get_game_state(game)
         game_state_tensor = game_state_tensor.float()   # Convert to float if not already
 
         # Forward pass through the neural network to get the action probabilities
@@ -595,7 +596,7 @@ while True:
                 handle_shift_click(mouse_position)
 
             elif handle_get_game_state(mouse_position):
-                save_game_state_to_file(game)
+                board_data.save_game_state_to_file(game)
 
             elif(check_if_bm_clicked(mouse_position)):
                 print(f"Bonus Marker was used!")
