@@ -143,11 +143,8 @@ def displace_action(game, post, route, displacing_piece_shape):
         
     for post in game.all_empty_posts:
         post.valid_post_to_displace_to()
-    # Check conditions based on displaced_piece_shape and number of game.all_empty_posts
-    if ((displaced_piece_shape == "square" and len(game.all_empty_posts) == 1) or
-        (displaced_piece_shape == "circle" and 1 <= len(game.all_empty_posts) <= 2)):
-        game.original_route_of_displacement = route
 
+    game.original_route_of_displacement = route
     game.waiting_for_displaced_player = True
     game.displaced_player.populate_displaced_player(game, current_displaced_player, displaced_piece_shape)
     print(f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}.")
@@ -302,6 +299,11 @@ def displace_move_action(game, post, desired_shape):
         if not game.all_empty_posts:
             print("ERROR::No empty posts found in adjacent routes!")  # Debugging log
             sys.exit()
+        post_count = 0  # Counter for the number of posts processed
+        for post in game.all_empty_posts:
+            post.valid_post_to_displace_to()
+            post_count += 1
+        print(f"Processed {post_count} posts.")  # Debugging log
 
     # If the player has pieces in hand to place
     elif displaced_player.holding_pieces:
