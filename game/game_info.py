@@ -28,6 +28,11 @@ class Game:
         self.waiting_for_bm_upgrade_ability = False
         self.waiting_for_bm_move_any_2 = False
         self.waiting_for_bm_move3 = False
+        
+        self.waiting_for_bm_exchange_bm = False
+        self.waiting_for_bm_tribute_trading_post = False
+        self.waiting_for_bm_block_trade_route = False
+
         self.waiting_for_bm_green_city = False
         self.waiting_for_place2_in_scotland_or_wales = False
 
@@ -67,6 +72,10 @@ class Game:
         
         return players
     
+    def assign_player_nn_size(self, input_size):
+        for player in self.players:
+            player.assign_nn(input_size)
+
     def initialize_tile_pool(self):
         # 6 default tiles
         tiles = ["DisplaceAnywhere", "+1Action", "+1IncomeIfOthersIncome", "+1DisplacedPiece", "+4PtsPerOwnedCity", "+7PtsPerCompletedAbility"]

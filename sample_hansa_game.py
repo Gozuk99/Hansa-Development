@@ -352,12 +352,14 @@ def use_bonus_marker(bm):
                         print(f"Clicked on route between cities of {route.cities[0].name} and {route.cities[1].name}")
                         if bm.handle_tribute4_establishing_tp(route, player):
                             waiting_for_click = False
+                            game.waiting_for_bm_tribute4_establishing_tp = False
                 elif bm.type == 'BlockTradeRoute':
                     route, _ = find_post_by_position(mouse_position)
                     if route:
                         print(f"Clicked on route between cities of {route.cities[0].name} and {route.cities[1].name}")
                         if bm.handle_block_trade_route(route, player):
                             waiting_for_click = False
+                            game.waiting_for_bm_block_trade_route = False
                 elif bm.type == 'ExchangeBonusMarker':
                     for opponent_bm, rect in game.opponents_used_bms_rects.items():
                         if rect.collidepoint(mouse_position):
@@ -468,10 +470,9 @@ def handle_shift_click(mouse_position):
             game.current_player.tiles.append(tile)
             return True            
             
-game = Game(map_num=1, num_players=3)
-board_data = BoardData()
-game_state_tensor = board_data.get_game_state(game)
-hansa_nn = HansaNN(board_data.all_game_state_size, OUTPUT_SIZE, model_file=f"hansa_nn_model.pth")
+# game = Game(map_num=1, num_players=3)
+# board_data = BoardData()
+# game_state_tensor = board_data.get_game_state(game)
 # game = board_data.load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights
@@ -484,10 +485,14 @@ epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(1):
+for j in range(3):
     game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
-    for i in range(1):
+    board_data = BoardData()
+    game_state_tensor = board_data.get_game_state(game)
+    game.assign_player_nn_size(board_data.all_game_state_size)
+    for i in range(100):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
+        hansa_nn = active_player.hansa_nn
 
         # Get the current game state tensor
         game_state_tensor = board_data.get_game_state(game)
@@ -555,8 +560,8 @@ for j in range(1):
             active_player.reward = 0
             epsilon = max(epsilon_end, epsilon - decay_rate)
 
-        print(f"Saving model for Player: {active_player.order} as hansa_nn_model.pth")
-        torch.save(hansa_nn.state_dict(), f"hansa_nn_model.pth")
+        print(f"Saving model for Player: {active_player.order} as hansa_nn_model{active_player.order}.pth")
+        torch.save(active_player.hansa_nn.state_dict(), f"hansa_nn_model{active_player.order}.pth")
     gc.collect()
 
 # final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()

@@ -377,7 +377,7 @@ def displace_to(game, post, shape, use_displaced_piece=False):
         if displaced_player.has_general_stock(shape):
             print(f"Placed a {shape} from general_stock, because use_displaced is false.")
             claim_and_update(game, post, shape)
-        elif displaced_player.is_general_stock_empty() and displaced_player.is_personal_supply_empty():
+        elif displaced_player.is_general_stock_empty() and displaced_player.has_personal_supply(shape):
             print(f"Placed a {shape} from personal_supply, because use_displaced is false and GS is empty.")
             claim_and_update(game, post, shape, from_personal_supply=True)
         else:

@@ -108,7 +108,10 @@ def map_claim_post_action(game, index):
 
     # CLAIM AS DISPLACED PLAYER - if post is empty
     if game.waiting_for_displaced_player:
-        if selected_post in game.all_empty_posts:
+        if selected_post.owner == game.displaced_player and game.displaced_player.is_general_stock_empty() and game.displaced_player.is_personal_supply_empty():
+            print(f"DISPLACE - Performing PICKUP/PLACE action for {post_type} on post {post_idx} because GS and PS is empty")
+            displace_claim(game, selected_post, post_type)
+        elif selected_post in game.all_empty_posts:
             print(f"DISPLACE - Performing displaced claim action for {post_type} on post {post_idx}")
             displace_claim(game, selected_post, post_type)
         else:
@@ -132,7 +135,14 @@ def map_claim_post_action(game, index):
             move_action(game, selected_route, selected_post, post_type)
         else:
             print(f"ERROR: This should have been masked out index:{index}, ai_post_index: {ai_post_selection}")
-
+    elif game.waiting_for_bm_tribute_trading_post:
+        current_player.personal_supply_squares -= 1
+        selected_route.establish_tribute_on_route(current_player)
+        game.waiting_for_bm_block_trade_route = False
+    elif game.waiting_for_bm_block_trade_route:
+        current_player.personal_supply_squares -= 1
+        selected_route.establish_blocked_route()
+        game.waiting_for_bm_block_trade_route = False
     else:
         # Claim post with MOVE action: check if the post is empty
         # Check if the desired post type is available in holding pieces
@@ -287,32 +297,45 @@ def map_bm_action(game, index):
         "Tribute4EstablishingTP": 6,
         "BlockTradeRoute": 7
     }
-    selected_bm = None
-    for bm in game.current_player.bonus_markers:
-        bm_index = bm_mapping.get(bm.type)
-        if bm_index is not None:
-            if bm_index == index:
-                selected_bm = bm
 
-    if selected_bm.type == "SwapOffice":
-        game.waiting_for_bm_swap_office = True
-    elif selected_bm.type == "Move3":
-       selected_bm.handle_move3(game)
-    elif selected_bm.type == "UpgradeAbility":
-        game.waiting_for_bm_upgrade_ability = True
-    elif selected_bm.type == "3Actions":
-        selected_bm.handle_3_actions(current_player)
-    elif selected_bm.type == "4Actions":
-        selected_bm.handle_4_actions(current_player)
+    if game.waiting_for_bm_exchange_bm:
+        for player in game.players:
+            if player != current_player:
+                for bm in player.bonus_markers:
+                    bm_index = bm_mapping.get(bm.type)
+                    if bm_index is not None:
+                        if bm_index == index:
+                            player.bonus_markers.remove(bm)
+                            current_player.bonus_markers.append(bm)
+                            game.waiting_for_bm_exchange_bm = False
+                            return
+    else:
+        selected_bm = None
+        for bm in game.current_player.bonus_markers:
+            bm_index = bm_mapping.get(bm.type)
+            if bm_index is not None:
+                if bm_index == index:
+                    selected_bm = bm
 
-    # elif selected_bm.type == "ExchangeBonusMarker":
-    #     game.exchange_bonus_marker = True
-    # elif selected_bm.type == "Tribute4EstablishingTP":
-    #     game.tribute_for_establish_trading_post = True
-    # elif selected_bm.type == "BlockTradeRoute":
-    #     game.block_trade_route = True
+        if selected_bm.type == "SwapOffice":
+            game.waiting_for_bm_swap_office = True
+        elif selected_bm.type == "Move3":
+            selected_bm.handle_move3(game)
+        elif selected_bm.type == "UpgradeAbility":
+            game.waiting_for_bm_upgrade_ability = True
+        elif selected_bm.type == "3Actions":
+            selected_bm.handle_3_actions(current_player)
+        elif selected_bm.type == "4Actions":
+            selected_bm.handle_4_actions(current_player)
 
-    game.current_player.bonus_markers.remove(selected_bm)
+        elif selected_bm.type == "ExchangeBonusMarker":
+            game.waiting_for_bm_exchange_bm = True
+        elif selected_bm.type == "Tribute4EstablishingTP" and current_player.personal_supply_squares > 0:
+            game.waiting_for_bm_tribute_trading_post = True
+        elif selected_bm.type == "BlockTradeRoute" and current_player.personal_supply_squares > 0:
+            game.waiting_for_bm_block_trade_route = True
+
+        game.current_player.bonus_markers.remove(selected_bm)
     return
 
 def map_perm_bm_action(game, index):
@@ -416,12 +439,22 @@ def mask_post_action(game):
 
             # CLAIM AS DISPLACED PLAYER - if post is empty
             if game.waiting_for_displaced_player:
-                if post in game.all_empty_posts:
-                    displaced_player = game.displaced_player
-                    must_use_displaced_piece = (not displaced_player.played_displaced_shape) and (displaced_player.total_pieces_to_place == 1)
-                    has_pieces_in_general_stock = (displaced_player.player.general_stock_squares + displaced_player.player.general_stock_circles) > 0
-                    has_pieces_in_personal_supply = (displaced_player.player.personal_supply_squares + displaced_player.player.personal_supply_circles) > 0
-                    
+                displaced_player = game.displaced_player
+                must_use_displaced_piece = (not displaced_player.played_displaced_shape) and (displaced_player.total_pieces_to_place == 1)
+                has_pieces_in_general_stock = (displaced_player.player.general_stock_squares + displaced_player.player.general_stock_circles) > 0
+                has_pieces_in_personal_supply = (displaced_player.player.personal_supply_squares + displaced_player.player.personal_supply_circles) > 0
+                
+                if not has_pieces_in_general_stock and not has_pieces_in_personal_supply:
+                    if post in game.all_empty_posts and not displaced_player.played_displaced_shape:
+                        if displaced_player.displaced_shape == "square" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
+                            post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
+                        elif displaced_player.displaced_shape == "circle" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
+                            post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
+                    elif post.owner == displaced_player and displaced_player.played_displaced_shape:
+                        post_tensor[post_idx] = 1
+                        post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
+
+                elif post in game.all_empty_posts:
                     if must_use_displaced_piece:
                         if displaced_player.displaced_shape == "square" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
                             post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
@@ -481,6 +514,10 @@ def mask_post_action(game):
                     post_tensor[post_idx] = 1
                 elif not post.is_owned() and current_player.pieces_to_pickup == 0:
                     post_tensor[post_idx] = 1
+            elif game.waiting_for_bm_tribute_trading_post:
+                post_tensor[post_idx] = 1
+            elif game.waiting_for_bm_block_trade_route:
+                post_tensor[post_idx] = 1
 
             else:
                 # # Now use this condition in your if statement
@@ -637,10 +674,19 @@ def mask_bm(game):
         "BlockTradeRoute": 7
     }
 
-    for bm in game.current_player.bonus_markers:
-        bm_index = bm_mapping.get(bm.type)
-        if bm_index is not None:
-            bm_tensor[bm_index] = 1
+    if game.waiting_for_bm_exchange_bm:
+        for player in game.players:
+            if player != game.current_player and player.has_bonus_markers():
+                for bm in player.bonus_markers:
+                    bm_index = bm_mapping.get(bm.type)
+                    if bm_index is not None:
+                        bm_tensor[bm_index] = 1
+    else:
+        for bm in game.current_player.bonus_markers:
+            bm_index = bm_mapping.get(bm.type)
+            if bm_index is not None:
+                #TODO: Check if the BM is valid to use
+                bm_tensor[bm_index] = 1
 
     return bm_tensor
 
