@@ -337,7 +337,7 @@ def displace_claim(game, post, desired_shape):
     if wants_to_use_displaced_piece:
         print(f"Attempting to place the Displaced Piece '{desired_shape}' while Displaced Shape has NOT been played yet.")
         displace_to(game, post, desired_shape, use_displaced_piece=True)
-    elif must_use_displaced_piece == False and displaced_player.is_general_stock_empty() and displaced_player.is_personal_supply_empty():
+    elif displaced_player.played_displaced_shape == True and displaced_player.is_general_stock_empty() and displaced_player.is_personal_supply_empty():
         print(f"Attempting to move ANY piece already on the board, because the GS and PS do not contain it.")
         displaced_player.player.pieces_to_pickup = displaced_player.total_pieces_to_place - len(displaced_player.player.holding_pieces)
         displace_move_action(game, post, desired_shape)

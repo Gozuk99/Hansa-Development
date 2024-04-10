@@ -485,12 +485,13 @@ epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(3):
+for j in range(1):
     game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
     board_data = BoardData()
     game_state_tensor = board_data.get_game_state(game)
     game.assign_player_nn_size(board_data.all_game_state_size)
-    for i in range(100):
+    game = board_data.load_game_from_file('game_states_for_training.txt')
+    for i in range(1):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
         hansa_nn = active_player.hansa_nn
 
@@ -560,8 +561,9 @@ for j in range(3):
             active_player.reward = 0
             epsilon = max(epsilon_end, epsilon - decay_rate)
 
-        print(f"Saving model for Player: {active_player.order} as hansa_nn_model{active_player.order}.pth")
-        torch.save(active_player.hansa_nn.state_dict(), f"hansa_nn_model{active_player.order}.pth")
+    for player in game.players:
+        print(f"Saving model for Player: {player.order} as hansa_nn_model{player.order}.pth")
+        torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{player.order}.pth")
     gc.collect()
 
 # final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()

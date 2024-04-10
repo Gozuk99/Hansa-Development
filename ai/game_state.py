@@ -991,7 +991,7 @@ class BoardData:
             if line.startswith("City Tensor:"):
                 city_str = line.split("City Tensor: ")[1].strip()
                 city_data_list = city_str.split(", ")
-                num_attributes_per_city = self.num_city_attributes
+                num_attributes_per_city = self.city_num_attributes
 
                 for i, city in enumerate(game.selected_map.cities):
                     start_index = i * num_attributes_per_city
