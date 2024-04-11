@@ -22,7 +22,7 @@ class BoardData:
         self.num_player_attributes = 0
 
     def get_game_state(self, game):
-        # game_tensor Size: torch.Size([39])
+        # game_tensor Size: torch.Size([49])
         # city_tensor Size: torch.Size([1740])
         # route_tensor Size: torch.Size([880])
         # player_tensor Size: torch.Size([185])
@@ -77,12 +77,13 @@ class BoardData:
 
     def fill_game_tensor(self, game):
         # Initial game info
-        initial_game_info = torch.tensor([game.map_num, game.num_players, game.active_player,
+        initial_game_info = torch.tensor([game.map_num, game.num_players, game.active_player, game.replace_bonus_marker,
                                         game.current_player_index + 1, game.current_player.actions_remaining,
                                         game.selected_map.max_full_cities, game.current_full_cities_count,
                                         game.east_west_completed_count,
                                         game.waiting_for_bm_swap_office, game.waiting_for_bm_upgrade_ability,
                                         game.waiting_for_bm_move_any_2, game.waiting_for_bm_move3,
+                                        game.waiting_for_bm_exchange_bm, game.waiting_for_bm_tribute_trading_post, game.waiting_for_bm_block_trade_route,
                                         game.waiting_for_bm_green_city, game.waiting_for_place2_in_scotland_or_wales], device=device, dtype=torch.uint8)
 
         # Privileges info
@@ -93,9 +94,10 @@ class BoardData:
         special_prestige_points_info = self.assign_special_prestige_points_mapping(game)
         bonus_marker_info = self.assign_bonus_marker_pool_mapping(game)
         tile_info = self.assign_tile_pool_mapping(game)
+        tile_owner_info = self.assign_tile_owner_mapping(game)
 
         # Concatenate all game info into one tensor
-        game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info, bonus_marker_info, tile_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
+        game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info, bonus_marker_info, tile_info, tile_owner_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
         # print(f"game_info {game_info}")
         return game_info
 
@@ -217,6 +219,44 @@ class BoardData:
 
         game.selected_map.tile_pool = [tile_mapping.get(tile, None) for tile in tile_pool_mappings_info]
 
+    def assign_tile_owner_mapping(self, game):
+        tile_owner_mappings = [0, 0, 0, 0, 0, 0]
+
+        for player in game.players:
+            if game.DisplaceAnywhereOwner == player:
+                tile_owner_mappings[0] = player.order + 1  # +1 to handle zero-based indexing
+            if game.OneActionOwner == player:
+                tile_owner_mappings[1] = player.order + 1
+            if game.OneIncomeIfOthersIncomeOwner == player:
+                tile_owner_mappings[2] = player.order + 1
+            if game.OneDisplacedPieceOwner == player:
+                tile_owner_mappings[3] = player.order + 1
+            if game.FourPtsPerOwnedCityOwner == player:
+                tile_owner_mappings[4] = player.order + 1
+            if game.SevenPtsPerCompletedAbilityOwner == player:
+                tile_owner_mappings[5] = player.order + 1
+
+        tile_owner_mappings_info = torch.tensor(tile_owner_mappings, device=device, dtype=torch.uint8)
+        return tile_owner_mappings_info
+    
+    def unmap_tile_owner_mapping(self, tile_owner_mappings_info, game):
+
+        if len(tile_owner_mappings_info) != 6:
+            print(f"Error: Mismatch in the size of tile owner mappings info.")
+            exit()
+        if tile_owner_mappings_info[0] != 0:
+            game.DisplaceAnywhereOwner = game.players[tile_owner_mappings_info[0] - 1]
+        if tile_owner_mappings_info[1] != 0:
+            game.OneActionOwner = game.players[tile_owner_mappings_info[1] - 1]
+        if tile_owner_mappings_info[2] != 0:
+            game.OneIncomeIfOthersIncomeOwner = game.players[tile_owner_mappings_info[2] - 1]
+        if tile_owner_mappings_info[3] != 0:
+            game.OneDisplacedPieceOwner = game.players[tile_owner_mappings_info[3] - 1]
+        if tile_owner_mappings_info[4] != 0:
+            game.FourPtsPerOwnedCityOwner = game.players[tile_owner_mappings_info[4] - 1]
+        if tile_owner_mappings_info[5] != 0:
+            game.SevenPtsPerCompletedAbilityOwner = game.players[tile_owner_mappings_info[5] - 1]
+    
     def fill_city_tensor(self, game):
         self.city_num_attributes = 58  # 8 attributes for city + 10 offices * 5 attributes each + 5 adjacent city numbers
         all_city_info = torch.zeros(MAX_CITIES, self.city_num_attributes, device=device, dtype=torch.uint8)
@@ -227,6 +267,7 @@ class BoardData:
             city_tributes = self.assign_city_tribute_mapping(city)
 
             city_data = [city_num, city_color, city1_upgrade, city2_upgrade, city_tributes[0], city_tributes[1], city_tributes[2], city_tributes[3]]
+            # print(f"city_data len {len(city_data)}")
             office_data = [self.assign_office_mapping(office) for office in city.offices]
             # Pad with zeros if there are fewer than 10 offices
             office_data += [(0, 0, 0, 0, 0)] * (10 - len(office_data))
@@ -247,28 +288,26 @@ class BoardData:
         return all_city_info
 
     def unmap_city_tensor(self, city_tensor, game, city):
-        # Split the tensor into its parts
-        city_data_list = list(map(int, city_tensor))
-        city_data = city_data_list[:8]
-        office_data = city_data_list[8:58]
-        # adjacent_city_numbers = city_data_list[58:63]
+        # Ensure city_tensor is a list of integers
+        city_info_list = list(map(int, city_tensor))
 
-        # Unpack the office data into a list of tuples
-        office_data = [tuple(office_data[i:i + 4]) for i in range(0, len(office_data), 4)]
+        # Split the tensor into city and office information
+        city_data = city_info_list[:8]
+        office_info = city_info_list[8:58]
+        # adjacent_city_numbers = city_info_list[58:]
+        office_data = [tuple(office_info[i:i + 5]) for i in range(0, len(office_info), 5)]
 
         # Convert city data to their original values
         city_name = self.unmap_city_name_and_color_mapping(city_data[0], game)
-        city_tribues = self.unmap_city_tribute_mapping(city_data[4])
+        city_tributes = self.unmap_city_tribute_mapping(city_data[4:8])
+        # print (f"city_tributes len {len(city_tributes)}")
 
-        # Convert office data to their original values
         office_data = [self.unmap_office_mapping(office, game) for office in office_data]
 
         if city.name == city_name:
             # Ensure the number of offices in the tensor matches the number of offices in the city
             for office, new_office_data in zip(city.offices, office_data):
                 office_shape, office_color, office_controller, office_points, office_place_adjacent = new_office_data
-                # office.shape = office_shape
-                # office.color = office_color
                 if office_controller:
                     office.controller = office_controller  
                     office.color = office.controller.color
@@ -276,13 +315,14 @@ class BoardData:
                 else:
                     office.controller = None
                 # office.awards_points = office_points
-            for i, player_num in enumerate(city_tribues):
-                if player_num:
-                    city.tributed_players[i] = game.players[player_num - 1]
-                else:
-                    city.tributed_players[i] = None
-                    if city.tribute_points[0] is None and city.tribute_points[1] is not None or city.tribute_points[2] is not None or city.tribute_points[3] is not None:
-                        sys.exit(f"Players are appended to this list. If any players are tributed, it should start with the 0th index.")              
+                for i, player_num in enumerate(city_tributes):
+                    # print(f"i {i}, player_num {player_num}")
+                    if player_num:
+                        office.tributed_players[i] = game.players[player_num]  # -1 to handle zero-based indexing
+                    else:
+                        city.tributed_players[i] = None
+                        if city.tributed_players[0] is None and city.tributed_players[1] is not None or city.tributed_players[2] is not None or city.tributed_players[3] is not None:
+                            sys.exit(f"Players are appended to this list. If any players are tributed, it should start with the 0th index.")              
         else:
             sys.exit(f"City name: {city.name} does not match city name in tensor: {city_name}")
 
@@ -520,8 +560,11 @@ class BoardData:
         return city_tributes 
 
     def unmap_city_tribute_mapping(self, city_tributes):
-        city_tributes = [player - 1 if player else None for player in city_tributes]
-        return city_tributes
+        city_tributed_players = [0] * 4
+        for i, player_num in enumerate(city_tributes):
+            if player_num:
+                city_tributed_players[i] = player_num - 1  # -1 to handle zero-based indexing
+        return city_tributed_players
 
     def assign_office_mapping(self, office):
         colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
@@ -543,7 +586,7 @@ class BoardData:
         return office_shape, office_color, office_controller, office_points, office_place_adjacent
 
     def unmap_office_mapping(self, office, game):
-        if len(office) != 4:
+        if len(office) != 5:
             print(f"Error: Office data does not have 4 attributes.")
             return None, None, None, 0
 
@@ -620,7 +663,7 @@ class BoardData:
         route_perm_bm = self.unmap_permanent_bm_mapping(route_info[6])
 
         # Convert post data to original values
-        post_info = [tuple(post_info[i:i + 2]) for i in range(0, len(post_info), 2)]
+        post_info = [tuple(post_info[i:i + 3]) for i in range(0, len(post_info), 3)]
         owner_shapes = [self.unmap_post_shape_mapping(post[0]) for post in post_info]
         post_owners = [self.unmap_player_mapping(post[1], game) for post in post_info]
         post_blocked = [post[2] for post in post_info]
@@ -781,20 +824,23 @@ class BoardData:
         player_unused_bm = player_info_list[13:25]
         player_used_bm = player_info_list[25:]
 
-        # Convert player data to their original values
-        player.score = player_data[0]
-        player.keys = player_data[1]
-        player.privilege = self.unmap_priv_mapping(player_data[2])
-        player.book = player_data[3]
-        player.actions_index = player_data[4]
-        player.actions = player_data[5]
-        player.bank = self.unmap_bank_mapping(player_data[6])
-        player.general_stock_squares = player_data[7]
-        player.general_stock_circles = player_data[8]
-        player.personal_supply_squares = player_data[9]
-        player.personal_supply_circles = player_data[10]
-        player.brown_priv_count = player_data[11]
-        player.blue_priv_count = player_data[12]
+        if player_data:
+            # Convert player data to their original values
+            player.score = player_data[0]
+            player.keys = player_data[1]
+            player.privilege = self.unmap_priv_mapping(player_data[2])
+            player.book = player_data[3]
+            player.actions_index = player_data[4]
+            player.actions = player_data[5]
+            player.bank = self.unmap_bank_mapping(player_data[6])
+            player.general_stock_squares = player_data[7]
+            player.general_stock_circles = player_data[8]
+            player.personal_supply_squares = player_data[9]
+            player.personal_supply_circles = player_data[10]
+            player.brown_priv_count = player_data[11]
+            player.blue_priv_count = player_data[12]
+        else:
+            exit("Warning: player_data is empty.")
 
         # Convert bonus markers to their original values
         player_unused_bm = [self.unmap_bm_mapping(bm) for bm in player_unused_bm]
@@ -929,25 +975,37 @@ class BoardData:
                 num_players = int_game_list[1]
                 print(f"Num Players: {num_players}")
                 active_player = int_game_list[2]
-                current_player_index = int_game_list[3]
-                actions_remaining = int_game_list[4]
-                # max_full_cities = int_game_list[5]
-                current_full_cities_count = int_game_list[6]
-                east_west_completed_count = int_game_list[7]
-                waiting_for_bm_swap_office = int_game_list[8]
-                waiting_for_bm_upgrade_ability = int_game_list[9]
-                waiting_for_bm_move_any_2 = int_game_list[10]
-                waiting_for_bm_move3 = int_game_list[11]
-                cardiff_priv = int_game_list[12]
-                carlisle_priv = int_game_list[13]
-                london_priv = int_game_list[14]
-                special_prestige_points = int_game_list[15:19]
-                bonus_marker_pool = int_game_list[19:31]
+                replace_bonus_marker = int_game_list[3]
+                
+                current_player_index = int_game_list[4]
+                actions_remaining = int_game_list[5]
+                # max_full_cities = int_game_list[6]
+                current_full_cities_count = int_game_list[7]
+                east_west_completed_count = int_game_list[8]
+                waiting_for_bm_swap_office = int_game_list[9]
+                waiting_for_bm_upgrade_ability = int_game_list[10]
+                waiting_for_bm_move_any_2 = int_game_list[11]
+                waiting_for_bm_move3 = int_game_list[12]
+
+                waiting_for_bm_exchange_bm = int_game_list[13]
+                waiting_for_bm_tribute_trading_post = int_game_list[14]
+                waiting_for_bm_block_trade_route = int_game_list[15]
+
+                cardiff_priv = int_game_list[16]
+                carlisle_priv = int_game_list[17]
+                london_priv = int_game_list[18]
+                special_prestige_points = int_game_list[19:23]
+                bonus_marker_pool = int_game_list[23:35]
+                tile_pool = int_game_list[35:41]
+                tile_owner = int_game_list[41:47]
 
                 break
         
         game = Game(map_num, num_players)
+        self.get_game_state(game)
+        
         game.active_player = active_player
+        game.replace_bonus_marker = replace_bonus_marker
         game.current_player_index = current_player_index - 1
         game.current_player = game.players[current_player_index - 1]
 
@@ -958,9 +1016,14 @@ class BoardData:
         game.waiting_for_bm_upgrade_ability = waiting_for_bm_upgrade_ability
         game.waiting_for_bm_move_any_2 = waiting_for_bm_move_any_2
         game.waiting_for_bm_move3 = waiting_for_bm_move3
+        game.waiting_for_bm_exchange_bm = waiting_for_bm_exchange_bm
+        game.waiting_for_bm_tribute_trading_post = waiting_for_bm_tribute_trading_post
+        game.waiting_for_bm_block_trade_route = waiting_for_bm_block_trade_route
         game.cardiff_priv, game.carlisle_priv, game.london_priv = self.unmap_blue_brown_priv_mapping(cardiff_priv, carlisle_priv, london_priv)
         self.unmap_special_prestige_points_mapping(special_prestige_points, game)
         self.unmap_bonus_marker_pool_mapping(bonus_marker_pool, game)
+        self.unmap_tile_pool_mapping(tile_pool, game)
+        self.unmap_tile_owner_mapping(tile_owner, game)
         
         return game
 
@@ -975,6 +1038,8 @@ class BoardData:
                 player_str = line.split("Player Tensor: ")[1].strip()
                 player_data_list = player_str.split(", ")
                 num_attributes_per_player = self.num_player_attributes
+                if num_attributes_per_player == 0:
+                    sys.exit("Player tensor size is not correct.")
 
                 for i, player in enumerate(game.players):
                     start_index = i * num_attributes_per_player

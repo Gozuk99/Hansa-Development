@@ -77,7 +77,7 @@ class City:
         self.height = 0
         self.midpoint = (0, 0)  # Initialize midpoint with (0, 0)
         self.upgrade_city_type = []
-        self.tributed_players = []
+        self.tributed_players = [None, None, None, None]
 
     def add_route(self, route):
         self.routes.append(route)
@@ -493,7 +493,7 @@ class Route:
     
     def award_tributes(self):
         for city in self.cities:
-            for player in city.tributed_players:
+            for player in [p for p in city.tributed_players if p is not None]:
                 num_circles = player.general_stock_circles
                 num_squares = player.general_stock_squares
 

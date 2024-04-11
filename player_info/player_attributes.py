@@ -1,18 +1,18 @@
 # player_attributes.py
 
 import sys
-from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, OUTPUT_SIZE
+from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, INPUT_SIZE, OUTPUT_SIZE
 from ai.ai_model import HansaNN
 from player_info.reward_options import Rewards
 
 class Player:
     def __init__(self, color, order):
         self.color = color
-        self.hansa_nn = None
         self.reward = 0
         self.reward_structure = Rewards(1)
 
         self.order = order
+        self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{self.order}.pth")
 
         self.score = 0  # Initial score
         self.final_score = 0
@@ -48,9 +48,6 @@ class Player:
 
         self.brown_priv_count = 0
         self.blue_priv_count = 0
-
-    def assign_nn(self, input_size):
-        self.hansa_nn = HansaNN(input_size, OUTPUT_SIZE, model_file=f"hansa_nn_model{self.order}.pth")
 
     def refresh_map3_priv_actions(self, game):
         self.brown_priv_count = 0

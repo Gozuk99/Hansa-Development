@@ -485,15 +485,22 @@ epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 
-for j in range(1):
-    game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
+for j in range(100):
+    # game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
     board_data = BoardData()
-    game_state_tensor = board_data.get_game_state(game)
-    game.assign_player_nn_size(board_data.all_game_state_size)
+    # game_state_tensor = board_data.get_game_state(game)
     game = board_data.load_game_from_file('game_states_for_training.txt')
-    for i in range(1):
+    if board_data.all_game_state_size != INPUT_SIZE:
+        print(f"Invalid input size: {board_data.all_game_state_size}")
+        exit()
+
+    for i in range(100):
         active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
+        print(f"Active Player: {COLOR_NAMES[active_player.color]}")
+        print(f"Available actions: {active_player.actions_remaining}")
         hansa_nn = active_player.hansa_nn
+        if not hansa_nn:
+            exit(f"No neural network found for the active player {COLOR_NAMES[active_player.color]}")
 
         # Get the current game state tensor
         game_state_tensor = board_data.get_game_state(game)
@@ -501,7 +508,6 @@ for j in range(1):
 
         # Forward pass through the neural network to get the action probabilities
         action_probabilities = hansa_nn(game_state_tensor.unsqueeze(0))  # Adding an extra dimension for batch
-        # print(f"action_probabilities: {action_probabilities}")
 
         # Apply masking to filter out invalid actions
         valid_actions = masking_out_invalid_actions(game)

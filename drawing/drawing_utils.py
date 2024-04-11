@@ -152,7 +152,7 @@ def draw_city_rectangle(win, city):
     draw_shape(win, "rectangle", city.color, rect_x, rect_y, city.width, city.height)
     draw_text_below_rectangle(win, city.name, rect_x, rect_y, city.width, city.height)
 
-    if city.tributed_players:
+    if any(player is not None for player in city.tributed_players):
         square_size = 15
         square_padding = 3
         total_width = len(city.tributed_players) * (square_size + square_padding) - square_padding
@@ -379,7 +379,8 @@ def draw_bonus_marker_pool(win, game):
     # Adjust start_y for bonus markers to be below the label
     start_y += 30  # Space below the label
 
-    alphabatized_bonus_markers = sorted(game.selected_map.bonus_marker_pool, key=lambda bm: bm)
+    # alphabatized_bonus_markers = sorted(game.selected_map.bonus_marker_pool, key=lambda bm: bm)
+    alphabatized_bonus_markers = sorted([bm for bm in game.selected_map.bonus_marker_pool if bm is not None], key=lambda bm: bm)
     max_per_column = 6
     vertical_space = 20  # Space between markers
 
