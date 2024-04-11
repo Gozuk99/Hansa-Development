@@ -57,6 +57,7 @@ def error_exit(game, route):
     win.fill((210, 180, 140))
 
     if route:
+        print(f"Route between cities {route.cities[0].name} and {route.cities[1].name} has an error.")
         for i, post in enumerate(route.posts):
             if post.owner:
                 print(f"[{i}] Post Owner: {COLOR_NAMES[post.owner.color]}, Post Owner Piece Shape: {post.owner_piece_shape}")
@@ -108,7 +109,7 @@ def map_claim_post_action(game, index):
 
     # CLAIM AS DISPLACED PLAYER - if post is empty
     if game.waiting_for_displaced_player:
-        if selected_post.owner == game.displaced_player and game.displaced_player.is_general_stock_empty() and game.displaced_player.is_personal_supply_empty():
+        if selected_post.owner == game.displaced_player.player and game.displaced_player.is_general_stock_empty() and game.displaced_player.is_personal_supply_empty():
             print(f"DISPLACE - Performing PICKUP/PLACE action for {post_type} on post {post_idx} because GS and PS is empty")
             displace_claim(game, selected_post, post_type)
         elif selected_post in game.all_empty_posts:
@@ -116,6 +117,7 @@ def map_claim_post_action(game, index):
             displace_claim(game, selected_post, post_type)
         else:
             print(f"DISPLACE ERROR - Selected Post NOT in game.all_empty_posts")
+            exit()
 
     elif game.waiting_for_bm_move_any_2:
         print(f"Performing BM Move Any 2 action for {post_type} on post {post_idx}")
@@ -235,10 +237,7 @@ def map_claim_route_action(game, index):
         route_idx = adjusted_index // 4  # Four upgrade possibilities per route (2 cities × 2 upgrades each)
         city_idx = (adjusted_index // 2) % 2  # Which city on the route
         upgrade_idx = adjusted_index % 2  # Which upgrade in the city
-        print(f"adjusted_index {adjusted_index}.")
-        print(f"route_idx {route_idx}.")
-        print(f"city_idx {city_idx}.")
-        print(f"upgrade_idx {upgrade_idx}.")
+
         route = game.selected_map.routes[route_idx]
         city = route.cities[city_idx]
         if city.upgrade_city_type and len(city.upgrade_city_type) > upgrade_idx:
@@ -367,7 +366,7 @@ def map_replace_bm_action(game, index):
         print(f"{COLOR_NAMES[current_player.color]} has actions remaining or conditions not met for bonus marker replacement.")
 
 def map_bm_city_actions(game, index):
-    for city_idx, city in enumerate(game.cities):
+    for city_idx, city in enumerate(game.selected_map.cities):
         if city_idx == index:
             if game.waiting_for_bm_swap_office:
                 if city.check_if_eligible_to_swap_offices(game.current_player):
@@ -397,7 +396,7 @@ def map_end_turn_action(game):
 
 def masking_out_invalid_actions(game):
     
-    claim_post_tensor = mask_post_action(game) #size 242 (claiming with a square or circle))
+    claim_post_tensor = mask_post_action(game) #size 242 (claiming with a square or circle)
     claim_route_tensor = mask_claim_route(game) #size 280 (claim for points, office, or upgrade)
     # print(f"claim_route_tensor - {claim_route_tensor.size()}")
     income_tensor = mask_income_actions(game) #size 5 (0-4 circles + leftover squares)
@@ -450,7 +449,7 @@ def mask_post_action(game):
                             post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
                         elif displaced_player.displaced_shape == "circle" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
                             post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
-                    elif post.owner == displaced_player and displaced_player.played_displaced_shape:
+                    elif post.owner == displaced_player.player and displaced_player.played_displaced_shape:
                         post_tensor[post_idx] = 1
                         post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
 
@@ -546,8 +545,10 @@ def mask_post_action(game):
                 ## Claim post action: check if the post is empty and region is valid
                 if is_post_empty and check_brown_blue_priv(game, route):
                     if current_player.personal_supply_squares > 0 and (not post.required_shape or post.required_shape == "square"):
+                        # print(f"MASK OK - claim empty post {post_idx} with square")
                         post_tensor[post_idx] = 1
                     if current_player.personal_supply_circles > 0 and (not post.required_shape or post.required_shape == "circle"):
+                        # print(f"MASK OK - claim empty post {post_idx} with circle")
                         post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts
                 # DISPLACE - if post is owned by a different player:
                 elif is_post_owned and post.owner != current_player and check_brown_blue_priv(game, route) and can_displace:
@@ -558,8 +559,10 @@ def mask_post_action(game):
                     if current_player.personal_supply_squares + current_player.personal_supply_circles >= displacement_cost:
                         # If the player can displace this post, mark it as a valid action
                         if post.required_shape == "square" or post.required_shape is None and current_player.personal_supply_squares > 0:
+                            # print(f"MASK OK - displace taken post {post_idx} with square - owned by {COLOR_NAMES[post.owner.color]}")
                             post_tensor[post_idx] = 1
                         if post.required_shape == "circle" or post.required_shape is None and current_player.personal_supply_circles > 0:
+                            # print(f"MASK OK - displace taken post {post_idx} with circle - owned by {COLOR_NAMES[post.owner.color]}")
                             post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts
                 # else:
                 #     print (f"Invalid scenario detected. Post Info - Circle Color: {COLOR_NAMES[post.circle_color]}, Square Color: {COLOR_NAMES[post.square_color]}, Owner: {post.owner}, Region: {post.region}, ReqShape: {post.required_shape}")
@@ -723,7 +726,7 @@ def mask_replace_bm(game):
 
 def mask_bm_city_actions(game):
     bm_city_tensor = torch.zeros(MAX_CITIES, device=device, dtype=torch.uint8)  # 30 possible cities to claim a green city or swap office
-    if not game.waiting_for_bm_swap_office or not game.waiting_for_bm_green_city:
+    if not game.waiting_for_bm_swap_office and not game.waiting_for_bm_green_city:
         return bm_city_tensor
     
     city_idx = 0
@@ -733,6 +736,7 @@ def mask_bm_city_actions(game):
                 bm_city_tensor[city_idx] = 1
         elif game.waiting_for_bm_green_city:
             if city.color == DARK_GREEN:
+                print (f"Valid City to claim green city: {city.name}, {city.color}, {city_idx}")
                 bm_city_tensor[city_idx] = 1
         city_idx += 1
     

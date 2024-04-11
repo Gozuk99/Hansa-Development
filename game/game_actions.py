@@ -525,6 +525,7 @@ def handle_bonus_marker(game, player, route, reset_pieces):
             game.current_player.upgrade_privilege()
         elif perm_bm_type == "ClaimGreenCity":
             game.waiting_for_bm_green_city = True
+            print(f"BM: Please select a GREEN city to build an office in!")
         elif perm_bm_type == 'Place2TradesmenFromRoute':
             game.current_player.pieces_to_place = 2
             game.current_player.holding_pieces = reset_pieces

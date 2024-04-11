@@ -484,89 +484,84 @@ epsilon_start = 1.0
 epsilon_end = 0.1
 decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
+gamma = 0.99
 
-for j in range(100):
-    # game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
+for j in range(5):
+    game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
     board_data = BoardData()
-    # game_state_tensor = board_data.get_game_state(game)
-    game = board_data.load_game_from_file('game_states_for_training.txt')
+    game_state_tensor = board_data.get_game_state(game)
+    # game = board_data.load_game_from_file('game_states_for_training.txt')
+
     if board_data.all_game_state_size != INPUT_SIZE:
         print(f"Invalid input size: {board_data.all_game_state_size}")
         exit()
 
+    # Assuming you have defined INPUT_SIZE, OUTPUT_SIZE, epsilon_start, epsilon_end, decay_rate
     for i in range(100):
-        active_player = game.players[game.active_player] #declaring this variable now to prevent the active player variable from being overwritten
+        active_player = game.players[game.active_player]
         print(f"Active Player: {COLOR_NAMES[active_player.color]}")
-        print(f"Available actions: {active_player.actions_remaining}")
         hansa_nn = active_player.hansa_nn
+
         if not hansa_nn:
-            exit(f"No neural network found for the active player {COLOR_NAMES[active_player.color]}")
+            print(f"No neural network found for the active player {COLOR_NAMES[active_player.color]}")
+            exit()
 
-        # Get the current game state tensor
-        game_state_tensor = board_data.get_game_state(game)
-        game_state_tensor = game_state_tensor.float()   # Convert to float if not already
+        game_state_tensor = board_data.get_game_state(game).float()
 
-        # Forward pass through the neural network to get the action probabilities
-        action_probabilities = hansa_nn(game_state_tensor.unsqueeze(0))  # Adding an extra dimension for batch
+        # Do NOT detach here, you need the gradients for the learning process
+        current_q_values = hansa_nn(game_state_tensor.unsqueeze(0)).squeeze(0)  # No need to flatten yet
 
-        # Apply masking to filter out invalid actions
         valid_actions = masking_out_invalid_actions(game)
-        masked_action_probabilities = action_probabilities * valid_actions
-        masked_action_probabilities = masked_action_probabilities.flatten()
+        # Apply masking by setting invalid actions to negative infinity
+        masked_q_values = torch.where(valid_actions > 0, current_q_values, torch.tensor(-float('inf')).to(current_q_values.device))
 
-        # Get the top 3 indices with highest probabilities
-        topk_values, topk_indices = torch.topk(masked_action_probabilities, 3)
+        valid_indices = valid_actions.nonzero().squeeze(1)
+        if valid_indices.numel() == 0:
+            print("No valid actions available. Breaking out of the loop.")
+            print(f"Valid actions: {valid_actions}")
+            print(f"Masked Q-values: {masked_q_values}")
+            break  # Exiting the loop if no valid actions are available
 
-        topk_values = topk_values.flatten()
-        top3_choices = topk_indices.flatten()
-
-        # Filter out indices that correspond to zero probabilities
-        valid_top3_choices = [index for index, value in zip(top3_choices, topk_values) if value > 0]
-
-        # If there are no valid choices (all probabilities are zero), handle this case separately
-        if not valid_top3_choices:
-            print("No valid actions available")
-            print("action_probabilities:")
-            print(f"{action_probabilities}")
-            print("masked_action_probabilities:")
-            print(f"{masked_action_probabilities}")
-            print("No valid actions available")
-            break
+        if random.random() < epsilon:
+            # Exploration: Randomly select from valid actions
+            selected_index = random.choice(valid_indices.tolist())
+            print(f"Exploration: Selected random action Index {selected_index}")
         else:
-            if random.random() < epsilon:
-                # Exploration: Randomly select from valid actions
-                selected_index = random.choice(valid_top3_choices)
-                print(f"Exploration: Selected random action: Index {selected_index}")
-            else:
-                # Exploitation: Select the best action
-                selected_index = valid_top3_choices[0]  # Assuming top3_choices are sorted by probability
-                print(f"Exploitation: Selected best action: Index {selected_index}")
+            # Exploitation: Select the action with the highest Q-value
+            # print(f"Valid actions: {valid_actions}")
+            # print(f"Masked Q-values: {masked_q_values}")
+            selected_index = masked_q_values.argmax().item()
+            print(f"Exploitation: Selected action with highest Q-value Index {selected_index}")
 
-            # Perform the action corresponding to the selected index
-            perform_action_from_index(game, selected_index)
+        # Perform the selected action
+        perform_action_from_index(game, selected_index)
 
-            # Calculate loss and update network
-            hansa_nn.optimizer.zero_grad()
-            prob = masked_action_probabilities[selected_index].item()
-            if prob > 0:
-                log_prob = torch.log(masked_action_probabilities[selected_index])
-                # if active_player.reward == 0:
-                #     active_player.reward = 0.1
-                loss = -log_prob * active_player.reward
-                loss.backward()
+        # Obtain reward and next state
+        reward = active_player.reward  # Assuming this is updated in perform_action_from_index
+        next_game_state_tensor = board_data.get_game_state(game).float()
 
-                # Apply gradient clipping
-                torch.nn.utils.clip_grad_norm_(hansa_nn.parameters(), max_norm=1.0)
+        # Compute Q-values for the next state, detach to avoid calculating gradients
+        next_q_values = hansa_nn(next_game_state_tensor.unsqueeze(0)).detach()
 
-                hansa_nn.optimizer.step()
-                print(f"[{COLOR_NAMES[active_player.color]}] Reward: {active_player.reward}, Log Prob: {log_prob}, Loss: {loss.item()}")
-                
-            else:
-                print("Invalid probability value, skipping update")
-                break
-            active_player.reward = 0
-            epsilon = max(epsilon_end, epsilon - decay_rate)
+        # Compute the target Q-value
+        max_next_q_value = torch.max(next_q_values)
+        target_q_value = reward + (gamma * max_next_q_value)
 
+        # Calculate the loss using only the selected Q-value
+        loss = (current_q_values[selected_index] - target_q_value) ** 2
+        hansa_nn.optimizer.zero_grad()
+        loss.backward()
+
+        # Apply gradient clipping and optimizer step
+        torch.nn.utils.clip_grad_norm_(hansa_nn.parameters(), max_norm=1.0)
+        hansa_nn.optimizer.step()
+
+        print(f"[{COLOR_NAMES[active_player.color]}] Reward: {reward}, Loss: {loss.item()}")
+
+        active_player.reward = 0  # Reset reward for the next step
+        epsilon = max(epsilon_end, epsilon - decay_rate)  # Decay epsilon
+
+    # Save models
     for player in game.players:
         print(f"Saving model for Player: {player.order} as hansa_nn_model{player.order}.pth")
         torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{player.order}.pth")
