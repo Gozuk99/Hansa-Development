@@ -9,7 +9,6 @@ class Map2(Map):
         self.routes = []
         self.upgrade_cities = []
         self.east_west_cities = ['Lubeck', 'Danzig']
-        self.specialprestigepoints = None
         self.max_full_cities = 10
         self.max_full_cities_x_pos = 77
         self.max_full_cities_y_pos = 52

@@ -19,7 +19,7 @@ class Player:
         # The silver plate to store bonus markers for the end of the turn
         self.bonus_markers = []
         self.used_bonus_markers = []
-        self.card = None
+        self.mission_card = None
         self.tiles = []
         self.holding_pieces = []
         self.pieces_to_pickup = 0

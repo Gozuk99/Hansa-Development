@@ -470,10 +470,11 @@ def handle_shift_click(mouse_position):
             game.current_player.tiles.append(tile)
             return True            
             
-# game = Game(map_num=1, num_players=3)
-# board_data = BoardData()
+game = Game(map_num=1, num_players=3)
+board_data = BoardData()
+board_data.save_game_state_JSON(game)
+game = board_data.load_game_state_JSON('game_state_JSON.json')
 # game_state_tensor = board_data.get_game_state(game)
-# game = board_data.load_game_from_file('game_states_for_training.txt')
 
 # # Print initial weights
 # # print("Initial weights of layer1:")
@@ -486,11 +487,12 @@ decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 gamma = 0.99
 
-for j in range(5):
-    game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
-    board_data = BoardData()
+for j in range(0):
+    # game = Game(map_num=1, num_players=random.randint(3, 5))
+    # board_data = BoardData()
+    # board_data.save_game_state_JSON(game)
+
     game_state_tensor = board_data.get_game_state(game)
-    # game = board_data.load_game_from_file('game_states_for_training.txt')
 
     if board_data.all_game_state_size != INPUT_SIZE:
         print(f"Invalid input size: {board_data.all_game_state_size}")
@@ -605,7 +607,7 @@ while True:
                 handle_shift_click(mouse_position)
 
             elif handle_get_game_state(mouse_position):
-                board_data.save_game_state_to_file(game)
+                board_data.save_game_state_JSON(game)
 
             elif(check_if_bm_clicked(mouse_position)):
                 print(f"Bonus Marker was used!")

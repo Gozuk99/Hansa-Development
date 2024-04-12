@@ -10,7 +10,6 @@ class Map1(Map):
         self.routes = []
         self.upgrade_cities = []
         self.east_west_cities = ['Stendal', 'Arnheim']
-        self.specialprestigepoints = None
         self.max_full_cities = 10
         self.max_full_cities_x_pos = 77
         self.max_full_cities_y_pos = 52
@@ -320,7 +319,7 @@ class Map1(Map):
         if not self.mission_cards:
             return None
         card = self.mission_cards.pop()
-        player.card = card
+        player.mission_card = card
 
 
         #3p - 101 total posts, 32 routes, 27 cities

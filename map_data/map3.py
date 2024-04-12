@@ -9,7 +9,6 @@ class Map3(Map):
         self.routes = []
         self.upgrade_cities = []
         self.east_west_cities = ['York', 'Oxford']
-        self.specialprestigepoints = None
         self.max_full_cities = 8
         self.max_full_cities_x_pos = 1000
         self.max_full_cities_y_pos = 52

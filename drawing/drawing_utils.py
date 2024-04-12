@@ -658,9 +658,9 @@ def draw_player_card(window, board):
     y_offset = board.y + 90  # Positioning it further down than GS for clarity
     font = pygame.font.SysFont(None, 25)
 
-    if board.player.card:
-        #draw each city in the player card
-        for i, city in enumerate(board.player.card):
+    if board.player.mission_card:
+        #draw each city in the player mission card
+        for i, city in enumerate(board.player.mission_card):
             draw_text(window, str(city), x_offset+35, y_offset + 40 + i*25, font, BLACK, centered=True)
 
 def draw_circle_selection_buttons(window, board):

@@ -5,10 +5,11 @@ from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACIN
 class Map:
     def __init__(self):
         # This should never change
-        self.initial_bonus_types = ['ExchangeBonusMarker', 'SwapOffice', 'PlaceAdjacent']
+        self.initial_bonus_types = ['Move3', 'SwapOffice', 'PlaceAdjacent']
         self.permanent_bm_types = ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
         self.bonus_marker_pool = []
         self.place_new_bonus_marker = False
+        self.specialprestigepoints = None
         # Prepare the starting bonus markers
         self.assign_bm_pool_default()
 
