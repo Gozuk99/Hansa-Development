@@ -470,9 +470,12 @@ def handle_shift_click(mouse_position):
             game.current_player.tiles.append(tile)
             return True            
             
-game = Game(map_num=1, num_players=3)
+#game = Game(map_num=2, num_players=3)
 board_data = BoardData()
-board_data.save_game_state_JSON(game)
+# # board_data.fill_game_tensor(game)
+# # exit()
+
+# board_data.save_game_state_JSON(game)
 game = board_data.load_game_state_JSON('game_state_JSON.json')
 # game_state_tensor = board_data.get_game_state(game)
 
@@ -488,8 +491,9 @@ epsilon = epsilon_start
 gamma = 0.99
 
 for j in range(0):
-    # game = Game(map_num=1, num_players=random.randint(3, 5))
-    # board_data = BoardData()
+    # game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
+    board_data = BoardData()
+    game = board_data.load_game_state_JSON('game_state_JSON.json')
     # board_data.save_game_state_JSON(game)
 
     game_state_tensor = board_data.get_game_state(game)
@@ -520,20 +524,20 @@ for j in range(0):
         valid_indices = valid_actions.nonzero().squeeze(1)
         if valid_indices.numel() == 0:
             print("No valid actions available. Breaking out of the loop.")
-            print(f"Valid actions: {valid_actions}")
+            # print(f"Valid actions: {valid_actions}")
             print(f"Masked Q-values: {masked_q_values}")
             break  # Exiting the loop if no valid actions are available
 
         if random.random() < epsilon:
             # Exploration: Randomly select from valid actions
             selected_index = random.choice(valid_indices.tolist())
-            print(f"Exploration: Selected random action Index {selected_index}")
+            print(f"ExpLORation: Selected random action Index {selected_index}")
         else:
             # Exploitation: Select the action with the highest Q-value
             # print(f"Valid actions: {valid_actions}")
             # print(f"Masked Q-values: {masked_q_values}")
             selected_index = masked_q_values.argmax().item()
-            print(f"Exploitation: Selected action with highest Q-value Index {selected_index}")
+            print(f"ExpLOITation: Selected action with highest Q-value Index {selected_index}")
 
         # Perform the selected action
         perform_action_from_index(game, selected_index)

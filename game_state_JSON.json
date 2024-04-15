@@ -1,0 +1,2068 @@
+{
+    "game_info": {
+        "map_num": 2,
+        "num_players": 3,
+        "active_player": 2,
+        "replace_bonus_marker": 0,
+        "current_player_index": 2,
+        "max_full_cities": 10,
+        "current_full_cities_count": 0,
+        "east_west_completed_count": 0,
+        "waiting_for_bm_swap_office": false,
+        "waiting_for_bm_upgrade_ability": false,
+        "waiting_for_bm_move_any_2": false,
+        "waiting_for_bm_move3": false,
+        "waiting_for_bm_exchange_bm": false,
+        "waiting_for_bm_tribute_trading_post": false,
+        "waiting_for_bm_block_trade_route": false,
+        "waiting_for_bm_green_city": false,
+        "waiting_for_place2_in_scotland_or_wales": false,
+        "cardiff_priv": null,
+        "carlisle_priv": null,
+        "london_priv": null,
+        "special_prestige_points_white": null,
+        "special_prestige_points_orange": null,
+        "special_prestige_points_pink": null,
+        "special_prestige_points_black": null,
+        "bonus_marker1": "4Actions",
+        "bonus_marker2": "UpgradeAbility",
+        "bonus_marker3": "PlaceAdjacent",
+        "bonus_marker4": "UpgradeAbility",
+        "bonus_marker5": "Move3",
+        "bonus_marker6": "4Actions",
+        "bonus_marker7": "SwapOffice",
+        "bonus_marker8": "3Actions",
+        "bonus_marker9": "PlaceAdjacent",
+        "bonus_marker10": "PlaceAdjacent",
+        "bonus_marker11": "3Actions",
+        "bonus_marker12": "SwapOffice",
+        "available_tile1": "+1DisplacedPiece",
+        "available_tile2": "DisplaceAnywhere",
+        "available_tile3": "+7PtsPerCompletedAbility",
+        "tile_owner_DisplaceAnywhere": null,
+        "tile_owner_+1Action": null,
+        "tile_owner_+1IncomeIfOthersIncome": null,
+        "tile_owner_+1DisplacedPiece": null,
+        "tile_owner_+4PtsPerOwnedCity": null,
+        "tile_owner_+7PtsPerCompletedAbility": null,
+        "tile_to_buy": null,
+        "waiting_for_buy_tile_with_bm": false,
+        "first_bm_to_spend_on_tile": null
+    },
+    "city_info": [
+        {
+            "city_name": "Lubeck",
+            "city_color": "dark_red",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "BLACK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Mismar",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "circle",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Stralsund",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "circle",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Malmo",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "circle",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "circle",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Visby",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "circle",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Danzig",
+            "city_color": "dark_red",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "BLACK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Konigsberg",
+            "city_color": "blackish_brown",
+            "city1_upgrade": "SpecialPrestigePoints",
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "circle",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Belgard",
+            "city_color": "dark_green",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Anklam",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Waren",
+            "city_color": "dark_green",
+            "city1_upgrade": "Bank",
+            "city2_upgrade": "Actions",
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Perleberg",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Havelberg",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 1,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "circle",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "BLACK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Stettin",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "BLACK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Kulm",
+            "city_color": "blackish_brown",
+            "city1_upgrade": "Privilege",
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Elbing",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "BLACK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Braunsberg",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "circle",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Allenstein",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Frankfurt",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "BerlinColln",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Brandenburg",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "circle",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Tangermunde",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Magdeburg",
+            "city_color": "blackish_brown",
+            "city1_upgrade": "Privilege",
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 1,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Halle",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "circle",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Mittenberg",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Dresden",
+            "city_color": "dark_green",
+            "city1_upgrade": "Keys",
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Breslau",
+            "city_color": "blackish_brown",
+            "city1_upgrade": "Book",
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "circle",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Thorn",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 1,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "ORANGE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "BLACK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        },
+        {
+            "city_name": "Krackau",
+            "city_color": "blackish_brown",
+            "city1_upgrade": null,
+            "city2_upgrade": null,
+            "city_tribute0": null,
+            "city_tribute1": null,
+            "city_tribute2": null,
+            "city_tribute3": null,
+            "offices": [
+                {
+                    "office_shape": "square",
+                    "office_color": "WHITE",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "PINK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                },
+                {
+                    "office_shape": "square",
+                    "office_color": "BLACK",
+                    "office_controller": null,
+                    "office_points": 0,
+                    "office_place_adjacent": false
+                }
+            ]
+        }
+    ],
+    "route_info": [
+        {
+            "route_cities": [
+                "Lubeck",
+                "Mismar"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Mismar",
+                "Stralsund"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": "MoveAny2",
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": "circle",
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": "circle",
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Stralsund",
+                "Malmo"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": "+1Priv",
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": "circle",
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": "circle",
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Malmo",
+                "Visby"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": "ClaimGreenCity",
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": "circle",
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Malmo",
+                "Danzig"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": "Place2TradesmenFromRoute",
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": "circle",
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Danzig",
+                "Konigsberg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Danzig",
+                "Belgard"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Belgard",
+                "Anklam"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Belgard",
+                "Kulm"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Anklam",
+                "Stettin"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Stettin",
+                "Waren"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Waren",
+                "Mismar"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Waren",
+                "Havelberg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Havelberg",
+                "Perleberg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Stettin",
+                "Kulm"
+            ],
+            "route_regions": null,
+            "route_has_bm": true,
+            "route_bm_type": "SwapOffice",
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Kulm",
+                "Elbing"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Elbing",
+                "Braunsberg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Danzig",
+                "Braunsberg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Braunsberg",
+                "Allenstein"
+            ],
+            "route_regions": null,
+            "route_has_bm": true,
+            "route_bm_type": "PlaceAdjacent",
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Allenstein",
+                "Thorn"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Thorn",
+                "Krackau"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Krackau",
+                "Breslau"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Breslau",
+                "Frankfurt"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Frankfurt",
+                "Stettin"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Stettin",
+                "Brandenburg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Brandenburg",
+                "Tangermunde"
+            ],
+            "route_regions": null,
+            "route_has_bm": true,
+            "route_bm_type": "Move3",
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Brandenburg",
+                "BerlinColln"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Brandenburg",
+                "Halle"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Halle",
+                "Magdeburg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Halle",
+                "Mittenberg"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Halle",
+                "Dresden"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        },
+        {
+            "route_cities": [
+                "Dresden",
+                "Krackau"
+            ],
+            "route_regions": null,
+            "route_has_bm": false,
+            "route_bm_type": null,
+            "route_perm_bm": null,
+            "posts": [
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": null,
+                    "post_owner_shape": null,
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                }
+            ]
+        }
+    ],
+    "player_info": [
+        {
+            "player_color": "green",
+            "player_order": 1,
+            "player_score": 0,
+            "player_final_score": 0,
+            "player_keys_index": 0,
+            "player_keys": 1,
+            "player_privilege": "WHITE",
+            "player_book": 2,
+            "player_actions_index": 0,
+            "player_actions": 2,
+            "player_actions_remaining": 0,
+            "player_bank": 3,
+            "player_general_stock_squares": 6,
+            "player_general_stock_circles": 0,
+            "player_personal_supply_squares": 3,
+            "player_personal_supply_circles": 1,
+            "player_brown_priv_count": 0,
+            "player_blue_priv_count": 0,
+            "player_mission_card_cities": null,
+            "player_ending_turn": false
+        },
+        {
+            "player_color": "blue",
+            "player_order": 2,
+            "player_score": 0,
+            "player_final_score": 0,
+            "player_keys_index": 0,
+            "player_keys": 1,
+            "player_privilege": "WHITE",
+            "player_book": 2,
+            "player_actions_index": 0,
+            "player_actions": 2,
+            "player_actions_remaining": 0,
+            "player_bank": 3,
+            "player_general_stock_squares": 5,
+            "player_general_stock_circles": 0,
+            "player_personal_supply_squares": 4,
+            "player_personal_supply_circles": 1,
+            "player_brown_priv_count": 0,
+            "player_blue_priv_count": 0,
+            "player_mission_card_cities": null,
+            "player_ending_turn": false
+        },
+        {
+            "player_color": "purple",
+            "player_order": 3,
+            "player_score": 0,
+            "player_final_score": 0,
+            "player_keys_index": 0,
+            "player_keys": 1,
+            "player_privilege": "WHITE",
+            "player_book": 2,
+            "player_actions_index": 0,
+            "player_actions": 2,
+            "player_actions_remaining": 1,
+            "player_bank": 3,
+            "player_general_stock_squares": 4,
+            "player_general_stock_circles": 0,
+            "player_personal_supply_squares": 6,
+            "player_personal_supply_circles": 1,
+            "player_brown_priv_count": 0,
+            "player_blue_priv_count": 0,
+            "player_mission_card_cities": null,
+            "player_ending_turn": false
+        }
+    ]
+}

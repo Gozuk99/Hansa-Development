@@ -36,6 +36,10 @@ class Game:
         self.waiting_for_bm_green_city = False
         self.waiting_for_place2_in_scotland_or_wales = False
 
+        self.tile_to_buy = None
+        self.waiting_for_buy_tile_with_bm = False
+        self.first_bm_to_spend_on_tile = None
+
         self.original_route_of_displacement = None
         self.all_empty_posts = []
         self.tile_pool = []

@@ -2,7 +2,7 @@ import sys
 import torch
 import time
 from map_data.constants import DARK_GREEN, COLOR_NAMES, UPGRADE_MAX_VALUES, MAX_CITIES, MAX_ROUTES, MAX_POSTS
-from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points
+from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
 
 #debugging
 from drawing.drawing_utils import redraw_window
@@ -15,15 +15,15 @@ NUM_CLAIM_POST_ACTIONS = 242        # Actions for claiming posts, index range: 0
 NUM_CLAIM_ROUTE_ACTIONS = 280       # Actions for claiming routes, index range: 242 - 521
 NUM_INCOME_ACTIONS = 5              # Actions for income, index range: 522 - 526
 NUM_BM_ACTIONS = 8                  # Actions for BM, index range: 527 - 534
-NUM_PERM_BM_ACTIONS = 5             # Actions for permanent BM changes, index range: 535 - 539
-NUM_REPLACE_BM_ACTIONS = MAX_ROUTES # Actions for replacing BM, index range: 540 - 579
-NUM_BM_CITY_ACTIONS = MAX_CITIES    # Actions for BM related to cities, index range: 580 - 609
-NUM_BM_UPGRADE = 5                  # Actions for BM upgrades, index range: 610 - 614
-NUM_END_TURN_ACTIONS = 1            # Action to end turn, index range: 615
+NUM_BUY_TILE_ACTIONS = 8            # Actions for buying a tile, index range: 535 - 542
+NUM_REPLACE_BM_ACTIONS = 40         # Actions for replacing BM, index range: 543 - 582
+NUM_BM_CITY_ACTIONS = 30            # Actions for BM related to cities, index range: 583 - 612
+NUM_BM_UPGRADE = 5                  # Actions for BM upgrades, index range: 613 - 617
+NUM_END_TURN_ACTIONS = 1            # Action to end turn, index range: 618
 
 # Calculating the total actions
 TOTAL_ACTIONS = (NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + 
-                 NUM_BM_ACTIONS + NUM_PERM_BM_ACTIONS + NUM_REPLACE_BM_ACTIONS + 
+                 NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS + NUM_REPLACE_BM_ACTIONS + 
                  NUM_BM_CITY_ACTIONS + NUM_BM_UPGRADE + NUM_END_TURN_ACTIONS)
 
 def perform_action_from_index(game, max_prob_index):
@@ -35,18 +35,30 @@ def perform_action_from_index(game, max_prob_index):
         map_income_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS)
     elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS:
         map_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS)
-    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_PERM_BM_ACTIONS:
-        map_perm_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS)
-    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_PERM_BM_ACTIONS + NUM_REPLACE_BM_ACTIONS:
-        map_replace_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_PERM_BM_ACTIONS)
-    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_PERM_BM_ACTIONS + NUM_REPLACE_BM_ACTIONS + NUM_BM_CITY_ACTIONS:
-        map_bm_city_actions(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_PERM_BM_ACTIONS - NUM_REPLACE_BM_ACTIONS)
-    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_PERM_BM_ACTIONS + NUM_REPLACE_BM_ACTIONS + NUM_BM_CITY_ACTIONS + NUM_BM_UPGRADE:
-        map_bm_upgrade_ability(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_PERM_BM_ACTIONS - NUM_REPLACE_BM_ACTIONS - NUM_BM_CITY_ACTIONS)
+    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS:
+        map_buy_tile_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS)
+    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS + NUM_REPLACE_BM_ACTIONS:
+        map_replace_bm_action(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_BUY_TILE_ACTIONS)
+    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS + NUM_REPLACE_BM_ACTIONS + NUM_BM_CITY_ACTIONS:
+        map_bm_city_actions(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_BUY_TILE_ACTIONS - NUM_REPLACE_BM_ACTIONS)
+    elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS + NUM_REPLACE_BM_ACTIONS + NUM_BM_CITY_ACTIONS + NUM_BM_UPGRADE:
+        map_bm_upgrade_ability(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_BUY_TILE_ACTIONS - NUM_REPLACE_BM_ACTIONS - NUM_BM_CITY_ACTIONS)
     elif max_prob_index == TOTAL_ACTIONS - 1:
         map_end_turn_action(game)
 
-    game.switch_player_if_needed()
+    if not (game.waiting_for_bm_swap_office or game.waiting_for_bm_upgrade_ability or game.waiting_for_bm_move_any_2 or \
+            game.waiting_for_bm_move3 or game.waiting_for_bm_exchange_bm or game.waiting_for_bm_tribute_trading_post or\
+            game.waiting_for_bm_block_trade_route or game.waiting_for_bm_green_city or game.waiting_for_place2_in_scotland_or_wales):
+        # print(f"BM flag waiting_for_bm_swap_office: {game.waiting_for_bm_swap_office}")
+        # print(f"BM flag waiting_for_bm_upgrade_ability: {game.waiting_for_bm_upgrade_ability}")
+        # print(f"BM flag waiting_for_bm_move_any_2: {game.waiting_for_bm_move_any_2}")
+        # print(f"BM flag waiting_for_bm_move3: {game.waiting_for_bm_move3}")
+        # print(f"BM flag waiting_for_bm_exchange_bm: {game.waiting_for_bm_exchange_bm}")
+        # print(f"BM flag waiting_for_bm_tribute_trading_post: {game.waiting_for_bm_tribute_trading_post}")
+        # print(f"BM flag waiting_for_bm_block_trade_route: {game.waiting_for_bm_block_trade_route}")
+        # print(f"BM flag waiting_for_bm_green_city: {game.waiting_for_bm_green_city}")
+        # print(f"BM flag waiting_for_place2_in_scotland_or_wales: {game.waiting_for_place2_in_scotland_or_wales}")
+        game.switch_player_if_needed()
     # Handle default or error case
     return None
 
@@ -110,7 +122,7 @@ def map_claim_post_action(game, index):
     # CLAIM AS DISPLACED PLAYER - if post is empty
     if game.waiting_for_displaced_player:
         if selected_post.owner == game.displaced_player.player and game.displaced_player.is_general_stock_empty() and game.displaced_player.is_personal_supply_empty():
-            print(f"DISPLACE - Performing PICKUP/PLACE action for {post_type} on post {post_idx} because GS and PS is empty")
+            print(f"DISPLACE - Performing PICKUP action for {post_type} on post {post_idx} because GS and PS is empty")
             displace_claim(game, selected_post, post_type)
         elif selected_post in game.all_empty_posts:
             print(f"DISPLACE - Performing displaced claim action for {post_type} on post {post_idx}")
@@ -315,11 +327,14 @@ def map_bm_action(game, index):
             if bm_index is not None:
                 if bm_index == index:
                     selected_bm = bm
-
+                    print(f"1Selected BM: {selected_bm.type}")
+                    break
+        print(f"2Selected BM: {selected_bm.type}")
         if selected_bm.type == "SwapOffice":
             game.waiting_for_bm_swap_office = True
         elif selected_bm.type == "Move3":
             selected_bm.handle_move3(game)
+            print(f"3Selected BM: {selected_bm.type}, waiting_for_bm_move3: {game.waiting_for_bm_move3}, pieces_to_pickup: {current_player.pieces_to_pickup}")
         elif selected_bm.type == "UpgradeAbility":
             game.waiting_for_bm_upgrade_ability = True
         elif selected_bm.type == "3Actions":
@@ -337,13 +352,59 @@ def map_bm_action(game, index):
         game.current_player.bonus_markers.remove(selected_bm)
     return
 
-def map_perm_bm_action(game, index):
+def map_buy_tile_action(game, index):
     current_player = game.current_player
+    tile_mapping = {
+        1: 'DisplaceAnywhere',
+        2: '+1Action',
+        3: '+1IncomeIfOthersIncome',
+        4: '+1DisplacedPiece',
+        5: '+4PtsPerOwnedCity',
+        6: '+7PtsPerCompletedAbility'
+    }
+    bm_mapping = {
+        "SwapOffice": 0,
+        "Move3": 1,
+        "UpgradeAbility": 2,
+        "3Actions": 3,
+        "4Actions": 4,
+        "ExchangeBonusMarker": 5,
+        "Tribute4EstablishingTP": 6,
+        "BlockTradeRoute": 7
+    }
+
+    if game.waiting_for_buy_tile_with_bm:
+        if game.first_bm_to_spend:
+            second_bm_to_spend = bm_mapping.get(index)
+            buy_tile(game, game.tile_to_buy, game.first_bm_to_spend, second_bm_to_spend)
+
+            game.waiting_for_buy_tile_with_bm = False
+            game.first_bm_to_spend = None
+            game.tile_to_buy = None
+        else:
+            game.first_bm_to_spend = bm_mapping.get(index)
+
+    bm_to_spend = [None, None]
+
+    if len(current_player.bonus_markers) == 2:
+        for i, bm in enumerate(current_player.bonus_markers):
+            bm_to_spend[i] = bm
+        buy_tile(game, tile_mapping.get(index), bm_to_spend[0], bm_to_spend[1])
+    
+    elif len(current_player.bonus_markers) > 2:
+        game.waiting_for_buy_tile_with_bm = True
+        game.tile_to_buy = tile_mapping.get(index)
+
+    else:
+        print(f"{COLOR_NAMES[current_player.color]} has less than 2 bonus markers to spend on tiles - this shoulda been masked out.")
+
     return
 
 def map_replace_bm_action(game, index):
     current_player = game.current_player
 
+    print(f"Replace BM action for index: {index}")
+    print(f"Current Player: {COLOR_NAMES[current_player.color]}, Actions Remaining: {current_player.actions_remaining}, Ending Turn: {current_player.ending_turn}, Replace BM: {game.replace_bonus_marker}")
     # Check if the conditions are met to replace a bonus marker
     if current_player.actions_remaining == 0 and current_player.ending_turn and game.replace_bonus_marker > 0:
         # Check if the index is within the range of the number of routes
@@ -353,11 +414,13 @@ def map_replace_bm_action(game, index):
                     not route.has_tradesmen() and route.has_empty_office_in_cities():
                 # Place the bonus marker on the selected route
                 assign_new_bonus_marker_on_route(game, route)
-                game.replace_bonus_marker -= 1
                 # Check if all bonus markers have been placed
                 if game.replace_bonus_marker == 0:
                     current_player.ending_turn = False
                     game.switch_player_if_needed()
+                if game.replace_bonus_marker < 0:
+                    print(f"Invalid number of bonus markers to replace. Remaining: {game.replace_bonus_marker}")
+                    error_exit(game, None)
             else:
                 print(f"Invalid route selected for bonus marker placement. Route Index: {index}")
         else:
@@ -387,9 +450,15 @@ def map_bm_upgrade_ability(game, index):
                 game.current_player.perform_upgrade(upgrade_type) 
 
 def map_end_turn_action(game):
-    if check_if_player_has_usable_BMs(game) and game.current_player.actions_remaining == 0:
-        game.current_player.ending_turn = True
-        game.switch_player_if_needed()
+
+    if game.current_player.actions_remaining == 0:
+        if ((game.current_player.ending_turn and game.replace_bonus_marker > 0) or
+            (game.replace_bonus_marker > 0 and not check_if_player_has_usable_BMs(game))):
+            print("forcing player to replace bonus markers")
+            game.current_player.ending_turn = True
+        elif not check_if_player_has_usable_BMs(game) and game.replace_bonus_marker == 0:
+            # Player has no BMs to use or only has 'PlaceAdjacent', switch player
+            game.switch_player_if_needed()
     else:
         print("Cannot end the turn as Bonus Markers need to be replaced on the Map!")
         error_exit(game, None)
@@ -401,14 +470,14 @@ def masking_out_invalid_actions(game):
     # print(f"claim_route_tensor - {claim_route_tensor.size()}")
     income_tensor = mask_income_actions(game) #size 5 (0-4 circles + leftover squares)
     bonus_marker_tensor = mask_bm(game) #size 8 (8 total BM types to use)
-    permanent_bonus_marker_tensor = mask_perm_bm(game) #size 5
+    buy_tile_tensor = mask_buy_tile(game) #size 8 (6 tiles or 8 BMs to pay for the tiles)
     replace_bm_tensor = mask_replace_bm(game) #size 40
     bm_city_actions_tensor = mask_bm_city_actions(game) #size 30
     bm_upgrade_ability_tensor = mask_bm_upgrade_ability(game) #size 5
     end_turn_tensor = mask_end_turn(game) #size 1 (allowed to end turn if no bonus markers to replace)
 
     # Concatenate all tensors into one big tensor representing all possible actions
-    all_actions_tensor = torch.cat([claim_post_tensor, claim_route_tensor, income_tensor, bonus_marker_tensor, permanent_bonus_marker_tensor,
+    all_actions_tensor = torch.cat([claim_post_tensor, claim_route_tensor, income_tensor, bonus_marker_tensor, buy_tile_tensor,
                                     replace_bm_tensor, bm_city_actions_tensor, bm_upgrade_ability_tensor, end_turn_tensor], dim=0)
     # print(f"all_actions_tensor.size - {all_actions_tensor.size()}")
     
@@ -424,14 +493,21 @@ def mask_post_action(game):
     current_player = game.current_player
 
     post_tensor = torch.zeros(MAX_POSTS * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
-    if current_player.actions_remaining == 0 or check_if_any_action_BM_flag_set(game):
+
+    if (game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3 or game.waiting_for_bm_tribute_trading_post or\
+        game.waiting_for_bm_block_trade_route or game.waiting_for_bm_green_city or game.waiting_for_place2_in_scotland_or_wales):
+        print("BM flag set.")
+    elif current_player.actions_remaining == 0 or check_if_any_action_BM_flag_set(game):
         return post_tensor
     
     can_displace = current_player.personal_supply_squares + current_player.personal_supply_circles > 1
-
+    
     post_idx = 0
     for route in game.selected_map.routes:
+        # print(f"Route between cities {route.cities[0].name} and {route.cities[1].name}.")
         for post in route.posts:  # Make sure to iterate over posts in each route
+            # if post.owner:
+            #     print(f"Post {post_idx} - Owner: {COLOR_NAMES[post.owner.color] if post.owner else None}, owner_piece_shape: {post.owner_piece_shape}, waiting_for_bm_move3: {game.waiting_for_bm_move3}")
             # Common checks for valid region transition and post not being owned
             is_post_owned = post.is_owned()
             is_post_empty = not is_post_owned
@@ -449,9 +525,21 @@ def mask_post_action(game):
                             post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
                         elif displaced_player.displaced_shape == "circle" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
                             post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
-                    elif post.owner == displaced_player.player and displaced_player.played_displaced_shape:
+                    elif post in game.all_empty_posts and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup == 0:
+                        if displaced_player.displaced_shape == "square" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
+                            post_tensor[post_idx] = 1  # Offset by 121 for circle posts if necessary
+                        elif displaced_player.displaced_shape == "circle" and (post.required_shape == displaced_player.displaced_shape or post.required_shape is None):
+                            post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
+                    elif post.owner == displaced_player.player and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup > 0:
                         post_tensor[post_idx] = 1
                         post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
+                    else:
+                        if post in game.all_empty_posts and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup > 0:
+                            print(f"Waiting to pick up remaining pieces: {displaced_player.player.pieces_to_pickup}")
+                        elif post.owner == displaced_player.player and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup > 0:
+                            print(f"DISPLACE MASK ERROR: Displaced Shape: {displaced_player.played_displaced_shape}, index: {post_idx}")
+                            print(f"displaced_player.player = {COLOR_NAMES[displaced_player.player.color]}, pieces_to_pickup = {displaced_player.player.pieces_to_pickup}")
+                            error_exit(game, route)
 
                 elif post in game.all_empty_posts:
                     if must_use_displaced_piece:
@@ -509,7 +597,7 @@ def mask_post_action(game):
                         post_tensor[post_idx] = 1
             
             elif game.waiting_for_bm_move3:
-                if post.owner != current_player and current_player.pieces_to_pickup > 0:
+                if post.is_owned() and post.owner != current_player and current_player.pieces_to_pickup > 0:
                     post_tensor[post_idx] = 1
                 elif not post.is_owned() and current_player.pieces_to_pickup == 0:
                     post_tensor[post_idx] = 1
@@ -693,27 +781,47 @@ def mask_bm(game):
 
     return bm_tensor
 
-def mask_perm_bm(game):
-    perm_bm_tensor = torch.zeros(5, device=device, dtype=torch.uint8)  # 5 possible permanent bonus markers
+def mask_buy_tile(game):
+    current_player = game.current_player
+
+    buy_tile_tensor = torch.zeros(8, device=device, dtype=torch.uint8)  # 6 possible tiles to buy and 8 BMs
+    tile_mapping = {
+        'DisplaceAnywhere': 1,
+        '+1Action': 2,
+        '+1IncomeIfOthersIncome': 3,
+        '+1DisplacedPiece': 4,
+        '+4PtsPerOwnedCity': 5,
+        '+7PtsPerCompletedAbility': 6
+    }
     bm_mapping = {
-        "MoveAny2": 0,
-        "+1Priv": 1,
-        "ClaimGreenCity": 2,
-        "Place2TradesmenFromRoute": 3,
-        "Place2ScotlandOrWales": 4
+        "SwapOffice": 0,
+        "Move3": 1,
+        "UpgradeAbility": 2,
+        "3Actions": 3,
+        "4Actions": 4,
+        "ExchangeBonusMarker": 5,
+        "Tribute4EstablishingTP": 6,
+        "BlockTradeRoute": 7
     }
 
-    for bm in game.current_player.bonus_markers:
-        bm_index = bm_mapping.get(bm.type)
-        if bm_index is not None:
-            perm_bm_tensor[bm_index] = 1
+    if game.waiting_for_buy_tile_with_bm == True:
+        for bm in current_player.bonus_markers:
+            bm_index = bm_mapping.get(bm.type)
+            if bm_index is not None:
+                buy_tile_tensor[bm_index] = 1
 
-    return perm_bm_tensor
+
+    if current_player.actions_remaining == current_player.actions and len(current_player.bonus_markers) >= 2:
+        for tile in game.tile_pool:
+            buy_tile_tensor[tile_mapping.get(tile.type)] = 1
+
+    return buy_tile_tensor
 
 def mask_replace_bm(game):
     max_num_routes = 40  # Maximum number of routes
     replace_bm_tensor = torch.zeros(max_num_routes, device=device, dtype=torch.uint8)  # Tensor for replace bonus marker actions
 
+    # print(f"mask_replace_bm: actions_remaining: {game.current_player.actions_remaining}, ending_turn: {game.current_player.ending_turn}, replace_bonus_marker: {game.replace_bonus_marker}")
     # Only allow replacing bonus markers if the player has no actions remaining and needs to replace a bonus marker
     if game.current_player.actions_remaining == 0 and game.replace_bonus_marker > 0 and game.current_player.ending_turn:
         for route_idx, route in enumerate(game.selected_map.routes):
@@ -763,12 +871,20 @@ def mask_bm_upgrade_ability(game):
 def mask_end_turn(game):
     end_turn_tensor = torch.zeros(1, device=device, dtype=torch.uint8)
 
+    # print(f"mask_end_turn: actions_remaining: {game.current_player.actions_remaining}, ending_turn: {game.current_player.ending_turn}, holding_pieces: {game.current_player.holding_pieces}")
     if game.current_player.actions_remaining > 0 or game.current_player.ending_turn or game.current_player.holding_pieces or \
        check_if_any_post_BM_flag_set(game) or check_if_any_action_BM_flag_set(game):
+        # print("mask_end_turn: returning 0's")
         return end_turn_tensor
 
-    if check_if_player_has_usable_BMs(game) and game.current_player.actions_remaining == 0:
+    if (check_if_player_has_usable_BMs(game) and game.current_player.actions_remaining == 0) or \
+        (game.replace_bonus_marker > 0 and game.current_player.actions_remaining == 0):
+        print("mask_end_turn: returning valid to end turn")
         end_turn_tensor[0] = 1
+
+    if game.replace_bonus_marker > 0:
+        end_turn_tensor[0] = 1
+    
     return end_turn_tensor
 
 def check_if_player_has_usable_BMs(game):

@@ -5,8 +5,8 @@ BUFFER = 10  # Buffer around the rectangle
 SPACING = 10  # Increased spacing between the shapes
 
 # Constants for input and output sizes
-INPUT_SIZE = 2854
-OUTPUT_SIZE = 616
+INPUT_SIZE = 4445
+OUTPUT_SIZE = 619
 
 MAX_CITIES = 30
 MAX_ROUTES = 40

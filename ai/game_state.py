@@ -3,7 +3,7 @@ import json
 import time
 import sys
 from game.game_info import Game
-from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, MAX_CITIES, MAX_ROUTES, COLOR_NAMES
+from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, MAX_CITIES, MAX_ROUTES, COLOR_NAMES, WHITE, ORANGE, PINK, BLACK 
 from map_data.map_attributes import BonusMarker
 
 # Check if CUDA (GPU support) is available
@@ -17,21 +17,16 @@ class BoardData:
         self.route_tensor_size = 0
         self.player_tensor_size = 0
         self.all_game_state_size = 0
-
-        self.city_num_attributes = 0
-        self.num_route_attributes = 0
-        self.num_player_attributes = 0
     
     def get_game_state(self, game):
-        # game_tensor Size: torch.Size([49])
-        # city_tensor Size: torch.Size([1740])
-        # route_tensor Size: torch.Size([880])
-        # player_tensor Size: torch.Size([185])
+        # game_tensor Size: torch.Size([49])    // 70
+        # city_tensor Size: torch.Size([1740])  // 2700
+        # route_tensor Size: torch.Size([880])  // 1400
+        # player_tensor Size: torch.Size([185]) // 275
 
         # Game:
         start_time = time.time()
         game_tensor = self.fill_game_tensor(game)
-        game_tensor = game_tensor.flatten()
         end_time = time.time()
         # print(f"game_tensor Size: {game_tensor.size()[0]}")
         self.game_tensor_size = game_tensor.size()[0]
@@ -40,7 +35,6 @@ class BoardData:
         # Map info:
         start_time = time.time()
         city_tensor = self.fill_city_tensor(game)
-        city_tensor = city_tensor.flatten()
         end_time = time.time()
         # print(f"city_tensor Size: {city_tensor.size()[0]}")
         self.city_tensor_size = city_tensor.size()[0]
@@ -49,7 +43,6 @@ class BoardData:
         # Route Info
         start_time = time.time()
         route_tensor = self.fill_route_tensor(game)
-        route_tensor = route_tensor.flatten()
         end_time = time.time()
         # print(f"route_tensor Size: {route_tensor.size()[0]}")
         self.route_tensor_size = route_tensor.size()[0]
@@ -58,7 +51,6 @@ class BoardData:
         #Player Info
         start_time = time.time()
         player_tensor = self.fill_player_info_tensor(game)
-        player_tensor = player_tensor.flatten()
         end_time = time.time()
         # print(f"player_tensor Size: {player_tensor.size()[0]}")
         self.player_tensor_size = player_tensor.size()[0]
@@ -78,14 +70,14 @@ class BoardData:
 
     def fill_game_tensor(self, game):
         # Initial game info
-        initial_game_info = torch.tensor([game.map_num, game.num_players, game.active_player, game.replace_bonus_marker,
-                                        game.current_player_index + 1, game.current_player.actions_remaining,
-                                        game.selected_map.max_full_cities, game.current_full_cities_count,
-                                        game.east_west_completed_count,
-                                        game.waiting_for_bm_swap_office, game.waiting_for_bm_upgrade_ability,
-                                        game.waiting_for_bm_move_any_2, game.waiting_for_bm_move3,
-                                        game.waiting_for_bm_exchange_bm, game.waiting_for_bm_tribute_trading_post, game.waiting_for_bm_block_trade_route,
-                                        game.waiting_for_bm_green_city, game.waiting_for_place2_in_scotland_or_wales], device=device, dtype=torch.uint8)
+        initial_game_info = torch.tensor([game.map_num, game.num_players, 
+                                          game.active_player, game.replace_bonus_marker,
+                                          game.current_player_index, game.selected_map.max_full_cities, 
+                                          game.current_full_cities_count, game.east_west_completed_count,
+                                          game.waiting_for_bm_swap_office, game.waiting_for_bm_upgrade_ability,
+                                          game.waiting_for_bm_move_any_2, game.waiting_for_bm_move3,
+                                          game.waiting_for_bm_exchange_bm, game.waiting_for_bm_tribute_trading_post, game.waiting_for_bm_block_trade_route,
+                                          game.waiting_for_bm_green_city, game.waiting_for_place2_in_scotland_or_wales], device=device, dtype=torch.uint8)
 
         # Privileges info
         cardiff_priv, carlisle_priv, london_priv = self.assign_blue_brown_priv_mapping(game)
@@ -94,12 +86,20 @@ class BoardData:
         # Special Prestige Points info
         special_prestige_points_info = self.assign_special_prestige_points_mapping(game)
         bonus_marker_info = self.assign_bonus_marker_pool_mapping(game)
-        tile_info = self.assign_tile_pool_mapping(game)
+        tile_pool_info = self.assign_tile_pool_mapping(game)
         tile_owner_info = self.assign_tile_owner_mapping(game)
+        tile_to_buy_info = self.assign_tile_buying_info(game)
 
         # Concatenate all game info into one tensor
-        game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info, bonus_marker_info, tile_info, tile_owner_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
-        # print(f"game_info {game_info}")
+        game_info = torch.cat((initial_game_info, privileges_info, special_prestige_points_info, bonus_marker_info, tile_pool_info, tile_owner_info, tile_to_buy_info), dim=0).unsqueeze(0)  # Add an extra dimension for batch size
+        # flatten the tensor
+        game_info = game_info.flatten()
+
+        # Pad zeroes to the end until the size of tensor is of size 70
+        # This is to allow any missing data to be added without fear of breaking the model
+        game_info = torch.cat((game_info, torch.zeros(70 - game_info.size()[0], device=device, dtype=torch.uint8)), dim=0)
+
+        # print(f"game_tensor Size: {game_info.size()}")
         return game_info
 
     def assign_blue_brown_priv_mapping(self, game):
@@ -151,7 +151,7 @@ class BoardData:
         return bm_pool_mappings_info
 
     def assign_tile_pool_mapping(self, game):
-        tile_pool_mappings = [0, 0, 0, 0, 0, 0]
+        tile_pool_mappings = [0, 0, 0, 0, 0]
         tile_mapping = {
             'DisplaceAnywhere': 1,
             '+1Action': 2,
@@ -187,9 +187,39 @@ class BoardData:
         tile_owner_mappings_info = torch.tensor(tile_owner_mappings, device=device, dtype=torch.uint8)
         return tile_owner_mappings_info
         
+    def assign_tile_buying_info(self, game):
+        tile_mapping = {
+            'DisplaceAnywhere': 1,
+            '+1Action': 2,
+            '+1IncomeIfOthersIncome': 3,
+            '+1DisplacedPiece': 4,
+            '+4PtsPerOwnedCity': 5,
+            '+7PtsPerCompletedAbility': 6
+        }
+        bm_mapping = {
+            'PlaceAdjacent': 1,
+            'SwapOffice': 2,
+            'Move3': 3,
+            'UpgradeAbility': 4,
+            '3Actions': 5,
+            '4Actions': 6,
+            'ExchangeBonusMarker': 7,
+            'Tribute4EstablishingTP': 8,
+            'BlockTradeRoute': 9
+        }
+
+        tile_to_buy = tile_mapping.get(game.tile_to_buy, 0)
+        waiting_for_buy_tile_with_bm = 1 if game.waiting_for_buy_tile_with_bm == True else 0
+        first_bm_to_spend_on_tile = bm_mapping.get(game.first_bm_to_spend_on_tile, 0)
+
+        tile_buying_info = torch.tensor([tile_to_buy, waiting_for_buy_tile_with_bm, first_bm_to_spend_on_tile], device=device, dtype=torch.uint8)
+        return tile_buying_info        
+    
     def fill_city_tensor(self, game):
-        self.city_num_attributes = 58  # 8 attributes for city + 10 offices * 5 attributes each + 5 adjacent city numbers
-        all_city_info = torch.zeros(MAX_CITIES, self.city_num_attributes, device=device, dtype=torch.uint8)
+        city_num_attributes = 10  # 10 attributes for city - currently tracking 8, 2 are placeholders
+        office_num_attributes = 8  # 8 attributes for each office - currently tracking 5, 3 are placeholders
+        self.max_offices = 10  # Maximum number of offices per city
+        all_city_info = torch.zeros(MAX_CITIES, city_num_attributes + office_num_attributes * self.max_offices, device=device, dtype=torch.uint8)
 
         for i, city in enumerate(game.selected_map.cities):
             city_num, city_color = self.assign_city_name_and_color_mapping(game, city)
@@ -197,23 +227,23 @@ class BoardData:
             city_tributes = self.assign_city_tribute_mapping(city)
 
             city_data = [city_num, city_color, city1_upgrade, city2_upgrade, city_tributes[0], city_tributes[1], city_tributes[2], city_tributes[3]]
-            # print(f"city_data len {len(city_data)}")
+            city_data += [0] * (city_num_attributes - len(city_data))  # Pad with zeros
+
             office_data = [self.assign_office_mapping(office) for office in city.offices]
-            # Pad with zeros if there are fewer than 10 offices
-            office_data += [(0, 0, 0, 0, 0)] * (10 - len(office_data))
-            
-            # Flatten office data
-            office_data_flat = [attribute for office in office_data for attribute in office]
+            office_data += [(0, 0, 0, 0, 0)] * (self.max_offices - len(office_data))  # Pad with zeros if there are fewer than 10 offices
 
-            # # Get adjacent city numbers
-            # adjacent_city_numbers = [assign_city_name_and_color_mapping(game, adjacent_city)[0] for adjacent_route in city.routes for adjacent_city in adjacent_route.cities if adjacent_city != city]
-            # # Pad with zeros if there are fewer than 5 routes
-            # adjacent_city_numbers += [0] * (5 - len(adjacent_city_numbers))
+            # Flatten office data and pad with zeros
+            office_data_flat = []
+            for office in office_data:
+                office_flat = list(office)
+                office_flat += [0] * (office_num_attributes - len(office_flat))  # Pad with zeros
+                office_data_flat += office_flat
 
-            # Combine data into a single tensor
-            # city_tensor = torch.tensor(city_data + office_data_flat + adjacent_city_numbers, dtype=torch.uint8, device=device)
             city_tensor = torch.tensor(city_data + office_data_flat, dtype=torch.uint8, device=device)
             all_city_info[i] = city_tensor
+
+        all_city_info = all_city_info.flatten()
+        # print(f"all_city_info Size: {all_city_info.size()}")
 
         return all_city_info
 
@@ -349,27 +379,34 @@ class BoardData:
         return city_tributes 
 
     def assign_office_mapping(self, office):
-        colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
         office_shape_mapping = {
                 'square': 1,
                 'circle': 2
             }
         office_color_mapping = {
-                'WHITE': 1,
-                'ORANGE': 2,
-                'PINK': 3,
-                'BLACK': 4
+                tuple(WHITE): 1,
+                tuple(ORANGE): 2,
+                tuple(PINK): 3,
+                tuple(BLACK): 4,
+                tuple(GREEN): 5,
+                tuple(BLUE): 6,
+                tuple(PURPLE): 7,
+                tuple(RED): 8,
+                tuple(YELLOW): 9
             }
+
         office_shape = office_shape_mapping.get(office.shape, 0)
-        office_color = office_color_mapping.get(office.color, 0)
-        office_controller = colors.index(office.controller.color) + 1 if office.controller else 0
+        office_color = office_color_mapping.get(tuple(office.color), 0)
+        office_controller = office.controller.order + 1 if office.controller else 0
         office_points = office.awards_points
         office_place_adjacent = 1 if office.place_adjacent_office else 0
         return office_shape, office_color, office_controller, office_points, office_place_adjacent
 
     def fill_route_tensor(self, game):
-        self.num_route_attributes = 22  # 7 route attributes + 3 post attributes * 5 posts
-        all_route_info = torch.zeros(MAX_ROUTES, self.num_route_attributes, device=device, dtype=torch.uint8)
+        self.route_num_attributes = 10  # 10 attributes for route
+        self.post_num_attributes = 5  # 5 attributes for each post
+        self.max_posts = 5  # Maximum number of posts per route
+        all_route_info = torch.zeros(MAX_ROUTES, self.route_num_attributes + self.post_num_attributes * self.max_posts, device=device, dtype=torch.uint8)
 
         for i, route in enumerate(game.selected_map.routes):
             # Get numerical values for route attributes
@@ -379,8 +416,8 @@ class BoardData:
             route_has_bm, route_bm_type = self.assign_bonus_marker_mapping(route.has_bonus_marker, route.bonus_marker)
             route_perm_bm = self.assign_permanent_bm_mapping(route.has_permanent_bm_type)
 
-            # print(f"city1_num {city1_num}, city2_num {city2_num}, route_has_bm {route_has_bm}, route_bm_type {route_bm_type}")
             route_info = [city1_num, city2_num, route.num_posts, route_region, route_has_bm, route_bm_type, route_perm_bm]
+            route_info += [0] * (self.route_num_attributes - len(route_info))  # Pad with zeros
 
             # Get post information
             post_info = []
@@ -388,14 +425,18 @@ class BoardData:
                 owner_shape = self.assign_post_shape_mapping(post.owner_piece_shape)
                 post_owner = self.assign_player_mapping(game, post.owner)
                 post_blocked = 1 if post.blocked_bm else 0 
-                post_info.extend([owner_shape, post_owner, post_blocked])
+                post_data = [owner_shape, post_owner, post_blocked]
+                post_data += [0] * (self.post_num_attributes - len(post_data))  # Pad with zeros
+                post_info.extend(post_data)
 
             # Pad post_info if fewer than 5 posts
-            post_info += [0] * ((5 - len(route.posts)) * 3)
+            post_info += [0] * ((self.max_posts - len(route.posts)) * self.post_num_attributes)
 
             # Combine data into a single tensor
             all_route_info[i] = torch.tensor(route_info + post_info, dtype=torch.uint8, device=device)
 
+        all_route_info = all_route_info.flatten()
+        # print(f"all_route_info Size: {all_route_info.size()}")
         return all_route_info
 
     def assign_region_mapping(self, region):
@@ -453,27 +494,38 @@ class BoardData:
 
     def fill_player_info_tensor(self, game):
         max_players = 5 
-        self.num_player_attributes = 37
+        num_player_attributes = 55
 
         # Precompute priv and bank mappings for all players
         priv_mappings = [self.assign_priv_mapping(player) for player in game.players]
-        bank_mappings = [self.assign_bank_mapping(player) for player in game.players]
         bm_mappings = [self.assign_bm_mapping(player) for player in game.players]
         player_unused_bm, player_used_bm = zip(*bm_mappings)  # Unpack the tuples into two lists
 
         # Initialize the tensor on the appropriate device
-        player_info = torch.zeros(max_players, self.num_player_attributes, device=device, dtype=torch.uint8)
+        player_info = torch.zeros(max_players, num_player_attributes, device=device, dtype=torch.uint8)
 
         # Fill in the data for the actual players
         for i, player in enumerate(game.players):
-            player_data = [player.score, player.keys, priv_mappings[i], player.book, player.actions_index, player.actions, bank_mappings[i],
-                        player.general_stock_squares, player.general_stock_circles, 
-                        player.personal_supply_squares, player.personal_supply_circles, 
-                        player.brown_priv_count, player.blue_priv_count]
+            player_data = [player.order, player.score, player.final_score, player.pieces_to_pickup, player.pieces_to_place,
+                        player.keys_index, player.keys, priv_mappings[i], player.book, player.actions_index, player.actions, player.actions_remaining,
+                        player.bank, player.general_stock_squares, player.general_stock_circles, player.personal_supply_squares,
+                        player.personal_supply_circles, int(player.ending_turn), player.brown_priv_count, player.blue_priv_count]
+
+            mission_card_city1, mission_card_city2, mission_card_city3 = self.assign_mission_card_mapping(game, player)
+            player_data.extend([mission_card_city1, mission_card_city2, mission_card_city3])
+
+            # Add bonus marker info to player_data
+            player_data.extend(list(player_unused_bm[i]) + list(player_used_bm[i]))
+
+            # Pad player_data with zeros until it reaches the desired length of 55, incase we forget some attributes to keep track of without breaking the model
+            player_data.extend([0] * (55 - len(player_data)))
 
             # Combine all info into a single tensor
-            player_info[i] = torch.tensor(player_data + list(player_unused_bm[i]) + list(player_used_bm[i]), dtype=torch.uint8, device=device)
+            player_info[i] = torch.tensor(player_data, dtype=torch.uint8, device=device)
 
+        
+        player_info = player_info.flatten()
+        # print(f"player_info Size: {player_info.size()}")
         return player_info
 
     def assign_priv_mapping(self, player):
@@ -484,15 +536,6 @@ class BoardData:
                 'BLACK': 4
             }
         return priv_mapping.get(player.privilege, 0)
-
-    def assign_bank_mapping(self, player):
-        bank_mapping = {
-            3: 1,
-            5: 2,
-            7: 3,
-            50: 4
-        }
-        return bank_mapping.get(player.bank, 0)
 
     def assign_bm_mapping(self, player):
         bm_mapping = {
@@ -516,6 +559,19 @@ class BoardData:
 
         return player_unused_bm, player_used_bm
 
+    def assign_mission_card_mapping(self, game, player):
+        mission_card_cities = [0, 0, 0]
+
+        if game.map_num == 1:
+            for i, city_name in enumerate(player.mission_card):
+                # Find the city object with the matching name
+                city = next((c for c in game.selected_map.cities if c.name == city_name), None)
+                if city is not None:
+                    city_num, _ = self.assign_city_name_and_color_mapping(game, city)  # Ignore the color
+                    mission_card_cities[i] = city_num
+
+        return tuple(mission_card_cities)
+    
     def load_game_state_JSON(self, filename):
         with open(filename, 'r') as f:
             game_state_JSON = json.load(f)
@@ -540,6 +596,7 @@ class BoardData:
         game.waiting_for_bm_upgrade_ability = game_info_JSON['waiting_for_bm_upgrade_ability']
         game.waiting_for_bm_move_any_2 = game_info_JSON['waiting_for_bm_move_any_2']
         game.waiting_for_bm_move3 = game_info_JSON['waiting_for_bm_move3']
+        print(f"waiting_for_bm_move3: {game.waiting_for_bm_move3}")
         game.waiting_for_bm_exchange_bm = game_info_JSON['waiting_for_bm_exchange_bm']
         game.waiting_for_bm_tribute_trading_post = game_info_JSON['waiting_for_bm_tribute_trading_post']
         game.waiting_for_bm_block_trade_route = game_info_JSON['waiting_for_bm_block_trade_route']
@@ -586,6 +643,11 @@ class BoardData:
 
         if game_info_JSON['tile_owner_+7PtsPerCompletedAbility'] is not None:
             game.SevenPtsPerCompletedAbilityOwner = game.players[game_info_JSON['tile_owner_+7PtsPerCompletedAbility'] - 1]
+
+        # Unmap tile_to_buy_info_JSON
+        game.tile_to_buy = game_info_JSON['tile_to_buy']
+        game.waiting_for_buy_tile_with_bm = game_info_JSON['waiting_for_buy_tile_with_bm']
+        game.first_bm_to_spend_on_tile = game_info_JSON['first_bm_to_spend_on_tile']
     
     def load_city_info_JSON(self, game, city_info_JSON):
         city_colors = {
@@ -624,8 +686,9 @@ class BoardData:
 
                     # Map the controller
                     if office_data['office_controller'] is not None:
-                        # Assuming player_colors is a dictionary mapping colors to players
-                        office.controller = player_colors[office_data['office_controller']]
+                        for player in game.players:
+                            if player.color == office_data['office_controller']:
+                                office.controller = player
 
                     # Map the place_adjacent attribute
                     office.place_adjacent_office = office_data['office_place_adjacent']
@@ -633,39 +696,59 @@ class BoardData:
     def load_route_info_JSON(self, game, route_info_JSON):
         for route_data in route_info_JSON:
             for route in game.selected_map.routes:
-                if route.cities[0].name == route_data['route_cities'][0] and route.cities[1].name == route_data['route_cities'][0] and route.region == route_data['route_region']:
-                    route.has_bonus_marker = route_info_JSON['route_has_bm']
-                    route.bonus_marker = route_info_JSON['route_bm_type']
-                    route.has_permanent_bm_type = route_info_JSON['route_perm_bm']
+                if set(route.cities[i].name for i in range(2)) == set(route_data['route_cities']):
+                    route.has_bonus_marker = route_data['route_has_bm']
+                    if route_data['route_bm_type'] is not None:
+                        route.bonus_marker = BonusMarker(route_data['route_bm_type'])
+                    else:
+                        route.bonus_marker = None
+                    route.has_permanent_bm_type = route_data['route_perm_bm']
 
-                    for i, post_data in enumerate(route_info_JSON['posts']):
+                    for i, post_data in enumerate(route_data['posts']):
                         post = route.posts[i]
-                        post.owner_piece_shape = post_data['owner_shape']
-                        post.owner = game.players[post_data['post_owner'] - 1] if post_data['post_owner'] else None
+                        if post_data['post_owner'] is not None:
+                            for player in game.players:
+                                if player.color == tuple(post_data['post_owner']):
+                                    post.claim(player, post_data['post_owner_shape'])
+                                    break
+                        else:
+                            post.owner = None
                         post.blocked_bm = post_data['post_blocked']
 
     def load_player_info_JSON(self, game, player_info_JSON):
+        # Reverse dictionary to map color names to RGB values
+        color_names = {
+            'green': GREEN,
+            'blue': BLUE,
+            'purple': PURPLE,
+            'red': RED,
+            'yellow': YELLOW
+        }
         for player_data in player_info_JSON:
-            for player in game.players:
-                if player.color == player_data['player_color'] and player.order == player_data['player_order']:
-                    player.score = player_data['score']
-                    player.keys = player_data['keys']
-                    player.privilege = player_data['privilege']
-                    player.book = player_data['book']
-                    player.actions_index = player_data['actions_index']
-                    player.actions = player_data['actions']
-                    player.bank = player_data['bank']
-                    player.general_stock_squares = player_data['general_stock_squares']
-                    player.general_stock_circles = player_data['general_stock_circles']
-                    player.personal_supply_squares = player_data['personal_supply_squares']
-                    player.personal_supply_circles = player_data['personal_supply_circles']
-                    player.brown_priv_count = player_data['brown_priv_count']
-                    player.blue_priv_count = player_data['blue_priv_count']
+            # Convert color name to RGB value
+            player_data_color = color_names[player_data['player_color']]
 
-                    for bm in player_data['unused_bonus_markers']:
+            for player in game.players:
+                if player.color == player_data_color and player.order == player_data['player_order']:
+                    player.score = player_data['player_score']
+                    player.keys = player_data['player_keys']
+                    player.privilege = player_data['player_privilege']
+                    player.book = player_data['player_book']
+                    player.actions_index = player_data['player_actions_index']
+                    player.actions = player_data['player_actions']
+                    player.actions_remaining = player_data['player_actions_remaining']
+                    player.bank = player_data['player_bank']
+                    player.general_stock_squares = player_data['player_general_stock_squares']
+                    player.general_stock_circles = player_data['player_general_stock_circles']
+                    player.personal_supply_squares = player_data['player_personal_supply_squares']
+                    player.personal_supply_circles = player_data['player_personal_supply_circles']
+                    player.brown_priv_count = player_data['player_brown_priv_count']
+                    player.blue_priv_count = player_data['player_blue_priv_count']
+
+                    for bm in player_data.get('player_unused_bonus_markers', []):
                         player.bonus_markers.append(BonusMarker(type=bm, owner=player))
 
-                    for bm in player_data['used_bonus_markers']:
+                    for bm in player_data.get('player_used_bonus_markers', []):
                         player.used_bonus_markers.append(BonusMarker(type=bm, owner=player))
     
     def save_game_state_JSON(self, game):
@@ -727,7 +810,7 @@ class BoardData:
                     special_prestige_points_info_JSON[f'special_prestige_points_{color}'] = circle_data['owner'].order
         
         bonus_marker_pool_info_JSON = {}
-        for i in range(12):
+        for i in range(len(game.selected_map.bonus_marker_pool)):
             bonus_marker_pool_info_JSON[f'bonus_marker{i+1}'] = game.selected_map.bonus_marker_pool[i] if game.selected_map.bonus_marker_pool[i] else None
 
         tile_pool_info_JSON = {}
@@ -742,12 +825,18 @@ class BoardData:
             'tile_owner_+4PtsPerOwnedCity': game.FourPtsPerOwnedCityOwner.order if game.FourPtsPerOwnedCityOwner else None,
             'tile_owner_+7PtsPerCompletedAbility': game.SevenPtsPerCompletedAbilityOwner.order if game.SevenPtsPerCompletedAbilityOwner else None
         }
+        tile_to_buy_info_JSON = {
+            'tile_to_buy': game.tile_to_buy,
+            'waiting_for_buy_tile_with_bm': game.waiting_for_buy_tile_with_bm,
+            'first_bm_to_spend_on_tile': game.first_bm_to_spend_on_tile
+        }
 
         # Combine all game info into one JSON dictionary
         game_info_JSON.update(special_prestige_points_info_JSON)
         game_info_JSON.update(bonus_marker_pool_info_JSON)
         game_info_JSON.update(tile_pool_info_JSON)
         game_info_JSON.update(tile_owner_info_JSON)
+        game_info_JSON.update(tile_to_buy_info_JSON)
 
         # print(json.dumps(game_info_JSON, indent=4))
         # print("Size of the game_info_JSON dictionary:", len(game_info_JSON))
