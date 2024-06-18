@@ -3,6 +3,7 @@ import sys
 import random
 import torch
 import gc
+import time
 
 # Set print options
 torch.set_printoptions(profile="full")
@@ -422,6 +423,7 @@ def displaced_click(pos, button):
     # Determine which shape the player wants to place based on the button they clicked
     desired_shape = 'circle' if button == 3 else 'square'
     
+    print(f"Post between cities {route.cities[0].name} and {route.cities[1].name} was clicked.")
     displace_claim(game, post, desired_shape)
 
 def is_route_filled(route):
@@ -471,12 +473,12 @@ def handle_shift_click(mouse_position):
             return True            
             
 #game = Game(map_num=2, num_players=3)
-board_data = BoardData()
+#board_data = BoardData()
 # # board_data.fill_game_tensor(game)
 # # exit()
 
 # board_data.save_game_state_JSON(game)
-game = board_data.load_game_state_JSON('game_state_JSON.json')
+#game = board_data.load_game_state_JSON('game_state_JSON.json')
 # game_state_tensor = board_data.get_game_state(game)
 
 # # Print initial weights
@@ -490,9 +492,11 @@ decay_rate = 0.005  # Adjust this to control how quickly epsilon decays
 epsilon = epsilon_start
 gamma = 0.99
 
-for j in range(0):
-    # game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
-    board_data = BoardData()
+
+board_data = BoardData()
+
+for j in range(5):
+    #game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
     game = board_data.load_game_state_JSON('game_state_JSON.json')
     # board_data.save_game_state_JSON(game)
 
@@ -567,10 +571,17 @@ for j in range(0):
         active_player.reward = 0  # Reset reward for the next step
         epsilon = max(epsilon_end, epsilon - decay_rate)  # Decay epsilon
 
-    # Save models
-    for player in game.players:
-        print(f"Saving model for Player: {player.order} as hansa_nn_model{player.order}.pth")
-        torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{player.order}.pth")
+    try:
+        # Save models
+        for player in game.players:
+            print(f"Saving model for Player: {player.order} as hansa_nn_model{player.order}.pth")
+            torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{player.order}.pth")
+            time.sleep(0.1)  # Sleep for 0.1 seconds
+    except RuntimeError as e:
+        print(f"Error saving model: {e}")
+        j = 10  # Set j to 10 to break the outer loop
+        break
+    time.sleep(1)  # Sleep for 1 second
     gc.collect()
 
 # final_weights = game.players[0].hansa_nn.layer1.weight.data.cpu().numpy().flatten()

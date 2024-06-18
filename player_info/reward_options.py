@@ -70,11 +70,11 @@ class Rewards:
         self.end_game_on_your_turn = 150
 
         #upgrades
-        self.upgraded_keys = 80
-        self.upgraded_privilige = 80
-        self.upgraded_circles = 100
-        self.upgraded_actions = 100
-        self.upgraded_bank = 70
+        self.upgraded_keys = 120
+        self.upgraded_privilege = 150
+        self.upgraded_circles = 150
+        self.upgraded_actions = 180
+        self.upgraded_bank = 130
         self.upgraded_bonus_points = 500
         self.upgrade_finished_privilige = 400
         self.upgrade_finished_circles = 500

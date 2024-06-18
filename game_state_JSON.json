@@ -1,10 +1,10 @@
 {
     "game_info": {
         "map_num": 2,
-        "num_players": 3,
-        "active_player": 2,
+        "num_players": 5,
+        "active_player": 4,
         "replace_bonus_marker": 0,
-        "current_player_index": 2,
+        "current_player_index": 4,
         "max_full_cities": 10,
         "current_full_cities_count": 0,
         "east_west_completed_count": 0,
@@ -24,21 +24,21 @@
         "special_prestige_points_orange": null,
         "special_prestige_points_pink": null,
         "special_prestige_points_black": null,
-        "bonus_marker1": "4Actions",
-        "bonus_marker2": "UpgradeAbility",
-        "bonus_marker3": "PlaceAdjacent",
-        "bonus_marker4": "UpgradeAbility",
-        "bonus_marker5": "Move3",
-        "bonus_marker6": "4Actions",
-        "bonus_marker7": "SwapOffice",
-        "bonus_marker8": "3Actions",
-        "bonus_marker9": "PlaceAdjacent",
+        "bonus_marker1": "SwapOffice",
+        "bonus_marker2": "PlaceAdjacent",
+        "bonus_marker3": "SwapOffice",
+        "bonus_marker4": "Move3",
+        "bonus_marker5": "4Actions",
+        "bonus_marker6": "UpgradeAbility",
+        "bonus_marker7": "3Actions",
+        "bonus_marker8": "UpgradeAbility",
+        "bonus_marker9": "4Actions",
         "bonus_marker10": "PlaceAdjacent",
-        "bonus_marker11": "3Actions",
-        "bonus_marker12": "SwapOffice",
-        "available_tile1": "+1DisplacedPiece",
-        "available_tile2": "DisplaceAnywhere",
-        "available_tile3": "+7PtsPerCompletedAbility",
+        "available_tile1": "DisplaceAnywhere",
+        "available_tile2": "+7PtsPerCompletedAbility",
+        "available_tile3": "+4PtsPerOwnedCity",
+        "available_tile4": "+1DisplacedPiece",
+        "available_tile5": "+1IncomeIfOthersIncome",
         "tile_owner_DisplaceAnywhere": null,
         "tile_owner_+1Action": null,
         "tile_owner_+1IncomeIfOthersIncome": null,
@@ -425,8 +425,12 @@
             "offices": [
                 {
                     "office_shape": "square",
-                    "office_color": "WHITE",
-                    "office_controller": null,
+                    "office_color": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "office_controller": "purple",
                     "office_points": 1,
                     "office_place_adjacent": false
                 },
@@ -595,8 +599,12 @@
             "offices": [
                 {
                     "office_shape": "square",
-                    "office_color": "WHITE",
-                    "office_controller": null,
+                    "office_color": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "office_controller": "purple",
                     "office_points": 0,
                     "office_place_adjacent": false
                 },
@@ -718,8 +726,12 @@
             "offices": [
                 {
                     "office_shape": "square",
-                    "office_color": "WHITE",
-                    "office_controller": null,
+                    "office_color": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "office_controller": "red",
                     "office_points": 0,
                     "office_place_adjacent": false
                 },
@@ -883,8 +895,12 @@
             "offices": [
                 {
                     "office_shape": "square",
-                    "office_color": "WHITE",
-                    "office_controller": null,
+                    "office_color": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "office_controller": "green",
                     "office_points": 0,
                     "office_place_adjacent": false
                 },
@@ -912,20 +928,17 @@
                 "Mismar"
             ],
             "route_regions": null,
-            "route_has_bm": false,
-            "route_bm_type": null,
+            "route_has_bm": true,
+            "route_bm_type": "3Actions",
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
-                    "post_required_shape": null,
-                    "post_region": null,
-                    "post_blocked": false
-                },
-                {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -933,8 +946,19 @@
                 {
                     "post_owner": [
                         0,
-                        255,
-                        0
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
+                    "post_required_shape": null,
+                    "post_region": null,
+                    "post_blocked": false
+                },
+                {
+                    "post_owner": [
+                        0,
+                        0,
+                        255
                     ],
                     "post_owner_shape": "square",
                     "post_required_shape": null,
@@ -968,12 +992,8 @@
                     "post_blocked": false
                 },
                 {
-                    "post_owner": [
-                        128,
-                        0,
-                        128
-                    ],
-                    "post_owner_shape": "square",
+                    "post_owner": null,
+                    "post_owner_shape": null,
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1024,22 +1044,34 @@
             "route_perm_bm": "ClaimGreenCity",
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "circle",
                     "post_required_shape": "circle",
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1064,15 +1096,23 @@
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1132,8 +1172,8 @@
                 "Belgard"
             ],
             "route_regions": null,
-            "route_has_bm": false,
-            "route_bm_type": null,
+            "route_has_bm": true,
+            "route_bm_type": "PlaceAdjacent",
             "route_perm_bm": null,
             "posts": [
                 {
@@ -1276,29 +1316,45 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1317,9 +1373,9 @@
             "posts": [
                 {
                     "post_owner": [
-                        0,
-                        0,
-                        255
+                        255,
+                        255,
+                        0
                     ],
                     "post_owner_shape": "square",
                     "post_required_shape": null,
@@ -1328,9 +1384,9 @@
                 },
                 {
                     "post_owner": [
-                        0,
-                        0,
-                        255
+                        255,
+                        255,
+                        0
                     ],
                     "post_owner_shape": "square",
                     "post_required_shape": null,
@@ -1339,7 +1395,7 @@
                 },
                 {
                     "post_owner": [
-                        0,
+                        255,
                         255,
                         0
                     ],
@@ -1394,15 +1450,23 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1420,22 +1484,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1453,15 +1529,23 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1547,8 +1631,8 @@
                 "Allenstein"
             ],
             "route_regions": null,
-            "route_has_bm": true,
-            "route_bm_type": "PlaceAdjacent",
+            "route_has_bm": false,
+            "route_bm_type": null,
             "route_perm_bm": null,
             "posts": [
                 {
@@ -1585,22 +1669,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1618,22 +1714,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "circle",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        0,
+                        255
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1651,22 +1759,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1684,22 +1804,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1743,22 +1875,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "circle",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1771,20 +1915,28 @@
                 "Tangermunde"
             ],
             "route_regions": null,
-            "route_has_bm": true,
-            "route_bm_type": "Move3",
+            "route_has_bm": false,
+            "route_bm_type": null,
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        0,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1802,22 +1954,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        0,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1868,22 +2032,34 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1901,15 +2077,23 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "circle",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        255,
+                        255,
+                        0
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -1927,29 +2111,45 @@
             "route_perm_bm": null,
             "posts": [
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
                 },
                 {
-                    "post_owner": null,
-                    "post_owner_shape": null,
+                    "post_owner": [
+                        128,
+                        0,
+                        128
+                    ],
+                    "post_owner_shape": "square",
                     "post_required_shape": null,
                     "post_region": null,
                     "post_blocked": false
@@ -2011,9 +2211,9 @@
             "player_actions": 2,
             "player_actions_remaining": 0,
             "player_bank": 3,
-            "player_general_stock_squares": 6,
+            "player_general_stock_squares": 0,
             "player_general_stock_circles": 0,
-            "player_personal_supply_squares": 3,
+            "player_personal_supply_squares": 1,
             "player_personal_supply_circles": 1,
             "player_brown_priv_count": 0,
             "player_blue_priv_count": 0,
@@ -2033,18 +2233,63 @@
             "player_actions": 2,
             "player_actions_remaining": 0,
             "player_bank": 3,
-            "player_general_stock_squares": 5,
+            "player_general_stock_squares": 0,
             "player_general_stock_circles": 0,
-            "player_personal_supply_squares": 4,
-            "player_personal_supply_circles": 1,
+            "player_personal_supply_squares": 3,
+            "player_personal_supply_circles": 0,
+            "player_brown_priv_count": 0,
+            "player_blue_priv_count": 0,
+            "player_mission_card_cities": null,
+            "player_ending_turn": false,
+            "player_bm_PlaceAdjacent": "PlaceAdjacent"
+        },
+        {
+            "player_color": "purple",
+            "player_order": 3,
+            "player_score": 3,
+            "player_final_score": 0,
+            "player_keys_index": 0,
+            "player_keys": 1,
+            "player_privilege": "ORANGE",
+            "player_book": 2,
+            "player_actions_index": 0,
+            "player_actions": 2,
+            "player_actions_remaining": 0,
+            "player_bank": 3,
+            "player_general_stock_squares": 0,
+            "player_general_stock_circles": 0,
+            "player_personal_supply_squares": 0,
+            "player_personal_supply_circles": 0,
             "player_brown_priv_count": 0,
             "player_blue_priv_count": 0,
             "player_mission_card_cities": null,
             "player_ending_turn": false
         },
         {
-            "player_color": "purple",
-            "player_order": 3,
+            "player_color": "red",
+            "player_order": 4,
+            "player_score": 0,
+            "player_final_score": 0,
+            "player_keys_index": 0,
+            "player_keys": 1,
+            "player_privilege": "WHITE",
+            "player_book": 2,
+            "player_actions_index": 0,
+            "player_actions": 2,
+            "player_actions_remaining": 0,
+            "player_bank": 3,
+            "player_general_stock_squares": 0,
+            "player_general_stock_circles": 0,
+            "player_personal_supply_squares": 0,
+            "player_personal_supply_circles": 0,
+            "player_brown_priv_count": 0,
+            "player_blue_priv_count": 0,
+            "player_mission_card_cities": null,
+            "player_ending_turn": false
+        },
+        {
+            "player_color": "yellow",
+            "player_order": 5,
             "player_score": 0,
             "player_final_score": 0,
             "player_keys_index": 0,
@@ -2055,10 +2300,10 @@
             "player_actions": 2,
             "player_actions_remaining": 1,
             "player_bank": 3,
-            "player_general_stock_squares": 4,
+            "player_general_stock_squares": 0,
             "player_general_stock_circles": 0,
-            "player_personal_supply_squares": 6,
-            "player_personal_supply_circles": 1,
+            "player_personal_supply_squares": 1,
+            "player_personal_supply_circles": 0,
             "player_brown_priv_count": 0,
             "player_blue_priv_count": 0,
             "player_mission_card_cities": null,

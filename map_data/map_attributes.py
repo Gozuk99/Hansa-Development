@@ -134,7 +134,7 @@ class City:
 
     def get_controller(self):
         if not self.offices:
-            print(f"No offices in {self.name}, therefore no controller.")
+            print(f"ERROR: No offices in {self.name}, therefore no controller.")
             return None  # No offices in the city
         
         # Count the number of offices controlled by each player
@@ -198,7 +198,7 @@ class City:
         # Check if the current player has at least one office in the city
         player_has_office = any(office.controller == current_player and not office.place_adjacent_office for office in self.offices)
         if not player_has_office:
-            print(f"{COLOR_NAMES[current_player.color]} does not have a valid office in {self.name} to swap offices with.")
+            # print(f"{COLOR_NAMES[current_player.color]} does not have a valid office in {self.name} to swap offices with.")
             return False
 
         # Check if other players have offices in the city

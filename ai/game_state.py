@@ -596,7 +596,6 @@ class BoardData:
         game.waiting_for_bm_upgrade_ability = game_info_JSON['waiting_for_bm_upgrade_ability']
         game.waiting_for_bm_move_any_2 = game_info_JSON['waiting_for_bm_move_any_2']
         game.waiting_for_bm_move3 = game_info_JSON['waiting_for_bm_move3']
-        print(f"waiting_for_bm_move3: {game.waiting_for_bm_move3}")
         game.waiting_for_bm_exchange_bm = game_info_JSON['waiting_for_bm_exchange_bm']
         game.waiting_for_bm_tribute_trading_post = game_info_JSON['waiting_for_bm_tribute_trading_post']
         game.waiting_for_bm_block_trade_route = game_info_JSON['waiting_for_bm_block_trade_route']
@@ -613,11 +612,20 @@ class BoardData:
             else:
                 game.selected_map.specialprestigepoints.circle_data[i]['owner'] = None
 
-        for i in range(12):
-            bonus_marker_name = game_info_JSON[f'bonus_marker{i+1}']
-            if bonus_marker_name is not None:
-                # Assuming get_bonus_marker_by_name is a function that returns a bonus marker given its name
-                game.selected_map.bonus_marker_pool[i] = bonus_marker_name
+        i = 0
+        while True:
+            bonus_marker_key = f'bonus_marker{i+1}'
+            if bonus_marker_key in game_info_JSON:
+                bonus_marker_name = game_info_JSON[bonus_marker_key]
+                if bonus_marker_name is not None:
+                    # Assuming get_bonus_marker_by_name is a function that returns a bonus marker given its name
+                    game.selected_map.bonus_marker_pool[i] = bonus_marker_name
+                    i += 1
+                else:
+                    print(f"bonus_marker{i+1} is None")
+                    exit()
+            else:
+                break  # exit the loop if the key doesn't exist
 
         # Unmap tile_pool_info_JSON
         for i in range(len(game.players)):
@@ -686,9 +694,11 @@ class BoardData:
 
                     # Map the controller
                     if office_data['office_controller'] is not None:
+                        controller_color = player_colors[office_data['office_controller']]
                         for player in game.players:
-                            if player.color == office_data['office_controller']:
+                            if player.color == controller_color:
                                 office.controller = player
+                                break
 
                     # Map the place_adjacent attribute
                     office.place_adjacent_office = office_data['office_place_adjacent']

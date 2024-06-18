@@ -134,27 +134,21 @@ def displace_action(game, post, route, displacing_piece_shape):
 
     post.owner_piece_shape = displacing_piece_shape
     post.owner = current_player
-
+    game.original_route_of_displacement = route
+    game.waiting_for_displaced_player = True
+    game.displaced_player.populate_displaced_player(game, current_displaced_player, displaced_piece_shape)
+    
     # Find empty posts on adjacent routes
     if game.DisplaceAnywhereOwner == current_displaced_player:
         game.all_empty_posts = gather_all_empty_posts(game)
     else:
-        ignore_circle_posts = False
-        if displaced_piece_shape == "square":
-            if (current_displaced_player.general_stock_circles == 0 and 
-                current_displaced_player.personal_supply_squares > 0) or \
-            (current_displaced_player.general_stock_squares == 0 and 
-                current_displaced_player.personal_supply_circles == 0):
-                ignore_circle_posts = True
-        print(f"Getting adjacent posts for Displaced Player {COLOR_NAMES[current_displaced_player.color]} with ignore_circle_posts={ignore_circle_posts}")
-        game.all_empty_posts = gather_empty_adjacent_posts(route, ignore_circle_posts)
+        ignore_circle = ignore_posts_requiring_a_circle(game)
+        print("Ignoring posts requiring a circle." if ignore_circle else "Not ignoring posts requiring a circle.")
+        game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement, ignore_circle_posts=ignore_circle)
         
     for post in game.all_empty_posts:
         post.valid_post_to_displace_to()
 
-    game.original_route_of_displacement = route
-    game.waiting_for_displaced_player = True
-    game.displaced_player.populate_displaced_player(game, current_displaced_player, displaced_piece_shape)
     print(f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}.")
 
 def gather_all_empty_posts(game):
@@ -190,7 +184,7 @@ def gather_empty_adjacent_posts(start_route, ignore_circle_posts=False):
                     next_level_routes.append(route)
 
             for post in current_route.posts:
-                if ignore_circle_posts and post.owner_piece_shape == "circle":
+                if ignore_circle_posts and post.required_shape == "circle":
                     continue
                 elif not post.is_owned():
                     empty_posts.append(post)
@@ -315,17 +309,20 @@ def displace_move_action(game, post):
 
         print(f"{COLOR_NAMES[displaced_player.color]} DISPLACED MOVE - picked up a piece")
 
-        for post in game.all_empty_posts:
-            post.reset_post()
-        game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement)
         if not game.all_empty_posts:
-            print("ERROR::No empty posts found in adjacent routes!")  # Debugging log
-            sys.exit()
-        post_count = 0  # Counter for the number of posts processed
-        for post in game.all_empty_posts:
-            post.valid_post_to_displace_to()
-            post_count += 1
-        print(f"Processed {post_count} posts.")  # Debugging log
+            print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
+            ignore_circle = ignore_posts_requiring_a_circle(game)
+            game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement, ignore_circle_posts=ignore_circle)
+
+            if not game.all_empty_posts:
+                print("ERROR::No empty posts found in adjacent routes either!")  # Debugging log
+                sys.exit()
+            
+            post_count = 0  # Counter for the number of posts processed
+            for post in game.all_empty_posts:
+                post.valid_post_to_displace_to()
+                post_count += 1
+            print(f"displace_move_action: Processed {post_count} posts.")  # Debugging log
 
     # If the player has pieces in hand to place
     elif displaced_player.holding_pieces:
@@ -346,6 +343,32 @@ def displace_move_action(game, post):
     # else:
     #     print(f"ERROR: Holding pieces {len(displaced_player.holding_pieces)}, shape: {post.shape}")
 
+def ignore_posts_requiring_a_circle(game):
+    displaced_player = game.displaced_player
+
+    if game.map_num != 1:
+        all_posts_requires_circle = True
+        for empty_post in game.all_empty_posts:
+            if empty_post.required_shape == "square":
+                all_posts_requires_circle = False
+                break
+
+        if all_posts_requires_circle:
+            general_stock_empty = displaced_player.is_general_stock_empty()
+            personal_supply_empty = displaced_player.is_personal_supply_empty()
+            no_circles_in_general_stock = 1 if displaced_player.player.general_stock_circles == 0 else 0
+            no_circles_in_personal_supply = 1 if displaced_player.player.personal_supply_circles == 0 else 0
+
+            if ((displaced_player.displaced_shape == "circle" and displaced_player.played_displaced_shape and not general_stock_empty and no_circles_in_general_stock) or
+                (displaced_player.displaced_shape == "circle" and displaced_player.played_displaced_shape and general_stock_empty and not personal_supply_empty and no_circles_in_personal_supply) or
+                (displaced_player.displaced_shape == "square" and not general_stock_empty and no_circles_in_general_stock) or
+                (displaced_player.displaced_shape == "square" and general_stock_empty and not personal_supply_empty and no_circles_in_personal_supply) or
+                (displaced_player.displaced_shape == "square" and general_stock_empty and personal_supply_empty)):
+                # print(f"Gathering the next set of adjacent posts as all adjacent posts require a circle.")
+                # gather_empty_adjacent_posts(game.original_route_of_displacement, ignore_circle_posts=True)
+                return True
+    return False
+
 def displace_claim(game, post, desired_shape):
     displaced_player = game.displaced_player
 
@@ -363,25 +386,8 @@ def displace_claim(game, post, desired_shape):
 
     wants_to_use_displaced_piece = (not displaced_player.played_displaced_shape) and (desired_shape == displaced_player.displaced_shape)
 
-    if game.map_num != 1:
-        all_posts_requires_circle = True
-        for post in game.all_empty_posts:
-            if post.required_shape == "square":
-                all_posts_requires_circle = False
-                break
-
-        if all_posts_requires_circle:
-            general_stock_empty = displaced_player.is_general_stock_empty()
-            personal_supply_empty = displaced_player.is_personal_supply_empty()
-            no_circles_in_general_stock = 1 if displaced_player.player.general_stock_circles == 0 else 0
-            no_circles_in_personal_supply = 1 if displaced_player.player.personal_supply_circles == 0 else 0
-
-            if ((displaced_player.displaced_shape == "circle" and displaced_player.played_displaced_shape and not general_stock_empty and no_circles_in_general_stock) or
-                (displaced_player.displaced_shape == "circle" and displaced_player.played_displaced_shape and general_stock_empty and not personal_supply_empty and no_circles_in_personal_supply) or
-                (displaced_player.displaced_shape == "square" and not general_stock_empty and no_circles_in_general_stock) or
-                (displaced_player.displaced_shape == "square" and general_stock_empty and not personal_supply_empty and no_circles_in_personal_supply)):
-                print(f"Gathering the next set of adjacent posts as all adjacent posts require a circle.")
-                gather_empty_adjacent_posts(game.original_route_of_displacement, ignore_circle_posts=True)
+    ignore_circle = ignore_posts_requiring_a_circle(game)
+    game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement, ignore_circle_posts=ignore_circle)
     # if the only posts in adjacent routes (game.all_empty_posts) require a circle, and
     # the displaced_player.displaced_shape is a circle, but use displaced_player.played_displaced_shape == True, and general stock is not empty, but has no circles
     # or
@@ -419,7 +425,9 @@ def displace_claim(game, post, desired_shape):
         # game.switch_player_if_needed()
     elif not game.all_empty_posts:
         print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
-        game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement)
+        ignore_circle = ignore_posts_requiring_a_circle(game)
+        game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement, ignore_circle_posts=ignore_circle)
+
         if not game.all_empty_posts:
             print("ERROR::No empty posts found in adjacent routes either!")  # Debugging log
             sys.exit()
@@ -428,7 +436,7 @@ def displace_claim(game, post, desired_shape):
         for post in game.all_empty_posts:
             post.valid_post_to_displace_to()
             post_count += 1
-        print(f"Processed {post_count} posts.")  # Debugging log
+        print(f"displace_claim: Processed {post_count} posts.")  # Debugging log
 
 def displace_to(game, post, shape, use_displaced_piece=False):
     displaced_player = game.displaced_player
@@ -497,14 +505,20 @@ def assign_new_bonus_marker_on_route(game, route):
     else:
         print("No action taken: No bonus markers available in the pool.")
 
-def score_route(route):
+def score_route(current_player, route):
     # Allocate points
     for city in route.cities:
         player = city.get_controller()
         if player is not None:
+            print(f"Player {COLOR_NAMES[player.color]} controlled {city.name}")
             player.score += 1
-            player.reward += player.reward_structure.route_complete_got_points
+            if current_player.color == player.color:
+                current_player.reward += player.reward_structure.route_complete_got_points
+            else:
+                current_player.reward -= player.reward_structure.route_complete_got_points
             print(f"Player {COLOR_NAMES[player.color]} scored for controlling {city.name}, total score: {player.score}")
+        else:
+            print(f"City {city.name} is not controlled by any player.")
 
 def claim_route_for_office(game, city, route):
     current_player = game.current_player
@@ -517,7 +531,7 @@ def claim_route_for_office(game, city, route):
             print(f"{COLOR_NAMES[current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route.")
         else:
             current_player.reward += current_player.reward_structure.city_claim_office
-            score_route(route)
+            score_route(current_player, route)
             placed_piece_shape = city.get_next_open_office_shape()
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}")
             city.update_next_open_office_ownership(game)
@@ -525,7 +539,7 @@ def claim_route_for_office(game, city, route):
             route.award_tributes()
     elif 'PlaceAdjacent' in (bm.type for bm in current_player.bonus_markers):
         current_player.reward += current_player.reward_structure.bm_place_adjacent
-        score_route(route)
+        score_route(current_player, route)
         city.claim_office_with_bonus_marker(current_player)
         print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a square into a NEW office of {city.name}.")
         finalize_route_claim(game, route, "square")
@@ -542,15 +556,22 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice):
     if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
         if specialprestigepoints_city.claim_highest_prestige(current_player):
             current_player.reward += current_player.reward_structure.upgraded_bonus_points
-            score_route(route)
+            score_route(current_player, route)
             finalize_route_claim(game, route, "circle")
         else:
             print(f"{COLOR_NAMES[current_player.color]} cannot claim a SpecialPrestigePoints City ({city.name}) with a privilege of {current_player.privilege}.")
     elif any(upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"] for upgrade_type in city.upgrade_city_type):
+        upgrade_rewards = {
+            "Keys": "upgraded_keys",
+            "Privilege": "upgraded_privilege",
+            "Book": "upgraded_circles",
+            "Actions": "upgraded_actions",
+            "Bank": "upgraded_bank"
+        }
         if upgrade_choice and current_player.perform_upgrade(upgrade_choice):
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} upgraded {upgrade_choice}!")
-            current_player.reward += current_player.reward_structure.upgraded_keys
-            score_route(route)
+            current_player.reward += getattr(current_player.reward_structure, upgrade_rewards[upgrade_choice])
+            score_route(current_player, route)
             finalize_route_claim(game, route)
     else:
         print(f"Upgrade not detected")
@@ -558,7 +579,7 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice):
 def claim_route_for_points(game, route):
     current_player = game.current_player
     print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} claimed a route for Points/BM! between {route.cities[0].name} and {route.cities[1].name}")
-    score_route(route)
+    score_route(current_player, route)
     finalize_route_claim(game, route)
 
 def finalize_route_claim(game, route, placed_piece_shape=None):
@@ -587,8 +608,12 @@ def handle_bonus_marker(game, player, route, reset_pieces):
         elif perm_bm_type == '+1Priv':
             game.current_player.upgrade_privilege()
         elif perm_bm_type == "ClaimGreenCity":
-            game.waiting_for_bm_green_city = True
-            print(f"BM: Please select a GREEN city to build an office in!")
+            if game.current_player.personal_supply_squares > 0:
+                game.waiting_for_bm_green_city = True
+                print(f"BM: Please select a GREEN city to build an office in!")
+            else:
+                print(f"BM: Cannot utilize claiming a GREEN city without a square in personal supply.")
+                player.reward -= 20
         elif perm_bm_type == 'Place2TradesmenFromRoute':
             game.current_player.pieces_to_place = 2
             game.current_player.holding_pieces = reset_pieces

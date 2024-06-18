@@ -125,7 +125,7 @@ def map_claim_post_action(game, index):
             print(f"DISPLACE - Performing PICKUP action for {post_type} on post {post_idx} because GS and PS is empty")
             displace_claim(game, selected_post, post_type)
         elif selected_post in game.all_empty_posts:
-            print(f"DISPLACE - Performing displaced claim action for {post_type} on post {post_idx}")
+            print(f"DISPLACE - Performing displaced claim action for {post_type} on post {post_idx} between {selected_route.cities[0].name} and {selected_route.cities[1].name}")
             displace_claim(game, selected_post, post_type)
         else:
             print(f"DISPLACE ERROR - Selected Post NOT in game.all_empty_posts")
@@ -207,7 +207,8 @@ def map_claim_post_action(game, index):
                 print(f"CLAIM ERROR: post_type {post_type}")
         # DISPLACE - if post is owned by a different player:
         elif is_post_owned and selected_post.owner != current_player and check_brown_blue_priv(game, selected_route) and can_displace:
-            print(f"Attempting DISPLACE action on post {post_idx} owned by {COLOR_NAMES[selected_post.owner.color]}")
+            print(f"Attempting DISPLACE action on post {post_idx} between {selected_route.cities[0].name} and {selected_route.cities[1].name}")
+            print(f"Post owned by {COLOR_NAMES[selected_post.owner.color]} {selected_post.owner_piece_shape}")
             displace_action(game, selected_post, selected_route, post_type)
         else:
             print(f"something invalid happened with post index {post_idx} of shape {post_type}")
@@ -446,8 +447,9 @@ def map_bm_upgrade_ability(game, index):
     for upgrade_idx, upgrade_city in enumerate(game.selected_map.upgrade_cities):
         if upgrade_idx == index:
             if game.waiting_for_bm_upgrade_ability:
-                upgrade_type = upgrade_city.upgrade_city_type
-                game.current_player.perform_upgrade(upgrade_type) 
+                upgrade_type = upgrade_city.upgrade_type
+                game.current_player.perform_upgrade(upgrade_type)
+                game.waiting_for_bm_upgrade_ability = False 
 
 def map_end_turn_action(game):
 
@@ -458,6 +460,8 @@ def map_end_turn_action(game):
             game.current_player.ending_turn = True
         elif not check_if_player_has_usable_BMs(game) and game.replace_bonus_marker == 0:
             # Player has no BMs to use or only has 'PlaceAdjacent', switch player
+            print("Ending turn for player.")
+            print(f"replace_bonus_marker: {game.replace_bonus_marker}, check_if_player_has_usable_BMs: {check_if_player_has_usable_BMs(game)}")
             game.switch_player_if_needed()
     else:
         print("Cannot end the turn as Bonus Markers need to be replaced on the Map!")
@@ -494,8 +498,8 @@ def mask_post_action(game):
 
     post_tensor = torch.zeros(MAX_POSTS * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
 
-    if (game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3 or game.waiting_for_bm_tribute_trading_post or\
-        game.waiting_for_bm_block_trade_route or game.waiting_for_bm_green_city or game.waiting_for_place2_in_scotland_or_wales):
+    if (game.waiting_for_bm_move_any_2 or game.waiting_for_place2_in_scotland_or_wales or \
+        game.waiting_for_bm_move3 or game.waiting_for_bm_tribute_trading_post or game.waiting_for_bm_block_trade_route):
         print("BM flag set.")
     elif current_player.actions_remaining == 0 or check_if_any_action_BM_flag_set(game):
         return post_tensor
@@ -534,12 +538,12 @@ def mask_post_action(game):
                         post_tensor[post_idx] = 1
                         post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts if necessary
                     else:
-                        if post in game.all_empty_posts and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup > 0:
-                            print(f"Waiting to pick up remaining pieces: {displaced_player.player.pieces_to_pickup}")
-                        elif post.owner == displaced_player.player and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup > 0:
+                        if post.owner == displaced_player.player and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup > 0:
                             print(f"DISPLACE MASK ERROR: Displaced Shape: {displaced_player.played_displaced_shape}, index: {post_idx}")
                             print(f"displaced_player.player = {COLOR_NAMES[displaced_player.player.color]}, pieces_to_pickup = {displaced_player.player.pieces_to_pickup}")
                             error_exit(game, route)
+                        # elif post in game.all_empty_posts and displaced_player.played_displaced_shape and displaced_player.player.pieces_to_pickup > 0:
+                        #     print(f"Waiting to pick up remaining pieces: {displaced_player.player.pieces_to_pickup}")
 
                 elif post in game.all_empty_posts:
                     if must_use_displaced_piece:
@@ -777,7 +781,13 @@ def mask_bm(game):
             bm_index = bm_mapping.get(bm.type)
             if bm_index is not None:
                 #TODO: Check if the BM is valid to use
-                bm_tensor[bm_index] = 1
+                if bm.type == "SwapOffice":
+                    for city in game.selected_map.cities:
+                        if city.check_if_eligible_to_swap_offices(game.current_player):
+                            bm_tensor[bm_index] = 1
+                #todo check if can exchange bm with no one else having a used bm
+                else:
+                    bm_tensor[bm_index] = 1
 
     return bm_tensor
 
@@ -844,7 +854,7 @@ def mask_bm_city_actions(game):
                 bm_city_tensor[city_idx] = 1
         elif game.waiting_for_bm_green_city:
             if city.color == DARK_GREEN:
-                print (f"Valid City to claim green city: {city.name}, {city.color}, {city_idx}")
+                print (f"Valid City to claim green city: {city.name}, {city_idx}")
                 bm_city_tensor[city_idx] = 1
         city_idx += 1
     
@@ -858,8 +868,8 @@ def mask_bm_upgrade_ability(game):
     
     upgrade_idx = 0
     for upgrade_city in game.selected_map.upgrade_cities:
-        upgrade_type = upgrade_city.upgrade_city_type
-        current_player_value = getattr(game.current_player, upgrade_type)
+        upgrade_type = upgrade_city.upgrade_type
+        current_player_value = getattr(game.current_player, upgrade_type.lower())
         max_value = UPGRADE_MAX_VALUES.get(upgrade_type)
 
         if current_player_value != max_value:
@@ -879,7 +889,8 @@ def mask_end_turn(game):
 
     if (check_if_player_has_usable_BMs(game) and game.current_player.actions_remaining == 0) or \
         (game.replace_bonus_marker > 0 and game.current_player.actions_remaining == 0):
-        print("mask_end_turn: returning valid to end turn")
+        print(f"mask_end_turn: returning valid to end turn")
+        print(f"game.replace_bonus_marker = {game.replace_bonus_marker}, game.current_player.ending_turn = {game.current_player.ending_turn}")
         end_turn_tensor[0] = 1
 
     if game.replace_bonus_marker > 0:
@@ -888,7 +899,34 @@ def mask_end_turn(game):
     return end_turn_tensor
 
 def check_if_player_has_usable_BMs(game):
-    return game.current_player.bonus_markers and not all(bm.type == 'PlaceAdjacent' for bm in game.current_player.bonus_markers)
+    if not game.current_player.bonus_markers:
+        return False
+
+    for bm in game.current_player.bonus_markers:
+        if bm.type == 'PlaceAdjacent':
+            continue
+        elif bm.type == 'SwapOffice':
+            # Check if there's a city where the player is eligible to swap offices
+            swap_office_possible = False
+            for city in game.selected_map.cities:
+                if city.check_if_eligible_to_swap_offices(game.current_player):
+                    swap_office_possible = True
+                    break
+            if not swap_office_possible:
+                continue
+        elif bm.type == 'ExchangeBonusMarker':
+            # Check if there's a player to exchange bonus markers with
+            exchange_possible = False
+            for player in game.players:
+                if player != game.current_player and player.used_bonus_markers:
+                    exchange_possible = True
+                    break
+            if not exchange_possible:
+                continue
+        else:
+            return True
+
+    return False
 
 def check_brown_blue_priv(game, route):
     if route.region is not None:
