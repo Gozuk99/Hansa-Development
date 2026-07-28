@@ -272,7 +272,11 @@ def move_action(game, route, post, shape):
                 #     player.reward += 10
                 player.finish_move()
                 # Deduct an action if it's a standard move (not a BM Move3 or MoveAny2)
-                if not (game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2):
+                if not (
+                    game.waiting_for_bm_move3
+                    or game.waiting_for_bm_move_any_2
+                    or game.waiting_for_place2_from_route
+                ):
                     print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} finished their move action.")
                     player.spend_action()
                 else:
@@ -280,6 +284,8 @@ def move_action(game, route, post, shape):
                         game.waiting_for_bm_move3 = False
                     elif game.waiting_for_bm_move_any_2:
                         game.waiting_for_bm_move_any_2 = False
+                    elif game.waiting_for_place2_from_route:
+                        game.waiting_for_place2_from_route = False
         else:
             print(f"ERROR: Cannot place a piece here. The post is already occupied.")
     else:
@@ -635,19 +641,19 @@ def handle_bonus_marker(game, player, route, reset_pieces):
             game.waiting_for_bm_move_any_2 = True
             print(f"BM: Please pick up, upto {game.current_player.pieces_to_pickup} pieces to move!")
         elif perm_bm_type == '+1Priv':
-            game.current_player.upgrade_privilege()
+            game.current_player.perform_upgrade("Privilege")
         elif perm_bm_type == "ClaimGreenCity":
-            if game.current_player.personal_supply_squares > 0:
+            if (
+                game.current_player.personal_supply_squares > 0
+                or game.current_player.personal_supply_circles > 0
+            ):
                 game.waiting_for_bm_green_city = True
                 print(f"BM: Please select a GREEN city to build an office in!")
             else:
                 print(f"BM: Cannot utilize claiming a GREEN city without a square in personal supply.")
                 player.reward -= 20
         elif perm_bm_type == 'Place2TradesmenFromRoute':
-            game.current_player.pieces_to_place = 2
-            game.current_player.holding_pieces = reset_pieces
-            print(f"BM: Please place {game.current_player.pieces_to_place} pieces on valid posts!")
-            game.waiting_for_bm_move_any_2 = True
+            game.pending_route_piece_choices = reset_pieces
         elif perm_bm_type == "Place2ScotlandOrWales":
             game.current_player.pieces_to_place = 2
             game.current_player.holding_pieces = reset_pieces

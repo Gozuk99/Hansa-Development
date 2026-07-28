@@ -74,6 +74,8 @@ class Game:
         self.waiting_for_bm_block_trade_route = False
 
         self.waiting_for_bm_green_city = False
+        self.waiting_for_place2_from_route = False
+        self.pending_route_piece_choices = []
         self.waiting_for_place2_in_scotland_or_wales = False
 
         self.tile_to_buy = None
@@ -149,6 +151,8 @@ class Game:
             workflows.append(TurnPhase.TRIBUTE_INCOME_RESPONSE)
         if self.waiting_for_bm_place_adjacent:
             workflows.append(TurnPhase.PLACE_ADJACENT_ROUTE)
+        if self.pending_route_piece_choices:
+            workflows.append(TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION)
         if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
             workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
 
@@ -161,6 +165,7 @@ class Game:
             self.waiting_for_bm_tribute_trading_post,
             self.waiting_for_bm_block_trade_route,
             self.waiting_for_bm_green_city,
+            self.waiting_for_place2_from_route,
             self.waiting_for_place2_in_scotland_or_wales,
         ))
         if bonus_pending:
@@ -334,7 +339,17 @@ class Game:
             if self.pending_tribute_income_owners
             else self.current_player_index
         )
-        if not self.pending_tribute_income_owners and self.game_end_pending_immediate_resolution:
+        self.complete_deferred_game_end_if_ready()
+
+    def complete_deferred_game_end_if_ready(self):
+        if not self.game_end_pending_immediate_resolution:
+            return
+        immediate = [
+            workflow
+            for workflow in self.pending_workflows
+            if workflow != TurnPhase.REPLACE_BONUS_MARKERS
+        ]
+        if not immediate:
             self.game_end_pending_immediate_resolution = False
             self.check_for_game_end()
 
@@ -554,7 +569,12 @@ class Game:
                               self.current_full_cities_count >= self.selected_map.max_full_cities)
 
         if end_conditions_met:
-            if self.pending_tribute_income_owners:
+            immediate = [
+                workflow
+                for workflow in self.pending_workflows
+                if workflow != TurnPhase.REPLACE_BONUS_MARKERS
+            ]
+            if immediate:
                 self.game_end_pending_immediate_resolution = True
                 return
             self.current_player.forfeit_remaining_actions()

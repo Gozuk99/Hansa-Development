@@ -51,6 +51,8 @@ def _perform_action_from_index(game, max_prob_index):
     elif max_prob_index == 619:
         map_place_adjacent_action(game)
 
+    game.complete_deferred_game_end_if_ready()
+
     if not (game.waiting_for_bm_swap_office or game.waiting_for_bm_upgrade_ability or game.waiting_for_bm_move_any_2 or \
             game.waiting_for_bm_move3 or game.waiting_for_bm_exchange_bm or game.waiting_for_bm_tribute_trading_post or\
             game.waiting_for_bm_block_trade_route or game.waiting_for_bm_green_city or game.waiting_for_place2_in_scotland_or_wales):
@@ -152,6 +154,9 @@ def map_claim_post_action(game, index):
 
     elif game.waiting_for_bm_move_any_2:
         print(f"Performing BM Move Any 2 action for {post_type} on post {post_idx}")
+        move_action(game, selected_route, selected_post, post_type)
+
+    elif game.waiting_for_place2_from_route:
         move_action(game, selected_route, selected_post, post_type)
 
     elif game.waiting_for_place2_in_scotland_or_wales:
@@ -301,6 +306,33 @@ def map_claim_route_action(game, index):
     game.check_for_game_end()
 
 def map_income_action(game, index):
+    if game.pending_route_piece_choices:
+        available_circles = sum(
+            shape == "circle" for shape, _owner, _region in game.pending_route_piece_choices
+        )
+        available_squares = len(game.pending_route_piece_choices) - available_circles
+        circles = index
+        squares = 2 - circles
+        if circles > available_circles or squares > available_squares:
+            raise InvalidActionError("Selected route-piece composition is unavailable")
+        chosen = []
+        remaining = list(game.pending_route_piece_choices)
+        for shape, count in (("circle", circles), ("square", squares)):
+            for _ in range(count):
+                piece = next(piece for piece in remaining if piece[0] == shape)
+                remaining.remove(piece)
+                chosen.append(piece)
+                if shape == "circle":
+                    game.current_player.general_stock_circles -= 1
+                else:
+                    game.current_player.general_stock_squares -= 1
+        game.current_player.holding_pieces = chosen
+        game.current_player.pieces_to_place = 2
+        game.current_player.pieces_to_pickup = 0
+        game.pending_route_piece_choices = []
+        game.waiting_for_place2_from_route = True
+        return
+
     if game.pending_tribute_income_owners:
         game.resolve_tribute_income(index)
         return
@@ -529,6 +561,20 @@ def map_bm_city_actions(game, index):
         game.waiting_for_bm_swap_office = False
         return
 
+    if game.waiting_for_bm_green_city:
+        choices = [
+            (city, shape)
+            for city in game.selected_map.cities
+            if city.color == DARK_GREEN
+            for shape in ("square", "circle")
+            if game.current_player.has_personal_supply(shape)
+        ]
+        city, shape = choices[index]
+        if not city.claim_green_city(game, shape):
+            raise InvalidActionError("Green-city choice is no longer legal")
+        game.waiting_for_bm_green_city = False
+        return
+
     for city_idx, city in enumerate(game.selected_map.cities):
         if city_idx == index:
             if game.waiting_for_bm_green_city:
@@ -546,11 +592,12 @@ def map_bm_upgrade_ability(game, index):
                 game.waiting_for_bm_upgrade_ability = False 
 
 def map_end_turn_action(game):
-    if game.waiting_for_bm_move3:
+    if game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2:
         game.current_player.pieces_to_pickup = 0
         if not game.current_player.holding_pieces:
             game.current_player.finish_move()
             game.waiting_for_bm_move3 = False
+            game.waiting_for_bm_move_any_2 = False
         return
 
     if game.turn_phase == TurnPhase.DISPLACEMENT:
@@ -611,6 +658,7 @@ def restrict_mask_to_turn_phase(game, action_mask):
         TurnPhase.INCOME_FAVOUR_RESPONSE: ((535, 543),),
         TurnPhase.TRIBUTE_INCOME_RESPONSE: ((522, 527),),
         TurnPhase.PLACE_ADJACENT_ROUTE: ((362, 522),),
+        TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION: ((522, 527),),
         # End-turn is selected once to confirm that optional markers are being
         # forgone; replacement actions become available after that confirmation.
         TurnPhase.REPLACE_BONUS_MARKERS: ((543, 583), (618, 619)),
@@ -652,7 +700,7 @@ def mask_post_action(game):
 
     post_tensor = torch.zeros(MAX_POSTS * 2, device=device, dtype=torch.uint8)  # 121 max posts * 2 for squares and circles
 
-    if (game.waiting_for_bm_move_any_2 or game.waiting_for_place2_in_scotland_or_wales or \
+    if (game.waiting_for_bm_move_any_2 or game.waiting_for_place2_from_route or game.waiting_for_place2_in_scotland_or_wales or \
         game.waiting_for_bm_move3 or game.waiting_for_bm_tribute_trading_post or game.waiting_for_bm_block_trade_route):
         print("BM flag set.")
     elif current_player.actions_remaining == 0 or check_if_any_action_BM_flag_set(game):
@@ -771,6 +819,13 @@ def mask_post_action(game):
                             post_tensor[post_idx] = 1
                         elif shape_to_place == "circle" and (not post.required_shape or post.required_shape == "circle"):
                             post_tensor[MAX_POSTS + post_idx] = 1
+            elif game.waiting_for_place2_from_route:
+                if not post.is_owned() and current_player.holding_pieces:
+                    shape = current_player.holding_pieces[0][0]
+                    if post.required_shape in (None, shape):
+                        post_tensor[
+                            post_idx + (MAX_POSTS if shape == "circle" else 0)
+                        ] = 1
             elif game.waiting_for_bm_tribute_trading_post:
                 if (
                     post is route.posts[0]
@@ -803,6 +858,7 @@ def mask_post_action(game):
                     ):
                         post_tensor[post_idx] = 1
                         post_tensor[MAX_POSTS + post_idx] = 1
+
                 elif is_post_owned and post.owner == current_player:
                     post_tensor[post_idx] = 1
                     post_tensor[MAX_POSTS + post_idx] = 1
@@ -959,6 +1015,17 @@ def get_city_index(city, game):
 
 def mask_income_actions(game):
     income_tensor = torch.zeros(5, device=device, dtype=torch.uint8)  # 5 options for income actions
+
+    if game.pending_route_piece_choices:
+        circles = sum(
+            shape == "circle"
+            for shape, _owner, _region in game.pending_route_piece_choices
+        )
+        squares = len(game.pending_route_piece_choices) - circles
+        for circle_count in range(3):
+            if circle_count <= circles and 2 - circle_count <= squares:
+                income_tensor[circle_count] = 1
+        return income_tensor
 
     if game.pending_tribute_income_owners:
         owner = game.pending_tribute_income_owners[0]
@@ -1134,6 +1201,17 @@ def mask_bm_city_actions(game):
         bm_city_tensor[:len(pairs)] = 1
         return bm_city_tensor
 
+    if game.waiting_for_bm_green_city:
+        choices = [
+            (city, shape)
+            for city in game.selected_map.cities
+            if city.color == DARK_GREEN
+            for shape in ("square", "circle")
+            if game.current_player.has_personal_supply(shape)
+        ]
+        bm_city_tensor[:len(choices)] = 1
+        return bm_city_tensor
+
     if not game.waiting_for_bm_green_city:
         return bm_city_tensor
     
@@ -1168,7 +1246,10 @@ def mask_bm_upgrade_ability(game):
 def mask_end_turn(game):
     end_turn_tensor = torch.zeros(1, device=device, dtype=torch.uint8)
 
-    if game.waiting_for_bm_move3 and game.current_player.pieces_to_pickup > 0:
+    if (
+        (game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2)
+        and game.current_player.pieces_to_pickup > 0
+    ):
         end_turn_tensor[0] = 1
         return end_turn_tensor
 

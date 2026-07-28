@@ -235,7 +235,10 @@ class City:
         ]
         return (
             bool(standard_offices)
-            and standard_offices[0].controller is not None
+            and (
+                self.color == DARK_GREEN
+                or standard_offices[0].controller is not None
+            )
             and any(
                 post.owner is player and post.owner_piece_shape == shape
                 for post in route.posts
@@ -294,26 +297,30 @@ class City:
                 return True
         return False
     
-    def claim_green_city(self, game):
-        if game.current_player.personal_supply_squares == 0 and game.current_player.personal_supply_circles == 0:
-            print(f"Cannot claim GREEN City: {self.name}, because you have no Tradesmen in your Personal Supply")
+    def claim_green_city(self, game, shape):
+        player = game.current_player
+        if not player.has_personal_supply(shape):
             return False
+        rightmost_occupied = max(
+            (
+                index
+                for index, office in enumerate(self.offices)
+                if office.controller is not None
+            ),
+            default=-1,
+        )
+        target_index = rightmost_occupied + 1
+        if target_index >= len(self.offices):
+            self.add_office(Office(shape, "WHITE", 0))
+        office = self.offices[target_index]
+        office.shape = shape
+        office.controller = player
+        if shape == "square":
+            player.personal_supply_squares -= 1
         else:
-            if self.city_all_offices_occupied():
-                #create a new office
-                #append it to city.offices
-                self.add_office(Office("square", "WHITE", 0))
-
-            self.update_next_open_office_ownership(game)
-            
-            # Remove a square if available, otherwise remove a circle
-            if game.current_player.personal_supply_squares > 0:
-                game.current_player.personal_supply_squares -= 1
-            elif game.current_player.personal_supply_circles > 0:
-                game.current_player.personal_supply_circles -= 1
-            
-            print(f"Claimed office in GREEN City: {self.name}")
-            return True
+            player.personal_supply_circles -= 1
+        self.update_city_size_based_on_offices()
+        return True
 
 class Upgrade:
     def __init__(self, city_name, upgrade_type, x_pos, y_pos, width, height):

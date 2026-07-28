@@ -10,6 +10,7 @@ class TurnPhase(str, Enum):
     INCOME_FAVOUR_RESPONSE = "income_favour_response"
     TRIBUTE_INCOME_RESPONSE = "tribute_income_response"
     PLACE_ADJACENT_ROUTE = "place_adjacent_route"
+    PERMANENT_ROUTE_PIECE_SELECTION = "permanent_route_piece_selection"
     REPLACE_BONUS_MARKERS = "replace_bonus_markers"
     TURN_COMPLETE = "turn_complete"
     GAME_OVER = "game_over"
