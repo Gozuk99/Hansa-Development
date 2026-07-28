@@ -276,6 +276,7 @@ def move_action(game, route, post, shape):
                     game.waiting_for_bm_move3
                     or game.waiting_for_bm_move_any_2
                     or game.waiting_for_place2_from_route
+                    or game.waiting_for_place2_in_scotland_or_wales
                 ):
                     print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} finished their move action.")
                     player.spend_action()
@@ -286,6 +287,8 @@ def move_action(game, route, post, shape):
                         game.waiting_for_bm_move_any_2 = False
                     elif game.waiting_for_place2_from_route:
                         game.waiting_for_place2_from_route = False
+                    elif game.waiting_for_place2_in_scotland_or_wales:
+                        game.waiting_for_place2_in_scotland_or_wales = False
         else:
             print(f"ERROR: Cannot place a piece here. The post is already occupied.")
     else:
@@ -504,6 +507,10 @@ def assign_new_bonus_marker_on_route(game, route):
         print(f"Invalid BM Placement: Route between {route.cities[0].name} and {route.cities[1].name} already has a bonus marker.")
         return
 
+    if game.map_num == 3 and route.region in ("Wales", "Scotland"):
+        print("Invalid BM Placement: Britannia bonus markers must be placed in England.")
+        return
+
     if route.has_tradesmen():
         print(f"Invalid BM Placement: Route between {route.cities[0].name} and {route.cities[1].name} has tradesmen on it.")
         return
@@ -655,10 +662,9 @@ def handle_bonus_marker(game, player, route, reset_pieces):
         elif perm_bm_type == 'Place2TradesmenFromRoute':
             game.pending_route_piece_choices = reset_pieces
         elif perm_bm_type == "Place2ScotlandOrWales":
+            game.pending_britannia_place2 = True
             game.current_player.pieces_to_place = 2
-            game.current_player.holding_pieces = reset_pieces
-            print(f"BM: Please place {game.current_player.pieces_to_place} pieces on valid posts INSIDE Scotland or Wales!")
-            game.waiting_for_place2_in_scotland_or_wales = True
+            print("BM: Select and place 2 pieces in Scotland and/or Wales.")
         
         # handle_permanent_bonus_marker(route.permanent_bonus_marker.type, reset_pieces)
 

@@ -165,16 +165,16 @@ Existing tests:
 
 | Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
-| Cardiff grants one Wales placement/displacement per turn | `cardiff_priv`, `brown_priv_count` | `check_brown_blue_priv` in mask and engine | None | **Conflict / Partial** | Privilege ownership and counters exist, but `claim_post_action` appears to decrement the regional counter after `Game.check_brown_blue_priv` has already decremented it, risking double consumption. |
-| Carlisle grants one Scotland placement/displacement per turn | `carlisle_priv`, `blue_priv_count` | Same | None | **Conflict / Partial** | Same double-decrement risk. |
-| London grants one Wales or Scotland permission per turn | `london_priv`; both counters refreshed | Same | None | **Partial** | Code provides separate brown and blue counters, which may permit one action in each country rather than one total action. Confirm rule interpretation and test. |
-| Regional restrictions do not apply to route creation | Route claims do not call regional privilege check | Route mask | None | **Implemented / Unverified** | Add a route-completion test across regional borders. |
-| Displaced pieces stay in country of origin or England | Region-aware adjacency functions | Displacement mask | None | **Partial** | Needs Wales, Scotland, and England scenarios. |
-| Normal moves obey country restrictions | `Player.is_valid_region_transition` | Post mask | None | **Partial** | Current transition rules allow Wales/Scotland to same region or England and England only to England. Test all directions. |
-| Move 3 marker keeps each piece within one country | General region transition logic | BM move mask | None | **Partial** | Verify opponent pieces from multiple countries cannot be combined illegally. |
-| Britannia maritime permanent markers | Permanent marker route fields and handlers | Route/post mask | None | **Partial** | Test each board side and marker location. |
-| Place 2 in Wales/Scotland | `waiting_for_place2_in_scotland_or_wales` | Post mask | None | **Partial** | Verify source priority: general stock, then personal supply, then board. |
-| Regional Wales and Scotland end-game scoring | No scoring routine found | N/A | None | **Missing** | Required 7/4/2 awards, tie resolution, and Isle of Man double-region treatment are not implemented. |
+| Cardiff grants one Wales placement/displacement per turn | Live Cardiff control; `brown_priv_count` | `check_brown_blue_priv` in mask and engine | Control changes, availability, and single consumption | **Implemented** | Permission is recalculated from the current rightmost-tiebreak city controller at turn start. Legality checks do not consume it. |
+| Carlisle grants one Scotland placement/displacement per turn | Live Carlisle control; `blue_priv_count` | Same | Layout and regional permission scenarios | **Implemented** | Present only where Scotland is in play and consumed by one B or C action. |
+| London grants one Wales or Scotland permission per turn | Live London control; `london_priv_count` | Shared fallback in `consume_region_privilege` | Wales use prevents a later Scotland use | **Implemented** | London supplies one shared permission, not one counter per country. |
+| Regional restrictions do not apply to route creation | Route claims do not call regional privilege check | Route mask | Complete-game and route-action coverage | **Implemented** | Permissions guard only ordinary placement and displacement, never route creation. |
+| Displaced pieces stay in country of origin or England | `valid_region_transition`; region-aware adjacent-route search | Displacement post mask | Core displacement and transition coverage | **Implemented** | England remains England; Wales/Scotland may use their origin country or England, without spending permission. |
+| Normal moves obey country restrictions | `Player.is_valid_region_transition` | Post mask | All directional transition cases | **Implemented** | Wales/Scotland may move to the same country or England; England cannot move outward. |
+| Move 3 marker keeps each piece within one country | Exact origin/destination region equality on Britannia | BM move mask | Wales versus England destinations and multi-owner workflow | **Implemented** | This marker deliberately uses a stricter rule than normal movement. |
+| Britannia maritime permanent markers | Player-count-specific route fields and immediate handlers | Route/post and composition masks | Both board sides and every marker location | **Implemented** | Two southeast markers occur on both boards; 3-player also has Carlisle–Isle of Man. Move Any 2 stays within country. |
+| Place 2 in Wales/Scotland | `pending_britannia_place2`; `waiting_for_place2_in_scotland_or_wales` | Shape composition then shape-aware regional post mask | General-stock source and both destination regions | **Implemented** | Pieces are sourced from general stock, then personal supply, then the board, and consume no additional action. |
+| Regional Wales and Scotland end-game scoring | `calculate_britannia_region_points` | Included in final-score breakdown | 7/4/2, pooled ties, rounding down, and Isle of Man | **Implemented** | Wales is always scored; Scotland is added on the 4–5-player board. Isle of Man participates in both ladders. |
 
 ## Promo Bonus Markers
 
@@ -185,22 +185,21 @@ Existing tests:
 | Tribute for Establishing a Trading Post | Route-level `tribute_owners`; committed trader conservation; queued tribute-income response | BM index 533, unrestricted route choice, then contextual two-piece Income composition | One-trader setup; every route eligible; self-trigger; neighboring-route isolation; persistent marker; two-piece shape choice | **Implemented** | The marker and one trader remain on the selected route. Establishing an office in either neighboring city queues two tradesmen from general stock for every Tribute marker on that route, including the active player’s own marker. |
 | Block Trade Route | Route-level `block_marker_owners`; committed trader conservation; ordinary-placement surcharge | BM index 534 plus unrestricted route choice; ordinary post mask includes surcharge affordability | One-trader setup; every route eligible; marker persistence; extra-piece payment and piece conservation | **Implemented** | Each Block marker on the route adds one extra tradesman returned to general stock for action B placement. It applies to every player, including the marker owner; movement and displacement are not charged. |
 
-## Highest-Priority Conflicts
+## Highest-Priority Remaining Risks
 
-1. **Final ability scoring uses the wrong ability set.**  
-   `Game.finalize_end_of_game_points` includes City Keys and omits Privilege.
+1. **Saved-state coverage is not yet complete for every contextual workflow.**
+   Britannia’s pending Place 2 choice is serialized, but exact round trips for
+   every in-progress marker, displacement, and optional-module phase still need
+   dedicated fixtures.
 
-2. **An empty bonus-marker supply ends the game too broadly.**  
-   The rule triggers only when a player must draw a replacement and cannot; `Game.check_for_game_end` currently treats an empty pool itself as sufficient.
+2. **The displaced-player workflow still needs broader exhaustion scenarios.**
+   Core adjacency, source fallback, and optional-extra-piece behavior are tested,
+   but dense-board cases should be expanded before calling the whole engine
+   flawless.
 
-3. **Britannia regional permission ownership still needs scenario tests.**
-   Legal-mask generation is side-effect free and successful placement/displacement consumes one allowance. Cardiff, Carlisle, and London ownership combinations still need end-to-end fixtures.
-
-4. **Britannia regional end-game scoring is missing.**
-
-5. **Final tie breakers are missing.**
-
-6. **The displaced player cannot explicitly decline optional additional pieces.**
+3. **Complete-game smoke tests prove termination, not strategic rule coverage.**
+   Keep scenario tests as the authority for individual rules while expanding
+   deterministic full-game traces.
 
 ## Recommended Test Implementation Order
 

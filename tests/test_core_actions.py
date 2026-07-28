@@ -322,7 +322,8 @@ class CoreActionTests(unittest.TestCase):
         self.assertTrue(all(post.region == "Wales" for post in wales_route.posts))
         self.assertEqual(game.legal_action_mask()[target_index].item(), 0)
 
-        game.cardiff_priv = player
+        cardiff = next(city for city in game.selected_map.cities if city.name == "Cardiff")
+        cardiff.offices[0].controller = player
         player.refresh_map3_priv_actions(game)
         self.assertEqual(game.legal_action_mask()[target_index].item(), 1)
         self.apply(game, target_index)
@@ -337,7 +338,8 @@ class CoreActionTests(unittest.TestCase):
         scotland_route = next(
             route for route in game.selected_map.routes if route.region == "Scotland"
         )
-        game.london_priv = player
+        london = next(city for city in game.selected_map.cities if city.name == "London")
+        london.offices[0].controller = player
         player.refresh_map3_priv_actions(game)
         self.assertEqual(player.london_priv_count, 1)
 

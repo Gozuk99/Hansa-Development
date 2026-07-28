@@ -306,6 +306,88 @@ def map_claim_route_action(game, index):
     game.check_for_game_end()
 
 def map_income_action(game, index):
+    if game.pending_britannia_place2:
+        player = game.current_player
+        requested_circles = index
+        board_posts = [
+            post for route in game.selected_map.routes for post in route.posts
+            if post.owner == player
+        ]
+        pools = [
+            ["general_stock", player.general_stock_squares, player.general_stock_circles, []],
+            ["personal_supply", player.personal_supply_squares, player.personal_supply_circles, []],
+            [
+                "board",
+                sum(post.owner_piece_shape == "square" for post in board_posts),
+                sum(post.owner_piece_shape == "circle" for post in board_posts),
+                board_posts,
+            ],
+        ]
+        remaining_slots = 2
+        quotas = []
+        for _source, squares, circles, _posts in pools:
+            quota = min(remaining_slots, squares + circles)
+            quotas.append(quota)
+            remaining_slots -= quota
+        if remaining_slots:
+            raise InvalidActionError("Fewer than two pieces are available")
+
+        circle_allocations = None
+        for first in range(quotas[0] + 1):
+            for second in range(quotas[1] + 1):
+                third = requested_circles - first - second
+                candidates = (first, second, third)
+                if (
+                    0 <= third <= quotas[2]
+                    and all(
+                        circles >= selected_circles
+                        and squares >= quota - selected_circles
+                        for (_source, squares, circles, _posts), quota, selected_circles
+                        in zip(pools, quotas, candidates)
+                    )
+                ):
+                    circle_allocations = candidates
+                    break
+            if circle_allocations is not None:
+                break
+        if circle_allocations is None:
+            raise InvalidActionError("Selected Britannia piece composition is unavailable")
+
+        selected = []
+        for (source, _squares, _circles, posts), quota, circles in zip(
+            pools, quotas, circle_allocations
+        ):
+            shapes = ["circle"] * circles + ["square"] * (quota - circles)
+            for shape in shapes:
+                if source == "board":
+                    post = next(post for post in posts if post.owner_piece_shape == shape)
+                    posts.remove(post)
+                    selected.append((shape, player, post.region, source, post))
+                else:
+                    selected.append((shape, player, None, source))
+
+        holding = []
+        for piece in selected:
+            shape, _owner, region, source, *post = piece
+            if source == "general_stock":
+                if shape == "square":
+                    player.general_stock_squares -= 1
+                else:
+                    player.general_stock_circles -= 1
+            elif source == "personal_supply":
+                if shape == "square":
+                    player.personal_supply_squares -= 1
+                else:
+                    player.personal_supply_circles -= 1
+            else:
+                post[0].reset_post()
+            holding.append((shape, player, region))
+        player.holding_pieces = holding
+        player.pieces_to_pickup = 0
+        game.pending_britannia_place2 = False
+        game.waiting_for_place2_in_scotland_or_wales = True
+        return
+
     if game.pending_route_piece_choices:
         available_circles = sum(
             shape == "circle" for shape, _owner, _region in game.pending_route_piece_choices
@@ -797,16 +879,23 @@ def mask_post_action(game):
                     post_tensor[MAX_POSTS + post_idx] = 1
                 elif not post.is_owned() and current_player.pieces_to_pickup == 0 and current_player.holding_pieces:
                     shape_to_place, _, origin_region = current_player.holding_pieces[0]
-                    if current_player.is_valid_region_transition(origin_region, post.region):
+                    if (
+                        origin_region == post.region
+                        if game.map_num == 3
+                        else current_player.is_valid_region_transition(origin_region, post.region)
+                    ):
                         if shape_to_place == "square" and (not post.required_shape or post.required_shape == "square"):
                             post_tensor[post_idx] = 1
                         elif shape_to_place == "circle" and (not post.required_shape or post.required_shape == "circle"):
                             post_tensor[MAX_POSTS + post_idx] = 1
 
             elif game.waiting_for_place2_in_scotland_or_wales:
-                if post.region == "Scotland" or post.region == "Wales":
-                    if not post.is_owned() and current_player.pieces_to_place > 0:
-                        post_tensor[post_idx] = 1
+                if post.region in ("Scotland", "Wales") and not post.is_owned() and current_player.holding_pieces:
+                    shape = current_player.holding_pieces[0][0]
+                    if post.required_shape in (None, shape):
+                        post_tensor[
+                            post_idx + (MAX_POSTS if shape == "circle" else 0)
+                        ] = 1
             
             elif game.waiting_for_bm_move3:
                 if post.is_owned() and post.owner != current_player and current_player.pieces_to_pickup > 0:
@@ -814,7 +903,7 @@ def mask_post_action(game):
                     post_tensor[MAX_POSTS + post_idx] = 1
                 elif not post.is_owned() and current_player.pieces_to_pickup == 0 and current_player.holding_pieces:
                     shape_to_place, _, origin_region = current_player.holding_pieces[0]
-                    if current_player.is_valid_region_transition(origin_region, post.region):
+                    if game.map_num != 3 or origin_region == post.region:
                         if shape_to_place == "square" and (not post.required_shape or post.required_shape == "square"):
                             post_tensor[post_idx] = 1
                         elif shape_to_place == "circle" and (not post.required_shape or post.required_shape == "circle"):
@@ -1016,6 +1105,49 @@ def get_city_index(city, game):
 def mask_income_actions(game):
     income_tensor = torch.zeros(5, device=device, dtype=torch.uint8)  # 5 options for income actions
 
+    if game.pending_britannia_place2:
+        player = game.current_player
+        board_circles = sum(
+            post.owner == player and post.owner_piece_shape == "circle"
+            for route in game.selected_map.routes for post in route.posts
+        )
+        board_squares = sum(
+            post.owner == player and post.owner_piece_shape == "square"
+            for route in game.selected_map.routes for post in route.posts
+        )
+        pools = (
+            (player.general_stock_squares, player.general_stock_circles),
+            (player.personal_supply_squares, player.personal_supply_circles),
+            (board_squares, board_circles),
+        )
+        remaining_slots = 2
+        quotas = []
+        for squares, circles in pools:
+            quota = min(remaining_slots, squares + circles)
+            quotas.append(quota)
+            remaining_slots -= quota
+        if remaining_slots:
+            return income_tensor
+        for requested_circles in range(3):
+            for first in range(quotas[0] + 1):
+                for second in range(quotas[1] + 1):
+                    third = requested_circles - first - second
+                    candidates = (first, second, third)
+                    if (
+                        0 <= third <= quotas[2]
+                        and all(
+                            circles >= selected_circles
+                            and squares >= quota - selected_circles
+                            for (squares, circles), quota, selected_circles
+                            in zip(pools, quotas, candidates)
+                        )
+                    ):
+                        income_tensor[requested_circles] = 1
+                        break
+                if income_tensor[requested_circles]:
+                    break
+        return income_tensor
+
     if game.pending_route_piece_choices:
         circles = sum(
             shape == "circle"
@@ -1178,6 +1310,7 @@ def mask_replace_bm(game):
     if game.current_player.actions_remaining == 0 and game.replace_bonus_marker > 0 and game.current_player.ending_turn:
         for route_idx, route in enumerate(game.selected_map.routes):
             if not (route.bonus_marker or route.permanent_bonus_marker) and \
+               not (game.map_num == 3 and route.region in ("Wales", "Scotland")) and \
                not route.has_tradesmen() and \
                route.has_empty_office_in_cities():
                 replace_bm_tensor[route_idx] = 1

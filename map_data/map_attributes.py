@@ -106,16 +106,9 @@ class City:
                     player.score += office.awards_points
                 break
 
-        # Update privilege count only if the player is gaining control for the first time
-        if self.name == "Cardiff" and game.cardiff_priv != player:
-            game.cardiff_priv = player
-            player.brown_priv_count += 1
-        elif self.name == "Carlisle" and game.carlisle_priv != player:
-            game.carlisle_priv = player
-            player.blue_priv_count += 1
-        elif self.name == "London" and game.london_priv != player:
-            game.london_priv = player
-            player.london_priv_count += 1
+        # Britannia permissions are recalculated from current city control at
+        # the beginning of every turn; claiming an office does not grant an
+        # immediate extra permission during the current turn.
 
     def update_city_size_based_on_offices(self):
         num_offices = len(self.offices)

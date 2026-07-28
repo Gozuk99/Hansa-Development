@@ -77,6 +77,7 @@ class Game:
         self.waiting_for_place2_from_route = False
         self.pending_route_piece_choices = []
         self.waiting_for_place2_in_scotland_or_wales = False
+        self.pending_britannia_place2 = False
 
         self.tile_to_buy = None
         self.waiting_for_buy_tile_with_bm = False
@@ -153,6 +154,8 @@ class Game:
             workflows.append(TurnPhase.PLACE_ADJACENT_ROUTE)
         if self.pending_route_piece_choices:
             workflows.append(TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION)
+        if self.pending_britannia_place2:
+            workflows.append(TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION)
         if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
             workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
 
@@ -213,7 +216,7 @@ class Game:
         self.current_player.start_turn(extra_actions=extra_actions)
         self.active_player = self.current_player_index
 
-        if self.cardiff_priv or self.carlisle_priv or self.london_priv:
+        if self.map_num == 3:
             self.current_player.refresh_map3_priv_actions(self)
 
     def switch_player_if_needed(self):
@@ -479,6 +482,9 @@ class Game:
         return largest_network
 
     def finalize_end_of_game_points(self):
+        britannia_region_points = (
+            self.calculate_britannia_region_points() if self.map_num == 3 else {}
+        )
         for player in self.players:
             initial_points = player.score
             ability_points = 0
@@ -486,6 +492,7 @@ class Game:
             special_prestige_points = 0
             city_control_points = 0
             largest_network_points = 0
+            regional_points = britannia_region_points.get(player, 0)
 
             # 2. Fully developed abilities (City Keys are explicitly excluded).
             for ability in ["privilege", "book", "actions", "bank"]:
@@ -516,7 +523,7 @@ class Game:
             largest_network_points += self.calculate_largest_network(player) * player.keys
 
             # Sum up the final score
-            player.final_score = (initial_points + ability_points + bonus_marker_points + special_prestige_points + city_control_points + largest_network_points)
+            player.final_score = (initial_points + ability_points + bonus_marker_points + special_prestige_points + city_control_points + largest_network_points + regional_points)
 
             if self.use_mission_cards and player.mission_card:
                 mission_city_points = self.get_mission_card_points(player)
@@ -529,7 +536,8 @@ class Game:
                 'Bonus Marker Points': bonus_marker_points,
                 'Special Prestige Points': special_prestige_points,
                 'City Control Points': city_control_points,
-                'Largest Network Points': largest_network_points
+                'Largest Network Points': largest_network_points,
+                'Britannia Region Points': regional_points,
             }
 
             if self.use_mission_cards and player.mission_card:
@@ -543,6 +551,57 @@ class Game:
 
             # You can print the score breakdown here if needed
             print(f"Score breakdown for {COLOR_NAMES[player.color]}: {score_breakdown}")
+
+    def calculate_britannia_region_points(self):
+        """Award the Britannia 7/4/2 ladders for Wales and, on 4–5p, Scotland."""
+        totals = {player: 0 for player in self.players}
+        regions = ["Wales"]
+        if self.num_players > 3:
+            regions.append("Scotland")
+
+        city_names_by_region = {
+            region: {
+                city.name
+                for route in self.selected_map.routes
+                if route.region == region
+                for city in route.cities
+            }
+            | {"IsleOfMan"}
+            for region in regions
+        }
+        awards = (7, 4, 2)
+        for region in regions:
+            standings = []
+            for player in self.players:
+                cities = [
+                    city
+                    for city in self.selected_map.cities
+                    if city.name in city_names_by_region[region]
+                ]
+                controlled = sum(city.get_controller() == player for city in cities)
+                offices = sum(
+                    office.controller == player
+                    for city in cities
+                    for office in city.offices
+                )
+                if offices:
+                    standings.append((player, controlled, offices))
+            standings.sort(key=lambda item: (item[1], item[2]), reverse=True)
+
+            position = 0
+            index = 0
+            while index < len(standings) and position < len(awards):
+                metric = standings[index][1:]
+                tied = []
+                while index < len(standings) and standings[index][1:] == metric:
+                    tied.append(standings[index][0])
+                    index += 1
+                available = awards[position:min(position + len(tied), len(awards))]
+                shared = sum(available) // len(tied)
+                for player in tied:
+                    totals[player] += shared
+                position += len(tied)
+        return totals
 
     def get_mission_card_points(self, player):
         """Score one point per listed city occupied, plus five for controlling all three."""

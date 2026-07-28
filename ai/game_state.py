@@ -637,10 +637,17 @@ class BoardData:
         game.waiting_for_bm_exchange_bm = game_info_JSON['waiting_for_bm_exchange_bm']
         game.waiting_for_bm_tribute_trading_post = game_info_JSON['waiting_for_bm_tribute_trading_post']
         game.waiting_for_bm_block_trade_route = game_info_JSON['waiting_for_bm_block_trade_route']
+        game.waiting_for_bm_green_city = game_info_JSON.get('waiting_for_bm_green_city', False)
+        game.waiting_for_place2_in_scotland_or_wales = game_info_JSON.get(
+            'waiting_for_place2_in_scotland_or_wales', False
+        )
+        game.pending_britannia_place2 = game_info_JSON.get(
+            'pending_britannia_place2', False
+        )
 
-        game.cardiff_prov = game.player[game_info_JSON['cardiff_priv']] if game_info_JSON['cardiff_priv'] else None
-        game.carlisle_prov = game.player[game_info_JSON['carlisle_priv']] if game_info_JSON['carlisle_priv'] else None
-        game.london_prov = game.player[game_info_JSON['london_priv']] if game_info_JSON['london_priv'] else None
+        game.cardiff_priv = game.players[game_info_JSON['cardiff_priv'] - 1] if game_info_JSON['cardiff_priv'] else None
+        game.carlisle_priv = game.players[game_info_JSON['carlisle_priv'] - 1] if game_info_JSON['carlisle_priv'] else None
+        game.london_priv = game.players[game_info_JSON['london_priv'] - 1] if game_info_JSON['london_priv'] else None
         
         colors = ['white', 'orange', 'pink', 'black']
         for i, color in enumerate(colors):
@@ -843,6 +850,7 @@ class BoardData:
             'waiting_for_bm_block_trade_route': game.waiting_for_bm_block_trade_route,
             'waiting_for_bm_green_city': game.waiting_for_bm_green_city,
             'waiting_for_place2_in_scotland_or_wales': game.waiting_for_place2_in_scotland_or_wales,
+            'pending_britannia_place2': game.pending_britannia_place2,
             'cardiff_priv': game.cardiff_priv.order if game.cardiff_priv else None,
             'carlisle_priv': game.carlisle_priv.order if game.carlisle_priv else None,
             'london_priv': game.london_priv.order if game.london_priv else None

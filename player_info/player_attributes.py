@@ -93,12 +93,21 @@ class Player:
         self.brown_priv_count = 0
         self.blue_priv_count = 0
         self.london_priv_count = 0
-        
-        if game.cardiff_priv == self:
+
+        controllers = {
+            city.name: city.get_controller()
+            for city in game.selected_map.cities
+            if city.name in {"Cardiff", "Carlisle", "London"}
+        }
+        game.cardiff_priv = controllers.get("Cardiff")
+        game.carlisle_priv = controllers.get("Carlisle")
+        game.london_priv = controllers.get("London")
+
+        if controllers.get("Cardiff") == self:
             self.brown_priv_count += 1
-        if game.carlisle_priv == self:
+        if controllers.get("Carlisle") == self:
             self.blue_priv_count += 1
-        if game.london_priv == self:
+        if controllers.get("London") == self:
             self.london_priv_count = 1
 
     def add_bonus_marker(self, marker):
