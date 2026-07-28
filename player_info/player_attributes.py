@@ -19,6 +19,7 @@ class Player:
 
         self.score = 0  # Initial score
         self.final_score = 0
+        self.final_score_breakdown = {}
         # The silver plate to store bonus markers for the end of the turn
         self.bonus_markers = []
         self.used_bonus_markers = []

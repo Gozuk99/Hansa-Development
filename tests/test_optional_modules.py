@@ -179,8 +179,8 @@ class OptionalModuleTests(unittest.TestCase):
         enhanced.SevenPtsPerCompletedAbilityOwner = enhanced_owner
         enhanced.FourPtsPerOwnedCityOwner = enhanced_owner
 
-        baseline_owner.keys = UPGRADE_MAX_VALUES["keys"]
-        enhanced_owner.keys = UPGRADE_MAX_VALUES["keys"]
+        baseline_owner.book = UPGRADE_MAX_VALUES["book"]
+        enhanced_owner.book = UPGRADE_MAX_VALUES["book"]
         baseline.selected_map.cities[0].offices[0].controller = baseline_owner
         enhanced.selected_map.cities[0].offices[0].controller = enhanced_owner
 

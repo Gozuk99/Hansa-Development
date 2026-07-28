@@ -472,8 +472,8 @@ class Game:
             city_control_points = 0
             largest_network_points = 0
 
-            # 2. Fully developed abilities
-            for ability in ['keys', 'book', 'actions', 'bank']: # exclude keys intentionally
+            # 2. Fully developed abilities (City Keys are explicitly excluded).
+            for ability in ["privilege", "book", "actions", "bank"]:
                 if getattr(player, ability) == UPGRADE_MAX_VALUES[ability]:
                     ability_points += 4  # Assuming 4 points for each fully developed ability
                     if self.SevenPtsPerCompletedAbilityOwner == player:
@@ -484,9 +484,11 @@ class Game:
             bonus_marker_points += self.get_bonus_marker_points(total_bms)
 
             # 5. Add Special Prestige Points
-            for upgrade_city in self.selected_map.upgrade_cities:
-                if upgrade_city.upgrade_type == "SpecialPrestigePoints":
-                    special_prestige_points += upgrade_city.get_special_prestige_points_for_player(player)
+            if self.selected_map.specialprestigepoints is not None:
+                special_prestige_points = (
+                    self.selected_map.specialprestigepoints
+                    .get_special_prestige_points_for_player(player)
+                )
 
             # 6. Add points for control of cities
             for city in self.selected_map.cities:
@@ -517,6 +519,7 @@ class Game:
 
             if self.use_mission_cards and player.mission_card:
                 score_breakdown['Mission City Points'] = mission_city_points
+            player.final_score_breakdown = score_breakdown
 
             # Ensure final score is not less than the initial score
             if player.final_score < player.score:
@@ -554,17 +557,38 @@ class Game:
             if self.pending_tribute_income_owners:
                 self.game_end_pending_immediate_resolution = True
                 return
+            self.current_player.forfeit_remaining_actions()
             # Finalize points before determining the winner
             self.finalize_end_of_game_points()
             self.game_end = True
     
     def end_the_game(self):
-        # Find the player(s) with the highest score
         highest_score = max(player.final_score for player in self.players)
-        highest_scoring_players = [player for player in self.players if player.final_score == highest_score]
+        tied = [
+            player for player in self.players if player.final_score == highest_score
+        ]
+        if len(tied) <= 1:
+            return tied
 
-        # If there's a tie, you might need additional logic to determine the winner
-        return highest_scoring_players
+        least_developed_actions = min(player.actions_index for player in tied)
+        tied = [
+            player
+            for player in tied
+            if player.actions_index == least_developed_actions
+        ]
+        if len(tied) <= 1:
+            return tied
+
+        largest_network_score = max(
+            player.final_score_breakdown.get("Largest Network Points", 0)
+            for player in tied
+        )
+        return [
+            player
+            for player in tied
+            if player.final_score_breakdown.get("Largest Network Points", 0)
+            == largest_network_score
+        ]
 
     # # Example usage in your game loop:
     # winning_players = game.check_for_game_end()
