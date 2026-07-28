@@ -4,10 +4,18 @@ from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
 from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW
+from game.setup import validate_game_configuration
+from game.turn_state import TurnPhase, TurnStateError
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
 
 class Game:
-    def __init__(self, map_num, num_players):
+    def __init__(self, map_num, num_players, load_models=True, seed=None, interactive_errors=True):
+        validate_game_configuration(map_num, num_players)
+
+        self.seed = seed
+        self.rng = random.Random(seed)
+        self.load_models = load_models
+        self.interactive_errors = interactive_errors
         self.map_num = map_num
         self.selected_map = self.assign_map(map_num, num_players)
         self.num_players = num_players
@@ -16,6 +24,8 @@ class Game:
         self.current_player_index = 0
         self.current_player = self.players[self.current_player_index]
         self.active_player = self.current_player_index
+        self.turn_number = 1
+        self.round_number = 1
         self.replace_bonus_marker = 0
 
         self.displaced_player = DisplacedPlayer()
@@ -67,9 +77,9 @@ class Game:
         players = []
         
         for i, color in enumerate(colors[:num_players]):
-            new_player = Player(color, i+1)
+            new_player = Player(color, i+1, load_model=self.load_models)
             new_player.board = PlayerBoard(self.selected_map.map_width, i * 220, new_player)  # Create and assign the board directly here
-            new_player.actions_remaining = new_player.actions  # Initialize actions_remaining for the player
+            new_player.start_turn()
 
             if self.map_num == 1:
                 self.selected_map.assign_mission_cards(new_player)  # Assign a mission card to the player
@@ -85,37 +95,96 @@ class Game:
         num_tiles = self.num_players
 
         for i in range(num_tiles):
-            tile = tiles.pop(random.randint(0, len(tiles)-1))
+            tile = tiles.pop(self.rng.randint(0, len(tiles)-1))
             self.tile_pool.append(tile)
 
     def assign_map(self, map_num, num_players):
         # Logic to assign a map based on map_num
         if map_num == 1:
-            return Map1(num_players)
+            return Map1(num_players, rng=self.rng)
         elif map_num == 2:
-            return Map2()
+            return Map2(rng=self.rng)
         elif map_num == 3:
-            return Map3(num_players)
+            return Map3(num_players, rng=self.rng)
     
+    @property
+    def pending_workflows(self):
+        workflows = []
+        if self.waiting_for_displaced_player:
+            workflows.append(TurnPhase.DISPLACEMENT)
+        if self.waiting_for_buy_tile_with_bm:
+            workflows.append(TurnPhase.BUY_TILE_PAYMENT)
+        if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
+            workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
+
+        bonus_pending = any((
+            self.waiting_for_bm_swap_office,
+            self.waiting_for_bm_upgrade_ability,
+            self.waiting_for_bm_move_any_2,
+            self.waiting_for_bm_move3,
+            self.waiting_for_bm_exchange_bm,
+            self.waiting_for_bm_tribute_trading_post,
+            self.waiting_for_bm_block_trade_route,
+            self.waiting_for_bm_green_city,
+            self.waiting_for_place2_in_scotland_or_wales,
+        ))
+        if bonus_pending:
+            workflows.append(TurnPhase.BONUS_MARKER_CHOICE)
+        elif self.current_player.holding_pieces:
+            workflows.append(TurnPhase.MOVE_PIECES)
+
+        return tuple(workflows)
+
+    @property
+    def turn_phase(self):
+        if self.game_end:
+            return TurnPhase.GAME_OVER
+        workflows = self.pending_workflows
+        immediate_workflows = tuple(
+            workflow
+            for workflow in workflows
+            if workflow != TurnPhase.REPLACE_BONUS_MARKERS
+        )
+        if len(immediate_workflows) > 1:
+            names = ", ".join(workflow.value for workflow in immediate_workflows)
+            raise TurnStateError(f"Conflicting pending workflows: {names}")
+        if immediate_workflows:
+            return immediate_workflows[0]
+        if TurnPhase.REPLACE_BONUS_MARKERS in workflows:
+            return TurnPhase.REPLACE_BONUS_MARKERS
+        if self.current_player.actions_remaining == 0:
+            return TurnPhase.TURN_COMPLETE
+        return TurnPhase.ACTIONS
+
+    def advance_turn(self):
+        if self.turn_phase != TurnPhase.TURN_COMPLETE:
+            raise TurnStateError(
+                f"Cannot advance player during phase {self.turn_phase.value}"
+            )
+
+        previous_player = self.current_player
+        previous_player.ending_turn = False
+        self.current_player_index = (self.current_player_index + 1) % len(self.players)
+        self.turn_number += 1
+        if self.current_player_index == 0:
+            self.round_number += 1
+        self.current_player = self.players[self.current_player_index]
+        extra_actions = 1 if self.OneActionOwner == self.current_player else 0
+        self.current_player.start_turn(extra_actions=extra_actions)
+        self.active_player = self.current_player_index
+
+        if self.cardiff_priv or self.carlisle_priv or self.london_priv:
+            self.current_player.refresh_map3_priv_actions(self)
+
     def switch_player_if_needed(self):
-        # print(f"Attempting to switch player. Replace Bonus Marker: {self.replace_bonus_marker}, Actions Remaining: {self.current_player.actions_remaining}")
-        if self.replace_bonus_marker == 0 and self.current_player.actions_remaining == 0:
+        if self.turn_phase == TurnPhase.TURN_COMPLETE:
             print(f"Conditions met. Switching from Player {self.current_player_index+1} - {COLOR_NAMES[self.current_player.color]}.")
-            self.current_player.ending_turn = False
-            self.current_player_index = (self.current_player_index + 1) % len(self.players)
-            self.current_player = self.players[self.current_player_index]
-            self.current_player.actions_remaining = self.current_player.actions
-            if self.OneActionOwner == self.current_player:
-                self.current_player.actions_remaining += 1
-
-            self.active_player = self.current_player_index
-
-            if self.cardiff_priv or self.carlisle_priv or self.london_priv:
-                self.current_player.refresh_map3_priv_actions(self)
-
+            self.advance_turn()
             print(f"Switched to Player {self.current_player_index+1} - {COLOR_NAMES[self.current_player.color]}.")
-        elif self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
+            return True
+        if self.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS:
             print(f"{COLOR_NAMES[self.current_player.color]} - Place a Bonus Marker to Finish your Turn.")
+        return False
     
     def reset_valid_posts(self):
         for post in self.all_empty_posts:

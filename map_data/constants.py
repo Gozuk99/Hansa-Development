@@ -51,7 +51,8 @@ CITY_KEYS_MAX_VALUES = [1, 2, 2, 3, 4]
 PRIVILEGE_COLORS = ["WHITE", "ORANGE", "PINK", "BLACK"]
 BOOK_OF_KNOWLEDGE_MAX_VALUES = [2, 3, 4, 5]
 ACTIONS_MAX_VALUES = [2, 3, 3, 4, 4, 5]
-BANK_MAX_VALUES = [3, 5, 7, 50]
+# 50 is the engine's numeric sentinel for the final "C" (complete/all) space.
+BANK_MAX_VALUES = [3, 4, 7, 50]
 
 UPGRADE_METHODS_MAP = {
     "keys": "upgrade_keys",

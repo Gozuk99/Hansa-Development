@@ -1,11 +1,10 @@
 # map1.py
-import random
 from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, SPACING, DARK_RED
 
 class Map1(Map):
-    def __init__(self, num_players):
-        super().__init__()  # Call the parent class constructor
+    def __init__(self, num_players, rng=None):
+        super().__init__(rng=rng)  # Call the parent class constructor
         self.cities = []
         self.routes = []
         self.upgrade_cities = []
@@ -31,7 +30,7 @@ class Map1(Map):
             ['Minden', 'Osnabruck', 'Magdeburg'],
             ['Dortmund', 'Stendal', 'Munster']
         ]
-        random.shuffle(self.mission_cards)
+        self.rng.shuffle(self.mission_cards)
 
         #keep the cities in alphabetical order - helps when searching
         self.bonus_marker_positions = {

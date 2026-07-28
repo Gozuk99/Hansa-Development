@@ -3,7 +3,8 @@ import random
 from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN, DARK_BLUE, BLACKISH_BROWN
 
 class Map:
-    def __init__(self):
+    def __init__(self, rng=None):
+        self.rng = rng if rng is not None else random.Random()
         # This should never change
         self.initial_bonus_types = ['Move3', 'SwapOffice', 'PlaceAdjacent']
         self.permanent_bm_types = ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
@@ -15,7 +16,7 @@ class Map:
 
     def assign_starting_bonus_markers(self):
          # Ensure we shuffle the initial bonus types to randomize the assignment
-        random.shuffle(self.initial_bonus_types)
+        self.rng.shuffle(self.initial_bonus_types)
 
         for route in self.routes:
             # Check if the route has a bonus marker
@@ -40,7 +41,7 @@ class Map:
         # Add the default bonus markers to the pool
         for bm_type, count in default_bonus_markers.items():
             self.bonus_marker_pool.extend([bm_type] * count)
-        random.shuffle(self.bonus_marker_pool)
+        self.rng.shuffle(self.bonus_marker_pool)
     
     def assign_bm_pool_random(self):
         # All possible bonus markers including expansions
@@ -60,7 +61,7 @@ class Map:
         all_bonus_markers_list = [bm_type for bm_type, max_count in all_bonus_markers.items() for _ in range(max_count)]
 
         # Shuffle the list of all possible bonus markers
-        random.shuffle(all_bonus_markers_list)
+        self.rng.shuffle(all_bonus_markers_list)
 
         # Take exactly 12 bonus markers to form the bonus marker pool
         self.bonus_marker_pool = all_bonus_markers_list[:12]
@@ -544,10 +545,10 @@ class BonusMarker:
             return False
 
     def handle_3_actions(self, current_player):
-        current_player.actions_remaining += 3
+        current_player.grant_actions(3)
 
     def handle_4_actions(self, current_player):
-        current_player.actions_remaining += 4
+        current_player.grant_actions(4)
 
     def handle_tribute4_establishing_tp(self, route, current_player):
         if current_player.personal_supply_squares <= 0:
@@ -633,12 +634,11 @@ class Post:
         # Check if owner is None before trying to access its color
         owner_color = 'None' if self.owner is None else COLOR_NAMES[self.owner.color]
         print(f"Owner: {owner_color}")
-        
+
         # Check if circle_color is None before trying to access its color name
         circle_color_name = 'None' if self.circle_color is None else COLOR_NAMES.get(self.circle_color, 'Unknown')
         print(f"Circle Color: {circle_color_name}")
-        
+
         # Check if square_color is None before trying to access its color name
         square_color_name = 'None' if self.square_color is None else COLOR_NAMES.get(self.square_color, 'Unknown')
         print(f"Square Color: {square_color_name}")
-        

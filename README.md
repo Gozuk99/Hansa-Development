@@ -35,6 +35,25 @@ You may change the map and players by editing the line in the sample_hansa_game.
 
 		game = Game(map_num=2, num_players=5)
 
+### Headless Engine Verification
+
+Run the automated engine checks without loading neural-network models, opening a
+pygame window, training, or saving model checkpoints:
+
+		python -m unittest discover -s tests -v
+
+Run one deterministic headless game:
+
+		python run_headless_game.py --map 2 --players 3 --seed 124
+
+The same map, player count, and seed should produce the same action trace and
+final scores. The currently verified smoke configurations are map 2 with three
+players (seeds 124 and 125) and map 1 with three players (seed 124).
+
+Map 2 with four players and seed 124 is a known incomplete case: the current
+baseline policy does not reach a terminal state within 10,000 actions. It is
+not yet part of the supported verification matrix.
+
 ### How to Play:
 **Left-Click** to claim or displace with square.
 **Right-Click** to claim or displace with circle.

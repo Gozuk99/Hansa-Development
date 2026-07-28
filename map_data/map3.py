@@ -3,8 +3,8 @@ from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from map_data.constants import GREY, CIRCLE_RADIUS, SPACING, BLACKISH_BROWN, DARK_RED, DARK_BLUE
 
 class Map3(Map):
-    def __init__(self, num_players):
-        super().__init__()  # Call the parent class constructor
+    def __init__(self, num_players, rng=None):
+        super().__init__(rng=rng)  # Call the parent class constructor
         self.cities = []
         self.routes = []
         self.upgrade_cities = []

@@ -2,17 +2,20 @@
 
 import sys
 from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, INPUT_SIZE, OUTPUT_SIZE
-from ai.ai_model import HansaNN
+from game.setup import starting_inventory
 from player_info.reward_options import Rewards
 
 class Player:
-    def __init__(self, color, order):
+    def __init__(self, color, order, load_model=True):
         self.color = color
         self.reward = 0
         self.reward_structure = Rewards(1)
 
         self.order = order
-        self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{self.order}.pth")
+        self.hansa_nn = None
+        if load_model:
+            from ai.ai_model import HansaNN
+            self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{self.order}.pth")
 
         self.score = 0  # Initial score
         self.final_score = 0
@@ -35,19 +38,36 @@ class Player:
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
         self.bank = 3
 
-        # Setting the order-based attributes for general_stock and personal_supply
-        self.general_stock_squares = 7 - order  
-        self.general_stock_circles = 0  
-
-        # Personal supply attributes (distinct circles and squares)
-        self.personal_supply_squares = 4 + order # Squares in personal supply
-        self.personal_supply_circles = 1 # Each player always starts with 1 circle in personal supply
+        inventory = starting_inventory(order)
+        self.general_stock_squares = inventory.general_stock_squares
+        self.general_stock_circles = inventory.general_stock_circles
+        self.personal_supply_squares = inventory.personal_supply_squares
+        self.personal_supply_circles = inventory.personal_supply_circles
 
         self.board = None
         self.ending_turn = False
 
         self.brown_priv_count = 0
         self.blue_priv_count = 0
+
+    def start_turn(self, extra_actions=0):
+        if extra_actions < 0:
+            raise ValueError("extra_actions cannot be negative")
+        self.actions_remaining = self.actions + extra_actions
+        self.ending_turn = False
+
+    def spend_action(self):
+        if self.actions_remaining <= 0:
+            raise RuntimeError(f"Player {self.order} has no actions remaining")
+        self.actions_remaining -= 1
+
+    def grant_actions(self, count):
+        if count < 0:
+            raise ValueError("count cannot be negative")
+        self.actions_remaining += count
+
+    def forfeit_remaining_actions(self):
+        self.actions_remaining = 0
 
     def refresh_map3_priv_actions(self, game):
         self.brown_priv_count = 0
@@ -147,7 +167,7 @@ class Player:
             
             # If the new value of actions is greater than the previous one, increment actions_remaining by 1
             if self.actions > previous_actions:
-                self.actions_remaining += 1
+                self.grant_actions(1)
         else:
             print("Actions are already at maximum!")
 
@@ -204,7 +224,7 @@ class Player:
         return self.book > index + 1
 
     def has_unlocked_action(self, index):
-        return self.actions_index > index
+        return self.actions_index >= index
 
     def has_unlocked_bank(self, index):
         # If the player's bank is 50, then all slots are unlocked
@@ -228,7 +248,7 @@ class Player:
             
             self.general_stock_squares -= num_squares
             self.personal_supply_squares += num_squares
-            self.actions_remaining -= 1
+            self.spend_action()
         elif self.general_stock_circles + self.general_stock_squares > self.bank:
             raise Exception("The sum of general stock circles and squares exceeds the bank value.")
     

@@ -54,13 +54,13 @@ def claim_post_action(game, route, post, piece_to_play):
     if piece_to_play == "square" and player.has_personal_supply("square"):
         post.claim(player, "square")
         print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'square' between {city_names}{region_info}")
-        player.actions_remaining -= 1
+        player.spend_action()
         player.personal_supply_squares -= 1
 
     elif piece_to_play == "circle" and player.has_personal_supply("circle"):
         post.claim(player, "circle")
         print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'circle' between {city_names}{region_info}")
-        player.actions_remaining -= 1
+        player.spend_action()
         player.personal_supply_circles -= 1
     else:
         print("ERROR in claim_post_action")
@@ -285,7 +285,7 @@ def move_action(game, route, post, shape):
                 # Deduct an action if it's a standard move (not a BM Move3 or MoveAny2)
                 if not (game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2):
                     print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} finished their move action.")
-                    player.actions_remaining -= 1
+                    player.spend_action()
                 else:
                     if game.waiting_for_bm_move3:
                         game.waiting_for_bm_move3 = False
@@ -420,11 +420,12 @@ def displace_claim(game, post, desired_shape):
         game.displaced_player.reset_displaced_player()
         game.waiting_for_displaced_player = False
         print("No longer waiting for the displaced player.")
-        game.current_player.actions_remaining -= 1
+        game.current_player.spend_action()
         game.active_player = game.current_player.order-1
         # game.switch_player_if_needed()
-    elif not game.all_empty_posts:
-        print("No empty posts found initially. Searching for adjacent routes...")  # Debugging log
+    else:
+        # Recompute after every displaced placement. The required shape and
+        # remaining stock may change whether circle-only posts must be skipped.
         ignore_circle = ignore_posts_requiring_a_circle(game)
         game.all_empty_posts = gather_empty_adjacent_posts(game.original_route_of_displacement, ignore_circle_posts=ignore_circle)
 
@@ -585,7 +586,7 @@ def claim_route_for_points(game, route):
 def finalize_route_claim(game, route, placed_piece_shape=None):
     reset_pieces = update_stock_and_reset(route, game.current_player, placed_piece_shape)
     handle_bonus_marker(game, game.current_player, route, reset_pieces)
-    game.current_player.actions_remaining -= 1
+    game.current_player.spend_action()
     game.check_for_east_west_connection()
 
 def handle_bonus_marker(game, player, route, reset_pieces):
@@ -712,5 +713,5 @@ def buy_tile(game, tile_type, bm_payment1=None, bm_payment2=None):
         print(f"Player {COLOR_NAMES[player.color]} purchased a +7PtsPerCompletedAbility tile.")
         game.SevenPtsPerCompletedAbilityOwner = player
 
-    player.actions_remaining = 0
+    player.forfeit_remaining_actions()
     game.switch_player_if_needed()

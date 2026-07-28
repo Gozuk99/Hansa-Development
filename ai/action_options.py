@@ -3,6 +3,7 @@ import torch
 import time
 from map_data.constants import DARK_GREEN, COLOR_NAMES, UPGRADE_MAX_VALUES, MAX_CITIES, MAX_ROUTES, MAX_POSTS
 from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
+from game.turn_state import TurnPhase
 
 #debugging
 from drawing.drawing_utils import redraw_window
@@ -62,7 +63,21 @@ def perform_action_from_index(game, max_prob_index):
     # Handle default or error case
     return None
 
-def error_exit(game, route):
+class InvalidActionError(RuntimeError):
+    """Raised when an action reaches a state that should have been masked out."""
+
+
+def error_exit(game, route=None):
+    route_description = "unknown route"
+    if route is not None:
+        route_description = " - ".join(city.name for city in route.cities)
+
+    if not getattr(game, "interactive_errors", True):
+        raise InvalidActionError(
+            f"Invalid action reached action dispatcher on {route_description}; "
+            f"current_player={game.current_player_index}, active_player={game.active_player}"
+        )
+
     win = pygame.display.set_mode((game.selected_map.map_width+800, game.selected_map.map_height))
     # viewable_window = pygame.display.set_mode((1800, 1350))
     pygame.display.set_caption('Hansa Sample Game')
@@ -162,40 +177,26 @@ def map_claim_post_action(game, index):
         # Check if the desired post type is available in holding pieces
         post_type_available = any(piece[0] == post_type for piece in current_player.holding_pieces)
 
-        # # Now use this condition in your if statement
-        # if current_player.holding_pieces:
-        #     if is_post_empty and post_type_available:
-        #         # print(f"MOVE - Attempting to claim empty post {post_idx} with type {post_type}")
-        #         if selected_post.required_shape is None or selected_post.required_shape == post_type:
-        #             move_action(game, selected_route, post, post_type)
-        #         else:
-        #             print(f"MOVE CLAIM ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
-        #             print(f"MOVE CLAIM ERROR: holding_pieces {current_player.holding_pieces[0]}")            
-        #             error_exit(game, selected_route)
-        #     # MOVE - if post is owned by current_player:
-        #     elif is_post_owned and selected_post.owner == current_player and current_player.pieces_to_pickup > 0:
-        #         # print(f"MOVE - Attempting MOVE action on owned post {post_idx} with type {post_type}")
-        #         if len(current_player.holding_pieces) < current_player.book:
-        #             move_action(game, selected_route, selected_post, post_type)
-        #         else:
-        #             print(f"MOVE PICKUP ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
-        #             error_exit(game, selected_route)
-        #     else:
-        #         print(f"MOVE ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
-        #         print(f"MOVE ERROR: Pieces held {len(current_player.holding_pieces)}")
-        #         error_exit(game, selected_route)
-
-        # # MOVE - if post is owned by current_player:
-        # elif is_post_owned and selected_post.owner == current_player:
-        #     # print(f"MOVE - Attempting MOVE action on owned post {post_idx} with type {post_type}")
-        #     if len(current_player.holding_pieces) < current_player.book:
-        #         move_action(game, selected_route, selected_post, post_type)
-        #     else:
-        #         print(f"MOVE PICKUP ERROR: Post Type {post_type}, shape: {selected_post.required_shape}")
-        #         error_exit(game, selected_route)
-
+        if current_player.holding_pieces:
+            if (
+                is_post_empty
+                and post_type_available
+                and (selected_post.required_shape is None or selected_post.required_shape == post_type)
+            ):
+                move_action(game, selected_route, selected_post, post_type)
+            elif (
+                is_post_owned
+                and selected_post.owner == current_player
+                and current_player.pieces_to_pickup > 0
+                and len(current_player.holding_pieces) < current_player.book
+            ):
+                move_action(game, selected_route, selected_post, post_type)
+            else:
+                error_exit(game, selected_route)
+        elif is_post_owned and selected_post.owner == current_player:
+            move_action(game, selected_route, selected_post, post_type)
         # Claim post if it's empty
-        if is_post_empty and check_brown_blue_priv(game, selected_route):
+        elif is_post_empty and check_brown_blue_priv(game, selected_route):
             # print(f"CLAIM - Attempting to claim empty post {post_idx} with type {post_type}")
             if current_player.has_personal_supply(post_type) and (selected_post.required_shape is None or selected_post.required_shape == post_type):
                 claim_post_action(game, selected_route, selected_post, post_type)
@@ -454,20 +455,17 @@ def map_bm_upgrade_ability(game, index):
                 game.waiting_for_bm_upgrade_ability = False 
 
 def map_end_turn_action(game):
-
-    if game.current_player.actions_remaining == 0:
-        if ((game.current_player.ending_turn and game.replace_bonus_marker > 0) or
-            (game.replace_bonus_marker > 0 and not check_if_player_has_usable_BMs(game))):
-            print("forcing player to replace bonus markers")
-            game.current_player.ending_turn = True
-        elif not check_if_player_has_usable_BMs(game) and game.replace_bonus_marker == 0:
-            # Player has no BMs to use or only has 'PlaceAdjacent', switch player
-            print("Ending turn for player.")
-            print(f"replace_bonus_marker: {game.replace_bonus_marker}, check_if_player_has_usable_BMs: {check_if_player_has_usable_BMs(game)}")
-            game.switch_player_if_needed()
-    else:
+    if game.current_player.actions_remaining != 0:
         print("Cannot end the turn as Bonus Markers need to be replaced on the Map!")
         error_exit(game, None)
+        return
+
+    game.current_player.ending_turn = True
+    if game.replace_bonus_marker > 0:
+        print("Forcing player to replace bonus markers.")
+    else:
+        print("Ending turn for player.")
+        game.switch_player_if_needed()
 
 def masking_out_invalid_actions(game):
     
@@ -485,9 +483,37 @@ def masking_out_invalid_actions(game):
     # Concatenate all tensors into one big tensor representing all possible actions
     all_actions_tensor = torch.cat([claim_post_tensor, claim_route_tensor, income_tensor, bonus_marker_tensor, buy_tile_tensor,
                                     replace_bm_tensor, bm_city_actions_tensor, bm_upgrade_ability_tensor, end_turn_tensor], dim=0)
-    # print(f"all_actions_tensor.size - {all_actions_tensor.size()}")
-    
-    return all_actions_tensor
+    return restrict_mask_to_turn_phase(game, all_actions_tensor)
+
+
+def restrict_mask_to_turn_phase(game, action_mask):
+    """Prevent a pending workflow from exposing actions belonging to another phase."""
+    phase = game.turn_phase
+    if phase == TurnPhase.ACTIONS:
+        return action_mask
+
+    allowed_ranges = {
+        TurnPhase.DISPLACEMENT: ((0, 242),),
+        TurnPhase.MOVE_PIECES: ((0, 242),),
+        TurnPhase.BONUS_MARKER_CHOICE: (
+            (0, 242),
+            (527, 535),
+            (583, 613),
+            (613, 618),
+        ),
+        TurnPhase.BUY_TILE_PAYMENT: ((535, 543),),
+        # End-turn is selected once to confirm that optional markers are being
+        # forgone; replacement actions become available after that confirmation.
+        TurnPhase.REPLACE_BONUS_MARKERS: ((543, 583), (618, 619)),
+        # A player with no ordinary actions may still use an optional marker or
+        # explicitly forgo it by ending the turn.
+        TurnPhase.TURN_COMPLETE: ((527, 535), (618, 619)),
+        TurnPhase.GAME_OVER: (),
+    }
+    phase_mask = torch.zeros_like(action_mask)
+    for start, end in allowed_ranges[phase]:
+        phase_mask[start:end] = 1
+    return action_mask * phase_mask
 
 def check_if_any_post_BM_flag_set(game):
     return game.waiting_for_displaced_player or game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3
@@ -594,8 +620,14 @@ def mask_post_action(game):
             elif game.waiting_for_bm_move_any_2:
                 if post.is_owned() and current_player.pieces_to_pickup > 0:
                     post_tensor[post_idx] = 1
-                elif not post.is_owned() and current_player.pieces_to_pickup == 0:
-                    post_tensor[post_idx] = 1
+                    post_tensor[MAX_POSTS + post_idx] = 1
+                elif not post.is_owned() and current_player.pieces_to_pickup == 0 and current_player.holding_pieces:
+                    shape_to_place, _, origin_region = current_player.holding_pieces[0]
+                    if current_player.is_valid_region_transition(origin_region, post.region):
+                        if shape_to_place == "square" and (not post.required_shape or post.required_shape == "square"):
+                            post_tensor[post_idx] = 1
+                        elif shape_to_place == "circle" and (not post.required_shape or post.required_shape == "circle"):
+                            post_tensor[MAX_POSTS + post_idx] = 1
 
             elif game.waiting_for_place2_in_scotland_or_wales:
                 if post.region == "Scotland" or post.region == "Wales":
@@ -605,39 +637,43 @@ def mask_post_action(game):
             elif game.waiting_for_bm_move3:
                 if post.is_owned() and post.owner != current_player and current_player.pieces_to_pickup > 0:
                     post_tensor[post_idx] = 1
-                elif not post.is_owned() and current_player.pieces_to_pickup == 0:
-                    post_tensor[post_idx] = 1
+                    post_tensor[MAX_POSTS + post_idx] = 1
+                elif not post.is_owned() and current_player.pieces_to_pickup == 0 and current_player.holding_pieces:
+                    shape_to_place, _, origin_region = current_player.holding_pieces[0]
+                    if current_player.is_valid_region_transition(origin_region, post.region):
+                        if shape_to_place == "square" and (not post.required_shape or post.required_shape == "square"):
+                            post_tensor[post_idx] = 1
+                        elif shape_to_place == "circle" and (not post.required_shape or post.required_shape == "circle"):
+                            post_tensor[MAX_POSTS + post_idx] = 1
             elif game.waiting_for_bm_tribute_trading_post:
                 post_tensor[post_idx] = 1
             elif game.waiting_for_bm_block_trade_route:
                 post_tensor[post_idx] = 1
 
             else:
-                # # Now use this condition in your if statement
-                # if current_player.holding_pieces:
-                #     if is_post_empty:
-                #         shape_to_place, owner_to_place, origin_region = current_player.holding_pieces[0]
-                #         if current_player.is_valid_region_transition(origin_region, post.region):
-                #             if shape_to_place == 'square' and (not post.required_shape or post.required_shape == 'square'):
-                #                 post_tensor[post_idx] = 1
-                #             elif shape_to_place == 'circle' and (not post.required_shape or post.required_shape == 'circle'):
-                #                 post_tensor[MAX_POSTS + post_idx] = 1  # Offset for circle posts
-                #         # else:
-                #             # Invalid action scenario, handle accordingly
-                #             # print(f"Invalid action: Cannot move {shape_to_place} piece from {origin_region} to {post.region}, or shape mismatch.")
-                #     elif is_post_owned and post.owner == current_player and current_player.pieces_to_pickup > 0:
-                #         if len(current_player.holding_pieces) < current_player.book:
-                #             post_tensor[post_idx] = 1
-                #     # else:
-                #     #     print(f"MOVE ERROR: Next Shape to place: {shape_to_place}, shape: {post.required_shape}")
-                #     #     print(f"MOVE ERROR: Pieces held {len(current_player.holding_pieces)}")
-
-                # # MOVE - if post is owned by current_player:
-                # elif is_post_owned and post.owner == current_player:
-                #     if len(current_player.holding_pieces) < current_player.book:
-                #         post_tensor[post_idx] = 1
-                ## Claim post action: check if the post is empty and region is valid
-                if is_post_empty and check_brown_blue_priv(game, route):
+                # MOVE: first pick up owned pieces, then place held pieces on
+                # compatible empty posts. The action index's shape is ignored
+                # while picking up because the board already determines it.
+                if current_player.holding_pieces:
+                    if is_post_empty:
+                        shape_to_place, _, origin_region = current_player.holding_pieces[0]
+                        if current_player.is_valid_region_transition(origin_region, post.region):
+                            if shape_to_place == "square" and (not post.required_shape or post.required_shape == "square"):
+                                post_tensor[post_idx] = 1
+                            elif shape_to_place == "circle" and (not post.required_shape or post.required_shape == "circle"):
+                                post_tensor[MAX_POSTS + post_idx] = 1
+                    elif (
+                        post.owner == current_player
+                        and current_player.pieces_to_pickup > 0
+                        and len(current_player.holding_pieces) < current_player.book
+                    ):
+                        post_tensor[post_idx] = 1
+                        post_tensor[MAX_POSTS + post_idx] = 1
+                elif is_post_owned and post.owner == current_player:
+                    post_tensor[post_idx] = 1
+                    post_tensor[MAX_POSTS + post_idx] = 1
+                # Claim post action: check if the post is empty and region is valid.
+                elif is_post_empty and check_brown_blue_priv(game, route):
                     if current_player.personal_supply_squares > 0 and (not post.required_shape or post.required_shape == "square"):
                         # print(f"MASK OK - claim empty post {post_idx} with square")
                         post_tensor[post_idx] = 1
@@ -771,6 +807,11 @@ def mask_bm(game):
         "BlockTradeRoute": 7
     }
 
+    if game.waiting_for_displaced_player or (
+        check_if_any_post_BM_flag_set(game) and not game.waiting_for_bm_exchange_bm
+    ) or check_if_any_action_BM_flag_set(game):
+        return bm_tensor
+
     if game.waiting_for_bm_exchange_bm:
         for player in game.players:
             if player != game.current_player and player.has_bonus_markers():
@@ -825,7 +866,9 @@ def mask_buy_tile(game):
 
     if current_player.actions_remaining == current_player.actions and len(current_player.bonus_markers) >= 2:
         for tile in game.tile_pool:
-            buy_tile_tensor[tile_mapping.get(tile.type)] = 1
+            tile_index = tile_mapping.get(tile)
+            if tile_index is not None:
+                buy_tile_tensor[tile_index] = 1
 
     return buy_tile_tensor
 

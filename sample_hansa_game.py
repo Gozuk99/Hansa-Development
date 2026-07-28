@@ -295,12 +295,12 @@ def use_bonus_marker(bm):
     elif bm.type == 'UpgradeAbility':
         print("Please click on an upgrade to choose it.")
     elif bm.type == '3Actions':
-        player.actions_remaining += 3
+        player.grant_actions(3)
         player.used_bonus_markers.append(bm)
         player.bonus_markers.remove(bm)
         return True
     elif bm.type == '4Actions':
-        player.actions_remaining += 4
+        player.grant_actions(4)
         player.used_bonus_markers.append(bm)
         player.bonus_markers.remove(bm)
         return True
