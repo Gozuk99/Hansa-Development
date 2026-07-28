@@ -6,7 +6,7 @@ SPACING = 10  # Increased spacing between the shapes
 
 # Constants for input and output sizes
 INPUT_SIZE = 4445
-OUTPUT_SIZE = 619
+OUTPUT_SIZE = 620
 
 MAX_CITIES = 30
 MAX_ROUTES = 40

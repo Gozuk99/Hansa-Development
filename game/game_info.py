@@ -62,6 +62,7 @@ class Game:
         self.players_who_completed_east_west = set()  # Track players who have completed the connection
 
         self.waiting_for_bm_swap_office = False
+        self.waiting_for_bm_place_adjacent = False
         self.waiting_for_bm_upgrade_ability = False
         self.waiting_for_bm_move_any_2 = False
         self.waiting_for_bm_move3 = False
@@ -146,6 +147,8 @@ class Game:
             workflows.append(TurnPhase.INCOME_FAVOUR_RESPONSE)
         if self.pending_tribute_income_owners:
             workflows.append(TurnPhase.TRIBUTE_INCOME_RESPONSE)
+        if self.waiting_for_bm_place_adjacent:
+            workflows.append(TurnPhase.PLACE_ADJACENT_ROUTE)
         if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
             workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
 

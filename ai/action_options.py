@@ -2,7 +2,7 @@ import sys
 import torch
 import time
 from map_data.constants import DARK_GREEN, COLOR_NAMES, UPGRADE_MAX_VALUES, MAX_CITIES, MAX_ROUTES, MAX_POSTS
-from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, finish_displacement, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
+from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, finish_displacement, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_additional_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
 from game.turn_state import TurnPhase
 
 #debugging
@@ -21,11 +21,13 @@ NUM_REPLACE_BM_ACTIONS = 40         # Actions for replacing BM, index range: 543
 NUM_BM_CITY_ACTIONS = 30            # Actions for BM related to cities, index range: 583 - 612
 NUM_BM_UPGRADE = 5                  # Actions for BM upgrades, index range: 613 - 617
 NUM_END_TURN_ACTIONS = 1            # Action to end turn, index range: 618
+NUM_PLACE_ADJACENT_ACTIONS = 1      # Additional Trading Post activation, index 619
 
 # Calculating the total actions
 TOTAL_ACTIONS = (NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + 
                  NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS + NUM_REPLACE_BM_ACTIONS + 
-                 NUM_BM_CITY_ACTIONS + NUM_BM_UPGRADE + NUM_END_TURN_ACTIONS)
+                 NUM_BM_CITY_ACTIONS + NUM_BM_UPGRADE + NUM_END_TURN_ACTIONS +
+                 NUM_PLACE_ADJACENT_ACTIONS)
 
 def _perform_action_from_index(game, max_prob_index):
     if max_prob_index < NUM_CLAIM_POST_ACTIONS:
@@ -44,8 +46,10 @@ def _perform_action_from_index(game, max_prob_index):
         map_bm_city_actions(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_BUY_TILE_ACTIONS - NUM_REPLACE_BM_ACTIONS)
     elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_ACTIONS + NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS + NUM_REPLACE_BM_ACTIONS + NUM_BM_CITY_ACTIONS + NUM_BM_UPGRADE:
         map_bm_upgrade_ability(game, max_prob_index - NUM_CLAIM_POST_ACTIONS - NUM_CLAIM_ROUTE_ACTIONS - NUM_INCOME_ACTIONS - NUM_BM_ACTIONS - NUM_BUY_TILE_ACTIONS - NUM_REPLACE_BM_ACTIONS - NUM_BM_CITY_ACTIONS)
-    elif max_prob_index == TOTAL_ACTIONS - 1:
+    elif max_prob_index == 618:
         map_end_turn_action(game)
+    elif max_prob_index == 619:
+        map_place_adjacent_action(game)
 
     if not (game.waiting_for_bm_swap_office or game.waiting_for_bm_upgrade_ability or game.waiting_for_bm_move_any_2 or \
             game.waiting_for_bm_move3 or game.waiting_for_bm_exchange_bm or game.waiting_for_bm_tribute_trading_post or\
@@ -254,6 +258,11 @@ def map_claim_route_action(game, index):
 
         route = game.selected_map.routes[route_idx]
         city = route.cities[city_idx]
+        if game.waiting_for_bm_place_adjacent:
+            shape = ("square", "circle")[upgrade_idx]
+            claim_route_for_additional_office(game, city, route, shape)
+            game.check_for_game_end()
+            return
         special_city = next(
             (
                 candidate
@@ -397,6 +406,14 @@ def map_bm_action(game, index):
             current_player.used_bonus_markers.append(selected_bm)
     return
 
+def map_place_adjacent_action(game):
+    if not any(
+        marker.type == "PlaceAdjacent"
+        for marker in game.current_player.bonus_markers
+    ):
+        raise InvalidActionError("No Additional Trading Post marker is available")
+    game.waiting_for_bm_place_adjacent = True
+
 def map_buy_tile_action(game, index):
     current_player = game.current_player
     if game.pending_income_favour_owner is not None:
@@ -500,14 +517,21 @@ def map_bm_city_actions(game, index):
         game.exchange_target_player = target
         return
 
+    if game.waiting_for_bm_swap_office:
+        pairs = [
+            (city, pair)
+            for city in game.selected_map.cities
+            for pair in city.eligible_swap_pairs(game.current_player)
+        ]
+        city, pair = pairs[index]
+        if not city.swap_office_pair(game.current_player, pair):
+            raise InvalidActionError("Trading-post exchange is no longer legal")
+        game.waiting_for_bm_swap_office = False
+        return
+
     for city_idx, city in enumerate(game.selected_map.cities):
         if city_idx == index:
-            if game.waiting_for_bm_swap_office:
-                if city.check_if_eligible_to_swap_offices(game.current_player):
-                    print ("Valid City to swap offices")
-                    city.swap_offices(game.current_player)
-                    game.waiting_for_bm_swap_office = False
-            elif game.waiting_for_bm_green_city:
+            if game.waiting_for_bm_green_city:
                 if city.color == DARK_GREEN:
                     city.claim_green_city(game)
                     game.waiting_for_bm_green_city = False
@@ -522,6 +546,13 @@ def map_bm_upgrade_ability(game, index):
                 game.waiting_for_bm_upgrade_ability = False 
 
 def map_end_turn_action(game):
+    if game.waiting_for_bm_move3:
+        game.current_player.pieces_to_pickup = 0
+        if not game.current_player.holding_pieces:
+            game.current_player.finish_move()
+            game.waiting_for_bm_move3 = False
+        return
+
     if game.turn_phase == TurnPhase.DISPLACEMENT:
         finish_displacement(game)
         game.switch_player_if_needed()
@@ -551,10 +582,12 @@ def masking_out_invalid_actions(game):
     bm_city_actions_tensor = mask_bm_city_actions(game) #size 30
     bm_upgrade_ability_tensor = mask_bm_upgrade_ability(game) #size 5
     end_turn_tensor = mask_end_turn(game) #size 1 (allowed to end turn if no bonus markers to replace)
+    place_adjacent_tensor = mask_place_adjacent(game)
 
     # Concatenate all tensors into one big tensor representing all possible actions
     all_actions_tensor = torch.cat([claim_post_tensor, claim_route_tensor, income_tensor, bonus_marker_tensor, buy_tile_tensor,
-                                    replace_bm_tensor, bm_city_actions_tensor, bm_upgrade_ability_tensor, end_turn_tensor], dim=0)
+                                    replace_bm_tensor, bm_city_actions_tensor, bm_upgrade_ability_tensor,
+                                    end_turn_tensor, place_adjacent_tensor], dim=0)
     return restrict_mask_to_turn_phase(game, all_actions_tensor)
 
 
@@ -572,10 +605,12 @@ def restrict_mask_to_turn_phase(game, action_mask):
             (527, 535),
             (583, 613),
             (613, 618),
+            (618, 619),
         ),
         TurnPhase.BUY_TILE_PAYMENT: ((535, 543),),
         TurnPhase.INCOME_FAVOUR_RESPONSE: ((535, 543),),
         TurnPhase.TRIBUTE_INCOME_RESPONSE: ((522, 527),),
+        TurnPhase.PLACE_ADJACENT_ROUTE: ((362, 522),),
         # End-turn is selected once to confirm that optional markers are being
         # forgone; replacement actions become available after that confirmation.
         TurnPhase.REPLACE_BONUS_MARKERS: ((543, 583), (618, 619)),
@@ -588,6 +623,23 @@ def restrict_mask_to_turn_phase(game, action_mask):
     for start, end in allowed_ranges[phase]:
         phase_mask[start:end] = 1
     return action_mask * phase_mask
+
+def mask_place_adjacent(game):
+    tensor = torch.zeros(1, device=device, dtype=torch.uint8)
+    if game.turn_phase != TurnPhase.ACTIONS:
+        return tensor
+    if any(
+        marker.type == "PlaceAdjacent"
+        for marker in game.current_player.bonus_markers
+    ) and any(
+        city.can_claim_additional_office(game.current_player, route, shape)
+        for route in game.selected_map.routes
+        if route.is_controlled_by(game.current_player)
+        for city in route.cities
+        for shape in ("square", "circle")
+    ):
+        tensor[0] = 1
+    return tensor
 
 def check_if_any_post_BM_flag_set(game):
     return game.waiting_for_displaced_player or game.waiting_for_bm_move_any_2 or game.waiting_for_bm_move3
@@ -799,6 +851,26 @@ def mask_claim_route(game):
     claim_route_for_office_tensor = torch.zeros(max_num_routes * two_cities_per_route, device=device, dtype=torch.uint8)
     claim_route_for_upgrade_tensor = torch.zeros(max_num_routes * two_cities_per_route * max_upgrades_per_city, device=device, dtype=torch.uint8)
 
+    if game.waiting_for_bm_place_adjacent:
+        for route_idx, route in enumerate(game.selected_map.routes):
+            if not route.is_controlled_by(game.current_player):
+                continue
+            for city_idx, city in enumerate(route.cities):
+                for shape_idx, shape in enumerate(("square", "circle")):
+                    if city.can_claim_additional_office(
+                        game.current_player, route, shape
+                    ):
+                        claim_route_for_upgrade_tensor[
+                            route_idx * 4 + city_idx * 2 + shape_idx
+                        ] = 1
+        return torch.cat(
+            [
+                claim_route_for_points_tensor,
+                claim_route_for_office_tensor,
+                claim_route_for_upgrade_tensor,
+            ]
+        )
+
     if game.current_player.actions_remaining == 0 or game.current_player.holding_pieces or \
        check_if_any_post_BM_flag_set(game) or check_if_any_action_BM_flag_set(game):
         claim_route_tensor = torch.cat([claim_route_for_points_tensor, claim_route_for_office_tensor, claim_route_for_upgrade_tensor])
@@ -964,6 +1036,13 @@ def mask_bm(game):
                         for player in game.players
                     ):
                         bm_tensor[bm_index] = 1
+                elif bm.type == "UpgradeAbility":
+                    if any(
+                        getattr(game.current_player, ability)
+                        != maximum
+                        for ability, maximum in UPGRADE_MAX_VALUES.items()
+                    ):
+                        bm_tensor[bm_index] = 1
                 elif bm.type in ("Tribute4EstablishingTP", "BlockTradeRoute"):
                     if game.current_player.personal_supply_squares > 0:
                         bm_tensor[bm_index] = 1
@@ -1046,15 +1125,21 @@ def mask_bm_city_actions(game):
                 bm_city_tensor[index] = 1
         return bm_city_tensor
 
-    if not game.waiting_for_bm_swap_office and not game.waiting_for_bm_green_city:
+    if game.waiting_for_bm_swap_office:
+        pairs = [
+            (city, pair)
+            for city in game.selected_map.cities
+            for pair in city.eligible_swap_pairs(game.current_player)
+        ]
+        bm_city_tensor[:len(pairs)] = 1
+        return bm_city_tensor
+
+    if not game.waiting_for_bm_green_city:
         return bm_city_tensor
     
     city_idx = 0
     for city in game.selected_map.cities:
-        if game.waiting_for_bm_swap_office:
-            if city.check_if_eligible_to_swap_offices(game.current_player):
-                bm_city_tensor[city_idx] = 1
-        elif game.waiting_for_bm_green_city:
+        if game.waiting_for_bm_green_city:
             if city.color == DARK_GREEN:
                 print (f"Valid City to claim green city: {city.name}, {city_idx}")
                 bm_city_tensor[city_idx] = 1
@@ -1082,6 +1167,10 @@ def mask_bm_upgrade_ability(game):
 
 def mask_end_turn(game):
     end_turn_tensor = torch.zeros(1, device=device, dtype=torch.uint8)
+
+    if game.waiting_for_bm_move3 and game.current_player.pieces_to_pickup > 0:
+        end_turn_tensor[0] = 1
+        return end_turn_tensor
 
     if (
         game.waiting_for_displaced_player

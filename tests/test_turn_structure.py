@@ -164,7 +164,7 @@ class TurnStructureTests(unittest.TestCase):
         with self.assertRaises(InvalidActionError):
             game.apply_action(-1)
         with self.assertRaises(InvalidActionError):
-            game.apply_action(619)
+            game.apply_action(620)
         with self.assertRaises(InvalidActionError):
             game.apply_action(618)
 

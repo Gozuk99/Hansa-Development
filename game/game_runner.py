@@ -45,8 +45,8 @@ def create_headless_game(
 
 def legal_action_indices(game):
     mask = masking_out_invalid_actions(game)
-    if mask.numel() != 619:
-        raise GameRunError(f"Expected a 619-entry action mask, got {mask.numel()}")
+    if mask.numel() != 620:
+        raise GameRunError(f"Expected a 620-entry action mask, got {mask.numel()}")
     return tuple(int(index) for index in mask.nonzero().flatten().tolist())
 
 

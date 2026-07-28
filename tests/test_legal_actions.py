@@ -9,7 +9,7 @@ class LegalActionTests(unittest.TestCase):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         actions = legal_action_indices(game)
         self.assertTrue(actions)
-        self.assertTrue(all(0 <= action < 619 for action in actions))
+        self.assertTrue(all(0 <= action < 620 for action in actions))
         self.assertTrue(validate_game(game))
 
 

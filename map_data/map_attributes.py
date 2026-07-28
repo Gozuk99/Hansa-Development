@@ -197,61 +197,55 @@ class City:
                 return office.color
         return None
     
+    def eligible_swap_pairs(self, current_player):
+        pairs = []
+        for left_index in range(len(self.offices) - 1):
+            left = self.offices[left_index]
+            right = self.offices[left_index + 1]
+            if left.place_adjacent_office or right.place_adjacent_office:
+                continue
+            if left.controller is None or right.controller is None:
+                continue
+            if left.controller is right.controller:
+                continue
+            if current_player in (left.controller, right.controller):
+                pairs.append((left_index, left_index + 1))
+        return pairs
+
     def check_if_eligible_to_swap_offices(self, current_player):
-        # Check if the current player has at least one office in the city
-        player_has_office = any(office.controller == current_player and not office.place_adjacent_office for office in self.offices)
-        if not player_has_office:
-            # print(f"{COLOR_NAMES[current_player.color]} does not have a valid office in {self.name} to swap offices with.")
-            return False
+        return bool(self.eligible_swap_pairs(current_player))
 
-        # Check if other players have offices in the city
-        other_players_present = any(office.controller and office.controller != current_player for office in self.offices)
-        if not other_players_present:
-            print(f"{COLOR_NAMES[current_player.color]} is the only player with offices in {self.name}.")
+    def swap_office_pair(self, current_player, pair):
+        if pair not in self.eligible_swap_pairs(current_player):
             return False
-
-        # Check if the current player controls the city
-        if self.get_controller() == current_player:
-            print(f"{COLOR_NAMES[current_player.color]} controls the city of {self.name} and is not eligible to swap offices.")
-            return False
-
-        # If all checks pass, the player is eligible to swap offices
-        print(f"{COLOR_NAMES[current_player.color]} is eligible to swap offices in {self.name}.")
+        left_index, right_index = pair
+        self.offices[left_index].controller, self.offices[right_index].controller = (
+            self.offices[right_index].controller,
+            self.offices[left_index].controller,
+        )
         return True
-    
+
     def swap_offices(self, current_player):
-        # Find the current player's rightmost office
-        rightmost_office_index = next((i for i, office in reversed(list(enumerate(self.offices))) if office.controller == current_player), None)
+        pairs = self.eligible_swap_pairs(current_player)
+        return bool(pairs and self.swap_office_pair(current_player, pairs[0]))
 
-        # Check if there's an office to the right to swap with
-        if rightmost_office_index is not None and rightmost_office_index < len(self.offices) - 1:
-            # Identify the office to swap with (the next office to the right)
-            swap_office_index = rightmost_office_index + 1
-            swap_office = self.offices[swap_office_index]
+    def can_claim_additional_office(self, player, route, shape):
+        standard_offices = [
+            office for office in self.offices if not office.place_adjacent_office
+        ]
+        return (
+            bool(standard_offices)
+            and standard_offices[0].controller is not None
+            and any(
+                post.owner is player and post.owner_piece_shape == shape
+                for post in route.posts
+            )
+        )
 
-            # Ensure the swap office is controlled by a different player
-            if swap_office.controller and swap_office.controller != current_player:
-                # Print the swap information
-                rightmost_office = self.offices[rightmost_office_index]
-                print(f"Swapping offices between {COLOR_NAMES[current_player.color]} and {COLOR_NAMES[swap_office.controller.color]} in {self.name}.")
-
-                rightmost_office.controller, swap_office.controller = (
-                    swap_office.controller,
-                    rightmost_office.controller,
-                )
-
-                return True
-            else:
-                print(f"The office next to {COLOR_NAMES[current_player.color]}'s is not controlled by a different player.")
-                return False
-        else:
-            print(f"{COLOR_NAMES[current_player.color]} does not have a rightmost office that can be swapped or is already the last office.")
-        return False
-
-    def claim_office_with_bonus_marker(self, player):
+    def claim_office_with_bonus_marker(self, player, shape="square"):
         # Check if the player has the 'PlaceAdjacent' bonus marker and can't claim the next office
         # Use the bonus marker to create a new office to the left of the leftmost office
-        new_office = self.create_new_office(player.color)
+        new_office = self.create_new_office(player.color, shape)
         new_office.controller = player
         new_office.color = player.color
         new_office.place_adjacent_office = True
@@ -285,10 +279,9 @@ class City:
     def city_all_offices_occupied(self):
         return all(office.controller is not None for office in self.offices)
     
-    def create_new_office(self, color):
+    def create_new_office(self, color, shape="square"):
         # Create a new office to the left of the leftmost office
-        new_office_shape = 'square'  # or 'circle', depending on your game rules
-        new_office = Office(new_office_shape, color, awards_points=False)  # Set 'awards_points' as per your game rules
+        new_office = Office(shape, color, awards_points=False)
         self.offices.insert(0, new_office)  # Insert the new office at the beginning of the list
         return new_office
         

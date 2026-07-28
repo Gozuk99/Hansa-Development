@@ -43,7 +43,7 @@ The current tests establish only that:
 
 - A model-free game can be constructed.
 - Seeded setup is repeatable for the tested cases.
-- A fresh game exposes at least one action in a 619-entry mask.
+- A fresh game exposes at least one action in a 620-entry mask.
 - A deterministic baseline can finish selected three-player games on maps 1 and 2.
 
 They do **not** yet prove that individual actions, scoring, expansions, or complete games follow all rules.
@@ -132,12 +132,12 @@ Existing tests:
 
 | Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
-| Exchange Trading Posts | `City.swap_offices`, `BonusMarker.handle_swap_office` | BM index 527 plus city choice | None | **Partial** | Must reject additional offices and special-prestige spaces; must not award gold-coin points. |
-| Develop 1 Ability | `Player.perform_upgrade` | BM index 529 plus ability choice | None | **Partial** | Maximum-value filtering has a likely key-case inconsistency in `mask_bm_upgrade_ability`. |
-| Additional Trading Post | `City.claim_office_with_bonus_marker` | Represented through city/route interaction | None | **Partial** | Confirm timing: it modifies route creation step 3a and cannot later participate in swaps. |
-| +3 Actions | `BonusMarker.handle_3_actions` | BM index 530 | None | **Implemented / Unverified** | Verify it adds actions without consuming an action and interacts correctly with turn end. |
-| +4 Actions | `BonusMarker.handle_4_actions` | BM index 531 | None | **Implemented / Unverified** | Same as above. |
-| Move 3 opponent tradesmen (“Remove 3 Resources” in the FAQ) | `BonusMarker.handle_move3`, `move_action` | BM index 528 plus post choices | None | **Partial** | These are two names for the same marker, not separate marker types. A trader or merchant each counts as one of the maximum three pieces. Core flow exists; ownership, “up to 3,” swapping, route-completion consequences, and Britannia country restrictions still need tests. |
+| Exchange Trading Posts | Adjacent-pair enumeration and `City.swap_office_pair` | BM index 527 plus contextual adjacent-pair choice | Multiple eligible pairs; city controller may exchange; shape/privilege ignored; no gold points; additional offices excluded | **Implemented** | Every occupied adjacent pair containing exactly one of the player’s standard offices is selectable. Special-prestige spaces are not offices and never enter the choices. |
+| Develop 1 Ability | `Player.perform_upgrade` | BM index 529 plus one of five ability choices | All five choices exposed; released piece; fully developed filtering; marker remains spent | **Implemented** | Develops exactly one non-maxed ability and transfers its leftmost trader or merchant to personal supply without spending an action. |
+| Additional Trading Post | `waiting_for_bm_place_adjacent`; `claim_route_for_additional_office` | Appended activation index 619, then four contextual route slots encode city and route-piece shape | Activation legality; city and trader/merchant choice; occupied lowest standard office; route clearing; marker spending; swap exclusion; conservation | **Implemented** | This modifies route creation step 3a. It may be chosen even when a normal office is available, uses a selected piece from that route, creates the lowest-valued office to the left, and never participates in exchanges. Existing action indices 0–618 remain unchanged. |
+| +3 Actions | `BonusMarker.handle_3_actions` | BM index 530 | Adds exactly three without spending an action; spent-marker preservation | **Implemented** | May be used at any point in the owner’s turn, including after ordinary actions reach zero but before the turn is finalized. |
+| +4 Actions | `BonusMarker.handle_4_actions` | BM index 531 | Adds exactly four without spending an action; spent-marker preservation | **Implemented** | Same timing as +3 Actions. |
+| Move 3 opponent tradesmen (“Remove 3 Resources” in the FAQ) | `BonusMarker.handle_move3`, `move_action` | BM index 528, opponent post choices, contextual early-finish index 618, then destinations | Multiple owners and shapes; up-to-three early transition; swapping through vacated posts; no displacement; spent-marker preservation | **Implemented** | These are two names for the same marker. A trader or merchant each counts as one piece. Route completion remains a separate action. Britannia adds country restrictions audited in its own section. |
 
 ## Mission Cards and Emperor’s Favour
 

@@ -559,6 +559,16 @@ def claim_route_for_office(game, city, route):
     else:
         print(f"{COLOR_NAMES[current_player.color]} doesn't have the correct privilege - {current_player.privilege} - to claim an office in {city.name}.")
 
+def claim_route_for_additional_office(game, city, route, shape):
+    player = game.current_player
+    if not city.can_claim_additional_office(player, route, shape):
+        raise ValueError("Additional Trading Post choice is no longer legal")
+    score_route(player, route)
+    city.claim_office_with_bonus_marker(player, shape)
+    finalize_route_claim(game, route, shape)
+    route.award_tributes(game)
+    game.waiting_for_bm_place_adjacent = False
+
 def claim_route_for_upgrade(game, city, route, upgrade_choice, prestige_value=None):
     current_player = game.current_player
     specialprestigepoints_city = game.selected_map.specialprestigepoints
