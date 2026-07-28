@@ -11,6 +11,12 @@ def main():
     parser.add_argument("--max-actions", type=int, default=10_000)
     parser.add_argument("--mission-cards", action="store_true")
     parser.add_argument("--emperors-favour", action="store_true")
+    parser.add_argument(
+        "--bonus-marker",
+        action="append",
+        dest="bonus_marker_supply",
+        help="Explicit supply marker type; repeat exactly 12 times to choose a promo mix.",
+    )
     args = parser.parse_args()
 
     try:
@@ -21,6 +27,7 @@ def main():
             max_actions=args.max_actions,
             use_mission_cards=args.mission_cards,
             use_emperors_favour=args.emperors_favour,
+            bonus_marker_supply=args.bonus_marker_supply,
         )
     except GameRunError as error:
         parser.exit(1, f"Headless game failed: {error}\n")

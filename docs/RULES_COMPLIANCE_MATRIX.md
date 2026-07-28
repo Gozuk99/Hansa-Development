@@ -137,17 +137,16 @@ Existing tests:
 | Additional Trading Post | `City.claim_office_with_bonus_marker` | Represented through city/route interaction | None | **Partial** | Confirm timing: it modifies route creation step 3a and cannot later participate in swaps. |
 | +3 Actions | `BonusMarker.handle_3_actions` | BM index 530 | None | **Implemented / Unverified** | Verify it adds actions without consuming an action and interacts correctly with turn end. |
 | +4 Actions | `BonusMarker.handle_4_actions` | BM index 531 | None | **Implemented / Unverified** | Same as above. |
-| Move 3 opponent tradesmen | `BonusMarker.handle_move3`, `move_action` | BM index 528 plus post choices | None | **Partial** | Core flow exists. Ownership, “up to 3,” swapping, route-completion consequences, and Britannia country restrictions need tests. |
-| Remove 3 Resources FAQ marker | No corresponding type found in standard BM mapping | None | None | **Missing / Source question** | The FAQ discusses this marker, but it is not present in the supplied Big Box component list or current action space. Decide whether it belongs in project scope. |
+| Move 3 opponent tradesmen (“Remove 3 Resources” in the FAQ) | `BonusMarker.handle_move3`, `move_action` | BM index 528 plus post choices | None | **Partial** | These are two names for the same marker, not separate marker types. A trader or merchant each counts as one of the maximum three pieces. Core flow exists; ownership, “up to 3,” swapping, route-completion consequences, and Britannia country restrictions still need tests. |
 
 ## Mission Cards and Emperor’s Favour
 
 | Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
-| Secret mission-card setup | `use_mission_cards`; `Map1.assign_mission_cards`; `Player.mission_card` | N/A | Disabled by default; map 1 uniqueness and three-city card structure; enablement rejected on other maps | **Implemented** | This optional module can only be enabled for map 1. |
-| Mission final scoring | `Game.finalize_end_of_game_points` | N/A | None | **Partial** | Code awards one point per controlled mission city plus five for all three. Add exact fixtures. |
-| Buy one Emperor’s Favour tile at start of turn using two unused markers | `buy_tile`; tile state on `Game` | Tile indices `535–542`; `mask_buy_tile` | None | **Conflict / Partial** | Tile strings and payment state have had inconsistent field names and mapping directions. Multi-marker selection remains unverified. |
-| Six tile effects | Owner fields on `Game`; selected action/scoring hooks | Mostly indirect | None | **Partial** | Some effects exist: displacement range, +1 action, income response, extra displaced piece, city points, and ability points. Each needs an isolated test. |
+| Secret mission-card setup and AI information | `use_mission_cards`; `Map1.assign_mission_cards`; `Player.mission_card`; perspective-filtered AI observation | N/A | Disabled by default; map 1 uniqueness and three-city card structure; enablement rejected on other maps; own card visible before game end; opponents’ cards hidden | **Implemented** | This optional module can only be enabled for map 1. Exact engine state retains every dealt card. Throughout play, an acting AI observes its own three mission cities so reinforcement learning can pursue them, while opponents’ cards remain hidden. |
+| Mission final scoring | `Game.get_mission_card_points`; `Game.finalize_end_of_game_points` | N/A | One point for any office without control; three-city control bonus; loss of bonus when one city is not controlled | **Implemented** | At game end, actual board ownership is evaluated: each listed city containing at least one of the player’s offices scores 1 point. Controlling all three, including the normal rightmost-office tie break, adds 5 points, for a maximum of 8. |
+| Buy one Emperor’s Favour tile at start of turn using two unused markers | `buy_tile`; tile state on `Game` | Tile indices `535–542`; `mask_buy_tile` | Exact two-marker payment; explicit selection from more than two; duplicate marker types; invalid timing/payment; turn forfeiture | **Implemented** | The six tile choices use the first six context-sensitive slots. During payment all eight slots identify marker types. Exactly two distinct unused marker objects move to the used area, the tile leaves the display, and the buyer forfeits all actions and acquires no second tile that turn. |
+| Six tile effects | Owner fields on `Game`; displacement, turn-start, income-response, and scoring hooks | Contextual Favour response uses tile slots for trader, merchant, or decline | Displace-anywhere ownership; extra action; other-player income with both shape choices and decline; extra displaced trader; four-point city control; seven-point completed abilities | **Implemented** | All six effects are isolated in tests. The optional income response interrupts completion of the other player’s Income action, permits either available shape or decline, and does not trigger on its owner’s Income action. |
 
 ## Eastern Hanseatic League
 
@@ -181,10 +180,10 @@ Existing tests:
 
 | Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
-| Use exactly 15 total markers with chosen promo mix | `assign_bm_pool_random` can select from expanded types | N/A | None | **Partial** | No setup API exposes an explicit chosen mix or guarantees the promo rule’s intended composition. |
-| Exchange Bonus Marker | `waiting_for_bm_exchange_bm`; exchange handler | BM index 532 | None | **Partial** | Verify only another player’s used markers are eligible and the exchanged marker remains spent. |
-| Tribute for Establishing a Trading Post | `Route.establish_tribute_on_route`, `award_tributes` | BM index 533 plus route/post choice | None | **Partial** | Verify setup cost, unrestricted route choice, self-triggering, neighboring cities, and two-piece income. |
-| Block Trade Route | `Route.establish_blocked_route`; blocked-post placement cost | BM index 534 plus route/post choice | None | **Partial** | Verify setup cost and one additional piece returned for each ordinary placement by every player, including owner. |
+| Optionally use exactly 15 total markers with a player-chosen promo mix | `bonus_marker_supply`; `Map.configure_bonus_marker_supply` | Setup API and repeatable `--bonus-marker` CLI option | Default excludes promos; explicit seeded mix; exactly 12 supply plus 3 starting markers; unknown, excess, and wrong-count rejection | **Implemented** | Promo markers never enter default play. The caller explicitly supplies all 12 replacement-supply marker types; physical component limits are enforced and the 3 fixed starting markers preserve exactly 15 total. |
+| Exchange Bonus Marker | Explicit pending exchange marker and target player on `Game` | BM index 532, contextual player choice, then used-marker type choice | Chosen opponent; only used markers; acquired marker becomes unused; Exchange marker remains spent at opponent | **Implemented** | The player chooses an opponent who has used markers, then chooses one marker type from that player’s used area. The exchanged marker is immediately usable and the Exchange marker moves to the chosen opponent’s used area. |
+| Tribute for Establishing a Trading Post | Route-level `tribute_owners`; committed trader conservation; queued tribute-income response | BM index 533, unrestricted route choice, then contextual two-piece Income composition | One-trader setup; every route eligible; self-trigger; neighboring-route isolation; persistent marker; two-piece shape choice | **Implemented** | The marker and one trader remain on the selected route. Establishing an office in either neighboring city queues two tradesmen from general stock for every Tribute marker on that route, including the active player’s own marker. |
+| Block Trade Route | Route-level `block_marker_owners`; committed trader conservation; ordinary-placement surcharge | BM index 534 plus unrestricted route choice; ordinary post mask includes surcharge affordability | One-trader setup; every route eligible; marker persistence; extra-piece payment and piece conservation | **Implemented** | Each Block marker on the route adds one extra tradesman returned to general stock for action B placement. It applies to every player, including the marker owner; movement and displacement are not charged. |
 
 ## Highest-Priority Conflicts
 
@@ -201,9 +200,7 @@ Existing tests:
 
 5. **Final tie breakers are missing.**
 
-6. **Emperor’s Favour purchase/payment flow has conflicting field and mapping designs.**
-
-7. **The displaced player cannot explicitly decline optional additional pieces.**
+6. **The displaced player cannot explicitly decline optional additional pieces.**
 
 ## Recommended Test Implementation Order
 

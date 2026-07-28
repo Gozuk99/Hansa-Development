@@ -52,6 +52,11 @@ Optional setup modules are disabled by default. Enable them explicitly with:
 
 Mission Cards are only valid on map 1. Emperor's Favour may be enabled on any map.
 
+Promo bonus markers are never included by default. To use them, pass an explicit
+12-marker replacement supply through `bonus_marker_supply` or repeat
+`--bonus-marker TYPE` exactly 12 times with `run_headless_game.py`. The three
+fixed starting markers remain separate, preserving 15 total markers.
+
 The same map, player count, and seed should produce the same action trace and
 final scores. The currently verified smoke configurations are map 2 with three
 players (seeds 124 and 125) and map 1 with three players (seed 124).

@@ -170,7 +170,7 @@ def map_claim_post_action(game, index):
         game.waiting_for_bm_tribute_trading_post = False
     elif game.waiting_for_bm_block_trade_route:
         current_player.personal_supply_squares -= 1
-        selected_route.establish_blocked_route()
+        selected_route.establish_blocked_route(current_player)
         game.waiting_for_bm_block_trade_route = False
     else:
         # Claim post with MOVE action: check if the post is empty
@@ -292,6 +292,10 @@ def map_claim_route_action(game, index):
     game.check_for_game_end()
 
 def map_income_action(game, index):
+    if game.pending_tribute_income_owners:
+        game.resolve_tribute_income(index)
+        return
+
     current_player = game.current_player
     num_circles = current_player.general_stock_circles
     num_squares = current_player.general_stock_squares
@@ -305,6 +309,7 @@ def map_income_action(game, index):
     if num_circles == 0:
         print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} INCOME - Squares: {min(num_squares, current_player.bank)}, Circles: 0.")
         current_player.income_action(min(num_squares, current_player.bank), 0)
+        game.begin_income_favour_response(current_player)
         return
 
     # Determine the number of circles and squares for each index
@@ -318,6 +323,7 @@ def map_income_action(game, index):
     # Perform the income action
     print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} INCOME - Squares: {squares_to_take}, Circles: {circles_to_take}.")
     current_player.income_action(squares_to_take, circles_to_take)
+    game.begin_income_favour_response(current_player)
 
 def map_bm_action(game, index):
     current_player = game.current_player
@@ -334,16 +340,27 @@ def map_bm_action(game, index):
     }
 
     if game.waiting_for_bm_exchange_bm:
-        for player in game.players:
-            if player != current_player:
-                for bm in player.bonus_markers:
-                    bm_index = bm_mapping.get(bm.type)
-                    if bm_index is not None:
-                        if bm_index == index:
-                            player.bonus_markers.remove(bm)
-                            current_player.bonus_markers.append(bm)
-                            game.waiting_for_bm_exchange_bm = False
-                            return
+        target = game.exchange_target_player
+        if target is None:
+            raise InvalidActionError("An exchange target must be selected first")
+        exchanged_marker = next(
+            (
+                marker
+                for marker in target.used_bonus_markers
+                if bm_mapping.get(marker.type) == index
+            ),
+            None,
+        )
+        if exchanged_marker is None:
+            raise InvalidActionError("Selected used bonus marker is unavailable")
+        target.used_bonus_markers.remove(exchanged_marker)
+        current_player.bonus_markers.append(exchanged_marker)
+        game.pending_exchange_marker.owner = target
+        target.used_bonus_markers.append(game.pending_exchange_marker)
+        game.pending_exchange_marker = None
+        game.exchange_target_player = None
+        game.waiting_for_bm_exchange_bm = False
+        return
     else:
         selected_bm = None
         for bm in game.current_player.bonus_markers:
@@ -368,59 +385,82 @@ def map_bm_action(game, index):
 
         elif selected_bm.type == "ExchangeBonusMarker":
             game.waiting_for_bm_exchange_bm = True
+            game.pending_exchange_marker = selected_bm
         elif selected_bm.type == "Tribute4EstablishingTP" and current_player.personal_supply_squares > 0:
             game.waiting_for_bm_tribute_trading_post = True
         elif selected_bm.type == "BlockTradeRoute" and current_player.personal_supply_squares > 0:
             game.waiting_for_bm_block_trade_route = True
 
         game.current_player.bonus_markers.remove(selected_bm)
+        if selected_bm.type != "ExchangeBonusMarker":
+            selected_bm.owner = current_player
+            current_player.used_bonus_markers.append(selected_bm)
     return
 
 def map_buy_tile_action(game, index):
     current_player = game.current_player
+    if game.pending_income_favour_owner is not None:
+        game.resolve_income_favour({0: "square", 1: "circle", 2: None}[index])
+        return
+
     tile_mapping = {
-        1: 'DisplaceAnywhere',
-        2: '+1Action',
-        3: '+1IncomeIfOthersIncome',
-        4: '+1DisplacedPiece',
-        5: '+4PtsPerOwnedCity',
-        6: '+7PtsPerCompletedAbility'
+        0: 'DisplaceAnywhere',
+        1: '+1Action',
+        2: '+1IncomeIfOthersIncome',
+        3: '+1DisplacedPiece',
+        4: '+4PtsPerOwnedCity',
+        5: '+7PtsPerCompletedAbility',
     }
-    bm_mapping = {
-        "SwapOffice": 0,
-        "Move3": 1,
-        "UpgradeAbility": 2,
-        "3Actions": 3,
-        "4Actions": 4,
-        "ExchangeBonusMarker": 5,
-        "Tribute4EstablishingTP": 6,
-        "BlockTradeRoute": 7
-    }
+    bm_types = (
+        "SwapOffice",
+        "Move3",
+        "UpgradeAbility",
+        "3Actions",
+        "4Actions",
+        "ExchangeBonusMarker",
+        "Tribute4EstablishingTP",
+        "BlockTradeRoute",
+    )
 
     if game.waiting_for_buy_tile_with_bm:
-        if game.first_bm_to_spend:
-            second_bm_to_spend = bm_mapping.get(index)
-            buy_tile(game, game.tile_to_buy, game.first_bm_to_spend, second_bm_to_spend)
-
-            game.waiting_for_buy_tile_with_bm = False
-            game.first_bm_to_spend = None
-            game.tile_to_buy = None
+        marker_type = bm_types[index]
+        marker = next(
+            (
+                candidate
+                for candidate in current_player.bonus_markers
+                if candidate.type == marker_type
+                and candidate is not game.first_bm_to_spend_on_tile
+            ),
+            None,
+        )
+        if marker is None:
+            raise InvalidActionError("Selected bonus-marker payment is unavailable")
+        if game.first_bm_to_spend_on_tile is None:
+            game.first_bm_to_spend_on_tile = marker
         else:
-            game.first_bm_to_spend = bm_mapping.get(index)
-
-    bm_to_spend = [None, None]
+            buy_tile(
+                game,
+                game.tile_to_buy,
+                game.first_bm_to_spend_on_tile,
+                marker,
+            )
+            game.waiting_for_buy_tile_with_bm = False
+            game.first_bm_to_spend_on_tile = None
+            game.tile_to_buy = None
+        return
 
     if len(current_player.bonus_markers) == 2:
-        for i, bm in enumerate(current_player.bonus_markers):
-            bm_to_spend[i] = bm
-        buy_tile(game, tile_mapping.get(index), bm_to_spend[0], bm_to_spend[1])
-    
+        buy_tile(
+            game,
+            tile_mapping[index],
+            current_player.bonus_markers[0],
+            current_player.bonus_markers[1],
+        )
     elif len(current_player.bonus_markers) > 2:
         game.waiting_for_buy_tile_with_bm = True
-        game.tile_to_buy = tile_mapping.get(index)
-
+        game.tile_to_buy = tile_mapping[index]
     else:
-        print(f"{COLOR_NAMES[current_player.color]} has less than 2 bonus markers to spend on tiles - this shoulda been masked out.")
+        raise InvalidActionError("Two unused bonus markers are required")
 
     return
 
@@ -453,6 +493,13 @@ def map_replace_bm_action(game, index):
         print(f"{COLOR_NAMES[current_player.color]} has actions remaining or conditions not met for bonus marker replacement.")
 
 def map_bm_city_actions(game, index):
+    if game.waiting_for_bm_exchange_bm and game.exchange_target_player is None:
+        target = game.players[index]
+        if target is game.current_player or not target.used_bonus_markers:
+            raise InvalidActionError("Selected player has no used marker to exchange")
+        game.exchange_target_player = target
+        return
+
     for city_idx, city in enumerate(game.selected_map.cities):
         if city_idx == index:
             if game.waiting_for_bm_swap_office:
@@ -527,6 +574,8 @@ def restrict_mask_to_turn_phase(game, action_mask):
             (613, 618),
         ),
         TurnPhase.BUY_TILE_PAYMENT: ((535, 543),),
+        TurnPhase.INCOME_FAVOUR_RESPONSE: ((535, 543),),
+        TurnPhase.TRIBUTE_INCOME_RESPONSE: ((522, 527),),
         # End-turn is selected once to confirm that optional markers are being
         # forgone; replacement actions become available after that confirmation.
         TurnPhase.REPLACE_BONUS_MARKERS: ((543, 583), (618, 619)),
@@ -671,9 +720,17 @@ def mask_post_action(game):
                         elif shape_to_place == "circle" and (not post.required_shape or post.required_shape == "circle"):
                             post_tensor[MAX_POSTS + post_idx] = 1
             elif game.waiting_for_bm_tribute_trading_post:
-                post_tensor[post_idx] = 1
+                if (
+                    post is route.posts[0]
+                    and current_player.personal_supply_squares > 0
+                ):
+                    post_tensor[post_idx] = 1
             elif game.waiting_for_bm_block_trade_route:
-                post_tensor[post_idx] = 1
+                if (
+                    post is route.posts[0]
+                    and current_player.personal_supply_squares > 0
+                ):
+                    post_tensor[post_idx] = 1
 
             else:
                 # MOVE: first pick up owned pieces, then place held pieces on
@@ -699,10 +756,15 @@ def mask_post_action(game):
                     post_tensor[MAX_POSTS + post_idx] = 1
                 # Claim post action: check if the post is empty and region is valid.
                 elif is_post_empty and check_brown_blue_priv(game, route):
-                    if current_player.personal_supply_squares > 0 and (not post.required_shape or post.required_shape == "square"):
+                    block_cost = len(route.block_marker_owners)
+                    total_supply = (
+                        current_player.personal_supply_squares
+                        + current_player.personal_supply_circles
+                    )
+                    if current_player.personal_supply_squares > 0 and total_supply > block_cost and (not post.required_shape or post.required_shape == "square"):
                         # print(f"MASK OK - claim empty post {post_idx} with square")
                         post_tensor[post_idx] = 1
-                    if current_player.personal_supply_circles > 0 and (not post.required_shape or post.required_shape == "circle"):
+                    if current_player.personal_supply_circles > 0 and total_supply > block_cost and (not post.required_shape or post.required_shape == "circle"):
                         # print(f"MASK OK - claim empty post {post_idx} with circle")
                         post_tensor[MAX_POSTS + post_idx] = 1  # Offset by 121 for circle posts
                 # DISPLACE - if post is owned by a different player:
@@ -826,6 +888,18 @@ def get_city_index(city, game):
 def mask_income_actions(game):
     income_tensor = torch.zeros(5, device=device, dtype=torch.uint8)  # 5 options for income actions
 
+    if game.pending_tribute_income_owners:
+        owner = game.pending_tribute_income_owners[0]
+        amount = min(2, owner.general_stock_squares + owner.general_stock_circles)
+        for circles in range(amount + 1):
+            squares = amount - circles
+            if (
+                circles <= owner.general_stock_circles
+                and squares <= owner.general_stock_squares
+            ):
+                income_tensor[circles] = 1
+        return income_tensor
+
     if game.current_player.actions_remaining == 0 or game.current_player.holding_pieces or \
        check_if_any_post_BM_flag_set(game) or check_if_any_action_BM_flag_set(game):
         return income_tensor
@@ -869,12 +943,11 @@ def mask_bm(game):
         return bm_tensor
 
     if game.waiting_for_bm_exchange_bm:
-        for player in game.players:
-            if player != game.current_player and player.has_bonus_markers():
-                for bm in player.bonus_markers:
-                    bm_index = bm_mapping.get(bm.type)
-                    if bm_index is not None:
-                        bm_tensor[bm_index] = 1
+        if game.exchange_target_player is not None:
+            for bm in game.exchange_target_player.used_bonus_markers:
+                bm_index = bm_mapping.get(bm.type)
+                if bm_index is not None:
+                    bm_tensor[bm_index] = 1
     else:
         for bm in game.current_player.bonus_markers:
             bm_index = bm_mapping.get(bm.type)
@@ -884,7 +957,16 @@ def mask_bm(game):
                     for city in game.selected_map.cities:
                         if city.check_if_eligible_to_swap_offices(game.current_player):
                             bm_tensor[bm_index] = 1
-                #todo check if can exchange bm with no one else having a used bm
+                elif bm.type == "ExchangeBonusMarker":
+                    if any(
+                        player is not game.current_player
+                        and player.used_bonus_markers
+                        for player in game.players
+                    ):
+                        bm_tensor[bm_index] = 1
+                elif bm.type in ("Tribute4EstablishingTP", "BlockTradeRoute"):
+                    if game.current_player.personal_supply_squares > 0:
+                        bm_tensor[bm_index] = 1
                 else:
                     bm_tensor[bm_index] = 1
 
@@ -895,12 +977,12 @@ def mask_buy_tile(game):
 
     buy_tile_tensor = torch.zeros(8, device=device, dtype=torch.uint8)  # 6 possible tiles to buy and 8 BMs
     tile_mapping = {
-        'DisplaceAnywhere': 1,
-        '+1Action': 2,
-        '+1IncomeIfOthersIncome': 3,
-        '+1DisplacedPiece': 4,
-        '+4PtsPerOwnedCity': 5,
-        '+7PtsPerCompletedAbility': 6
+        'DisplaceAnywhere': 0,
+        '+1Action': 1,
+        '+1IncomeIfOthersIncome': 2,
+        '+1DisplacedPiece': 3,
+        '+4PtsPerOwnedCity': 4,
+        '+7PtsPerCompletedAbility': 5,
     }
     bm_mapping = {
         "SwapOffice": 0,
@@ -913,14 +995,27 @@ def mask_buy_tile(game):
         "BlockTradeRoute": 7
     }
 
-    if game.waiting_for_buy_tile_with_bm == True:
+    if game.pending_income_favour_owner is not None:
+        owner = game.pending_income_favour_owner
+        buy_tile_tensor[0] = int(owner.general_stock_squares > 0)
+        buy_tile_tensor[1] = int(owner.general_stock_circles > 0)
+        buy_tile_tensor[2] = 1
+        return buy_tile_tensor
+
+    if game.waiting_for_buy_tile_with_bm:
         for bm in current_player.bonus_markers:
+            if bm is game.first_bm_to_spend_on_tile:
+                continue
             bm_index = bm_mapping.get(bm.type)
             if bm_index is not None:
                 buy_tile_tensor[bm_index] = 1
+        return buy_tile_tensor
 
-
-    if current_player.actions_remaining == current_player.actions and len(current_player.bonus_markers) >= 2:
+    if (
+        game.use_emperors_favour
+        and current_player.actions_remaining == current_player.actions_at_turn_start
+        and len(current_player.bonus_markers) >= 2
+    ):
         for tile in game.tile_pool:
             tile_index = tile_mapping.get(tile)
             if tile_index is not None:
@@ -945,6 +1040,12 @@ def mask_replace_bm(game):
 
 def mask_bm_city_actions(game):
     bm_city_tensor = torch.zeros(MAX_CITIES, device=device, dtype=torch.uint8)  # 30 possible cities to claim a green city or swap office
+    if game.waiting_for_bm_exchange_bm and game.exchange_target_player is None:
+        for index, player in enumerate(game.players):
+            if player is not game.current_player and player.used_bonus_markers:
+                bm_city_tensor[index] = 1
+        return bm_city_tensor
+
     if not game.waiting_for_bm_swap_office and not game.waiting_for_bm_green_city:
         return bm_city_tensor
     

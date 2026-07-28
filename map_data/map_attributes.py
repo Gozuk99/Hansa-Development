@@ -3,6 +3,20 @@ import random
 from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN, DARK_BLUE, BLACKISH_BROWN
 
 class Map:
+    STANDARD_BONUS_MARKER_SUPPLY = {
+        "PlaceAdjacent": 3,
+        "SwapOffice": 2,
+        "Move3": 1,
+        "UpgradeAbility": 2,
+        "3Actions": 2,
+        "4Actions": 2,
+    }
+    PROMO_BONUS_MARKERS = {
+        "ExchangeBonusMarker": 2,
+        "Tribute4EstablishingTP": 2,
+        "BlockTradeRoute": 2,
+    }
+
     def __init__(self, rng=None):
         self.rng = rng if rng is not None else random.Random()
         # This should never change
@@ -29,42 +43,31 @@ class Map:
                     print(f"Ran out of initial bonus types to assign for route between {route.cities[0].name} and {route.cities[1].name}")
 
     def assign_bm_pool_default(self):
-        # Default bonus markers
-        default_bonus_markers = {
-            'PlaceAdjacent': 3,
-            'SwapOffice': 2,
-            'Move3': 1,
-            'UpgradeAbility': 2,
-            '3Actions': 2,
-            '4Actions': 2
-        }
-        # Add the default bonus markers to the pool
-        for bm_type, count in default_bonus_markers.items():
+        for bm_type, count in self.STANDARD_BONUS_MARKER_SUPPLY.items():
             self.bonus_marker_pool.extend([bm_type] * count)
         self.rng.shuffle(self.bonus_marker_pool)
-    
-    def assign_bm_pool_random(self):
-        # All possible bonus markers including expansions
-        all_bonus_markers = {
-            'PlaceAdjacent': 3,
-            'SwapOffice': 2,
-            'Move3': 1,
-            'UpgradeAbility': 2,
-            '3Actions': 2,
-            '4Actions': 2,
-            'ExchangeBonusMarker': 2,
-            'Tribute4EstablishingTP': 2, #tribute for establishing trade post
-            'BlockTradeRoute': 2
+
+    def configure_bonus_marker_supply(self, marker_types):
+        """Install an explicit twelve-marker supply, including optional promos."""
+        marker_types = list(marker_types)
+        if len(marker_types) != 12:
+            raise ValueError("Bonus-marker supply must contain exactly 12 markers")
+
+        allowed_counts = {
+            **self.STANDARD_BONUS_MARKER_SUPPLY,
+            **self.PROMO_BONUS_MARKERS,
         }
+        for marker_type in set(marker_types):
+            if marker_type not in allowed_counts:
+                raise ValueError(f"Unknown bonus-marker type: {marker_type}")
+            count = marker_types.count(marker_type)
+            if count > allowed_counts[marker_type]:
+                raise ValueError(
+                    f"Too many {marker_type} markers: {count} > {allowed_counts[marker_type]}"
+                )
 
-        # Create a list of all bonus markers based on their maximum count
-        all_bonus_markers_list = [bm_type for bm_type, max_count in all_bonus_markers.items() for _ in range(max_count)]
-
-        # Shuffle the list of all possible bonus markers
-        self.rng.shuffle(all_bonus_markers_list)
-
-        # Take exactly 12 bonus markers to form the bonus marker pool
-        self.bonus_marker_pool = all_bonus_markers_list[:12]
+        self.bonus_marker_pool = marker_types
+        self.rng.shuffle(self.bonus_marker_pool)
     
 class City:
     def __init__(self, name, x_pos, y_pos, color):
@@ -423,6 +426,8 @@ class Route:
         self.color = color
         self.region = region
         self.posts = self.create_posts()
+        self.tribute_owners = []
+        self.block_marker_owners = []
 
         if self.has_permanent_bm_type:
             self.assign_map_permanent_bonus_marker(self.has_permanent_bm_type)
@@ -499,24 +504,18 @@ class Route:
         return False
         
     def establish_tribute_on_route(self, player):
-        for city in self.cities:
-            city.tributed_players.append(player)
+        self.tribute_owners.append(player)
     
-    def award_tributes(self):
-        for city in self.cities:
-            for player in [p for p in city.tributed_players if p is not None]:
-                num_circles = player.general_stock_circles
-                num_squares = player.general_stock_squares
-
-                #optimal income action
-                if num_circles >= 2:
-                    player.income_action(0, 2, True)
-                elif player.general_stock_circles == 1:
-                    player.income_action(min(1, num_squares), 1, True)
-                else:
-                    player.income_action(min(2, num_squares), 0, True)
+    def award_tributes(self, game):
+        eligible = [
+            player
+            for player in self.tribute_owners
+            if player.general_stock_squares or player.general_stock_circles
+        ]
+        game.begin_tribute_income_responses(eligible)
     
-    def establish_blocked_route(self):
+    def establish_blocked_route(self, player):
+        self.block_marker_owners.append(player)
         for post in self.posts:
             post.blocked_bm = True
 
@@ -572,7 +571,7 @@ class BonusMarker:
             print("Player has no Tradesmen in their personal supply to establish a trade post.")
             return False
         current_player.personal_supply_squares -= 1
-        route.establish_blocked_route()
+        route.establish_blocked_route(current_player)
         return True
     
     def handle_exchange_bonus_marker(self, game):

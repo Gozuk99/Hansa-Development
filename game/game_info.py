@@ -8,6 +8,15 @@ from game.setup import validate_game_configuration
 from game.turn_state import TurnPhase, TurnStateError
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
 
+EMPERORS_FAVOUR_TILES = (
+    "DisplaceAnywhere",
+    "+1Action",
+    "+1IncomeIfOthersIncome",
+    "+1DisplacedPiece",
+    "+4PtsPerOwnedCity",
+    "+7PtsPerCompletedAbility",
+)
+
 class Game:
     def __init__(
         self,
@@ -18,6 +27,7 @@ class Game:
         interactive_errors=True,
         use_mission_cards=False,
         use_emperors_favour=False,
+        bonus_marker_supply=None,
     ):
         validate_game_configuration(map_num, num_players)
         if use_mission_cards and map_num != 1:
@@ -31,6 +41,8 @@ class Game:
         self.use_mission_cards = use_mission_cards
         self.use_emperors_favour = use_emperors_favour
         self.selected_map = self.assign_map(map_num, num_players)
+        if bonus_marker_supply is not None:
+            self.selected_map.configure_bonus_marker_supply(bonus_marker_supply)
         self.num_players = num_players
 
         self.players = self.create_players(num_players)
@@ -55,6 +67,8 @@ class Game:
         self.waiting_for_bm_move3 = False
 
         self.waiting_for_bm_exchange_bm = False
+        self.pending_exchange_marker = None
+        self.exchange_target_player = None
         self.waiting_for_bm_tribute_trading_post = False
         self.waiting_for_bm_block_trade_route = False
 
@@ -64,6 +78,8 @@ class Game:
         self.tile_to_buy = None
         self.waiting_for_buy_tile_with_bm = False
         self.first_bm_to_spend_on_tile = None
+        self.pending_income_favour_owner = None
+        self.pending_tribute_income_owners = []
 
         self.original_route_of_displacement = None
         self.all_empty_posts = []
@@ -87,6 +103,7 @@ class Game:
         self.SevenPtsPerCompletedAbilityOwner = None
 
         self.game_end = False
+        self.game_end_pending_immediate_resolution = False
 
     def create_players(self, num_players):
         colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
@@ -105,14 +122,9 @@ class Game:
         return players
 
     def initialize_tile_pool(self):
-        # 6 default tiles
-        tiles = ["DisplaceAnywhere", "+1Action", "+1IncomeIfOthersIncome", "+1DisplacedPiece", "+4PtsPerOwnedCity", "+7PtsPerCompletedAbility"]
-
-        num_tiles = self.num_players
-
-        for i in range(num_tiles):
-            tile = tiles.pop(self.rng.randint(0, len(tiles)-1))
-            self.tile_pool.append(tile)
+        tiles = list(EMPERORS_FAVOUR_TILES)
+        self.rng.shuffle(tiles)
+        self.tile_pool.extend(tiles[:self.num_players])
 
     def assign_map(self, map_num, num_players):
         # Logic to assign a map based on map_num
@@ -130,6 +142,10 @@ class Game:
             workflows.append(TurnPhase.DISPLACEMENT)
         if self.waiting_for_buy_tile_with_bm:
             workflows.append(TurnPhase.BUY_TILE_PAYMENT)
+        if self.pending_income_favour_owner is not None:
+            workflows.append(TurnPhase.INCOME_FAVOUR_RESPONSE)
+        if self.pending_tribute_income_owners:
+            workflows.append(TurnPhase.TRIBUTE_INCOME_RESPONSE)
         if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
             workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
 
@@ -268,6 +284,56 @@ class Game:
                 self.current_player.london_priv_count -= 1
             else:
                 raise TurnStateError("No Scotland placement permission remains")
+
+    def begin_income_favour_response(self, income_player):
+        """Offer the optional income benefit after another player's Income action."""
+        owner = self.OneIncomeIfOthersIncomeOwner
+        if (
+            owner is not None
+            and owner is not income_player
+            and (owner.general_stock_squares or owner.general_stock_circles)
+        ):
+            self.pending_income_favour_owner = owner
+            self.active_player = owner.order - 1
+
+    def resolve_income_favour(self, shape=None):
+        owner = self.pending_income_favour_owner
+        if owner is None:
+            raise TurnStateError("No Emperor's Favour income response is pending")
+        if shape is not None:
+            owner.add_1_income(shape)
+        self.pending_income_favour_owner = None
+        self.active_player = self.current_player_index
+
+    def begin_tribute_income_responses(self, owners):
+        self.pending_tribute_income_owners.extend(owners)
+        if self.pending_tribute_income_owners:
+            self.active_player = self.pending_tribute_income_owners[0].order - 1
+
+    def resolve_tribute_income(self, num_circles):
+        if not self.pending_tribute_income_owners:
+            raise TurnStateError("No tribute income is pending")
+        owner = self.pending_tribute_income_owners[0]
+        total_available = owner.general_stock_squares + owner.general_stock_circles
+        amount = min(2, total_available)
+        num_squares = amount - num_circles
+        if (
+            num_circles < 0
+            or num_circles > owner.general_stock_circles
+            or num_squares < 0
+            or num_squares > owner.general_stock_squares
+        ):
+            raise TurnStateError("Selected tribute-income composition is unavailable")
+        owner.income_action(num_squares, num_circles, tribute_income=True)
+        self.pending_tribute_income_owners.pop(0)
+        self.active_player = (
+            self.pending_tribute_income_owners[0].order - 1
+            if self.pending_tribute_income_owners
+            else self.current_player_index
+        )
+        if not self.pending_tribute_income_owners and self.game_end_pending_immediate_resolution:
+            self.game_end_pending_immediate_resolution = False
+            self.check_for_game_end()
 
     def check_for_east_west_connection(self):
         if self.current_player in self.players_who_completed_east_west:
@@ -432,21 +498,8 @@ class Game:
             # Sum up the final score
             player.final_score = (initial_points + ability_points + bonus_marker_points + special_prestige_points + city_control_points + largest_network_points)
 
-            if self.map_num == 1 and player.mission_card:
-                mission_cities_controlled = 0
-                mission_city_points = 0
-
-                for city in self.selected_map.cities:
-                    if city.name in player.mission_card and city.get_controller() == player:
-                        mission_cities_controlled += 1
-                        if mission_cities_controlled == 3:
-                            break
-
-                if mission_cities_controlled == 3:
-                    mission_city_points += 5
-
-                mission_city_points += mission_cities_controlled
-
+            if self.use_mission_cards and player.mission_card:
+                mission_city_points = self.get_mission_card_points(player)
                 player.final_score += mission_city_points
 
             # Update the score breakdown for display
@@ -459,7 +512,7 @@ class Game:
                 'Largest Network Points': largest_network_points
             }
 
-            if self.map_num == 1 and player.mission_card:
+            if self.use_mission_cards and player.mission_card:
                 score_breakdown['Mission City Points'] = mission_city_points
 
             # Ensure final score is not less than the initial score
@@ -469,6 +522,21 @@ class Game:
 
             # You can print the score breakdown here if needed
             print(f"Score breakdown for {COLOR_NAMES[player.color]}: {score_breakdown}")
+
+    def get_mission_card_points(self, player):
+        """Score one point per listed city occupied, plus five for controlling all three."""
+        if not self.use_mission_cards or not player.mission_card:
+            return 0
+
+        mission_cities = [
+            city for city in self.selected_map.cities if city.name in player.mission_card
+        ]
+        occupied = sum(city.has_office_owned_by(player) for city in mission_cities)
+        controls_all = (
+            len(mission_cities) == len(player.mission_card)
+            and all(city.get_controller() == player for city in mission_cities)
+        )
+        return occupied + (5 if controls_all else 0)
 
     def check_for_game_end(self):
 
@@ -480,6 +548,9 @@ class Game:
                               self.current_full_cities_count >= self.selected_map.max_full_cities)
 
         if end_conditions_met:
+            if self.pending_tribute_income_owners:
+                self.game_end_pending_immediate_resolution = True
+                return
             # Finalize points before determining the winner
             self.finalize_end_of_game_points()
             self.game_end = True

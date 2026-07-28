@@ -29,23 +29,20 @@ def claim_post_action(game, route, post, piece_to_play):
     city_names = ' and '.join([city.name for city in route.cities])
     region_info = f" in {route.region}" if route.region else ""
 
-    if post.blocked_bm:
-        if player.personal_supply_squares + player.personal_supply_circles == 1:
-            print(f"CLAIM ERROR - Cannot claim this blocked post with {piece_to_play} as current_player has PS Squares: {player.personal_supply_squares} PS Circles: {player.personal_supply_circles}")
+    block_cost = len(route.block_marker_owners)
+    if block_cost:
+        available_squares = player.personal_supply_squares - int(piece_to_play == "square")
+        available_circles = player.personal_supply_circles - int(piece_to_play == "circle")
+        if available_squares + available_circles < block_cost:
             return False
-        # Handle the cost of the blocked post with priority to squares
-        squares_to_pay = min(player.personal_supply_squares - 1, 1)  # Subtract 1 for the piece being placed
-        circles_to_pay = 1 - squares_to_pay
+        squares_to_pay = min(available_squares, block_cost)
+        circles_to_pay = block_cost - squares_to_pay
 
         player.personal_supply_squares -= squares_to_pay
         player.personal_supply_circles -= circles_to_pay
 
         player.general_stock_squares += squares_to_pay
         player.general_stock_circles += circles_to_pay
-
-        if player.personal_supply_squares < 0 or player.personal_supply_circles < 0:
-            print(f"ERROR: Claim BLOCKED Post - personal_supply_squares={player.personal_supply_squares} personal_supply_circles={player.personal_supply_circles}")
-            sys.exit()
 
     if piece_to_play == "square" and player.has_personal_supply("square"):
         post.claim(player, "square")
@@ -549,14 +546,14 @@ def claim_route_for_office(game, city, route):
             print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}")
             city.update_next_open_office_ownership(game)
             finalize_route_claim(game, route, placed_piece_shape)
-            route.award_tributes()
+            route.award_tributes(game)
     elif 'PlaceAdjacent' in (bm.type for bm in current_player.bonus_markers):
         current_player.reward += current_player.reward_structure.bm_place_adjacent
         score_route(current_player, route)
         city.claim_office_with_bonus_marker(current_player)
         print(f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a square into a NEW office of {city.name}.")
         finalize_route_claim(game, route, "square")
-        route.award_tributes()
+        route.award_tributes(game)
     elif city.color == DARK_GREEN:
         print(f"{COLOR_NAMES[current_player.color]} cannot claim a GREEN City ({city.name}) without a PlaceAdjacent BM.")
     else:
@@ -685,35 +682,23 @@ def update_stock_and_reset(route, player, placed_piece_shape=None):
 def buy_tile(game, tile_type, bm_payment1=None, bm_payment2=None):
     player = game.current_player
 
-    if len(game.tile_pool) == 0:
-        print("ERROR: No tiles left in the pool.")
-        return
     if tile_type not in game.tile_pool:
-        print(f"ERROR: Tile {tile_type} not available in the pool.")
-        return
-    if player.actions_remaining != ACTIONS_MAX_VALUES[player.actions_index]:
-        print(f"ERROR: Player {COLOR_NAMES[player.color]} already used an action.")
-        print("Must purchase at the beginning of the turn.")
-        return
-    if len(player.bonus_markers) < 2:
-        print(f"ERROR: Player {COLOR_NAMES[player.color]} has less than 2 bonus markers.")
-        return
-    
-    if len(player.bonus_markers) == 2:
-        # Remove the two bonus markers from the player's bonus_markers list
-        for bm in player.bonus_markers[:2]:
-            player.used_bonus_markers.append(bm)
-        player.bonus_markers = []
-        game.tile_pool.remove(tile_type)
-        player.tiles.append(tile_type)
+        raise ValueError(f"Emperor's Favour tile is unavailable: {tile_type}")
+    if player.actions_remaining != player.actions_at_turn_start:
+        raise ValueError("Emperor's Favour may only be bought at the start of a turn")
+    payments = [bm_payment1, bm_payment2]
+    if any(marker is None for marker in payments):
+        raise ValueError("Exactly two unused bonus markers are required")
+    if payments[0] is payments[1]:
+        raise ValueError("Two distinct unused bonus markers are required")
+    if any(marker not in player.bonus_markers for marker in payments):
+        raise ValueError("Payment must use the buyer's unused bonus markers")
 
-    elif len(player.bonus_markers) > 2:
-        for payment in [bm_payment1, bm_payment2]:
-            if payment in player.bonus_markers:
-                player.bonus_markers.remove(payment)
-                player.used_bonus_markers.append(payment)
-        game.tile_pool.remove(tile_type)
-        player.tiles.append(tile_type)
+    for marker in payments:
+        player.bonus_markers.remove(marker)
+        player.used_bonus_markers.append(marker)
+    game.tile_pool.remove(tile_type)
+    player.tiles.append(tile_type)
 
     if tile_type == "DisplaceAnywhere":
         print(f"Player {COLOR_NAMES[player.color]} purchased a DisplaceAnywhere tile.")
@@ -735,4 +720,3 @@ def buy_tile(game, tile_type, bm_payment1=None, bm_payment2=None):
         game.SevenPtsPerCompletedAbilityOwner = player
 
     player.forfeit_remaining_actions()
-    game.switch_player_if_needed()

@@ -417,7 +417,23 @@ class BoardData:
             route_has_bm, route_bm_type = self.assign_bonus_marker_mapping(route.has_bonus_marker, route.bonus_marker)
             route_perm_bm = self.assign_permanent_bm_mapping(route.has_permanent_bm_type)
 
-            route_info = [city1_num, city2_num, route.num_posts, route_region, route_has_bm, route_bm_type, route_perm_bm]
+            tribute_owners = [
+                self.assign_player_mapping(game, owner)
+                for owner in route.tribute_owners[:2]
+            ]
+            tribute_owners += [0] * (2 - len(tribute_owners))
+            route_info = [
+                city1_num,
+                city2_num,
+                route.num_posts,
+                route_region,
+                route_has_bm,
+                route_bm_type,
+                route_perm_bm,
+                tribute_owners[0],
+                tribute_owners[1],
+                len(route.block_marker_owners),
+            ]
             route_info += [0] * (self.route_num_attributes - len(route_info))  # Pad with zeros
 
             # Get post information
@@ -563,7 +579,11 @@ class BoardData:
     def assign_mission_card_mapping(self, game, player):
         mission_card_cities = [0, 0, 0]
 
-        if game.map_num == 1:
+        if (
+            game.use_mission_cards
+            and player is game.current_player
+            and player.mission_card
+        ):
             for i, city_name in enumerate(player.mission_card):
                 # Find the city object with the matching name
                 city = next((c for c in game.selected_map.cities if c.name == city_name), None)
@@ -731,6 +751,14 @@ class BoardData:
                     else:
                         route.bonus_marker = None
                     route.has_permanent_bm_type = route_data['route_perm_bm']
+                    route.tribute_owners = [
+                        game.players[index - 1]
+                        for index in route_data.get("route_tribute_owners", [])
+                    ]
+                    route.block_marker_owners = [
+                        game.players[index - 1]
+                        for index in route_data.get("route_block_marker_owners", [])
+                    ]
 
                     for i, post_data in enumerate(route_data['posts']):
                         post = route.posts[i]
@@ -929,6 +957,10 @@ class BoardData:
                 'route_has_bm': route.has_bonus_marker,
                 'route_bm_type': route.bonus_marker.type if route.bonus_marker else None,
                 'route_perm_bm': route.has_permanent_bm_type,
+                'route_tribute_owners': [owner.order for owner in route.tribute_owners],
+                'route_block_marker_owners': [
+                    owner.order for owner in route.block_marker_owners
+                ],
             }
 
             post_data_JSON = []

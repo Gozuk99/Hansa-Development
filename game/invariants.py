@@ -86,6 +86,11 @@ def validate_game(game):
             and not game.displaced_player.played_displaced_shape
             and game.displaced_player.displaced_shape == "circle"
         )
+        promo_marker_squares = sum(
+            route.tribute_owners.count(player)
+            + route.block_marker_owners.count(player)
+            for route in game.selected_map.routes
+        )
 
         trader_total = (
             player.general_stock_squares
@@ -95,6 +100,7 @@ def validate_game(game):
             + office_squares
             + held_squares
             + displaced_square
+            + promo_marker_squares
             + 1  # score-track marker
         )
         merchant_total = (

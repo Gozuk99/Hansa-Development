@@ -55,6 +55,7 @@ class Player:
         if extra_actions < 0:
             raise ValueError("extra_actions cannot be negative")
         self.actions_remaining = self.actions + extra_actions
+        self.actions_at_turn_start = self.actions_remaining
         self.ending_turn = False
 
     @property
@@ -291,15 +292,15 @@ class Player:
                 button_labels.append(label)
         return button_labels
     
-    def add_1_income(self):
-        if self.general_stock_circles > 0:
-            self.general_stock_circles -= 1
-            self.personal_supply_circles += 1
-        elif self.general_stock_squares > 0:
+    def add_1_income(self, shape):
+        if shape == "square" and self.general_stock_squares > 0:
             self.general_stock_squares -= 1
             self.personal_supply_squares += 1
+        elif shape == "circle" and self.general_stock_circles > 0:
+            self.general_stock_circles -= 1
+            self.personal_supply_circles += 1
         else:
-            print("General stock is empty, tile does not provide income.")
+            raise ValueError(f"No {shape} is available in general stock")
 
     def player_can_claim_office(self, office_color):
         """Check if a player can claim an office of the specified color."""

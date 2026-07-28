@@ -20,7 +20,9 @@ Can use the swap Kontor bonus marker to swap VP spots in Coellen?
 
 **Answer.** No. Those are not Kontors.
 
-## Remove 3 Resources (Remove Three Traders)
+## Move 3 Tradesmen (called “Remove 3 Resources” in this FAQ)
+
+This is the same bonus marker named **Move 3 Tradesmen** in the Big Box rulebook, not an additional marker type.
 
 ### Question (v5)
 

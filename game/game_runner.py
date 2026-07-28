@@ -27,6 +27,7 @@ def create_headless_game(
     seed=124,
     use_mission_cards=False,
     use_emperors_favour=False,
+    bonus_marker_supply=None,
 ):
     game = Game(
         map_num=map_num,
@@ -36,6 +37,7 @@ def create_headless_game(
         interactive_errors=False,
         use_mission_cards=use_mission_cards,
         use_emperors_favour=use_emperors_favour,
+        bonus_marker_supply=bonus_marker_supply,
     )
     validate_game(game)
     return game
@@ -128,6 +130,7 @@ def run_game(
     max_actions=10_000,
     use_mission_cards=False,
     use_emperors_favour=False,
+    bonus_marker_supply=None,
 ):
     """Run a deterministic legal-action baseline until terminal or a safety limit."""
     game = create_headless_game(
@@ -136,6 +139,7 @@ def run_game(
         seed,
         use_mission_cards=use_mission_cards,
         use_emperors_favour=use_emperors_favour,
+        bonus_marker_supply=bonus_marker_supply,
     )
     policy_rng = random.Random(seed)
     action_trace = []
