@@ -48,6 +48,7 @@ class PlayerAbilityTests(unittest.TestCase):
             self.assertEqual(player.keys_index, index)
             self.assertEqual(player.keys, expected_value)
             self.assertEqual(player.personal_supply_squares, starting_squares + index)
+            self.assertEqual(player.locked_ability_traders, 15 - index)
 
         self.assertFalse(self.upgrade(player, "keys"))
         self.assertEqual(player.personal_supply_squares, starting_squares + 4)
@@ -96,6 +97,7 @@ class PlayerAbilityTests(unittest.TestCase):
             self.assertTrue(self.upgrade(player, "book"))
             self.assertEqual(player.book, expected_value)
             self.assertEqual(player.personal_supply_circles, starting_circles + index)
+            self.assertEqual(player.locked_ability_merchants, 3 - index)
 
         self.assertFalse(self.upgrade(player, "book"))
         self.assertEqual(player.personal_supply_circles, starting_circles + 3)

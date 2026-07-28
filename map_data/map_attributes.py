@@ -112,8 +112,7 @@ class City:
             player.blue_priv_count += 1
         elif self.name == "London" and game.london_priv != player:
             game.london_priv = player
-            player.brown_priv_count += 1
-            player.blue_priv_count += 1
+            player.london_priv_count += 1
 
     def update_city_size_based_on_offices(self):
         num_offices = len(self.offices)
@@ -233,19 +232,10 @@ class City:
                 rightmost_office = self.offices[rightmost_office_index]
                 print(f"Swapping offices between {COLOR_NAMES[current_player.color]} and {COLOR_NAMES[swap_office.controller.color]} in {self.name}.")
 
-                # Swap the controllers and colors
-                rightmost_office.controller = swap_office.controller
-                swap_office.controller = rightmost_office.controller
-                rightmost_office.color = swap_office.color
-                swap_office.color = rightmost_office.color
-
-                # Assuming you have a method in the Player class to get their associated color
-                rightmost_office_color = current_player.color
-                swap_office_color = swap_office.controller.color
-
-                # Update the colors according to the new controller
-                rightmost_office.color = swap_office_color
-                swap_office.color = rightmost_office_color
+                rightmost_office.controller, swap_office.controller = (
+                    swap_office.controller,
+                    rightmost_office.controller,
+                )
 
                 return True
             else:
@@ -347,6 +337,30 @@ class Upgrade:
 
     def get_special_prestige_points_for_player(self, player):
         return sum(circle['value'] for circle in self.circle_data if circle['owner'] == player)
+
+    def can_claim_prestige(self, player, value=None):
+        player_privilege_index = PRIVILEGE_COLORS.index(player.privilege)
+        for circle in self.circle_data:
+            circle_color_name = COLOR_NAMES.get(circle["color"])
+            if (
+                (value is None or circle["value"] == value)
+                and
+                circle["owner"] is None
+                and circle_color_name in PRIVILEGE_COLORS
+                and player_privilege_index >= PRIVILEGE_COLORS.index(circle_color_name)
+            ):
+                return True
+        return False
+
+    def claim_prestige(self, player, value):
+        if not self.can_claim_prestige(player, value):
+            return False
+        circle = next(
+            circle for circle in self.circle_data if circle["value"] == value
+        )
+        circle["owner"] = player
+        circle["color"] = player.color
+        return True
     
     def claim_highest_prestige(self, player):
         # Log player details and privileges
@@ -407,8 +421,8 @@ class Route:
         self.permanent_bonus_marker = None
         self.required_circles = required_circles  # Number of posts that must be circles
         self.color = color
-        self.posts = self.create_posts()
         self.region = region
+        self.posts = self.create_posts()
 
         if self.has_permanent_bm_type:
             self.assign_map_permanent_bonus_marker(self.has_permanent_bm_type)
@@ -416,9 +430,6 @@ class Route:
     def create_posts(self, buffer=0.12):
         city1, city2 = self.cities
         posts = []
-        region_colors = {DARK_BLUE: "Wales", BLACKISH_BROWN: "Scotland"}
-        region = region_colors.get(self.color)
-
         # Pre-calculate differences for position calculation
         x_diff = city2.midpoint[0] - city1.midpoint[0]
         y_diff = city2.midpoint[1] - city1.midpoint[1]
@@ -431,7 +442,7 @@ class Route:
 
             # Determine if the post requires a specific shape
             required_shape = "circle" if i <= self.required_circles else None
-            posts.append(Post(pos, required_shape=required_shape, region=region))
+            posts.append(Post(pos, required_shape=required_shape, region=self.region))
 
         return posts
 
@@ -485,9 +496,7 @@ class Route:
         for post in self.posts:
             if post.owner_piece_shape == "circle":
                 return True
-        else:
-            print("Route doesn't contain a circle!")
-            return False
+        return False
         
     def establish_tribute_on_route(self, player):
         for city in self.cities:

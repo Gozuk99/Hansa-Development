@@ -46,6 +46,12 @@ Run one deterministic headless game:
 
 		python run_headless_game.py --map 2 --players 3 --seed 124
 
+Optional setup modules are disabled by default. Enable them explicitly with:
+
+		python run_headless_game.py --map 1 --players 3 --mission-cards --emperors-favour
+
+Mission Cards are only valid on map 1. Emperor's Favour may be enabled on any map.
+
 The same map, player count, and seed should produce the same action trace and
 final scores. The currently verified smoke configurations are map 2 with three
 players (seeds 124 and 125) and map 1 with three players (seed 124).

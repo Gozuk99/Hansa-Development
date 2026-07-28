@@ -2,7 +2,7 @@ import sys
 import torch
 import time
 from map_data.constants import DARK_GREEN, COLOR_NAMES, UPGRADE_MAX_VALUES, MAX_CITIES, MAX_ROUTES, MAX_POSTS
-from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
+from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, finish_displacement, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
 from game.turn_state import TurnPhase
 
 #debugging
@@ -27,7 +27,7 @@ TOTAL_ACTIONS = (NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS + NUM_INCOME_A
                  NUM_BM_ACTIONS + NUM_BUY_TILE_ACTIONS + NUM_REPLACE_BM_ACTIONS + 
                  NUM_BM_CITY_ACTIONS + NUM_BM_UPGRADE + NUM_END_TURN_ACTIONS)
 
-def perform_action_from_index(game, max_prob_index):
+def _perform_action_from_index(game, max_prob_index):
     if max_prob_index < NUM_CLAIM_POST_ACTIONS:
         map_claim_post_action(game, max_prob_index)
     elif max_prob_index < NUM_CLAIM_POST_ACTIONS + NUM_CLAIM_ROUTE_ACTIONS:
@@ -254,7 +254,27 @@ def map_claim_route_action(game, index):
 
         route = game.selected_map.routes[route_idx]
         city = route.cities[city_idx]
-        if city.upgrade_city_type and len(city.upgrade_city_type) > upgrade_idx:
+        special_city = next(
+            (
+                candidate
+                for candidate in route.cities
+                if "SpecialPrestigePoints" in candidate.upgrade_city_type
+            ),
+            None,
+        )
+        if special_city is not None:
+            prestige_value = [7, 8, 9, 11][adjusted_index % 4]
+            if route.is_controlled_by(game.current_player):
+                claim_route_for_upgrade(
+                    game,
+                    special_city,
+                    route,
+                    "SpecialPrestigePoints",
+                    prestige_value=prestige_value,
+                )
+            else:
+                error_exit(game, route)
+        elif city.upgrade_city_type and len(city.upgrade_city_type) > upgrade_idx:
             upgrade_choice = city.upgrade_city_type[upgrade_idx]
             if route.is_controlled_by(game.current_player):
                 claim_route_for_upgrade(game, city, route, upgrade_choice)
@@ -455,6 +475,11 @@ def map_bm_upgrade_ability(game, index):
                 game.waiting_for_bm_upgrade_ability = False 
 
 def map_end_turn_action(game):
+    if game.turn_phase == TurnPhase.DISPLACEMENT:
+        finish_displacement(game)
+        game.switch_player_if_needed()
+        return
+
     if game.current_player.actions_remaining != 0:
         print("Cannot end the turn as Bonus Markers need to be replaced on the Map!")
         error_exit(game, None)
@@ -493,7 +518,7 @@ def restrict_mask_to_turn_phase(game, action_mask):
         return action_mask
 
     allowed_ranges = {
-        TurnPhase.DISPLACEMENT: ((0, 242),),
+        TurnPhase.DISPLACEMENT: ((0, 242), (618, 619)),
         TurnPhase.MOVE_PIECES: ((0, 242),),
         TurnPhase.BONUS_MARKER_CHOICE: (
             (0, 242),
@@ -723,6 +748,24 @@ def mask_claim_route(game):
             # Claim route for points
             claim_route_for_points_tensor[route_idx] = 1
 
+            special_city = next(
+                (
+                    city
+                    for city in route.cities
+                    if "SpecialPrestigePoints" in city.upgrade_city_type
+                ),
+                None,
+            )
+            if special_city is not None and route.contains_a_circle():
+                prestige_values = [7, 8, 9, 11]
+                for prestige_index, prestige_value in enumerate(prestige_values):
+                    if game.selected_map.specialprestigepoints.can_claim_prestige(
+                        game.current_player, prestige_value
+                    ):
+                        claim_route_for_upgrade_tensor[
+                            route_idx * 4 + prestige_index
+                        ] = 1
+
             for city_idx, city in enumerate(route.cities):
                 # Calculate indices for tensor
                 base_index_office = route_idx * two_cities_per_route + city_idx
@@ -741,12 +784,25 @@ def mask_claim_route(game):
                             #         print(f"[{i}] Post Owner: None, Post Owner Piece Shape: {post.owner_piece_shape}")
 
                 # Check for upgrade options
-                if city.upgrade_city_type:
+                if city.upgrade_city_type and special_city is None:
                     for upgrade_idx, upgrade in enumerate(city.upgrade_city_type):
                         if upgrade_idx < max_upgrades_per_city:
                             # Calculate the unique index for this upgrade option
                             action_index_upgrade = (route_idx * two_cities_per_route * max_upgrades_per_city) + (city_idx * max_upgrades_per_city) + upgrade_idx
-                            claim_route_for_upgrade_tensor[action_index_upgrade] = 1
+                            if upgrade == "SpecialPrestigePoints":
+                                if (
+                                    route.contains_a_circle()
+                                    and game.selected_map.specialprestigepoints.can_claim_prestige(
+                                        game.current_player
+                                    )
+                                ):
+                                    claim_route_for_upgrade_tensor[action_index_upgrade] = 1
+                            else:
+                                current_value = getattr(
+                                    game.current_player, upgrade.lower()
+                                )
+                                if current_value != UPGRADE_MAX_VALUES[upgrade.lower()]:
+                                    claim_route_for_upgrade_tensor[action_index_upgrade] = 1
                             # print(f"action_index_upgrade: {action_index_upgrade}")
                             # print(f"{route_idx} City: {city.name}")
                             # print(f"{city_idx} Route between {route.cities[0].name} and {route.cities[1].name}")
@@ -926,6 +982,14 @@ def mask_bm_upgrade_ability(game):
 def mask_end_turn(game):
     end_turn_tensor = torch.zeros(1, device=device, dtype=torch.uint8)
 
+    if (
+        game.waiting_for_displaced_player
+        and game.displaced_player.played_displaced_shape
+        and not game.displaced_player.player.holding_pieces
+    ):
+        end_turn_tensor[0] = 1
+        return end_turn_tensor
+
     # print(f"mask_end_turn: actions_remaining: {game.current_player.actions_remaining}, ending_turn: {game.current_player.ending_turn}, holding_pieces: {game.current_player.holding_pieces}")
     if game.current_player.actions_remaining > 0 or game.current_player.ending_turn or game.current_player.holding_pieces or \
        check_if_any_post_BM_flag_set(game) or check_if_any_action_BM_flag_set(game):
@@ -974,22 +1038,4 @@ def check_if_player_has_usable_BMs(game):
     return False
 
 def check_brown_blue_priv(game, route):
-    if route.region is not None:
-        # Check for Wales region
-        if route.region == "Wales":
-            if not (game.cardiff_priv == game.current_player or game.london_priv == game.current_player):
-                # print("Cannot claim post in BROWN - Incorrect Privilege")
-                return False
-            if game.current_player.brown_priv_count == 0:
-                # print("Used all privilege already in Brown!")
-                return False
-
-        # Check for Scotland region
-        elif route.region == "Scotland":
-            if not (game.carlisle_priv == game.current_player or game.london_priv == game.current_player):
-                # print("Cannot claim post in BLUE - Incorrect Privilege")
-                return False
-            if game.current_player.blue_priv_count == 0:
-                # print("Used all privilege already in Blue!")
-                return False
-    return True
+    return game.check_brown_blue_priv(route)

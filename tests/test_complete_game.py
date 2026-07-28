@@ -18,6 +18,7 @@ class CompleteGameTests(unittest.TestCase):
         cases = (
             (2, 3, 125),
             (1, 3, 124),
+            (3, 3, 124),
         )
         for map_num, num_players, seed in cases:
             with self.subTest(map_num=map_num, num_players=num_players, seed=seed):

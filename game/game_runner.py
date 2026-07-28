@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import random
 
-from ai.action_options import masking_out_invalid_actions, perform_action_from_index
+from ai.action_options import masking_out_invalid_actions
 from game.game_info import Game
 from game.invariants import validate_game
 
@@ -21,13 +21,21 @@ class GameRunError(RuntimeError):
     """Raised when a headless game cannot make safe forward progress."""
 
 
-def create_headless_game(map_num=2, num_players=3, seed=124):
+def create_headless_game(
+    map_num=2,
+    num_players=3,
+    seed=124,
+    use_mission_cards=False,
+    use_emperors_favour=False,
+):
     game = Game(
         map_num=map_num,
         num_players=num_players,
         load_models=False,
         seed=seed,
         interactive_errors=False,
+        use_mission_cards=use_mission_cards,
+        use_emperors_favour=use_emperors_favour,
     )
     validate_game(game)
     return game
@@ -58,6 +66,20 @@ def select_progress_action(game, legal_actions, policy_rng):
 
     route_actions = [action for action in legal_actions if 242 <= action <= 521]
     if route_actions:
+        def route_index_for_action(action):
+            if action < 282:
+                return action - 242
+            if action < 362:
+                return (action - 282) // 2
+            return (action - 362) // 4
+
+        marker_route_actions = [
+            action
+            for action in route_actions
+            if game.selected_map.routes[route_index_for_action(action)].bonus_marker
+        ]
+        if marker_route_actions:
+            return policy_rng.choice(marker_route_actions)
         return policy_rng.choice(route_actions)
 
     income_actions = [action for action in legal_actions if 522 <= action <= 526]
@@ -80,7 +102,7 @@ def select_progress_action(game, legal_actions, policy_rng):
             progressing_post_actions.append(action)
             post_action_scores[action] = sum(
                 route_post.owner is game.current_player for route_post in route.posts
-            )
+            ) + (100 if route.bonus_marker is not None else 0)
     if progressing_post_actions:
         best_score = max(post_action_scores.values())
         best_actions = [
@@ -99,9 +121,22 @@ def select_progress_action(game, legal_actions, policy_rng):
     return policy_rng.choice(legal_actions)
 
 
-def run_game(map_num=2, num_players=3, seed=124, max_actions=10_000):
+def run_game(
+    map_num=2,
+    num_players=3,
+    seed=124,
+    max_actions=10_000,
+    use_mission_cards=False,
+    use_emperors_favour=False,
+):
     """Run a deterministic legal-action baseline until terminal or a safety limit."""
-    game = create_headless_game(map_num, num_players, seed)
+    game = create_headless_game(
+        map_num,
+        num_players,
+        seed,
+        use_mission_cards=use_mission_cards,
+        use_emperors_favour=use_emperors_favour,
+    )
     policy_rng = random.Random(seed)
     action_trace = []
 
@@ -126,7 +161,7 @@ def run_game(map_num=2, num_players=3, seed=124, max_actions=10_000):
 
         action_index = select_progress_action(game, legal_actions, policy_rng)
         action_trace.append(action_index)
-        perform_action_from_index(game, action_index)
+        game.apply_action(action_index)
         validate_game(game)
 
     raise GameRunError(

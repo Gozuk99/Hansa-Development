@@ -9,14 +9,27 @@ from game.turn_state import TurnPhase, TurnStateError
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
 
 class Game:
-    def __init__(self, map_num, num_players, load_models=True, seed=None, interactive_errors=True):
+    def __init__(
+        self,
+        map_num,
+        num_players,
+        load_models=True,
+        seed=None,
+        interactive_errors=True,
+        use_mission_cards=False,
+        use_emperors_favour=False,
+    ):
         validate_game_configuration(map_num, num_players)
+        if use_mission_cards and map_num != 1:
+            raise ValueError("Mission Cards can only be enabled on map 1")
 
         self.seed = seed
         self.rng = random.Random(seed)
         self.load_models = load_models
         self.interactive_errors = interactive_errors
         self.map_num = map_num
+        self.use_mission_cards = use_mission_cards
+        self.use_emperors_favour = use_emperors_favour
         self.selected_map = self.assign_map(map_num, num_players)
         self.num_players = num_players
 
@@ -27,6 +40,8 @@ class Game:
         self.turn_number = 1
         self.round_number = 1
         self.replace_bonus_marker = 0
+        self.pending_bonus_markers = []
+        self.bonus_pool_exhausted_during_claim = False
 
         self.displaced_player = DisplacedPlayer()
         self.waiting_for_displaced_player = False
@@ -53,7 +68,8 @@ class Game:
         self.original_route_of_displacement = None
         self.all_empty_posts = []
         self.tile_pool = []
-        self.initialize_tile_pool()
+        if self.use_emperors_favour:
+            self.initialize_tile_pool()
         # print(f"Tile Pool: {self.tile_pool}")
         self.tile_rects = []
 
@@ -81,7 +97,7 @@ class Game:
             new_player.board = PlayerBoard(self.selected_map.map_width, i * 220, new_player)  # Create and assign the board directly here
             new_player.start_turn()
 
-            if self.map_num == 1:
+            if self.use_mission_cards:
                 self.selected_map.assign_mission_cards(new_player)  # Assign a mission card to the player
 
             players.append(new_player)
@@ -185,6 +201,33 @@ class Game:
         if self.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS:
             print(f"{COLOR_NAMES[self.current_player.color]} - Place a Bonus Marker to Finish your Turn.")
         return False
+
+    def legal_action_mask(self):
+        """Return the authoritative legal-action mask for the current state."""
+        from ai.action_options import masking_out_invalid_actions
+
+        return masking_out_invalid_actions(self)
+
+    def apply_action(self, action_index):
+        """Validate and apply one action through the supported engine boundary."""
+        from ai.action_options import (
+            InvalidActionError,
+            TOTAL_ACTIONS,
+            _perform_action_from_index,
+        )
+
+        if not isinstance(action_index, int) or isinstance(action_index, bool):
+            raise InvalidActionError(f"Action index must be an integer: {action_index!r}")
+        if not 0 <= action_index < TOTAL_ACTIONS:
+            raise InvalidActionError(f"Action index out of range: {action_index}")
+
+        legal_mask = self.legal_action_mask()
+        if legal_mask[action_index].item() != 1:
+            raise InvalidActionError(
+                f"Action {action_index} is illegal during phase {self.turn_phase.value}"
+            )
+
+        _perform_action_from_index(self, action_index)
     
     def reset_valid_posts(self):
         for post in self.all_empty_posts:
@@ -195,26 +238,36 @@ class Game:
         if route.region is not None:
             # Check for Wales region
             if route.region == "Wales":
-                if not (self.cardiff_priv == self.current_player or self.london_priv == self.current_player):
-                    print("Cannot claim post in BROWN - Incorrect Privilege")
+                if not (
+                    self.current_player.brown_priv_count > 0
+                    or self.current_player.london_priv_count > 0
+                ):
                     return False
-                if self.current_player.brown_priv_count == 0:
-                    print("Used all privilege already in Brown!")
-                    return False
-                else:
-                    self.current_player.brown_priv_count -= 1
 
             # Check for Scotland region
             elif route.region == "Scotland":
-                if not (self.carlisle_priv == self.current_player or self.london_priv == self.current_player):
-                    print("Cannot claim post in BLUE - Incorrect Privilege")
+                if not (
+                    self.current_player.blue_priv_count > 0
+                    or self.current_player.london_priv_count > 0
+                ):
                     return False
-                if self.current_player.blue_priv_count == 0:
-                    print("Used all privilege already in Blue!")
-                    return False
-                else:
-                    self.current_player.blue_priv_count -= 1
         return True
+
+    def consume_region_privilege(self, route):
+        if route.region == "Wales":
+            if self.current_player.brown_priv_count > 0:
+                self.current_player.brown_priv_count -= 1
+            elif self.current_player.london_priv_count > 0:
+                self.current_player.london_priv_count -= 1
+            else:
+                raise TurnStateError("No Wales placement permission remains")
+        elif route.region == "Scotland":
+            if self.current_player.blue_priv_count > 0:
+                self.current_player.blue_priv_count -= 1
+            elif self.current_player.london_priv_count > 0:
+                self.current_player.london_priv_count -= 1
+            else:
+                raise TurnStateError("No Scotland placement permission remains")
 
     def check_for_east_west_connection(self):
         if self.current_player in self.players_who_completed_east_west:
@@ -246,12 +299,10 @@ class Game:
         if not start_city or not end_city:
             return False
 
-        start_city_owners = {office.controller for office in start_city.offices if office.controller}
-        end_city_owners = {office.controller for office in end_city.offices if office.controller}
-
-        # Check for intersection between the sets of owners
-        common_owners = start_city_owners.intersection(end_city_owners)
-        return bool(common_owners)
+        return (
+            start_city.has_office_controlled_by(self.current_player)
+            and end_city.has_office_controlled_by(self.current_player)
+        )
     
     def has_east_west_connection(self, start_city_name, end_city_name, visited=None):
         # This is a recursive depth-first search (DFS) algorithm.
@@ -263,6 +314,10 @@ class Game:
 
         # Check if both cities exist in the game.
         if start_city is None or end_city is None:
+            return False
+        if not start_city.has_office_controlled_by(self.current_player):
+            return False
+        if not end_city.has_office_controlled_by(self.current_player):
             return False
 
         # If we've reached the end city, return True
@@ -420,7 +475,7 @@ class Game:
         self.current_full_cities_count = sum(1 for city in self.selected_map.cities if city.city_is_full())
         
         # Check if the bonus marker pool is empty or any player has reached the score threshold
-        end_conditions_met = (not self.selected_map.bonus_marker_pool or 
+        end_conditions_met = (self.bonus_pool_exhausted_during_claim or
                               any(player.score >= 20 for player in self.players) or
                               self.current_full_cities_count >= self.selected_map.max_full_cities)
 

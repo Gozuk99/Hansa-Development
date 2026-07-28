@@ -17,7 +17,7 @@ from map_data.constants import CIRCLE_RADIUS, TAN, COLOR_NAMES, DARK_GREEN, INPU
 # from map_data.map_attributes import Map, City, Upgrade, Office, Route
 from ai.ai_model import HansaNN
 from ai.game_state import BoardData
-from ai.action_options import perform_action_from_index, masking_out_invalid_actions
+from ai.action_options import masking_out_invalid_actions
 from game.game_info import Game
 from game.game_actions import claim_post_action, displace_action, move_action, displace_claim, assign_new_bonus_marker_on_route, claim_route_for_office, claim_route_for_upgrade, claim_route_for_points, buy_tile
 from drawing.drawing_utils import redraw_window, draw_end_game
@@ -560,7 +560,7 @@ for j in range(10):
             print(f"ExpLOITation: Selected action with highest Q-value Index {selected_index}")
 
         # Perform the selected action
-        perform_action_from_index(game, selected_index)
+        game.apply_action(selected_index)
 
         if game.game_end == True:
             active_player.reward_structure.get_end_game_placement_RL_rewards(game)

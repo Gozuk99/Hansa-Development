@@ -6,7 +6,6 @@ from ai.action_options import (
     InvalidActionError,
     map_end_turn_action,
     masking_out_invalid_actions,
-    perform_action_from_index,
 )
 from map_data.map_attributes import BonusMarker
 
@@ -114,7 +113,7 @@ class TurnStructureTests(unittest.TestCase):
         mask = masking_out_invalid_actions(game)
         self.assertEqual(mask[618].item(), 1)
 
-        perform_action_from_index(game, 618)
+        game.apply_action(618)
 
         self.assertEqual(game.current_player_index, 1)
         self.assertEqual(game.turn_number, 2)
@@ -126,7 +125,7 @@ class TurnStructureTests(unittest.TestCase):
         mask = masking_out_invalid_actions(game)
         self.assertEqual(mask[618].item(), 1)
 
-        perform_action_from_index(game, 618)
+        game.apply_action(618)
 
         self.assertEqual(game.current_player_index, 0)
         self.assertTrue(game.current_player.ending_turn)
@@ -159,6 +158,36 @@ class TurnStructureTests(unittest.TestCase):
         self.assertGreater(mask[543:583].count_nonzero().item(), 0)
         self.assertEqual(mask[:543].count_nonzero().item(), 0)
         self.assertEqual(mask[583:].count_nonzero().item(), 0)
+
+    def test_apply_action_rejects_out_of_range_and_masked_actions(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        with self.assertRaises(InvalidActionError):
+            game.apply_action(-1)
+        with self.assertRaises(InvalidActionError):
+            game.apply_action(619)
+        with self.assertRaises(InvalidActionError):
+            game.apply_action(618)
+
+    def test_apply_action_is_authoritative_supported_boundary(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        legal_indices = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        action_index = legal_indices[0]
+        before_actions = game.current_player.actions_remaining
+
+        game.apply_action(action_index)
+
+        self.assertEqual(game.players[0].actions_remaining, before_actions - 1)
+
+    def test_legality_checks_do_not_consume_britannia_permission(self):
+        game = create_headless_game(map_num=3, num_players=3, seed=124)
+        game.cardiff_priv = game.current_player
+        game.current_player.refresh_map3_priv_actions(game)
+        before = game.current_player.brown_priv_count
+
+        game.legal_action_mask()
+        game.legal_action_mask()
+
+        self.assertEqual(game.current_player.brown_priv_count, before)
 
 
 if __name__ == "__main__":

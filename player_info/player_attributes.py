@@ -49,12 +49,30 @@ class Player:
 
         self.brown_priv_count = 0
         self.blue_priv_count = 0
+        self.london_priv_count = 0
 
     def start_turn(self, extra_actions=0):
         if extra_actions < 0:
             raise ValueError("extra_actions cannot be negative")
         self.actions_remaining = self.actions + extra_actions
         self.ending_turn = False
+
+    @property
+    def locked_ability_traders(self):
+        return (
+            len(CITY_KEYS_MAX_VALUES) - 1 - self.keys_index
+            + len(ACTIONS_MAX_VALUES) - 1 - self.actions_index
+            + len(PRIVILEGE_COLORS) - 1 - PRIVILEGE_COLORS.index(self.privilege)
+            + len(BANK_MAX_VALUES) - 1 - BANK_MAX_VALUES.index(self.bank)
+        )
+
+    @property
+    def locked_ability_merchants(self):
+        return (
+            len(BOOK_OF_KNOWLEDGE_MAX_VALUES)
+            - 1
+            - BOOK_OF_KNOWLEDGE_MAX_VALUES.index(self.book)
+        )
 
     def spend_action(self):
         if self.actions_remaining <= 0:
@@ -72,14 +90,14 @@ class Player:
     def refresh_map3_priv_actions(self, game):
         self.brown_priv_count = 0
         self.blue_priv_count = 0
+        self.london_priv_count = 0
         
         if game.cardiff_priv == self:
             self.brown_priv_count += 1
         if game.carlisle_priv == self:
             self.blue_priv_count += 1
         if game.london_priv == self:
-            self.brown_priv_count += 1
-            self.blue_priv_count += 1
+            self.london_priv_count = 1
 
     def add_bonus_marker(self, marker):
         self.bonus_markers.append(marker)
@@ -236,21 +254,26 @@ class Player:
         return False  # For any other cases
     
     def income_action(self, num_squares=0, num_circles=0, tribute_income=False):
-        if num_circles <= self.general_stock_circles and num_squares <= self.general_stock_squares:
+        if num_squares < 0 or num_circles < 0:
+            raise ValueError("Income counts cannot be negative")
+        total = num_squares + num_circles
+        if total == 0:
+            raise ValueError("Income must transfer at least one tradesman")
+        if num_squares > self.general_stock_squares:
+            raise ValueError("Not enough traders in general stock")
+        if num_circles > self.general_stock_circles:
+            raise ValueError("Not enough merchants in general stock")
+        if self.bank != 50 and total > self.bank:
+            raise ValueError(
+                f"Income exceeds Bank capacity: requested {total}, capacity {self.bank}"
+            )
 
-            if num_circles + num_squares < self.bank and self.bank == 3:
-                if not tribute_income:
-                    print(f"Inefficient use of income action while bank is at {self.bank}")
-                    self.reward -=10
-
-            self.general_stock_circles -= num_circles
-            self.personal_supply_circles += num_circles
-            
-            self.general_stock_squares -= num_squares
-            self.personal_supply_squares += num_squares
+        self.general_stock_circles -= num_circles
+        self.personal_supply_circles += num_circles
+        self.general_stock_squares -= num_squares
+        self.personal_supply_squares += num_squares
+        if not tribute_income:
             self.spend_action()
-        elif self.general_stock_circles + self.general_stock_squares > self.bank:
-            raise Exception("The sum of general stock circles and squares exceeds the bank value.")
     
     def income_action_based_on_circle_count(self, max_circles, bank, general_stock_squares):
         button_labels = []

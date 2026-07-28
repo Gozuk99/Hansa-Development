@@ -9,6 +9,8 @@ def main():
     parser.add_argument("--players", type=int, default=3)
     parser.add_argument("--seed", type=int, default=124)
     parser.add_argument("--max-actions", type=int, default=10_000)
+    parser.add_argument("--mission-cards", action="store_true")
+    parser.add_argument("--emperors-favour", action="store_true")
     args = parser.parse_args()
 
     try:
@@ -17,6 +19,8 @@ def main():
             num_players=args.players,
             seed=args.seed,
             max_actions=args.max_actions,
+            use_mission_cards=args.mission_cards,
+            use_emperors_favour=args.emperors_favour,
         )
     except GameRunError as error:
         parser.exit(1, f"Headless game failed: {error}\n")

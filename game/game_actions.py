@@ -10,11 +10,7 @@ def claim_post_action(game, route, post, piece_to_play):
     if not game.check_brown_blue_priv(route):
         print(f"CLAIM ERROR - Incorrect Privilige to claim in brown or blue")
         return
-    else:
-        if route.region == "Wales":
-            game.current_player.brown_priv_count -= 1
-        elif route.region == "Scotland":
-            game.current_player.blue_priv_count -= 1
+    game.consume_region_privilege(route)
     
     if (player.personal_supply_squares + player.personal_supply_circles) == 0:
         print("CLAIM ERROR - No pieces left to place!")
@@ -90,11 +86,7 @@ def displace_action(game, post, route, displacing_piece_shape):
     if not game.check_brown_blue_priv(route):
         print(f"DISPLACE ERROR - Incorrect Privilige to displace in brown or blue")
         return
-    else:
-        if route.region == "Wales":
-            game.current_player.brown_priv_count -= 1
-        elif route.region == "Scotland":
-            game.current_player.blue_priv_count -= 1
+    game.consume_region_privilege(route)
     
     if route.has_bonus_marker:
         current_player.reward += current_player.reward_structure.post_with_bm-2
@@ -439,6 +431,26 @@ def displace_claim(game, post, desired_shape):
             post_count += 1
         print(f"displace_claim: Processed {post_count} posts.")  # Debugging log
 
+def finish_displacement(game):
+    """Decline optional extra pieces after replacing the displaced piece."""
+    displaced = game.displaced_player
+    if not game.waiting_for_displaced_player:
+        raise RuntimeError("No displacement is in progress")
+    if not displaced.played_displaced_shape:
+        raise RuntimeError("The displaced piece itself must be placed")
+    if displaced.player.holding_pieces:
+        raise RuntimeError("Held pieces must be placed before finishing displacement")
+
+    for candidate in game.all_empty_posts:
+        candidate.reset_post()
+    game.all_empty_posts.clear()
+    game.original_route_of_displacement = None
+    displaced.reset_displaced_player()
+    game.waiting_for_displaced_player = False
+    game.current_player.spend_action()
+    game.active_player = game.current_player.order - 1
+
+
 def displace_to(game, post, shape, use_displaced_piece=False):
     displaced_player = game.displaced_player
     if use_displaced_piece:
@@ -497,14 +509,14 @@ def assign_new_bonus_marker_on_route(game, route):
         print(f"Invalid BM Placement: Both cities at the ends of the route between {route.cities[0].name} and {route.cities[1].name} have no empty offices.")
         return
 
-    if game.selected_map.bonus_marker_pool:
-        bm_type = game.selected_map.bonus_marker_pool.pop()
+    if game.pending_bonus_markers:
+        bm_type = game.pending_bonus_markers.pop(0)
         route.assign_map_new_bonus_marker(bm_type)  # Create a new BonusMarker instance with the type
         print(f"Bonus marker '{bm_type}' has been placed on the route between {route.cities[0].name} and {route.cities[1].name}.")
         game.replace_bonus_marker -= 1
         game.switch_player_if_needed()
     else:
-        print("No action taken: No bonus markers available in the pool.")
+        print("No action taken: No pending bonus marker is available.")
 
 def score_route(current_player, route):
     # Allocate points
@@ -550,12 +562,17 @@ def claim_route_for_office(game, city, route):
     else:
         print(f"{COLOR_NAMES[current_player.color]} doesn't have the correct privilege - {current_player.privilege} - to claim an office in {city.name}.")
 
-def claim_route_for_upgrade(game, city, route, upgrade_choice):
+def claim_route_for_upgrade(game, city, route, upgrade_choice, prestige_value=None):
     current_player = game.current_player
     specialprestigepoints_city = game.selected_map.specialprestigepoints
 
     if "SpecialPrestigePoints" in city.upgrade_city_type and route.contains_a_circle():
-        if specialprestigepoints_city.claim_highest_prestige(current_player):
+        claimed = (
+            specialprestigepoints_city.claim_prestige(current_player, prestige_value)
+            if prestige_value is not None
+            else specialprestigepoints_city.claim_highest_prestige(current_player)
+        )
+        if claimed:
             current_player.reward += current_player.reward_structure.upgraded_bonus_points
             score_route(current_player, route)
             finalize_route_claim(game, route, "circle")
@@ -597,7 +614,11 @@ def handle_bonus_marker(game, player, route, reset_pieces):
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
         route.has_bonus_marker = False
-        game.replace_bonus_marker += 1
+        if game.selected_map.bonus_marker_pool:
+            game.pending_bonus_markers.append(game.selected_map.bonus_marker_pool.pop())
+            game.replace_bonus_marker += 1
+        else:
+            game.bonus_pool_exhausted_during_claim = True
     elif route.permanent_bonus_marker:
         player.reward += player.reward_structure.route_complete_perm_bm
         perm_bm_type = route.permanent_bonus_marker.type
