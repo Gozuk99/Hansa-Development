@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import random
+import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -25,10 +26,7 @@ class HansaNN(nn.Module):
         self.layer2 = nn.Linear(2048, 1024).to(device)
         self.layer3 = nn.Linear(1024, output_size).to(device)
         self.relu = nn.ReLU()
-        self.softmax = nn.Softmax(dim=-1)
-
-        # Define the optimizer
-        self.optimizer = optim.Adam(self.parameters(), lr=0.001)
+        # self.softmax = nn.Softmax(dim=-1)
 
         if model_file and os.path.isfile(model_file):
             self.load_state_dict(torch.load(model_file, map_location=device))
@@ -36,12 +34,15 @@ class HansaNN(nn.Module):
         else:
             if model_file:
                 print(f"No saved model found at {model_file}. Initializing new model.")
+        
+        # Define the optimizer
+        self.optimizer = optim.Adam(self.parameters(), lr=0.001)
 
     def forward(self, x):
         x = self.relu(self.layer1(x))
         x = self.relu(self.layer2(x))
         x = self.layer3(x)
-        x = self.softmax(x)  # Apply softmax to the output layer
+        # x = self.softmax(x)  # Apply softmax to the output layer
         return x
 
     def print_weights(self, layer_name, n=50, precision=4):
@@ -51,6 +52,16 @@ class HansaNN(nn.Module):
             weights = layer.weight.data.flatten()[:n]
             formatted_weights = torch.round(weights * (10 ** precision)) / (10 ** precision)
             print(f"{layer_name} first {n} weights: {formatted_weights.cpu().numpy()}")  # Convert to CPU and NumPy array for printing
+
+    def save_model(self, player_order):
+        model_path = f"hansa_nn_model{player_order}.pth"
+        try:
+            print(f"Saving model for Player: {player_order} as {model_path}")
+            torch.save(self.state_dict(), model_path)
+        except Exception as e:  # Catch a broader range of exceptions for robustness
+            print(f"Error saving model: {e}")
+            return False
+        return True
 
 # # Step 1: Displacement Decision
 # state = get_current_state(game)

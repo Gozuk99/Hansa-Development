@@ -152,7 +152,7 @@ def map_claim_post_action(game, index):
     elif game.waiting_for_bm_tribute_trading_post:
         current_player.personal_supply_squares -= 1
         selected_route.establish_tribute_on_route(current_player)
-        game.waiting_for_bm_block_trade_route = False
+        game.waiting_for_bm_tribute_trading_post = False
     elif game.waiting_for_bm_block_trade_route:
         current_player.personal_supply_squares -= 1
         selected_route.establish_blocked_route()
@@ -267,6 +267,8 @@ def map_claim_route_action(game, index):
     else:
         print("Invalid index for claim route action.")
         error_exit(game)
+
+    game.check_for_game_end()
 
 def map_income_action(game, index):
     current_player = game.current_player

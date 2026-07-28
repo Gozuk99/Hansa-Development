@@ -5,6 +5,11 @@ import torch
 import gc
 import time
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+criterion = nn.CrossEntropyLoss()
+
 # Set print options
 torch.set_printoptions(profile="full")
 
@@ -123,10 +128,10 @@ def check_if_route_claimed(pos, button):
             print(f"Route(s) not controlled by current_player: {COLOR_NAMES[current_player.color]}")
 
 def check_if_game_over():
-    highest_scoring_players = game.check_for_game_end()
-    if highest_scoring_players:
+    game.check_for_game_end()
+    if game.game_end == True:
         redraw_window(win, game)
-        end_game(highest_scoring_players)
+        end_game(game.end_the_game())
 
 def get_upgrade_choice(upgrade_options):
     waiting_for_click = True
@@ -495,9 +500,14 @@ gamma = 0.99
 
 board_data = BoardData()
 
-for j in range(5):
-    #game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
-    game = board_data.load_game_state_JSON('game_state_JSON.json')
+for j in range(10):
+    game = Game(map_num=random.randint(1, 2), num_players=random.randint(3, 5))
+    # game = board_data.load_random_game_state_JSON('game_state_JSON.json')
+    # game = board_data.load_game_state_JSON('training_data\\5p-map2_early_game_full_routes.json')
+    WIDTH = game.selected_map.map_width+800
+    HEIGHT = game.selected_map.map_height
+    win = pygame.display.set_mode((WIDTH, HEIGHT))
+
     # board_data.save_game_state_JSON(game)
 
     game_state_tensor = board_data.get_game_state(game)
@@ -505,7 +515,7 @@ for j in range(5):
     if board_data.all_game_state_size != INPUT_SIZE:
         print(f"Invalid input size: {board_data.all_game_state_size}")
         exit()
-
+    
     # Assuming you have defined INPUT_SIZE, OUTPUT_SIZE, epsilon_start, epsilon_end, decay_rate
     for i in range(100):
         active_player = game.players[game.active_player]
@@ -529,9 +539,15 @@ for j in range(5):
         if valid_indices.numel() == 0:
             print("No valid actions available. Breaking out of the loop.")
             # print(f"Valid actions: {valid_actions}")
-            print(f"Masked Q-values: {masked_q_values}")
-            break  # Exiting the loop if no valid actions are available
 
+            for player in game.players:
+                if not player.hansa_nn.save_model(player.order):
+                    j = 10  # Set j to 10 to break the outer loop
+            print(f"Masked Q-values: {masked_q_values}")
+
+            break  # Exiting the loop if no valid actions are available
+        # print(f"Valid actions: {valid_actions}")
+        # print(f"Masked Q-values: {masked_q_values}")
         if random.random() < epsilon:
             # Exploration: Randomly select from valid actions
             selected_index = random.choice(valid_indices.tolist())
@@ -546,6 +562,9 @@ for j in range(5):
         # Perform the selected action
         perform_action_from_index(game, selected_index)
 
+        if game.game_end == True:
+            active_player.reward_structure.get_end_game_placement_RL_rewards(game)
+
         # Obtain reward and next state
         reward = active_player.reward  # Assuming this is updated in perform_action_from_index
         next_game_state_tensor = board_data.get_game_state(game).float()
@@ -558,29 +577,37 @@ for j in range(5):
         target_q_value = reward + (gamma * max_next_q_value)
 
         # Calculate the loss using only the selected Q-value
-        loss = (current_q_values[selected_index] - target_q_value) ** 2
+        loss = criterion(current_q_values.unsqueeze(0), torch.tensor([selected_index], device=current_q_values.device))
         hansa_nn.optimizer.zero_grad()
         loss.backward()
+
+        # for name, param in hansa_nn.named_parameters():
+        #     if param.grad is not None:
+        #         print(f"{name} grad sum: {param.grad.sum()}")
 
         # Apply gradient clipping and optimizer step
         torch.nn.utils.clip_grad_norm_(hansa_nn.parameters(), max_norm=1.0)
         hansa_nn.optimizer.step()
 
         print(f"[{COLOR_NAMES[active_player.color]}] Reward: {reward}, Loss: {loss.item()}")
+        if game.game_end == True:
+            pygame.display.set_caption('Hansa Teutonica Sample Game')
+            win.fill(TAN)
+            redraw_window(win, game)
+            for player in game.players:
+                if not player.hansa_nn.save_model(player.order):
+                    j = 10  # Set j to 10 to break the outer loop
+                    break  # Set j to 10 to break the outer loop
+            end_game(game.end_the_game())
+            break
 
         active_player.reward = 0  # Reset reward for the next step
         epsilon = max(epsilon_end, epsilon - decay_rate)  # Decay epsilon
 
-    try:
-        # Save models
-        for player in game.players:
-            print(f"Saving model for Player: {player.order} as hansa_nn_model{player.order}.pth")
-            torch.save(player.hansa_nn.state_dict(), f"hansa_nn_model{player.order}.pth")
-            time.sleep(0.1)  # Sleep for 0.1 seconds
-    except RuntimeError as e:
-        print(f"Error saving model: {e}")
-        j = 10  # Set j to 10 to break the outer loop
-        break
+    for player in game.players:
+        if not player.hansa_nn.save_model(player.order):
+            j = 10  # Set j to 10 to break the outer loop
+            break  # Set j to 10 to break the outer loop
     time.sleep(1)  # Sleep for 1 second
     gc.collect()
 
@@ -596,15 +623,13 @@ for j in range(5):
 # plt.title("Final Weights Distribution")
 # plt.show()
 
-WIDTH = game.selected_map.map_width+800
-HEIGHT = game.selected_map.map_height
 cities = game.selected_map.cities
 routes = game.selected_map.routes
 
-win = pygame.display.set_mode((WIDTH, HEIGHT))
 # viewable_window = pygame.display.set_mode((1800, 1350))
 pygame.display.set_caption('Hansa Teutonica Sample Game')
 win.fill(TAN)
+redraw_window(win, game)
 
 # exit()
 while True:

@@ -111,3 +111,48 @@ class Rewards:
         self.bm_move3 = 100
         self.bm_swap_city_office = 100
         self.bm_place_adjacent = 50
+
+    def get_end_game_placement_RL_rewards(self, game):
+        # Fixed rewards by rank
+        rank_rewards = {
+            1: 2000,   # Reward for 1st place
+            2: 500,    # Reward for 2nd place
+            3: 0,      # Reward for 3rd place
+            4: -500,   # Reward for 4th place
+            5: -2000   # Reward for 5th place
+        }
+
+        # Sort players based on their scores (higher scores are better)
+        sorted_players = sorted(game.players, key=lambda x: x.final_score, reverse=True)
+        num_players = len(sorted_players)
+
+        # Initialize rewards for each rank
+        player_rewards = {}
+        last_score = None
+        last_rank = 0
+        shared_rank = 1
+
+        # Assign rewards based on ranking and handle ties
+        for i, player in enumerate(sorted_players):
+            if player.final_score == last_score:
+                player_rewards[player] = player_rewards[last_player]  # Same reward as previous for a tie
+            else:
+                if i > 0:  # Adjust rank only if not the first player
+                    shared_rank = i + 1
+                player_rewards[player] = rank_rewards.get(shared_rank, -2000)  # Default to -2000 if rank beyond 5
+
+            # Update for next iteration
+            last_score = player.final_score
+            last_player = player
+            last_rank = shared_rank
+
+        # Apply calculated rewards to players
+        for player, reward in player_rewards.items():
+            player.reward += reward
+            print(f"{COLOR_NAMES[player.color]} (Rank {last_rank}/{num_players}): Score = {player.final_score}, Reward = {player.reward}")
+
+        # This handles the case where the active player ends the game
+        game.players[game.active_player].reward += self.end_game_on_your_turn
+
+
+

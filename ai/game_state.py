@@ -1,7 +1,8 @@
 import torch
 import json
 import time
-import sys
+import random
+import os
 from game.game_info import Game
 from map_data.constants import GREEN, BLUE, PURPLE, RED, YELLOW, BLACKISH_BROWN, DARK_RED, DARK_GREEN, DARK_BLUE, GREY, MAX_CITIES, MAX_ROUTES, COLOR_NAMES, WHITE, ORANGE, PINK, BLACK 
 from map_data.map_attributes import BonusMarker
@@ -584,6 +585,23 @@ class BoardData:
         self.load_player_info_JSON(game, game_state_JSON['player_info'])
 
         return game
+    
+    def load_random_game_state_JSON(self, directory):
+        # List all files in the specified directory
+        files = os.listdir(directory)
+        
+        # Filter for JSON files if there are other file types in the directory
+        json_files = [file for file in files if file.endswith('.json')]
+        
+        if not json_files:
+            raise ValueError("No JSON files found in the directory")
+        
+        # Randomly select a JSON file
+        selected_file = random.choice(json_files)
+        full_path = os.path.join(directory, selected_file)
+        
+        # Load the game state from the selected JSON file
+        return self.load_game_state_JSON(full_path)
     
     def load_game_info_JSON(self, game, game_info_JSON):
         game.active_player = game_info_JSON['active_player']

@@ -60,6 +60,8 @@ class Game:
         self.FourPtsPerOwnedCityOwner = None
         self.SevenPtsPerCompletedAbilityOwner = None
 
+        self.game_end = False
+
     def create_players(self, num_players):
         colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
         players = []
@@ -337,7 +339,7 @@ class Game:
                 score_breakdown['Mission City Points'] = mission_city_points
 
             # Ensure final score is not less than the initial score
-            if player.final_score <= player.score:
+            if player.final_score < player.score:
                 print(f"ERROR: Player {COLOR_NAMES[player.color]}: Final score is less than or equal to the initial score. No change made.")
                 exit(1)
 
@@ -356,16 +358,15 @@ class Game:
         if end_conditions_met:
             # Finalize points before determining the winner
             self.finalize_end_of_game_points()
+            self.game_end = True
+    
+    def end_the_game(self):
+        # Find the player(s) with the highest score
+        highest_score = max(player.final_score for player in self.players)
+        highest_scoring_players = [player for player in self.players if player.final_score == highest_score]
 
-            # Find the player(s) with the highest score
-            highest_score = max(player.final_score for player in self.players)
-            highest_scoring_players = [player for player in self.players if player.final_score == highest_score]
-
-            # If there's a tie, you might need additional logic to determine the winner
-            return highest_scoring_players
-
-        # Game continues if no end condition is met
-        return None
+        # If there's a tie, you might need additional logic to determine the winner
+        return highest_scoring_players
 
     # # Example usage in your game loop:
     # winning_players = game.check_for_game_end()
