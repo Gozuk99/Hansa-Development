@@ -210,32 +210,40 @@ def gather_empty_adjacent_posts(
 
 
 def displacement_shapes_to_place(game):
-    """Return shapes available from the rule-ordered displacement source."""
+    """Return shapes available among all pieces remaining in the sequence.
+
+    The displaced piece is mandatory, but it need not be placed first. Optional
+    pieces therefore participate in the same nearest-distance search until the
+    displaced piece has been placed. General Stock retains priority over
+    Personal Supply.
+    """
     displaced = game.displaced_player
     player = game.displaced_player.player
     if player.holding_pieces:
         return (player.holding_pieces[0][0],)
+
+    shapes = []
     if not displaced.played_displaced_shape:
-        return (displaced.displaced_shape,)
+        shapes.append(displaced.displaced_shape)
+
     if displacement_uses_board_fallback(game):
-        return ()
+        return tuple(shapes)
+
     if not displaced.is_general_stock_empty():
-        return tuple(
-            shape
-            for shape, count in (
-                ("square", player.general_stock_squares),
-                ("circle", player.general_stock_circles),
-            )
-            if count
+        source_counts = (
+            ("square", player.general_stock_squares),
+            ("circle", player.general_stock_circles),
         )
-    return tuple(
-        shape
-        for shape, count in (
+    else:
+        source_counts = (
             ("square", player.personal_supply_squares),
             ("circle", player.personal_supply_circles),
         )
-        if count
-    )
+
+    for shape, count in source_counts:
+        if count and shape not in shapes:
+            shapes.append(shape)
+    return tuple(shapes)
 
 
 def displacement_shape_to_place(game):
