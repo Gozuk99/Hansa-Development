@@ -197,16 +197,23 @@ class GameWindow:
 
         if not candidates:
             return None
-        return min(
-            candidates,
-            key=lambda candidate: min(
-                (
-                    (position[0] - post.pos[0]) ** 2 + (position[1] - post.pos[1]) ** 2
-                    for post in candidate[1].posts
-                ),
-                default=0,
-            ),
-        )[0]
+        if len(candidates) == 1:
+            return candidates[0][0]
+
+        route_targets = []
+        for action, route in candidates:
+            other_city = next(endpoint for endpoint in route.cities if endpoint is not city)
+            route_targets.append((action, route, other_city.midpoint))
+        x_values = [target[2][0] for target in route_targets]
+        y_values = [target[2][1] for target in route_targets]
+        use_x_axis = max(x_values) - min(x_values) >= max(y_values) - min(y_values)
+        axis = 0 if use_x_axis else 1
+        ordered = sorted(route_targets, key=lambda target: target[2][axis])
+        origin = upgrade.x_pos if use_x_axis else upgrade.y_pos
+        extent = upgrade.width if use_x_axis else upgrade.height
+        relative = max(0, min(extent - 1, position[axis] - origin))
+        selection = int(relative * len(ordered) / extent)
+        return ordered[selection][0]
 
     def _route_toward_click(self, city, position):
         controlled_routes = [

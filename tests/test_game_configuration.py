@@ -349,6 +349,67 @@ class GameConfigurationTests(unittest.TestCase):
         )
         self.assertIsNone(window.action_for_click(city_center, 2, legal_actions))
 
+    def test_every_legal_adjacent_route_is_reachable_from_upgrade_box(self):
+        for map_num in (1, 2, 3):
+            game = GameConfiguration(map_num=map_num, seed=124).create_game()
+            for upgrade in game.selected_map.upgrade_cities:
+                with self.subTest(map_num=map_num, upgrade=upgrade.upgrade_type):
+                    city = next(
+                        candidate
+                        for candidate in game.selected_map.cities
+                        if candidate.name == upgrade.city_name
+                    )
+                    for route in city.routes:
+                        for post in route.posts:
+                            post.owner = game.current_player
+                            post.owner_piece_shape = "square"
+                    legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+                    upgrade_index = city.upgrade_city_type.index(upgrade.upgrade_type)
+                    expected = {
+                        242
+                        + 120
+                        + game.selected_map.routes.index(route) * 4
+                        + route.cities.index(city) * 2
+                        + upgrade_index
+                        for route in city.routes
+                    }
+                    expected.intersection_update(legal_actions)
+                    window = GameWindow.__new__(GameWindow)
+                    window.game = game
+                    window.action_rects = []
+                    center_x = int(upgrade.x_pos + upgrade.width / 2)
+                    center_y = int(upgrade.y_pos + upgrade.height / 2)
+                    positions = [
+                        *(
+                            (x, center_y)
+                            for x in range(
+                                int(upgrade.x_pos),
+                                int(upgrade.x_pos + upgrade.width),
+                            )
+                        ),
+                        *(
+                            (center_x, y)
+                            for y in range(
+                                int(upgrade.y_pos),
+                                int(upgrade.y_pos + upgrade.height),
+                            )
+                        ),
+                    ]
+                    reached = {
+                        action
+                        for position in positions
+                        if (
+                            action := window.action_for_click(
+                                position,
+                                1,
+                                legal_actions,
+                            )
+                        )
+                        is not None
+                    }
+                    self.assertTrue(expected)
+                    self.assertTrue(expected.issubset(reached))
+
     def test_left_click_on_special_prestige_box_exposes_all_four_values(self):
         game = GameConfiguration(map_num=1, seed=124).create_game()
         city = next(

@@ -47,6 +47,9 @@ mask and is applied through `Game.apply_action()`.
   Waren or the four Special Prestige values, each drawn choice is its own
   left-click target. Every choice also remains available in the legal-action
   browser.
+- If several completed routes can develop the same ability, click the side of
+  the ability box nearest the route's other city. Each legal adjacent route is
+  assigned a reachable section of the box.
 - Arrow keys navigate the legal-action browser; Enter applies the selected
   action; `E` finishes when action `618` is legal.
 
