@@ -53,7 +53,7 @@ class GameWindow:
         prompt = self.font.render(prompt_text, True, (117, 70, 42))
         self.screen.blit(prompt, (panel.x + 10, panel.y + 54))
         city_help = self.font.render(
-            "City — L: office  M: upgrade  R: points",
+            "City — L: office  R: points | Upgrade box — L: develop",
             True,
             (30, 25, 20),
         )
@@ -103,6 +103,11 @@ class GameWindow:
                 if rect.collidepoint(position) and action in legal_actions:
                     return action
 
+        if button == 1:
+            upgrade_action = self._upgrade_action_for_click(position, legal_actions)
+            if upgrade_action is not None:
+                return upgrade_action
+
         post_index = 0
         for route_index, route in enumerate(self.game.selected_map.routes):
             for post in route.posts:
@@ -134,33 +139,6 @@ class GameWindow:
                 if button == 3:
                     action = 242 + route_index
                     return action if action in legal_actions else None
-                if button == 2:
-                    base = 242 + MAX_ROUTES * 3 + route_index * 4
-                    choices = [
-                        action for action in range(base, base + 4) if action in legal_actions
-                    ]
-                    city_choices = [
-                        action for action in choices if ((action - base) // 2) == city_index
-                    ]
-                    special_city = next(
-                        (
-                            city
-                            for city in route.cities
-                            if "SpecialPrestigePoints" in city.upgrade_city_type
-                        ),
-                        None,
-                    )
-                    if special_city is not None:
-                        available = choices if clicked_city is special_city else []
-                    else:
-                        available = city_choices
-                    if not available:
-                        return None
-                    relative_x = max(
-                        0, min(clicked_city.width - 1, position[0] - clicked_city.x_pos)
-                    )
-                    selection = int(relative_x * len(available) / clicked_city.width)
-                    return available[selection]
 
         tile_actions = {
             "DisplaceAnywhere": 535,
@@ -176,6 +154,59 @@ class GameWindow:
                 action = tile_actions[tile]
                 return action if action in legal_actions else None
         return None
+
+    def _upgrade_action_for_click(self, position, legal_actions):
+        selected_map = self.game.selected_map
+        upgrades = [*selected_map.upgrade_cities, selected_map.specialprestigepoints]
+        upgrade = next(
+            (
+                candidate
+                for candidate in upgrades
+                if pygame.Rect(
+                    candidate.x_pos,
+                    candidate.y_pos,
+                    candidate.width,
+                    candidate.height,
+                ).collidepoint(position)
+            ),
+            None,
+        )
+        if upgrade is None:
+            return None
+
+        city = next(
+            candidate for candidate in selected_map.cities if candidate.name == upgrade.city_name
+        )
+        candidates = []
+        if upgrade.upgrade_type == "SpecialPrestigePoints":
+            relative_x = max(0, min(upgrade.width - 1, position[0] - upgrade.x_pos))
+            choice = int(relative_x * 4 / upgrade.width)
+            for route in city.routes:
+                route_index = selected_map.routes.index(route)
+                action = 242 + MAX_ROUTES * 3 + route_index * 4 + choice
+                if action in legal_actions:
+                    candidates.append((action, route))
+        else:
+            upgrade_index = city.upgrade_city_type.index(upgrade.upgrade_type)
+            for route in city.routes:
+                route_index = selected_map.routes.index(route)
+                city_index = route.cities.index(city)
+                action = 242 + MAX_ROUTES * 3 + route_index * 4 + city_index * 2 + upgrade_index
+                if action in legal_actions:
+                    candidates.append((action, route))
+
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda candidate: min(
+                (
+                    (position[0] - post.pos[0]) ** 2 + (position[1] - post.pos[1]) ** 2
+                    for post in candidate[1].posts
+                ),
+                default=0,
+            ),
+        )[0]
 
     def _route_toward_click(self, city, position):
         controlled_routes = [

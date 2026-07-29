@@ -310,7 +310,7 @@ class GameConfigurationTests(unittest.TestCase):
             543,
         )
 
-    def test_middle_click_zones_expose_each_city_upgrade(self):
+    def test_left_click_on_each_waren_upgrade_box_selects_that_upgrade(self):
         game = GameConfiguration(map_num=2, seed=124).create_game()
         city = next(city for city in game.selected_map.cities if city.name == "Waren")
         route = city.routes[0]
@@ -325,14 +325,31 @@ class GameConfigurationTests(unittest.TestCase):
         window.game = game
         window.action_rects = []
 
-        left = (city.x_pos + 1, city.y_pos + city.height // 2)
-        right = (city.x_pos + city.width - 1, city.y_pos + city.height // 2)
-
+        upgrade_boxes = [
+            upgrade for upgrade in game.selected_map.upgrade_cities if upgrade.city_name == "Waren"
+        ]
         self.assertEqual(len(choices), 2)
-        self.assertEqual(window.action_for_click(left, 2, legal_actions), choices[0])
-        self.assertEqual(window.action_for_click(right, 2, legal_actions), choices[1])
+        city_index = route.cities.index(city)
+        for upgrade in upgrade_boxes:
+            with self.subTest(upgrade=upgrade.upgrade_type):
+                center = (
+                    upgrade.x_pos + upgrade.width // 2,
+                    upgrade.y_pos + upgrade.height // 2,
+                )
+                expected = (
+                    base + city_index * 2 + city.upgrade_city_type.index(upgrade.upgrade_type)
+                )
+                self.assertEqual(
+                    window.action_for_click(center, 1, legal_actions),
+                    expected,
+                )
+        city_center = (
+            city.x_pos + city.width // 2,
+            city.y_pos + city.height // 2,
+        )
+        self.assertIsNone(window.action_for_click(city_center, 2, legal_actions))
 
-    def test_special_prestige_city_zones_expose_all_four_values(self):
+    def test_left_click_on_special_prestige_box_exposes_all_four_values(self):
         game = GameConfiguration(map_num=1, seed=124).create_game()
         city = next(
             city
@@ -349,16 +366,17 @@ class GameConfigurationTests(unittest.TestCase):
         window = GameWindow.__new__(GameWindow)
         window.game = game
         window.action_rects = []
+        prestige = game.selected_map.specialprestigepoints
         positions = [
             (
-                city.x_pos + int((index + 0.5) * city.width / 4),
-                city.y_pos + city.height // 2,
+                prestige.x_pos + int((index + 0.5) * prestige.width / 4),
+                prestige.y_pos + prestige.height // 2,
             )
             for index in range(4)
         ]
 
         self.assertEqual(
-            [window.action_for_click(position, 2, choices) for position in positions],
+            [window.action_for_click(position, 1, choices) for position in positions],
             choices,
         )
 

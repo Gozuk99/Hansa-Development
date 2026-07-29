@@ -56,8 +56,10 @@ a model, or save a checkpoint.
 
 - Route post: left-click to place/displace with a Trader (square); right-click
   for a Merchant (circle).
-- Controlled-route city: left-click to claim an office; middle-click for an
-  upgrade or Special Prestige choice; right-click to score route points.
+- Controlled-route city: left-click to claim an office; right-click to score
+  route points.
+- Drawn upgrade or Special Prestige box: left-click the desired upgrade or
+  prestige value.
 - Legal-action browser: Up/Down selects an action and Enter applies it.
 - Press `E` to finish the turn when End Turn is legal.
 
