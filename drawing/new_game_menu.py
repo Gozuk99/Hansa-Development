@@ -18,6 +18,7 @@ from map_data.map_attributes import Map
 
 
 WINDOW_SIZE = (980, 940)
+INITIAL_WINDOW_SCALE = 2.0
 BACKGROUND = (237, 222, 190)
 PANEL = (250, 243, 224)
 INK = (38, 31, 24)
@@ -77,7 +78,11 @@ class NewGameMenuState:
 class NewGameMenu:
     def __init__(self, state: NewGameMenuState | None = None):
         self.state = state or NewGameMenuState()
-        self.display = ScaledDisplay(WINDOW_SIZE, "Hansa Teutonica — New Game")
+        self.display = ScaledDisplay(
+            WINDOW_SIZE,
+            "Hansa Teutonica — New Game",
+            initial_scale=INITIAL_WINDOW_SCALE,
+        )
         self.screen = self.display.canvas
         self.clock = pygame.time.Clock()
         self.title_font = pygame.font.Font(None, 44)

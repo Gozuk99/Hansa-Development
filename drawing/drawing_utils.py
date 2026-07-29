@@ -419,7 +419,8 @@ def draw_scoreboard(win, players, start_x, start_y):
 def draw_end_turn(win, game):
     start_x = game.selected_map.map_width + 415
     start_y = game.selected_map.map_height - 170
-    end_turn_width = 75  # Set the width according to your requirements
+    is_displacement = game.waiting_for_displaced_player
+    end_turn_width = 145 if is_displacement else 75
     end_turn_height = 70  # Adjust based on text size and spacing
 
     # Draw the End Turn rectangle background
@@ -430,23 +431,24 @@ def draw_end_turn(win, game):
     label_center_y = start_y + end_turn_height // 3
 
     # Draw the End Turn label centered
+    acting_player = game.players[game.active_player]
     draw_text(
         win,
-        "End",
+        "Finish" if is_displacement else "End",
         label_center_x,
         label_center_y,
         FONT_LARGE,
-        game.current_player.color,
+        acting_player.color,
         centered=True,
     )
     label_center_y += end_turn_height // 3
     draw_text(
         win,
-        "Turn",
+        "Displacement" if is_displacement else "Turn",
         label_center_x,
         label_center_y,
-        FONT_LARGE,
-        game.current_player.color,
+        FONT_SMALL if is_displacement else FONT_LARGE,
+        acting_player.color,
         centered=True,
     )
     return pygame.Rect(start_x, start_y, end_turn_width, end_turn_height)

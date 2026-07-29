@@ -8,7 +8,13 @@ import pygame
 class ScaledDisplay:
     """Keep drawing coordinates stable while fitting the whole UI on screen."""
 
-    def __init__(self, logical_size: tuple[int, int], caption: str):
+    def __init__(
+        self,
+        logical_size: tuple[int, int],
+        caption: str,
+        *,
+        initial_scale: float = 1.0,
+    ):
         self.logical_size = logical_size
         self.canvas = pygame.Surface(logical_size)
         pygame.display.set_caption(caption)
@@ -17,8 +23,12 @@ class ScaledDisplay:
             max(640, info.current_w - 80) if info.current_w else logical_size[0],
             max(480, info.current_h - 100) if info.current_h else logical_size[1],
         )
+        requested = (
+            round(logical_size[0] * initial_scale),
+            round(logical_size[1] * initial_scale),
+        )
         self.window = pygame.display.set_mode(
-            self.fit_size(logical_size, available),
+            self.fit_size(requested, available),
             pygame.RESIZABLE,
         )
 

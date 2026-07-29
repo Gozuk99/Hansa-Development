@@ -72,6 +72,8 @@ def action_label(index: int, game=None) -> str:
             return f"Upgrade {game.selected_map.upgrade_cities[choice].upgrade_type}"
         return f"Ability choice {choice + 1}"
     if index == 618:
+        if game is not None and game.turn_phase == TurnPhase.DISPLACEMENT:
+            return "Finish displacement (decline optional pieces)"
         return "Finish / End turn"
     if index == 619:
         return "Use Additional Trading Post"

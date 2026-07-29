@@ -16,6 +16,7 @@ from game.game_config import (
     PlayerControl,
     choose_ranked_ai_action,
 )
+from map_data.constants import MAX_POSTS
 from map_data.map_attributes import Map
 
 
@@ -244,6 +245,11 @@ class GameConfigurationTests(unittest.TestCase):
         self.assertLessEqual(game_size[0], 1840)
         self.assertLessEqual(game_size[1], 980)
 
+    def test_menu_requests_double_size_without_changing_logical_coordinates(self):
+        requested = ScaledDisplay.fit_size((980 * 2, 940 * 2), (3840, 2160))
+
+        self.assertEqual(requested, (1960, 1880))
+
     def test_game_window_mouse_mapping_submits_only_legal_actions(self):
         game = GameConfiguration(map_num=2, seed=124).create_game()
         window = GameWindow.__new__(GameWindow)
@@ -269,6 +275,45 @@ class GameConfigurationTests(unittest.TestCase):
                 1,
                 [],
             )
+        )
+
+    def test_zero_stock_displaced_merchant_is_right_clickable_then_may_finish(self):
+        game = GameConfiguration(map_num=2, seed=124).create_game()
+        actor, opponent = game.players[:2]
+        route = next(
+            candidate
+            for candidate in game.selected_map.routes
+            if {city.name for city in candidate.cities} == {"Malmo", "Visby"}
+        )
+        displaced_post = next(post for post in route.posts if post.required_shape is None)
+        displaced_post.claim(opponent, "circle")
+        opponent.general_stock_circles = 0
+        opponent.general_stock_squares = 2
+        posts = [post for candidate in game.selected_map.routes for post in candidate.posts]
+        displaced_index = posts.index(displaced_post)
+        game.apply_action(displaced_index)
+        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        circle_action = next(
+            action for action in legal_actions if MAX_POSTS <= action < MAX_POSTS * 2
+        )
+        target = posts[circle_action - MAX_POSTS]
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+        window.action_rects = []
+
+        self.assertEqual(
+            window.action_for_click(target.pos, 3, legal_actions),
+            circle_action,
+        )
+        self.assertIsNone(window.action_for_click(target.pos, 1, legal_actions))
+
+        game.apply_action(circle_action)
+        updated_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        self.assertFalse(any(MAX_POSTS <= action < MAX_POSTS * 2 for action in updated_actions))
+        self.assertIn(618, updated_actions)
+        self.assertEqual(
+            action_label(618, game),
+            "Finish displacement (decline optional pieces)",
         )
 
     def test_game_window_city_click_maps_to_legal_route_outcome(self):
