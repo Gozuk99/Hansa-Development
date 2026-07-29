@@ -1,36 +1,16 @@
-"""Structured player decisions for action schema version 1.
-
-These immutable values describe choices only. They do not calculate legality
-or mutate game state; those responsibilities remain with later engine work.
-"""
+"""Complete Hansa player decisions for atomic action schema version 2."""
 
 from dataclasses import dataclass
 from enum import Enum
 
 
 class GameAction:
-    """Base type for every structured game action."""
-
-
-class DeclineAction(GameAction):
-    """Base type for an explicit decline decision."""
-
-
-class PassAction(GameAction):
-    """Base type for passing an optional decision."""
+    """Immutable semantic decision accepted by the Hansa rules engine."""
 
 
 class PieceShape(str, Enum):
     TRADER = "trader"
     MERCHANT = "merchant"
-
-
-class RouteOutcome(str, Enum):
-    POINTS = "points"
-    OFFICE = "office"
-    UPGRADE = "upgrade"
-    PRESTIGE = "prestige"
-    ADDITIONAL_TRADING_POST = "additional_trading_post"
 
 
 class BonusMarkerType(str, Enum):
@@ -60,57 +40,110 @@ class IncomeFavourChoice(str, Enum):
     DECLINE = "decline"
 
 
-class DisplacementSource(str, Enum):
-    GENERAL_STOCK = "general_stock"
-    PERSONAL_SUPPLY = "personal_supply"
-    BOARD = "board"
-
-
-class DisplacementPieceKind(str, Enum):
-    MANDATORY = "mandatory"
-    OPTIONAL = "optional"
-
-
 @dataclass(frozen=True)
-class SelectPost(GameAction):
-    """Select a stable post slot and requested piece shape."""
-
-    post_slot: int
+class PlaceFromPersonalSupply(GameAction):
+    post_id: str
     shape: PieceShape
 
 
 @dataclass(frozen=True)
-class SelectRoute(GameAction):
-    route_slot: int
-
-
-@dataclass(frozen=True)
-class SelectRouteOutcome(GameAction):
-    outcome: RouteOutcome
-
-
-@dataclass(frozen=True)
-class SelectRouteEndpoint(GameAction):
-    endpoint_slot: int
-
-
-@dataclass(frozen=True)
-class SelectCityUpgradeSlot(GameAction):
-    upgrade_slot: int
-
-
-@dataclass(frozen=True)
-class SelectPrestigeValue(GameAction):
-    value: int
-
-
-@dataclass(frozen=True)
-class SelectPieceShape(GameAction):
+class DisplaceOpponent(GameAction):
+    post_id: str
     shape: PieceShape
 
 
 @dataclass(frozen=True)
-class SelectIncome(GameAction):
+class PickUpPiece(GameAction):
+    post_id: str
+
+
+@dataclass(frozen=True)
+class PlaceHeldPiece(GameAction):
+    post_id: str
+
+
+@dataclass(frozen=True)
+class PlaceDisplacedPiece(GameAction):
+    destination_post_id: str
+
+
+@dataclass(frozen=True)
+class PlaceOptionalDisplacementPiece(GameAction):
+    shape: PieceShape
+    destination_post_id: str
+
+
+@dataclass(frozen=True)
+class PickUpDisplacementFallbackPiece(GameAction):
+    source_post_id: str
+
+
+@dataclass(frozen=True)
+class PlaceHeldDisplacementFallbackPiece(GameAction):
+    destination_post_id: str
+
+
+@dataclass(frozen=True)
+class CompleteRouteForPoints(GameAction):
+    route_id: str
+
+
+@dataclass(frozen=True)
+class ClaimRouteOffice(GameAction):
+    route_id: str
+    city_id: str
+
+
+@dataclass(frozen=True)
+class UpgradeFromRoute(GameAction):
+    route_id: str
+    city_id: str
+    ability_id: str
+
+
+@dataclass(frozen=True)
+class ClaimRoutePrestige(GameAction):
+    route_id: str
+    prestige_value: int
+
+
+@dataclass(frozen=True)
+class ClaimAdditionalTradingPost(GameAction):
+    route_id: str
+    city_id: str
+    shape: PieceShape
+
+
+@dataclass(frozen=True)
+class SelectTributeRoute(GameAction):
+    route_id: str
+
+
+@dataclass(frozen=True)
+class SelectBlockedRoute(GameAction):
+    route_id: str
+
+
+@dataclass(frozen=True)
+class SelectBonusMarkerReplacementRoute(GameAction):
+    route_id: str
+
+
+@dataclass(frozen=True)
+class SwapAdjacentOffices(GameAction):
+    city_id: str
+    left_office_id: str
+    right_office_id: str
+
+
+@dataclass(frozen=True)
+class ClaimGreenCity(GameAction):
+    city_id: str
+    shape: PieceShape
+
+
+@dataclass(frozen=True)
+class TakeIncome(GameAction):
     merchant_count: int
 
 
@@ -130,7 +163,8 @@ class ActivateBonusMarker(GameAction):
 
 
 @dataclass(frozen=True)
-class SelectUsedBonusMarker(GameAction):
+class ExchangeForUsedBonusMarker(GameAction):
+    target_player_id: str
     marker_type: BonusMarkerType
 
 
@@ -145,38 +179,13 @@ class SelectBonusMarkerPayment(GameAction):
 
 
 @dataclass(frozen=True)
-class RespondToIncomeFavour(DeclineAction):
+class RespondToIncomeFavour(GameAction):
     choice: IncomeFavourChoice
 
 
 @dataclass(frozen=True)
-class SelectPlayer(GameAction):
-    player_slot: int
-
-
-@dataclass(frozen=True)
-class SelectCity(GameAction):
-    city_slot: int
-
-
-@dataclass(frozen=True)
-class SelectOfficePair(GameAction):
-    pair_slot: int
-
-
-@dataclass(frozen=True)
 class SelectAbility(GameAction):
-    ability_slot: int
-
-
-@dataclass(frozen=True)
-class SelectDisplacementSource(GameAction):
-    source: DisplacementSource
-
-
-@dataclass(frozen=True)
-class SelectDisplacementPiece(GameAction):
-    kind: DisplacementPieceKind
+    ability_id: str
 
 
 @dataclass(frozen=True)
@@ -186,24 +195,9 @@ class FinishMovePickup(GameAction):
 
 @dataclass(frozen=True)
 class FinishDisplacement(GameAction):
-    pass
-
-
-@dataclass(frozen=True)
-class DeclineDisplacementOptionalPieces(DeclineAction):
-    pass
+    """Decline all remaining optional pieces and finish displacement."""
 
 
 @dataclass(frozen=True)
 class EndTurn(GameAction):
-    pass
-
-
-@dataclass(frozen=True)
-class ForgoBonusMarker(PassAction):
-    pass
-
-
-@dataclass(frozen=True)
-class ConfirmBonusMarkerReplacement(GameAction):
-    pass
+    """Forgo unused optional markers and advance to replacement or next player."""
