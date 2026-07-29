@@ -778,3 +778,34 @@ Use this section to track progress.
 7. Schema versioning prevents silent incompatibility.
 8. Tests prove that legality, masking, decoding, and execution agree.
 9. Training begins only after the final audit passes.
+
+---
+
+# Standard Implementation Workflow
+
+For every milestone:
+
+1. Implement only the current milestone.
+2. Run Python parsing, Ruff, the required validation, and the full test suite.
+3. Perform an independent read-only review.
+4. Classify every review finding as:
+   - Blocking
+   - Major
+   - Minor
+   - Optional
+5. If any Blocking or Major findings exist:
+   - fix them;
+   - rerun validation;
+   - perform another independent review.
+6. Repeat the fix, validation, and review cycle until:
+   - Blocking = 0;
+   - Major = 0;
+   - Minor = 0, preferably; otherwise explain why each remaining Minor
+     finding is not being resolved.
+7. When the milestone is complete:
+   - stage only the milestone files;
+   - create a commit;
+   - report the commit SHA;
+   - report the validation results;
+   - report the final review summary.
+8. Stop and wait for user approval before beginning the next milestone.
