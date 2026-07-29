@@ -10,6 +10,7 @@ import torch
 from ai.action_options import masking_out_invalid_actions
 from ai.game_state import BoardData
 from drawing.drawing_utils import draw_end_game, redraw_window
+from drawing.scaled_display import ScaledDisplay
 from game.game_config import PlayerControl, choose_ranked_ai_action
 from map_data.constants import TAN
 
@@ -33,8 +34,8 @@ class GameWindow:
         self.game = game
         self.width = game.selected_map.map_width + 800
         self.height = game.selected_map.map_height
-        self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Hansa Teutonica")
+        self.display = ScaledDisplay((self.width, self.height), "Hansa Teutonica")
+        self.screen = self.display.canvas
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 22)
         self.selected = 0
@@ -132,32 +133,52 @@ class GameWindow:
         while running:
             actions = self.legal_actions()
             control = getattr(self.game.current_player, "control", PlayerControl.HUMAN)
-            if not control.is_human and not self.game.game_end:
-                self.game.apply_action(self.choose_ai_action(actions))
-                continue
-
             self.screen.fill(TAN)
             redraw_window(self.screen, self.game)
             self.draw_action_browser(actions)
             if self.game.game_end:
                 draw_end_game(self.screen, self.game.end_the_game())
-            pygame.display.flip()
+            self.display.present()
 
+            action_applied = False
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN and actions and not self.game.game_end:
+                elif event.type == pygame.VIDEORESIZE:
+                    self.display.resize(event.size)
+                elif (
+                    control.is_human
+                    and not action_applied
+                    and event.type == pygame.KEYDOWN
+                    and actions
+                    and not self.game.game_end
+                ):
                     if event.key == pygame.K_UP:
                         self.selected = (self.selected - 1) % len(actions)
                     elif event.key == pygame.K_DOWN:
                         self.selected = (self.selected + 1) % len(actions)
                     elif event.key == pygame.K_e and 618 in actions:
                         self.game.apply_action(618)
+                        action_applied = True
                     elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                         self.game.apply_action(actions[self.selected % len(actions)])
-                elif event.type == pygame.MOUSEBUTTONUP and actions and not self.game.game_end:
-                    action = self.action_for_click(event.pos, event.button, actions)
+                        action_applied = True
+                elif (
+                    control.is_human
+                    and not action_applied
+                    and event.type == pygame.MOUSEBUTTONUP
+                    and actions
+                    and not self.game.game_end
+                ):
+                    action = self.action_for_click(
+                        self.display.to_logical(event.pos),
+                        event.button,
+                        actions,
+                    )
                     if action is not None:
                         self.game.apply_action(action)
+                        action_applied = True
+
+            if running and not control.is_human and not self.game.game_end and actions:
+                self.game.apply_action(self.choose_ai_action(actions))
             self.clock.tick(30)
-        pygame.quit()

@@ -1,11 +1,14 @@
 import importlib
 import random
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
 import hansa_game
 from drawing.game_window import GameWindow
 from drawing.new_game_menu import NewGameMenuState
+from drawing.scaled_display import ScaledDisplay
 from game.game_config import (
     EMPERORS_FAVOUR_TILES,
     GameConfiguration,
@@ -174,6 +177,20 @@ class GameConfigurationTests(unittest.TestCase):
         launcher = importlib.import_module("sample_hansa_game")
         self.assertTrue(callable(launcher.main))
 
+    def test_primary_launcher_import_does_not_initialize_pygame(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import pygame; assert not pygame.get_init(); "
+                "import hansa_game; assert not pygame.get_init()",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_primary_launcher_creates_game_from_menu_configuration(self):
         configuration = mock.Mock()
         game = mock.Mock()
@@ -181,13 +198,27 @@ class GameConfigurationTests(unittest.TestCase):
         window = mock.Mock()
 
         with (
-            mock.patch.object(hansa_game, "run_new_game_menu", return_value=configuration),
-            mock.patch.object(hansa_game, "GameWindow", return_value=window),
+            mock.patch(
+                "drawing.new_game_menu.run_new_game_menu",
+                return_value=configuration,
+            ),
+            mock.patch("drawing.game_window.GameWindow", return_value=window),
+            mock.patch("pygame.quit") as quit_pygame,
         ):
             self.assertEqual(hansa_game.main(), 0)
 
         configuration.create_game.assert_called_once_with()
         window.run.assert_called_once_with()
+        quit_pygame.assert_called_once_with()
+
+    def test_scaled_display_fits_large_logical_canvas_inside_viewport(self):
+        self.assertEqual(
+            ScaledDisplay.fit_size((980, 900), (1280, 620)),
+            (675, 620),
+        )
+        game_size = ScaledDisplay.fit_size((2600, 1370), (1840, 980))
+        self.assertLessEqual(game_size[0], 1840)
+        self.assertLessEqual(game_size[1], 980)
 
     def test_game_window_mouse_mapping_submits_only_legal_actions(self):
         game = GameConfiguration(map_num=2, seed=124).create_game()

@@ -12,6 +12,8 @@ from game.game_config import (
     PlayerControl,
     human_players,
 )
+from game.setup import MAX_PLAYERS, MIN_PLAYERS, SUPPORTED_MAPS
+from drawing.scaled_display import ScaledDisplay
 from map_data.map_attributes import Map
 
 
@@ -69,8 +71,8 @@ class NewGameMenuState:
 class NewGameMenu:
     def __init__(self, state: NewGameMenuState | None = None):
         self.state = state or NewGameMenuState()
-        self.screen = pygame.display.set_mode(WINDOW_SIZE)
-        pygame.display.set_caption("Hansa Teutonica — New Game")
+        self.display = ScaledDisplay(WINDOW_SIZE, "Hansa Teutonica — New Game")
+        self.screen = self.display.canvas
         self.clock = pygame.time.Clock()
         self.title_font = pygame.font.Font(None, 44)
         self.font = pygame.font.Font(None, 28)
@@ -100,7 +102,7 @@ class NewGameMenu:
         )
 
         self.label("Players", 48, 100)
-        for offset, count in enumerate((3, 4, 5)):
+        for offset, count in enumerate(range(MIN_PLAYERS, MAX_PLAYERS + 1)):
             self.button(
                 pygame.Rect(180 + offset * 92, 94, 78, 38),
                 str(count),
@@ -109,7 +111,7 @@ class NewGameMenu:
             )
 
         self.label("Map", 500, 100)
-        for offset, map_num in enumerate((1, 2, 3)):
+        for offset, map_num in enumerate(SUPPORTED_MAPS):
             self.button(
                 pygame.Rect(580 + offset * 92, 94, 78, 38),
                 str(map_num),
@@ -213,7 +215,7 @@ class NewGameMenu:
             self._start,
             selected=True,
         )
-        pygame.display.flip()
+        self.display.present()
 
     def _draw_mode_buttons(self, y, module, x=330):
         mode = self.state.emperor_tile_mode if module == "emperor" else self.state.promo_marker_mode
@@ -280,9 +282,17 @@ class NewGameMenu:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return None
+                if event.type == pygame.VIDEORESIZE:
+                    self.display.resize(event.size)
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        self._start()
+                    elif event.key == pygame.K_ESCAPE:
+                        return None
                 if event.type == pygame.MOUSEBUTTONUP:
+                    logical_position = self.display.to_logical(event.pos)
                     for rect, action in reversed(self.buttons):
-                        if not rect.collidepoint(event.pos):
+                        if not rect.collidepoint(logical_position):
                             continue
                         if isinstance(action, tuple) and action[0] == "promo_count":
                             self._change_promo_count(
