@@ -42,6 +42,26 @@ pygame window, training, or saving model checkpoints:
 
 		python -m unittest discover -s tests -v
 
+### Pull Request Validation
+
+Install the pinned runtime and development dependencies, then run the same
+deterministic checks used for pull requests:
+
+		python -m pip install -r requirements-ci.txt -r requirements-dev.txt
+		python tools/validate_pr.py
+
+The command parses every Python file, runs the configured Ruff correctness
+checks, checks formatting for Python files changed on the current branch, and
+runs the complete `unittest` suite. Static type checking is not yet enabled
+because the project does not currently have a type-checker configuration.
+
+Pull requests automatically run the equivalent checks through
+`.github/workflows/pull-request-validation.yml`. Each pull request should link
+its issue and request a fresh-context advisory review; see
+`.github/CODEX_REVIEW.md`. AI review runs outside GitHub Actions: CI requires no
+OpenAI API key, incurs no OpenAI API billing, and never approves or merges a
+pull request automatically.
+
 Run one deterministic headless game:
 
 		python run_headless_game.py --map 2 --players 3 --seed 124
