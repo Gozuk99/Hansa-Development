@@ -10,10 +10,21 @@ import torch
 from ai.action_options import masking_out_invalid_actions
 from ai.game_state import BoardData
 from drawing.action_ui import action_label, phase_prompt
+from drawing.ai_observation import public_game_state
 from drawing.drawing_utils import draw_end_game, redraw_window
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import PlayerControl, choose_ranked_ai_action
 from map_data.constants import MAX_ROUTES, TAN
+
+
+def fit_text(font, text, max_width):
+    """Truncate a label to the available logical width."""
+    if font.size(text)[0] <= max_width:
+        return text
+    suffix = "…"
+    while text and font.size(text + suffix)[0] > max_width:
+        text = text[:-1]
+    return text.rstrip() + suffix
 
 
 class GameWindow:
@@ -39,18 +50,16 @@ class GameWindow:
         panel = pygame.Rect(self.game.selected_map.map_width + 810, 10, 280, 440)
         pygame.draw.rect(self.screen, (245, 238, 218), panel)
         pygame.draw.rect(self.screen, (45, 38, 30), panel, 2)
-        control = getattr(self.game.current_player, "control", PlayerControl.HUMAN)
+        control = getattr(self.acting_player, "control", PlayerControl.HUMAN)
         heading = self.font.render(
-            f"Player {self.game.current_player.order}: {control.value}",
+            f"Player {self.acting_player.order}: {control.value}",
             True,
             (30, 25, 20),
         )
         self.screen.blit(heading, (panel.x + 10, panel.y + 10))
         help_text = self.font.render("Up/Down + Enter; E ends when legal", True, (30, 25, 20))
         self.screen.blit(help_text, (panel.x + 10, panel.y + 34))
-        prompt_text = phase_prompt(self.game)
-        while self.font.size(prompt_text)[0] > panel.width - 20 and " " in prompt_text:
-            prompt_text = prompt_text.rsplit(" ", 1)[0] + "…"
+        prompt_text = fit_text(self.font, phase_prompt(self.game), panel.width - 20)
         prompt = self.font.render(prompt_text, True, (117, 70, 42))
         self.screen.blit(prompt, (panel.x + 10, panel.y + 54))
         city_help = self.font.render(
@@ -67,14 +76,19 @@ class GameWindow:
         for row, action in enumerate(actions[start : start + 15]):
             actual = start + row
             color = (70, 110, 75) if actual == self.selected else (30, 25, 20)
-            label = self.font.render(action_label(action, self.game), True, color)
+            label_text = fit_text(
+                self.font,
+                action_label(action, self.game),
+                panel.width - 24,
+            )
+            label = self.font.render(label_text, True, color)
             position = (panel.x + 12, panel.y + 102 + row * 20)
             self.screen.blit(label, position)
             self.action_rects.append((pygame.Rect(position, (panel.width - 24, 21)), action))
 
     def choose_ai_action(self, legal_actions):
-        player = self.game.current_player
-        state = self.board_data.get_game_state(self.game).float()
+        player = self.acting_player
+        state = public_game_state(self.board_data, self.game, player).float()
         with torch.no_grad():
             scores = player.hansa_nn(state.unsqueeze(0)).squeeze(0)
         ranked = [(index, float(scores[index])) for index in legal_actions]
@@ -84,6 +98,10 @@ class GameWindow:
             self.rng,
             dict(self.game.configuration.difficulty_top_k),
         )
+
+    @property
+    def acting_player(self):
+        return self.game.players[self.game.active_player]
 
     def action_for_click(self, position, button, legal_actions):
         for rect, action in self.action_rects:
@@ -142,7 +160,10 @@ class GameWindow:
                         ),
                         None,
                     )
-                    available = choices if special_city is not None else (city_choices or choices)
+                    if special_city is not None:
+                        available = choices if clicked_city is special_city else []
+                    else:
+                        available = city_choices
                     if not available:
                         return None
                     relative_x = max(
@@ -193,7 +214,7 @@ class GameWindow:
         running = True
         while running:
             actions = self.legal_actions()
-            control = getattr(self.game.current_player, "control", PlayerControl.HUMAN)
+            control = getattr(self.acting_player, "control", PlayerControl.HUMAN)
             self.screen.fill(TAN)
             self.layout = redraw_window(self.screen, self.game, actions)
             self.draw_action_browser(actions)

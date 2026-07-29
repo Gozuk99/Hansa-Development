@@ -76,6 +76,7 @@ def draw_text(window, text, x, y, font, color=BLACK, centered=False):
 def draw_upgrades(win, selected_map):
     for upgrade_type in selected_map.upgrade_cities:
         draw_upgrade_on_map(win, upgrade_type)
+    draw_special_prestige_points(win, selected_map.specialprestigepoints)
 
 
 def draw_upgrade_on_map(window, upgrade_type):
@@ -537,6 +538,7 @@ def draw_opponents_used_bms(win, game):
 def redraw_window(win, game, legal_actions=()):
     selected_map = game.selected_map
     layout = DrawLayout()
+    acting_player = game.players[game.active_player]
 
     draw_bonus_markers(win, selected_map)
     draw_upgrades(win, selected_map)
@@ -557,7 +559,7 @@ def redraw_window(win, game, legal_actions=()):
             draw_player_board(
                 win,
                 player,
-                game.current_player,
+                acting_player,
                 game,
                 legal_actions,
             )

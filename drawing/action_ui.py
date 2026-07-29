@@ -70,20 +70,23 @@ def action_label(index: int, game=None) -> str:
 
 def _income_action_label(index: int, game) -> str:
     circles = index - 522
-    if game is not None and game.turn_phase in (
-        TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION,
-        TurnPhase.TRIBUTE_INCOME_RESPONSE,
-    ):
+    if game is not None and game.turn_phase == TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION:
         return _piece_mix_label(total=2, circles=circles)
+    if game is not None and game.turn_phase == TurnPhase.TRIBUTE_INCOME_RESPONSE:
+        owner = game.pending_tribute_income_owners[0]
+        total = min(2, owner.general_stock_squares + owner.general_stock_circles)
+        return _piece_mix_label(total=total, circles=circles)
     if game is not None:
         player = game.current_player
-        labels = player.income_action_based_on_circle_count(
-            min(player.general_stock_circles, 4),
-            player.bank,
+        selected_circles = min(player.general_stock_circles, circles)
+        selected_squares = min(
             player.general_stock_squares,
+            player.bank - selected_circles,
         )
-        if circles < len(labels):
-            return f"Income: {labels[circles]}"
+        return "Income: " + _piece_mix_label(
+            total=selected_squares + selected_circles,
+            circles=selected_circles,
+        )
     return f"Income choice {circles}"
 
 

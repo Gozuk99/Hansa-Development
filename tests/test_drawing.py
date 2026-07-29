@@ -2,9 +2,13 @@ import unittest
 
 import pygame
 
+from ai.game_state import BoardData
 from drawing.action_ui import action_label, phase_prompt
-from drawing.drawing_utils import redraw_window
-from game.game_config import GameConfiguration
+from drawing.ai_observation import public_game_state
+from drawing.drawing_utils import draw_upgrades, redraw_window
+from drawing.game_window import GameWindow
+from game.game_config import GameConfiguration, PlayerControl
+from map_data.map_attributes import BonusMarker
 
 
 class DrawingTests(unittest.TestCase):
@@ -67,6 +71,103 @@ class DrawingTests(unittest.TestCase):
 
         self.assertEqual(first.action_rects, second.action_rects)
         self.assertEqual(first.tile_rects, second.tile_rects)
+
+    def test_special_prestige_track_is_rendered_on_every_map(self):
+        surface = pygame.Surface((3000, 1500))
+        for map_num in (1, 2, 3):
+            with self.subTest(map_num=map_num):
+                game = GameConfiguration(map_num=map_num, seed=124).create_game()
+                before = surface.copy()
+                draw_upgrades(surface, game.selected_map)
+                prestige = game.selected_map.specialprestigepoints
+                area = pygame.Rect(prestige.x_pos, prestige.y_pos, prestige.width, prestige.height)
+                self.assertNotEqual(
+                    pygame.image.tostring(before.subsurface(area), "RGB"),
+                    pygame.image.tostring(surface.subsurface(area), "RGB"),
+                )
+
+    def test_wrong_city_middle_click_never_applies_other_endpoint_upgrade(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        route = next(
+            route
+            for route in game.selected_map.routes
+            if bool(route.cities[0].upgrade_city_type) != bool(route.cities[1].upgrade_city_type)
+        )
+        upgrade_city = next(city for city in route.cities if city.upgrade_city_type)
+        other_city = next(city for city in route.cities if city is not upgrade_city)
+        for post in route.posts:
+            post.owner = game.current_player
+            post.owner_piece_shape = "square"
+        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+        window.action_rects = []
+        center = (
+            other_city.x_pos + other_city.width // 2,
+            other_city.y_pos + other_city.height // 2,
+        )
+
+        self.assertIsNone(window.action_for_click(center, 2, legal_actions))
+
+    def test_tribute_and_complete_bank_labels_describe_exact_pieces(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        owner = game.players[1]
+        owner.general_stock_squares = 1
+        owner.general_stock_circles = 0
+        game.begin_tribute_income_responses([owner])
+        self.assertEqual(action_label(522, game), "1 Trader")
+
+        game.pending_tribute_income_owners.clear()
+        game.active_player = game.current_player_index
+        game.current_player.bank = 50
+        game.current_player.general_stock_squares = 3
+        game.current_player.general_stock_circles = 2
+        self.assertEqual(action_label(523, game), "Income: 3 Traders + 1 Merchant")
+        self.assertEqual(action_label(524, game), "Income: 3 Traders + 2 Merchants")
+
+    def test_acting_player_controller_follows_out_of_turn_responder(self):
+        controls = (PlayerControl.HUMAN, PlayerControl.EASY, PlayerControl.HUMAN)
+        game = GameConfiguration(player_controls=controls, seed=124).create_game()
+        game.active_player = 1
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+
+        self.assertIs(window.acting_player, game.players[1])
+        self.assertIs(window.acting_player.control, PlayerControl.EASY)
+
+    def test_gui_ai_observation_conceals_face_down_and_private_information(self):
+        game = GameConfiguration(
+            map_num=1,
+            player_controls=(PlayerControl.HUMAN,) * 3,
+            use_mission_cards=True,
+            seed=124,
+        ).create_game()
+        observer = game.players[0]
+        opponent = game.players[1]
+        opponent.used_bonus_markers = [BonusMarker("Move3")]
+        board_data = BoardData()
+
+        state = public_game_state(board_data, game, observer)
+        player_start = (
+            board_data.game_tensor_size + board_data.city_tensor_size + board_data.route_tensor_size
+        )
+
+        self.assertEqual(state[24].item(), len(game.selected_map.bonus_marker_pool))
+        self.assertEqual(state[25:36].count_nonzero().item(), 0)
+        self.assertGreater(
+            state[player_start + 20 : player_start + 23].count_nonzero().item(),
+            0,
+        )
+        opponent_start = player_start + 55
+        self.assertEqual(
+            state[opponent_start + 20 : opponent_start + 23].count_nonzero().item(),
+            0,
+        )
+        self.assertEqual(state[opponent_start + 35].item(), 1)
+        self.assertEqual(
+            state[opponent_start + 36 : opponent_start + 47].count_nonzero().item(),
+            0,
+        )
 
 
 if __name__ == "__main__":
