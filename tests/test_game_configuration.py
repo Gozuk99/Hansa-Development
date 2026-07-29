@@ -288,6 +288,13 @@ class GameConfigurationTests(unittest.TestCase):
         self.assertIsNone(
             window.action_for_click(
                 target_post.pos,
+                2,
+                legal_actions,
+            )
+        )
+        self.assertIsNone(
+            window.action_for_click(
+                target_post.pos,
                 1,
                 [],
             )

@@ -94,6 +94,11 @@ class GameWindow:
         return self.game.players[self.game.active_player]
 
     def action_for_click(self, position, button, legal_actions):
+        # Middle-click has no game meaning. In particular, it must not fall
+        # through to the left-click Trader action while moving pieces.
+        if button == 2:
+            return None
+
         for rect, action in self.action_rects:
             if rect.collidepoint(position):
                 return action
