@@ -60,6 +60,9 @@ a model, or save a checkpoint.
   route points.
 - Drawn upgrade or Special Prestige box: left-click the desired upgrade or
   prestige value.
+- Displacement: left-click to place a displaced Trader and right-click to place
+  a displaced Merchant. After placing the displaced piece, use **Finish
+  Displacement** when optional matching pieces are unavailable or declined.
 - Legal-action browser: Up/Down selects an action and Enter applies it.
 - Press `E` to finish the turn when End Turn is legal.
 

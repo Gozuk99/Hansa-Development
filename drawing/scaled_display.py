@@ -19,9 +19,9 @@ class ScaledDisplay:
         self.canvas = pygame.Surface(logical_size)
         pygame.display.set_caption(caption)
         info = pygame.display.Info()
-        available = (
-            max(640, info.current_w - 80) if info.current_w else logical_size[0],
-            max(480, info.current_h - 100) if info.current_h else logical_size[1],
+        available = self.available_size(
+            (info.current_w, info.current_h),
+            logical_size,
         )
         requested = (
             round(logical_size[0] * initial_scale),
@@ -30,6 +30,18 @@ class ScaledDisplay:
         self.window = pygame.display.set_mode(
             self.fit_size(requested, available),
             pygame.RESIZABLE,
+        )
+
+    @staticmethod
+    def available_size(
+        display_size: tuple[int, int],
+        fallback_size: tuple[int, int],
+    ) -> tuple[int, int]:
+        """Return desktop bounds with a small margin, even on tiny displays."""
+        width, height = display_size
+        return (
+            max(1, width - 80) if width else fallback_size[0],
+            max(1, height - 100) if height else fallback_size[1],
         )
 
     @staticmethod

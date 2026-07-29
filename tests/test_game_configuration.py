@@ -250,6 +250,13 @@ class GameConfigurationTests(unittest.TestCase):
 
         self.assertEqual(requested, (1960, 1880))
 
+    def test_tiny_display_never_requests_a_window_larger_than_desktop(self):
+        available = ScaledDisplay.available_size((600, 400), (980, 940))
+        requested = ScaledDisplay.fit_size((980 * 2, 940 * 2), available)
+
+        self.assertLessEqual(requested[0], 600)
+        self.assertLessEqual(requested[1], 400)
+
     def test_game_window_mouse_mapping_submits_only_legal_actions(self):
         game = GameConfiguration(map_num=2, seed=124).create_game()
         window = GameWindow.__new__(GameWindow)
