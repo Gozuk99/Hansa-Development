@@ -17,6 +17,16 @@ BONUS_MARKER_NAMES = (
 )
 
 
+def fit_text(font, text, max_width):
+    """Truncate a rendered label to the available logical width."""
+    if font.size(text)[0] <= max_width:
+        return text
+    suffix = "…"
+    while text and font.size(text + suffix)[0] > max_width:
+        text = text[:-1]
+    return text.rstrip() + suffix
+
+
 def phase_prompt(game) -> str:
     """Describe what the current phase requires from the active human."""
     prompts = {

@@ -9,22 +9,12 @@ import torch
 
 from ai.action_options import masking_out_invalid_actions
 from ai.game_state import BoardData
-from drawing.action_ui import action_label, phase_prompt
+from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
 from drawing.drawing_utils import draw_end_game, redraw_window
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import PlayerControl, choose_ranked_ai_action
 from map_data.constants import MAX_ROUTES, TAN
-
-
-def fit_text(font, text, max_width):
-    """Truncate a label to the available logical width."""
-    if font.size(text)[0] <= max_width:
-        return text
-    suffix = "…"
-    while text and font.size(text + suffix)[0] > max_width:
-        text = text[:-1]
-    return text.rstrip() + suffix
 
 
 class GameWindow:

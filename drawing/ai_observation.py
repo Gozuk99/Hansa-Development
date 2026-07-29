@@ -11,7 +11,6 @@ def public_game_state(board_data, game, observer):
     # owners, then 12 face-down bonus-marker supply slots.
     supply_start = 24
     state[supply_start : supply_start + 12] = 0
-    state[supply_start] = len(game.selected_map.bonus_marker_pool)
 
     player_start = (
         board_data.game_tensor_size + board_data.city_tensor_size + board_data.route_tensor_size

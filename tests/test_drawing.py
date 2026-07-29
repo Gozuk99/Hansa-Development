@@ -3,7 +3,7 @@ import unittest
 import pygame
 
 from ai.game_state import BoardData
-from drawing.action_ui import action_label, phase_prompt
+from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
 from drawing.drawing_utils import draw_upgrades, redraw_window
 from drawing.game_window import GameWindow
@@ -152,8 +152,7 @@ class DrawingTests(unittest.TestCase):
             board_data.game_tensor_size + board_data.city_tensor_size + board_data.route_tensor_size
         )
 
-        self.assertEqual(state[24].item(), len(game.selected_map.bonus_marker_pool))
-        self.assertEqual(state[25:36].count_nonzero().item(), 0)
+        self.assertEqual(state[24:36].count_nonzero().item(), 0)
         self.assertGreater(
             state[player_start + 20 : player_start + 23].count_nonzero().item(),
             0,
@@ -168,6 +167,12 @@ class DrawingTests(unittest.TestCase):
             state[opponent_start + 36 : opponent_start + 47].count_nonzero().item(),
             0,
         )
+
+    def test_contextual_labels_fit_their_button_width(self):
+        font = pygame.font.SysFont(None, 20)
+        label = fit_text(font, "Income: 3 Traders + 2 Merchants", 160)
+
+        self.assertLessEqual(font.size(label)[0], 160)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import pygame
 
-from drawing.action_ui import action_label
+from drawing.action_ui import action_label, fit_text
 from map_data.constants import (
     TAN,
     COLOR_NAMES,
@@ -527,7 +527,8 @@ def draw_opponents_used_bms(win, game):
     # Set initial Y offset for player scores just below the label
     y_offset = label.get_height() + 5
 
-    opponents = [player for player in game.players if player != game.current_player]
+    acting_player = game.players[game.active_player]
+    opponents = [player for player in game.players if player is not acting_player]
     for index, player in enumerate(opponents):
         opponent_bm_text = f"Player {player.order}: {len(player.used_bonus_markers)} face-down"
         text_surface = FONT_SMALL.render(opponent_bm_text, True, BLACK)
@@ -983,7 +984,11 @@ def draw_context_action_buttons(window, board, game, legal_actions):
 
     rects = {}
     for i, action in enumerate(contextual_actions):
-        label = action_label(action, game)
+        label = fit_text(
+            pygame.font.SysFont(None, 20),
+            action_label(action, game),
+            button_width - 10,
+        )
         if i == 0:
             button_x = income_x
             button_y = income_y + vertical_spacing
