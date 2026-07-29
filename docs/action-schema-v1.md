@@ -2,9 +2,9 @@
 
 ## Status and scope
 
-This document defines the authoritative 768-entry action allocation that later
-milestones will expose through structured actions and `ActionCodec`.
-Milestone 2 does not activate this schema or change game behavior.
+This document defines the authoritative 768-entry action allocation. Milestone
+3 adds its structured action values and `ActionCodec`; the current production
+mask and dispatcher do not use them yet.
 
 - `ACTION_SCHEMA_VERSION = 1`
 - `ACTION_SPACE_SIZE = 768`
@@ -27,8 +27,8 @@ headless and must not import drawing modules.
 Several current one-step integer actions combine a target and an outcome.
 Version 1 represents those as explicit structured selections, such as selecting
 a route and then selecting its outcome. This removes unrelated contextual
-reuse without changing rules; the structured action and codec milestones will
-define the state transitions.
+reuse without changing rules; the later engine-legality milestone will define
+the state transitions.
 
 ## Complete allocation
 
@@ -271,9 +271,50 @@ The codec must encode and decode each step below exactly as listed.
 | Forgo optional bonus-marker use | `FORGO_BONUS_MARKER` |
 | End the turn | `END_TURN`; if marker replacement must begin, the engine exposes `CONFIRM_BONUS_MARKER_REPLACEMENT` as a separate transition rather than reusing `END_TURN` |
 
-Pending workflow state is engine state, not index semantics. Structured action
-types introduced later must preserve these sequences, and the eventual codec
-must reject a selection whose family is not valid for the pending workflow.
+Pending workflow state is engine state, not index semantics. The structured
+action types preserve these sequences; the later engine-legality layer must
+reject a selection whose family is not valid for the pending workflow.
+
+## Structured actions and codec
+
+`game/structured_actions.py` defines immutable `GameAction` values, supporting
+enums, explicit decline actions, and the `PassAction` base used by
+`ForgoBonusMarker`. A general pass is not currently legal in the engine;
+specific pass/decline decisions therefore have specific action types.
+
+`game/action_codec.py` owns the version-1 integer translation. Its
+`ActionFamily` registrations are data-driven. Each registration supplies:
+
+- one concrete structured action type;
+- one active schema range;
+- a family-matching rule when a type spans more than one range;
+- local encoding and decoding functions;
+- field validation;
+- a debug-description formatter.
+
+`ActionCodec` exposes:
+
+```python
+encode(action) -> int
+decode(index, state=None) -> GameAction
+describe(index) -> str
+is_reserved(index) -> bool
+validate() -> None
+```
+
+The optional `state` parameter is accepted for the planned interface but is
+not consulted in Milestone 3 because version-1 indices describe stable
+selections. Engine legality remains separate.
+
+Registry validation proves that every active schema range has exactly one
+registration, no registered ranges overlap, each registration uses the
+structured type named by the schema, all 400 active indices round-trip, no two
+indices decode to the same structured action, and every active index has a
+description. Reserved indices are identified but never decoded.
+
+Adding a future family requires a new structured action, schema range, and
+`ActionFamily` registration. It does not require changing the codec's central
+encode/decode control flow.
 
 ## Reserved-index contract
 
@@ -308,6 +349,9 @@ Once version 1 is activated:
 - the final range ends exactly at `ACTION_SPACE_SIZE`.
 
 `tests/test_action_schema.py` verifies the version, size, complete `0–767`
-coverage, active-range semantics, and explicit reserved ranges. Milestone 2
-does not alter the current 620-entry mask, dispatcher, GUI, save formats,
-histories, or checkpoints.
+coverage, active-range semantics, and explicit reserved ranges.
+`tests/test_action_codec.py` exhaustively round-trips and describes all active
+indices, rejects all reserved indices, exercises validation failures, and
+proves duplicate or missing registrations fail. Milestone 3 does not alter the
+current 620-entry mask, dispatcher, GUI, save formats, histories, or
+checkpoints.
