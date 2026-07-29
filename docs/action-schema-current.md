@@ -304,8 +304,9 @@ Relevant source:
 `mask_end_turn()` creates the one-entry family later concatenated at absolute
 index 618. It enables the entry in these contexts:
 
-- Move 3 or Move Any 2 may stop picking up early, provided no held pieces
-  remain;
+- Move 3 or Move Any 2 may finish the pickup portion early while pickups
+  remain. Held pieces do not prevent 618 from being enabled; every held piece
+  must still be placed afterward;
 - displacement may finish after the mandatory displaced piece is placed and
   no held fallback piece remains;
 - ordinary turn completion/replacement workflows may confirm ending the turn
@@ -327,14 +328,16 @@ Game Over phases.
 `_perform_action_from_index()` sends 618 to `map_end_turn_action()`.
 `map_end_turn_action()` branches in this order:
 
-1. finish the pickup portion of Move 3 or Move Any 2;
+1. finish the pickup portion of Move 3 or Move Any 2; if pieces are held, the
+   workflow remains active until every held piece is placed;
 2. finish displacement via `finish_displacement()`;
 3. otherwise enter/continue ordinary end-turn and pending marker-replacement
    behavior.
 
 Thus 618 currently combines at least three structured meanings:
 
-- finish optional marker movement;
+- finish the pickup portion of optional marker movement, which does not finish
+  the entire workflow while pieces are held;
 - finish displacement/decline remaining optional displacement pieces;
 - end or confirm ending the current turn.
 
@@ -500,6 +503,15 @@ masked index, and invokes the decoder.
 The GUI therefore contains independent numeric knowledge that must be migrated
 with the codec in later milestones.
 
+This inventory records the GUI's current coupling; it does not endorse that
+coupling as the target design. The engine and AI must run headlessly without
+importing drawing or GUI modules. GUI code may consume decoded actions,
+codec-provided labels, or structured actions, but it must not define legality
+or own action-index mappings. After the 768-entry migration, `ActionCodec`
+should be the only component containing action-index ranges or index
+arithmetic. AI, GUI, replay, debugging, and history code should query the codec
+instead of duplicating offsets.
+
 ## Hard-coded sizes, offsets, and ranges
 
 ### Production code
@@ -510,28 +522,71 @@ with the codec in later milestones.
 | `ai/action_options.py` | family sizes `242, 280, 5, 8, 8, 40, 30, 5, 1, 1`; post offset 121; family endpoints 242/522/527/535/543/583/613/618/619/620; route factors 2 and 4; phase ranges listed above |
 | `game/game_info.py` | range check against imported `TOTAL_ACTIONS` |
 | `game/game_runner.py` | exact mask length 620; post modulo 121; policy ranges `0–241`, `242–521`, `522–526`; literal 618; route decoding boundaries 282 and 362 |
-| `drawing/action_ui.py` | boundaries 121, 242, 522, 527, 535, 543, 583, 613, 618, 619 and family-local offsets |
-| `drawing/game_window.py` | post offset 121; route base 242; replacement base 543; fixed tile indices 535–540; literal 618 |
+| `drawing/action_ui.py` | top-level boundaries `<121`, `<242`, `<522`, `<527`, `<535`, `<543`, `<583`, `<613`, `<618`, `==618`, and `==619`; local formulas `index - 121`, `index - 242`, `index - 522`, `index - 527`, `index - 535`, `index - 543`, `index - 582` (one-based fallback city label), `index - 583`, and `index - 613`; route-label formulas `relative < MAX_ROUTES`, `relative < MAX_ROUTES * 3`, `divmod(relative - MAX_ROUTES, 2)`, and `divmod(relative - MAX_ROUTES * 3, 4)` |
+| `drawing/game_window.py` | post formula `post_index + (121 if right-click else 0)`; replacement formula `543 + route_index`; office formula `242 + MAX_ROUTES + route_index * 2 + city_index`; points-only formula `242 + route_index`; tile map `535`–`540`; special-prestige formula `242 + MAX_ROUTES * 3 + route_index * 4 + choice`; ordinary-upgrade formula `242 + MAX_ROUTES * 3 + route_index * 4 + city_index * 2 + upgrade_index`; literal 618 for keyboard finish |
 | `drawing/drawing_utils.py` | literal 618; contextual range `522–526` |
 
 `ai/ai_model.py` does not contain an active literal output size; `HansaNN`
 accepts `output_size`. Its stale comments say 616. Callers supply the current
 620 through `OUTPUT_SIZE`.
 
+`player_info/reward_options.py` imports `OUTPUT_SIZE` but does not use it.
+This is a stale import, not an active action-space dependency.
+
 ### Tests with schema-number coupling
 
-- `tests/test_legal_actions.py`: upper bound 620;
-- `tests/test_turn_structure.py`: out-of-range 620 and direct 618 references;
-- `tests/test_core_actions.py`: direct 618/619 and family slices;
-- `tests/test_drawing.py`: `522–526` and 618;
-- `tests/test_game_configuration.py`: direct family bases, post offset, and
-  618. The values 620 in its display-size test are viewport dimensions, not
-  action-space dependencies;
-- `tests/test_eastern_hanseatic.py`: constants 618 and 619;
-- `tests/test_standard_bonus_markers.py`: constants 618 and 619 and range end
-  618;
-- other action tests define local family bases such as 242, 522, 527, 535,
-  543, 583, and 613.
+- `tests/test_legal_actions.py`: asserts every returned action satisfies
+  `0 <= action < 620`.
+- `tests/test_turn_structure.py`: directly uses 618, rejects 620, and checks
+  the phase slices `242:`, `535:543`, `:535`, `543:`, `543:583`, `:543`, and
+  `583:`.
+- `tests/test_core_actions.py`: defines `MAX_POSTS = 121` and
+  `MAX_ROUTES = 40`; derives post actions with `index + MAX_POSTS`; derives
+  route actions with `242 + route_index`,
+  `242 + MAX_ROUTES + route_index * 2 + city_index`, and
+  `242 + MAX_ROUTES * 3 + route_index * 4 + city_index * 2 + upgrade_index`;
+  directly uses 522, 523, 618, and 619; derives circle positions with
+  `index % MAX_POSTS` and `MAX_POSTS + index`; checks the post ranges
+  `:121`, `:MAX_POSTS`, `MAX_POSTS:MAX_POSTS * 2`, and `:242`; checks the
+  replacement range `543:583` and target formula `543 + target_index`; and
+  checks the four-slot route-choice range
+  `base_action:base_action + 4`, where
+  `base_action = 242 + MAX_ROUTES * 3 + route_index * 4`.
+- `tests/test_drawing.py`: directly uses 522 and checks the contextual
+  `522 <= action < 527` range plus 618.
+- `tests/test_game_configuration.py`: uses the post boundaries 121 and
+  `MAX_POSTS * 2`; directly uses 242, 527, 543, and 618; and derives upgrade
+  actions with `242 + 120 + route_index * 4`,
+  `242 + 120 + route_index * 4 + city_index * 2 + upgrade_index`, and
+  `242 + 120`. The values 620 in its display-size test are viewport
+  dimensions, not action-space dependencies.
+- `tests/test_eastern_hanseatic.py`: defines `MAX_POSTS = 121`,
+  `ROUTE_ACTION_START = 242`, `ROUTE_OFFICE_OFFSET = 40`,
+  `ROUTE_UPGRADE_OFFSET = 120`, `INCOME_ACTION_START = 522`,
+  `BM_CITY_ACTION_START = 583`, `END_CONTEXT_ACTION = 618`, and
+  `PLACE_ADJACENT_ACTION = 619`; derives post actions with
+  `index + MAX_POSTS`, office actions with
+  `ROUTE_ACTION_START + ROUTE_OFFICE_OFFSET + route_index * 2 + city_index`,
+  and defines
+  `upgrade_base = ROUTE_ACTION_START + ROUTE_UPGRADE_OFFSET + route_index * 4`;
+  it checks the two city-upgrade slots with
+  `upgrade_base:upgrade_base + 2`, uses
+  `BM_CITY_ACTION_START:613`, and applies the derived offsets
+  `BM_CITY_ACTION_START + 1`, `ROUTE_ACTION_START + route_index`, and
+  `INCOME_ACTION_START + 1`.
+- `tests/test_optional_modules.py`: defines `TILE_ACTION_START = 535` and
+  uses `TILE_ACTION_START + offset` plus the
+  `TILE_ACTION_START:TILE_ACTION_START + 3` tile-choice slice.
+- `tests/test_promo_bonus_markers.py`: defines `POST_ACTION_COUNT = 121`,
+  `INCOME_ACTION_START = 522`, `BM_ACTION_START = 527`, and
+  `BM_CITY_ACTION_START = 583`; applies offsets from those bases and uses
+  `:121` for legal post choices.
+- `tests/test_standard_bonus_markers.py`: defines `MAX_POSTS = 121`,
+  `ADDITIONAL_CHOICE_START = 362`, `BM_ACTION_START = 527`,
+  `BM_CITY_ACTION_START = 583`, `BM_UPGRADE_ACTION_START = 613`,
+  `END_CONTEXT_ACTION = 618`, and `PLACE_ADJACENT_ACTION = 619`; derives post
+  actions with `index + MAX_POSTS` and checks the `583:613` and `613:618`
+  contextual slices.
 
 ### Documentation with stale or direct schema numbers
 
@@ -547,11 +602,14 @@ accepts `output_size`. Its stale comments say 616. Callers supply the current
 ### Neural-network output and checkpoints
 
 - `map_data/constants.py`: `OUTPUT_SIZE = 620`;
-- `player_info/player_attributes.py`: constructs `HansaNN(INPUT_SIZE,
-  OUTPUT_SIZE)` for legacy direct player loading;
-- `game/game_config.py`: `_load_ai_model` constructs the same model for GUI AI
-  seats;
-- `ai/ai_model.py`: `layer3 = nn.Linear(1024, output_size)`;
+- `player_info/player_attributes.py`: `Player.__init__` constructs
+  `HansaNN(INPUT_SIZE, OUTPUT_SIZE)` for legacy direct player loading;
+- `game/game_config.py`: `GameConfiguration._load_ai_model` constructs the
+  same model for GUI AI seats;
+- `ai/ai_model.py`: `HansaNN.__init__` creates
+  `layer3 = nn.Linear(1024, output_size)`, loads a supplied state dictionary,
+  and relies on PyTorch shape validation; `HansaNN.save_model` saves that
+  state dictionary;
 - model files are raw PyTorch `state_dict` objects loaded with `torch.load`
   and saved with `torch.save`;
 - no action-space size or schema version metadata is stored;
