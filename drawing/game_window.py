@@ -9,125 +9,17 @@ import torch
 
 from ai.action_options import masking_out_invalid_actions
 from ai.game_state import BoardData
+from drawing.action_ui import action_label, phase_prompt
 from drawing.drawing_utils import draw_end_game, redraw_window
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import PlayerControl, choose_ranked_ai_action
-from map_data.constants import DARK_GREEN, MAX_ROUTES, TAN
-
-
-def action_label(index: int, game=None) -> str:
-    if index < 121:
-        return f"Post {index}: Trader"
-    if index < 242:
-        return f"Post {index - 121}: Merchant"
-    if index < 522:
-        if game is None:
-            return f"Route action {index}"
-        relative = index - 242
-        if relative < MAX_ROUTES:
-            route = game.selected_map.routes[relative]
-            return f"Score route: {route.cities[0].name}—{route.cities[1].name}"
-        if relative < MAX_ROUTES * 3:
-            choice = relative - MAX_ROUTES
-            route_index, city_index = divmod(choice, 2)
-            route = game.selected_map.routes[route_index]
-            return f"Office in {route.cities[city_index].name}"
-        choice = relative - MAX_ROUTES * 3
-        route_index, route_choice = divmod(choice, 4)
-        route = game.selected_map.routes[route_index]
-        if getattr(game, "waiting_for_bm_place_adjacent", False):
-            city_index, shape_index = divmod(route_choice, 2)
-            city = route.cities[city_index]
-            shape = ("Trader", "Merchant")[shape_index]
-            return f"Additional {shape} office in {city.name}"
-        special_city = next(
-            (city for city in route.cities if "SpecialPrestigePoints" in city.upgrade_city_type),
-            None,
-        )
-        if special_city is not None:
-            return f"Prestige {((7, 8, 9, 11)[route_choice])}: {special_city.name}"
-        city_index, upgrade_index = divmod(route_choice, 2)
-        city = route.cities[city_index]
-        if upgrade_index < len(city.upgrade_city_type):
-            return f"Upgrade {city.upgrade_city_type[upgrade_index]} in {city.name}"
-        return f"Route choice: {route.cities[0].name}—{route.cities[1].name}"
-    if index < 527:
-        return f"Income choice {index - 522}"
-    bonus_markers = (
-        "Swap Office",
-        "Move 3",
-        "Upgrade Ability",
-        "+3 Actions",
-        "+4 Actions",
-        "Exchange Bonus Marker",
-        "Tribute Trading Post",
-        "Block Trade Route",
-    )
-    if index < 535:
-        verb = "Take used" if getattr(game, "exchange_target_player", None) else "Use"
-        return f"{verb} {bonus_markers[index - 527]}"
-    if index < 543:
-        choice = index - 535
-        if getattr(game, "pending_income_favour_owner", None) is not None:
-            return ("Income favour: Trader", "Income favour: Merchant", "Decline income favour")[
-                choice
-            ]
-        if getattr(game, "waiting_for_buy_tile_with_bm", False):
-            return f"Pay {bonus_markers[choice]}"
-        tiles = (
-            "Buy Displace Anywhere",
-            "Buy +1 Action",
-            "Buy Income Favour",
-            "Buy +1 Displaced Piece",
-            "Buy City Scoring",
-            "Buy Ability Scoring",
-        )
-        return tiles[choice] if choice < len(tiles) else f"Tile choice {choice + 1}"
-    if index < 583 and game is not None:
-        route = game.selected_map.routes[index - 543]
-        return f"Place marker: {route.cities[0].name}—{route.cities[1].name}"
-    if index < 613 and game is not None:
-        choice = index - 583
-        if getattr(game, "waiting_for_bm_exchange_bm", False):
-            if getattr(game, "exchange_target_player", None) is None:
-                return f"Exchange with Player {choice + 1}"
-        if getattr(game, "waiting_for_bm_swap_office", False):
-            pairs = [
-                (city, pair)
-                for city in game.selected_map.cities
-                for pair in city.eligible_swap_pairs(game.current_player)
-            ]
-            if choice < len(pairs):
-                city, pair = pairs[choice]
-                return f"Swap offices {pair[0] + 1}/{pair[1] + 1} in {city.name}"
-        if getattr(game, "waiting_for_bm_green_city", False):
-            choices = [
-                (city, shape)
-                for city in game.selected_map.cities
-                if city.color == DARK_GREEN
-                for shape in ("square", "circle")
-                if game.current_player.has_personal_supply(shape)
-            ]
-            if choice < len(choices):
-                city, shape = choices[choice]
-                return f"Green office in {city.name}: {shape.title()}"
-        return f"City choice {choice + 1}"
-    if index < 618 and game is not None:
-        choice = index - 613
-        if choice < len(game.selected_map.upgrade_cities):
-            return f"Upgrade {game.selected_map.upgrade_cities[choice].upgrade_type}"
-        return f"Ability choice {choice + 1}"
-    if index == 618:
-        return "Finish / End turn"
-    if index == 619:
-        return "Use Additional Trading Post"
-    return f"Action {index}"
+from map_data.constants import MAX_ROUTES, TAN
 
 
 class GameWindow:
     def __init__(self, game):
         self.game = game
-        self.width = game.selected_map.map_width + 800
+        self.width = game.selected_map.map_width + 1100
         self.height = game.selected_map.map_height
         self.display = ScaledDisplay((self.width, self.height), "Hansa Teutonica")
         self.screen = self.display.canvas
@@ -137,13 +29,14 @@ class GameWindow:
         self.board_data = BoardData()
         self.rng = random.Random(game.seed)
         self.action_rects: list[tuple[pygame.Rect, int]] = []
+        self.layout = None
 
     def legal_actions(self) -> list[int]:
         return masking_out_invalid_actions(self.game).nonzero(as_tuple=True)[0].tolist()
 
     def draw_action_browser(self, actions):
         self.action_rects.clear()
-        panel = pygame.Rect(self.width - 290, 10, 280, 420)
+        panel = pygame.Rect(self.game.selected_map.map_width + 810, 10, 280, 440)
         pygame.draw.rect(self.screen, (245, 238, 218), panel)
         pygame.draw.rect(self.screen, (45, 38, 30), panel, 2)
         control = getattr(self.game.current_player, "control", PlayerControl.HUMAN)
@@ -155,12 +48,17 @@ class GameWindow:
         self.screen.blit(heading, (panel.x + 10, panel.y + 10))
         help_text = self.font.render("Up/Down + Enter; E ends when legal", True, (30, 25, 20))
         self.screen.blit(help_text, (panel.x + 10, panel.y + 34))
+        prompt_text = phase_prompt(self.game)
+        while self.font.size(prompt_text)[0] > panel.width - 20 and " " in prompt_text:
+            prompt_text = prompt_text.rsplit(" ", 1)[0] + "…"
+        prompt = self.font.render(prompt_text, True, (117, 70, 42))
+        self.screen.blit(prompt, (panel.x + 10, panel.y + 54))
         city_help = self.font.render(
-            "City click — L: office  M: upgrade  R: points",
+            "City — L: office  M: upgrade  R: points",
             True,
             (30, 25, 20),
         )
-        self.screen.blit(city_help, (panel.x + 10, panel.y + 54))
+        self.screen.blit(city_help, (panel.x + 10, panel.y + 74))
 
         if not actions:
             return
@@ -170,7 +68,7 @@ class GameWindow:
             actual = start + row
             color = (70, 110, 75) if actual == self.selected else (30, 25, 20)
             label = self.font.render(action_label(action, self.game), True, color)
-            position = (panel.x + 12, panel.y + 82 + row * 22)
+            position = (panel.x + 12, panel.y + 102 + row * 20)
             self.screen.blit(label, position)
             self.action_rects.append((pygame.Rect(position, (panel.width - 24, 21)), action))
 
@@ -191,6 +89,11 @@ class GameWindow:
         for rect, action in self.action_rects:
             if rect.collidepoint(position):
                 return action
+        layout = getattr(self, "layout", None)
+        if layout is not None:
+            for action, rect in layout.action_rects.items():
+                if rect.collidepoint(position) and action in legal_actions:
+                    return action
 
         post_index = 0
         for route_index, route in enumerate(self.game.selected_map.routes):
@@ -248,21 +151,6 @@ class GameWindow:
                     selection = int(relative_x * len(available) / clicked_city.width)
                     return available[selection]
 
-        board = self.game.current_player.board
-        for index, rect in enumerate(getattr(board, "circle_buttons", ())):
-            if rect.collidepoint(position):
-                action = 522 + index
-                return action if action in legal_actions else None
-
-        end_turn = pygame.Rect(
-            self.game.selected_map.map_width + 415,
-            self.game.selected_map.map_height - 170,
-            75,
-            70,
-        )
-        if end_turn.collidepoint(position) and 618 in legal_actions:
-            return 618
-
         tile_actions = {
             "DisplaceAnywhere": 535,
             "+1Action": 536,
@@ -271,7 +159,8 @@ class GameWindow:
             "+4PtsPerOwnedCity": 539,
             "+7PtsPerCompletedAbility": 540,
         }
-        for tile, rect in getattr(self.game, "tile_rects", {}).items():
+        tile_rects = layout.tile_rects if layout is not None else {}
+        for tile, rect in tile_rects.items():
             if rect.collidepoint(position):
                 action = tile_actions[tile]
                 return action if action in legal_actions else None
@@ -306,7 +195,7 @@ class GameWindow:
             actions = self.legal_actions()
             control = getattr(self.game.current_player, "control", PlayerControl.HUMAN)
             self.screen.fill(TAN)
-            redraw_window(self.screen, self.game)
+            self.layout = redraw_window(self.screen, self.game, actions)
             self.draw_action_browser(actions)
             if self.game.game_end:
                 draw_end_game(self.screen, self.game.end_the_game())

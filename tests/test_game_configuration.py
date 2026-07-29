@@ -6,7 +6,8 @@ import unittest
 from unittest import mock
 
 import hansa_game
-from drawing.game_window import GameWindow, action_label
+from drawing.action_ui import action_label
+from drawing.game_window import GameWindow
 from drawing.new_game_menu import NewGameMenu, NewGameMenuState
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import (

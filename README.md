@@ -41,6 +41,9 @@ constructing the game. Every player defaults to Human. AI seats may independentl
 use Easy (top 15), Medium (top 10), Hard (top 5), or Impossible/Magnus (top 1);
 these thresholds live in `game/game_config.py` rather than in the UI.
 
+The current rendering and interaction boundaries are documented in
+[`docs/DRAWING_ARCHITECTURE.md`](docs/DRAWING_ARCHITECTURE.md).
+
 `sample_hansa_game.py` remains as a compatibility launcher and forwards to the
 same entry point. Importing either module does not start a game, train a model,
 or save checkpoints.
