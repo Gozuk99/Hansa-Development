@@ -757,7 +757,7 @@ Update the milestone status in the plan or associated documentation.
 Use this section to track progress.
 
 - [x] Milestone 1 — Inventory current 620-entry action space
-- [ ] Milestone 2 — Define versioned 768-entry schema
+- [x] Milestone 2 — Define versioned 768-entry schema
 - [ ] Milestone 3 — Add structured action types and codec
 - [ ] Milestone 4 — Expose structured legal actions
 - [ ] Milestone 5 — Replace AI mask and dispatcher
