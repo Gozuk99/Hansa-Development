@@ -385,7 +385,7 @@ class CoreActionTests(unittest.TestCase):
         self.assertIs(adjacent_circle.owner, opponent)
         self.assertEqual(adjacent_circle.owner_piece_shape, "circle")
 
-    def test_displaced_merchant_extra_stock_pieces_must_be_merchants(self):
+    def test_optional_trader_may_be_placed_before_displaced_merchant(self):
         game = create_headless_game(2, 3, seed=124)
         actor, opponent = game.players[:2]
         original_route = next(
@@ -393,47 +393,170 @@ class CoreActionTests(unittest.TestCase):
             for route in game.selected_map.routes
             if {city.name for city in route.cities} == {"Malmo", "Visby"}
         )
-        displaced_post = next(post for post in original_route.posts if post.required_shape is None)
-        displaced_post.claim(opponent, "circle")
-        opponent.general_stock_circles = 2
-        opponent.general_stock_squares = 2
-
-        self.apply(game, post_index(game, displaced_post))
-        first_circle = next(
-            index
-            for index in game.legal_action_mask()[MAX_POSTS : MAX_POSTS * 2]
-            .nonzero(as_tuple=True)[0]
-            .tolist()
-        )
-        self.apply(game, MAX_POSTS + first_circle)
-
-        stock_squares_before = opponent.general_stock_squares
-        stock_circles_before = opponent.general_stock_circles
-        extra_mask = game.legal_action_mask()
         adjacent_routes = {
             route
             for city in original_route.cities
             for route in city.routes
             if route is not original_route
         }
-        adjacent_post_indices = {
-            post_index(game, post) for route in adjacent_routes for post in route.posts
-        }
-        legal_circle_indices = set(
-            extra_mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
+        nearest_open_post = next(
+            post for route in adjacent_routes for post in route.posts if post.required_shape is None
         )
-        self.assertEqual(extra_mask[:MAX_POSTS].count_nonzero().item(), 0)
-        self.assertTrue(legal_circle_indices)
-        self.assertTrue(legal_circle_indices.issubset(adjacent_post_indices))
-        self.assertEqual(extra_mask[618].item(), 1)
+        for route in adjacent_routes:
+            for post in route.posts:
+                if post is not nearest_open_post:
+                    post.claim(actor, post.required_shape or "square")
 
-        second_circle = next(iter(legal_circle_indices))
-        self.apply(game, MAX_POSTS + second_circle)
-        self.assertEqual(opponent.general_stock_squares, stock_squares_before)
-        self.assertEqual(
-            opponent.general_stock_circles,
-            stock_circles_before - 1,
+        opponent.general_stock_circles = 0
+        opponent.general_stock_squares = 2
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "circle")
+        refresh_displacement_targets(game)
+
+        initial_mask = game.legal_action_mask()
+        nearest_index = post_index(game, nearest_open_post)
+        self.assertEqual(initial_mask[nearest_index].item(), 1)
+        self.assertEqual(initial_mask[MAX_POSTS + nearest_index].item(), 1)
+        self.assertEqual(initial_mask[618].item(), 0)
+
+        stock_squares_before = opponent.general_stock_squares
+        self.apply(game, nearest_index)
+        self.assertEqual(opponent.general_stock_squares, stock_squares_before - 1)
+        self.assertFalse(game.displaced_player.played_displaced_shape)
+        self.assertEqual(game.legal_action_mask()[618].item(), 0)
+
+        outward_mask = game.legal_action_mask()
+        outward_circle = next(
+            index
+            for index in outward_mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
         )
+        self.assertNotEqual(outward_circle, nearest_index)
+        self.apply(game, MAX_POSTS + outward_circle)
+        self.assertTrue(game.displaced_player.played_displaced_shape)
+        self.assertEqual(game.legal_action_mask()[618].item(), 1)
+
+    def test_same_shape_stock_piece_can_precede_mandatory_piece_and_unlock_supply(self):
+        game = create_headless_game(2, 3, seed=124)
+        _, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 1
+        opponent.personal_supply_squares = 2
+        opponent.personal_supply_circles = 0
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "circle")
+        refresh_displacement_targets(game)
+
+        self.assertEqual(game.legal_action_mask()[619].item(), 1)
+        self.apply(game, 619)
+        mask = game.legal_action_mask()
+        target_index = next(
+            index for index in mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.apply(game, MAX_POSTS + target_index)
+
+        self.assertFalse(game.displaced_player.played_displaced_shape)
+        self.assertEqual(opponent.general_stock_circles, 0)
+        self.assertEqual(game.legal_action_mask()[618].item(), 0)
+
+        square_index = next(
+            index
+            for index in game.legal_action_mask()[:MAX_POSTS].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.apply(game, square_index)
+        circle_index = next(
+            index
+            for index in game.legal_action_mask()[MAX_POSTS : MAX_POSTS * 2]
+            .nonzero(as_tuple=True)[0]
+            .tolist()
+        )
+        self.apply(game, MAX_POSTS + circle_index)
+        self.assertFalse(game.waiting_for_displaced_player)
+        self.assertIsNone(game.displaced_player.player)
+
+    def test_optional_same_shape_selection_constrains_shape_and_nearest_search(self):
+        game = create_headless_game(2, 3, seed=124)
+        _, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        opponent.general_stock_squares = 1
+        opponent.general_stock_circles = 1
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "circle")
+        refresh_displacement_targets(game)
+
+        initial_mask = game.legal_action_mask()
+        self.assertGreater(initial_mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertGreater(
+            initial_mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(),
+            0,
+        )
+
+        self.apply(game, 619)
+        selected_mask = game.legal_action_mask()
+        self.assertEqual(selected_mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertGreater(
+            selected_mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(),
+            0,
+        )
+
+        circle_index = next(
+            index
+            for index in selected_mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.apply(game, MAX_POSTS + circle_index)
+        self.assertFalse(game.displaced_player.use_optional_displaced_shape)
+        self.assertFalse(game.displaced_player.played_displaced_shape)
+        self.assertEqual(opponent.general_stock_circles, 0)
+        self.assertGreater(game.legal_action_mask()[:MAX_POSTS].count_nonzero().item(), 0)
+
+    def test_maritime_post_forces_displaced_merchant_before_optional_traders(self):
+        game = create_headless_game(2, 3, seed=124)
+        actor, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        adjacent_routes = {
+            route
+            for city in original_route.cities
+            for route in city.routes
+            if route is not original_route
+        }
+        for route in adjacent_routes:
+            for post in route.posts:
+                if post.required_shape is None:
+                    post.claim(actor, "square")
+
+        opponent.general_stock_squares = 2
+        opponent.general_stock_circles = 2
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "circle")
+        opponent.general_stock_circles = 0
+        refresh_displacement_targets(game)
+
+        mask = game.legal_action_mask()
+        self.assertEqual(mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertGreater(mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(), 0)
+
+        circle_index = next(
+            index for index in mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.apply(game, MAX_POSTS + circle_index)
+        self.assertTrue(game.displaced_player.played_displaced_shape)
+        self.assertGreater(game.legal_action_mask()[:MAX_POSTS].count_nonzero().item(), 0)
 
     def test_britannia_board_fallback_keeps_shape_and_country_search_rules(self):
         game = create_headless_game(3, 4, seed=124)

@@ -1,9 +1,21 @@
 # player_attributes.py
 
 import sys
-from map_data.constants import CITY_KEYS_MAX_VALUES, ACTIONS_MAX_VALUES, PRIVILEGE_COLORS, BOOK_OF_KNOWLEDGE_MAX_VALUES, BANK_MAX_VALUES, COLOR_NAMES, UPGRADE_METHODS_MAP, UPGRADE_MAX_VALUES, INPUT_SIZE, OUTPUT_SIZE
+from map_data.constants import (
+    CITY_KEYS_MAX_VALUES,
+    ACTIONS_MAX_VALUES,
+    PRIVILEGE_COLORS,
+    BOOK_OF_KNOWLEDGE_MAX_VALUES,
+    BANK_MAX_VALUES,
+    COLOR_NAMES,
+    UPGRADE_METHODS_MAP,
+    UPGRADE_MAX_VALUES,
+    INPUT_SIZE,
+    OUTPUT_SIZE,
+)
 from game.setup import starting_inventory
 from player_info.reward_options import Rewards
+
 
 class Player:
     def __init__(self, color, order, load_model=True):
@@ -15,7 +27,10 @@ class Player:
         self.hansa_nn = None
         if load_model:
             from ai.ai_model import HansaNN
-            self.hansa_nn = HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{self.order}.pth")
+
+            self.hansa_nn = HansaNN(
+                INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{self.order}.pth"
+            )
 
         self.score = 0  # Initial score
         self.final_score = 0
@@ -62,19 +77,23 @@ class Player:
     @property
     def locked_ability_traders(self):
         return (
-            len(CITY_KEYS_MAX_VALUES) - 1 - self.keys_index
-            + len(ACTIONS_MAX_VALUES) - 1 - self.actions_index
-            + len(PRIVILEGE_COLORS) - 1 - PRIVILEGE_COLORS.index(self.privilege)
-            + len(BANK_MAX_VALUES) - 1 - BANK_MAX_VALUES.index(self.bank)
+            len(CITY_KEYS_MAX_VALUES)
+            - 1
+            - self.keys_index
+            + len(ACTIONS_MAX_VALUES)
+            - 1
+            - self.actions_index
+            + len(PRIVILEGE_COLORS)
+            - 1
+            - PRIVILEGE_COLORS.index(self.privilege)
+            + len(BANK_MAX_VALUES)
+            - 1
+            - BANK_MAX_VALUES.index(self.bank)
         )
 
     @property
     def locked_ability_merchants(self):
-        return (
-            len(BOOK_OF_KNOWLEDGE_MAX_VALUES)
-            - 1
-            - BOOK_OF_KNOWLEDGE_MAX_VALUES.index(self.book)
-        )
+        return len(BOOK_OF_KNOWLEDGE_MAX_VALUES) - 1 - BOOK_OF_KNOWLEDGE_MAX_VALUES.index(self.book)
 
     def spend_action(self):
         if self.actions_remaining <= 0:
@@ -112,7 +131,7 @@ class Player:
 
     def add_bonus_marker(self, marker):
         self.bonus_markers.append(marker)
-    
+
     def start_move(self):
         # Start a new move by setting pieces to place equal to book value
         self.pieces_to_pickup = self.book
@@ -124,10 +143,16 @@ class Player:
         if self.pieces_to_pickup > 0 and post.owner_piece_shape:
             self.holding_pieces.append((post.owner_piece_shape, post.owner, post.region))
             self.pieces_to_pickup -= 1
-            print(f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_pickup} moves left.")
+            print(
+                f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_pickup} moves left."
+            )
             post.reset_post()
         else:
-            message = "No more pieces can be picked up this turn." if self.pieces_to_pickup <= 0 else "This post is empty."
+            message = (
+                "No more pieces can be picked up this turn."
+                if self.pieces_to_pickup <= 0
+                else "This post is empty."
+            )
             print(message)
 
     def place_piece(self, post, shape):
@@ -139,24 +164,32 @@ class Player:
 
         # Check if the post has a specific required shape
         if post.required_shape and post.required_shape != shape:
-            print(f"Cannot place a {shape} on this post. This post requires a {post.required_shape}.")
+            print(
+                f"Cannot place a {shape} on this post. This post requires a {post.required_shape}."
+            )
             return
 
         # Check if the placement is valid based on the regions
         if self.is_valid_region_transition(origin_region, post.region):
             if shape_to_place == shape:
-                print(f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}.")
+                print(
+                    f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}."
+                )
                 print(f"[{self.actions_remaining}] {COLOR_NAMES[self.color]} placed a piece")
                 post.claim(owner_to_place, shape_to_place)
                 self.holding_pieces.pop(0)
-                print(f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board.")
+                print(
+                    f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board."
+                )
         else:
             print("Invalid placement: Cannot move piece between incompatible regions.")
 
         # If the next piece to place is available
         if self.holding_pieces:
             next_shape, next_owner, _ = self.holding_pieces[0]
-            print(f"The next piece to place must be Player {COLOR_NAMES[next_owner.color]}'s {next_shape}.")
+            print(
+                f"The next piece to place must be Player {COLOR_NAMES[next_owner.color]}'s {next_shape}."
+            )
 
     def is_valid_region_transition(self, start_region, target_region):
         # If the piece was picked up from a white/None region, it can only be placed in a white/None region
@@ -193,7 +226,7 @@ class Player:
 
             self.actions_index += 1
             self.actions = ACTIONS_MAX_VALUES[self.actions_index]
-            
+
             # If the new value of actions is greater than the previous one, increment actions_remaining by 1
             if self.actions > previous_actions:
                 self.grant_actions(1)
@@ -210,7 +243,9 @@ class Player:
     def upgrade_book(self):
         print("Upgrade book called")
         if self.book < max(BOOK_OF_KNOWLEDGE_MAX_VALUES):
-            self.book = BOOK_OF_KNOWLEDGE_MAX_VALUES[BOOK_OF_KNOWLEDGE_MAX_VALUES.index(self.book) + 1]
+            self.book = BOOK_OF_KNOWLEDGE_MAX_VALUES[
+                BOOK_OF_KNOWLEDGE_MAX_VALUES.index(self.book) + 1
+            ]
         else:
             print("Book_of_Knowledge is already at its maximum level!")
 
@@ -239,7 +274,9 @@ class Player:
             # If this is called from a bonus marker, you might not want to adjust actions or switch player
             return True
         else:
-            print(f"{upgrade_type} is already at its maximum value for player {COLOR_NAMES[self.color]}.")
+            print(
+                f"{upgrade_type} is already at its maximum value for player {COLOR_NAMES[self.color]}."
+            )
             return False
 
     def has_unlocked_key(self, index):
@@ -263,7 +300,7 @@ class Player:
         if isinstance(BANK_MAX_VALUES[index], int):
             return self.bank >= BANK_MAX_VALUES[index]
         return False  # For any other cases
-    
+
     def income_action(self, num_squares=0, num_circles=0, tribute_income=False):
         if num_squares < 0 or num_circles < 0:
             raise ValueError("Income counts cannot be negative")
@@ -285,10 +322,10 @@ class Player:
         self.personal_supply_squares += num_squares
         if not tribute_income:
             self.spend_action()
-    
+
     def income_action_based_on_circle_count(self, max_circles, bank, general_stock_squares):
         button_labels = []
-        
+
         if bank == 50:
             label = f"{general_stock_squares}S/{max_circles}C"
             button_labels.append(label)
@@ -301,7 +338,7 @@ class Player:
                 label = f"{squares}S/{circles}C"
                 button_labels.append(label)
         return button_labels
-    
+
     def add_1_income(self, shape):
         if shape == "square" and self.general_stock_squares > 0:
             self.general_stock_squares -= 1
@@ -314,22 +351,23 @@ class Player:
 
     def player_can_claim_office(self, office_color):
         """Check if a player can claim an office of the specified color."""
-        allowed_office_colors = PRIVILEGE_COLORS[:PRIVILEGE_COLORS.index(self.privilege) + 1]
+        allowed_office_colors = PRIVILEGE_COLORS[: PRIVILEGE_COLORS.index(self.privilege) + 1]
         return office_color in allowed_office_colors
-    
+
     def has_general_stock(self, shape):
         if shape == "circle":
             return self.general_stock_circles > 0
         elif shape == "square":
             return self.general_stock_squares > 0
         return False
-    
+
     def has_personal_supply(self, shape):
         if shape == "circle":
             return self.personal_supply_circles > 0
         elif shape == "square":
             return self.personal_supply_squares > 0
         return False
+
 
 class DisplacedPlayer:
     def __init__(self):
@@ -339,6 +377,7 @@ class DisplacedPlayer:
         self.player = None
         self.displaced_shape = None
         self.played_displaced_shape = False
+        self.use_optional_displaced_shape = False
         self.total_pieces_to_place = 0
 
     def populate_displaced_player(self, game, player, displaced_shape):
@@ -352,10 +391,10 @@ class DisplacedPlayer:
             self.total_pieces_to_place = 3
         else:
             sys.exit()
-            
+
     def all_pieces_placed(self):
         return self.total_pieces_to_place == 0 and self.played_displaced_shape
-    
+
     def has_general_stock(self, shape):
         if shape == "square":
             return self.player.general_stock_squares > 0
@@ -368,9 +407,10 @@ class DisplacedPlayer:
         if shape == "square":
             return self.player.personal_supply_squares > 0
         return self.player.personal_supply_circles > 0
-    
+
     def is_personal_supply_empty(self):
         return self.player.personal_supply_squares == 0 and self.player.personal_supply_circles == 0
+
 
 class PlayerBoard:
     def __init__(self, x, y, player):
@@ -386,5 +426,5 @@ class PlayerBoard:
 
     def income_action_based_on_circle_count(self, idx):
         label = self.button_labels[idx]
-        num_squares, num_circles = [int(x[:-1]) for x in label.split('/')]
+        num_squares, num_circles = [int(x[:-1]) for x in label.split("/")]
         self.player.income_action(num_squares, num_circles)

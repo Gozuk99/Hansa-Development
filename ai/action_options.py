@@ -16,7 +16,8 @@ from game.game_actions import (
     displace_claim,
     can_pick_up_displacement_fallback,
     can_place_displacement_piece,
-    displacement_shape_to_place,
+    optional_displacement_piece_available,
+    select_optional_displaced_shape,
     finish_displacement,
     assign_new_bonus_marker_on_route,
     claim_route_for_office,
@@ -154,7 +155,10 @@ def _perform_action_from_index(game, max_prob_index):
     elif max_prob_index == 618:
         map_end_turn_action(game)
     elif max_prob_index == 619:
-        map_place_adjacent_action(game)
+        if game.turn_phase == TurnPhase.DISPLACEMENT:
+            select_optional_displaced_shape(game)
+        else:
+            map_place_adjacent_action(game)
 
     game.complete_deferred_game_end_if_ready()
 
@@ -932,7 +936,7 @@ def restrict_mask_to_turn_phase(game, action_mask):
         return action_mask
 
     allowed_ranges = {
-        TurnPhase.DISPLACEMENT: ((0, 242), (618, 619)),
+        TurnPhase.DISPLACEMENT: ((0, 242), (618, 620)),
         TurnPhase.MOVE_PIECES: ((0, 242),),
         TurnPhase.BONUS_MARKER_CHOICE: (
             (0, 242),
@@ -962,6 +966,16 @@ def restrict_mask_to_turn_phase(game, action_mask):
 
 def mask_place_adjacent(game):
     tensor = torch.zeros(1, device=device, dtype=torch.uint8)
+    if game.turn_phase == TurnPhase.DISPLACEMENT:
+        displaced = game.displaced_player
+        if (
+            not displaced.played_displaced_shape
+            and not displaced.use_optional_displaced_shape
+            and displaced.total_pieces_to_place > 1
+            and optional_displacement_piece_available(game, displaced.displaced_shape)
+        ):
+            tensor[0] = 1
+        return tensor
     if game.turn_phase != TurnPhase.ACTIONS:
         return tensor
     if any(marker.type == "PlaceAdjacent" for marker in game.current_player.bonus_markers) and any(
@@ -1033,10 +1047,10 @@ def mask_post_action(game):
                     post_tensor[post_idx] = 1
                     post_tensor[MAX_POSTS + post_idx] = 1
                 else:
-                    required_shape = displacement_shape_to_place(game)
-                    if can_place_displacement_piece(game, post, required_shape):
-                        shape_offset = MAX_POSTS if required_shape == "circle" else 0
-                        post_tensor[shape_offset + post_idx] = 1
+                    for available_shape in ("square", "circle"):
+                        if can_place_displacement_piece(game, post, available_shape):
+                            shape_offset = MAX_POSTS if available_shape == "circle" else 0
+                            post_tensor[shape_offset + post_idx] = 1
             # handle BM Move any2 or #handle BM Move 3:
             elif game.waiting_for_bm_move_any_2:
                 if post.is_owned() and current_player.pieces_to_pickup > 0:
