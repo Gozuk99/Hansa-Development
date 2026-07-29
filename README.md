@@ -1,124 +1,142 @@
-### Project Goals:
+# Hansa Teutonica
 
-1. To play Hansa Teutonica against an AI/Computer **ONLY** written using Python.
-2. Build a NN and train using Reinforcement Learning with PyTorch
-3. Become more familiar with AI, GitHub, and Pytorch
+A Python implementation of Hansa Teutonica intended to support deterministic
+self-play and, eventually, reinforcement-learning agents.
 
-**NEVER** intending to allow a multiplayer/online functionality.
+The current priority is game-engine correctness. The project is not intended to
+provide online multiplayer. Reinforcement-learning quality, position
+evaluation, and suggested moves come after the rules and game lifecycle are
+reliable.
 
-Inspired by the Chess.com features to view the position evaluation, and view suggested move(s).
+## Current Capabilities
 
-### Priorities (in order):
-1. Game Logic **(being worked on now)**
-2. Clean code
-3. Acquire a variety of game positions to be used for training.
-	Ex1: 1 action away from ending the game.
-	Ex2: 1 action away from running out of Bonus Markers
-	Ex3: 1 action away from ending the game and losing.
-6. Statistic tracking:
-	Turns taken
-	Upgrade Ability Prioritization
-	Office/City Prioritization
-5. Visual effects/beauty
+- Deterministic game creation from a map, player count, optional modules, and
+  seed.
+- Three-to-five-player games on the base, Eastern Hanseatic League, and
+  Britannia maps. Two-player rules are intentionally out of scope.
+- A Pygame New Game menu with every active seat defaulting to Human.
+- Independently configurable Human, Easy, Medium, Hard, and
+  Impossible ("Magnus") seats.
+- Optional Mission Cards on Map 1 and optional Emperor's Favour tiles on every
+  map.
+- Standard bonus markers by default, with optional seeded or manually selected
+  standard/promo replacement supplies.
+- A legal-action-driven game window and a deterministic headless runner.
+- Automated engine, configuration, rendering, and complete-game tests.
 
-### Prerequisites:
-Python 3.11.4
-import pygame
-import sys
-import random
-import torch
-import gc
+Exact save/load and replayable game-history support remain future milestones.
 
-### How to Run
+## Requirements
 
-Start the interactive game:
+- Python 3.11
+- Runtime dependencies from `requirements-ci.txt`
+- Development and validation tools from `requirements-dev.txt`
 
-		python hansa_game.py
+Install dependencies in a virtual environment:
 
-The New Game menu configures player count, map, every player's controller,
-Mission Cards, Emperor's Favour tiles, and promotional bonus markers before
-constructing the game. Every player defaults to Human. AI seats may independently
-use Easy (top 15), Medium (top 10), Hard (top 5), or Impossible/Magnus (top 1);
-these thresholds live in `game/game_config.py` rather than in the UI.
+```console
+python -m pip install -r requirements-ci.txt -r requirements-dev.txt
+```
 
-The current rendering and interaction boundaries are documented in
-[`docs/DRAWING_ARCHITECTURE.md`](docs/DRAWING_ARCHITECTURE.md).
+## Run the Interactive Game
 
-`sample_hansa_game.py` remains as a compatibility launcher and forwards to the
-same entry point. Importing either module does not start a game, train a model,
-or save checkpoints.
+```console
+python hansa_game.py
+```
 
-All setup choices are represented by one reusable `GameConfiguration`. Manual
-Emperor's Favour selection requires exactly one distinct tile per player.
-Custom bonus-marker supplies are disabled by default; random mode generates a
-legal standard/promo mix, while manual mode selects all twelve exact copies from
-the complete standard-and-promo pool. Mission Cards appear only for Map 1.
+The New Game menu configures the map, player count, controller for each seat,
+Mission Cards, Emperor's Favour tiles, and replacement bonus-marker supply
+before constructing the game. Press Enter to start or Escape to close the menu.
 
-### Headless Engine Verification
+`sample_hansa_game.py` is retained only as a compatibility launcher and forwards
+to the same entry point. Importing either launcher does not open a window, train
+a model, or save a checkpoint.
 
-Run the automated engine checks without loading neural-network models, opening a
-pygame window, training, or saving model checkpoints:
+### Game Controls
 
-		python -m unittest discover -s tests -v
+- Route post: left-click to place/displace with a Trader (square); right-click
+  for a Merchant (circle).
+- Controlled-route city: left-click to claim an office; middle-click for an
+  upgrade or Special Prestige choice; right-click to score route points.
+- Legal-action browser: Up/Down selects an action and Enter applies it.
+- Press `E` to finish the turn when End Turn is legal.
 
-### Pull Request Validation
+All GUI moves come from the engine's current legal-action mask and pass through
+`Game.apply_action()`. When multiple routes or outcomes share a location, the
+click position selects among them; every legal choice is also available in the
+action browser.
 
-Install the pinned runtime and development dependencies, then run the same
-deterministic checks used for pull requests:
+## Run a Deterministic Headless Game
 
-		python -m pip install -r requirements-ci.txt -r requirements-dev.txt
-		python tools/validate_pr.py
+```console
+python run_headless_game.py --map 2 --players 3 --seed 124
+```
 
-The command parses every Python file, runs the configured Ruff correctness
-checks, checks formatting for Python files changed on the current branch, and
-runs the complete `unittest` suite. Static type checking is not yet enabled
-because the project does not currently have a type-checker configuration.
+Optional setup modules are disabled unless explicitly requested:
 
-Pull requests automatically run the equivalent checks through
-`.github/workflows/pull-request-validation.yml`. Each pull request should link
-its issue and request a fresh-context advisory review; see
-`.github/CODEX_REVIEW.md`. AI review runs outside GitHub Actions: CI requires no
-OpenAI API key, incurs no OpenAI API billing, and never approves or merges a
-pull request automatically.
+```console
+python run_headless_game.py --map 1 --players 3 --seed 124 \
+  --mission-cards --emperors-favour
+```
 
-Run one deterministic headless game:
+Mission Cards are valid only on Map 1. Emperor's Favour may be enabled on any
+map. Promo markers are never included by default; provide an explicit
+12-marker replacement supply by repeating `--bonus-marker TYPE` exactly twelve
+times. The three fixed starting markers remain separate.
 
-		python run_headless_game.py --map 2 --players 3 --seed 124
+The same configuration and seed should produce the same action trace and final
+scores. See `run_headless_game.py --help` for all available options.
 
-Optional setup modules are disabled by default. Enable them explicitly with:
+## Validation
 
-		python run_headless_game.py --map 1 --players 3 --mission-cards --emperors-favour
+Run the same deterministic validation used by pull requests:
 
-Mission Cards are only valid on map 1. Emperor's Favour may be enabled on any map.
+```console
+python tools/validate_pr.py
+```
 
-Promo bonus markers are never included by default. To use them, pass an explicit
-12-marker replacement supply through `bonus_marker_supply` or repeat
-`--bonus-marker TYPE` exactly 12 times with `run_headless_game.py`. The three
-fixed starting markers remain separate, preserving 15 total markers.
+It parses every Python file, runs Ruff lint and formatting checks, and executes
+the complete `unittest` suite. Tests do not begin training or save model
+checkpoints.
 
-The same map, player count, and seed should produce the same action trace and
-final scores. The currently verified smoke configurations are map 2 with three
-players (seeds 124 and 125) and map 1 with three players (seed 124).
+To run only the test suite:
 
-Map 2 with four players and seed 124 is a known incomplete case: the current
-baseline policy does not reach a terminal state within 10,000 actions. It is
-not yet part of the supported verification matrix.
+```console
+python -m unittest discover -s tests -v
+```
 
-### How to Play:
-**Left-Click** to claim or displace with square.
-**Right-Click** to claim or displace with circle.
+Pull requests run the equivalent checks through
+`.github/workflows/pull-request-validation.yml`. Independent Codex review is
+advisory and runs outside GitHub Actions, so CI requires no OpenAI API key,
+creates no OpenAI API billing, and never auto-merges.
 
-Admin Mode:
-**Shift-Click** an Upgrade (yellow city), to auto upgrade an ability. Used for testing/training.
+## Architecture and Rules
 
-### Long Term Goals:
-- Train Models for all 5 players - **Cannot do until game logic is complete.**
-- ~~Mini Expansion Bonus Markers~~
-- Evaluation Bar
-- - Initially thinking to do just a breakdown of the score if the game ended immediately
-- Computer generated suggestion for move.
-- - When AI Models are build, would print top suggested move.
-- Reward structure for more advanced scenarios
-- - Ex: blocking East/West Connection completion
-- Intro Screen to select players, maps, bonus markers.
-- Generate a game state to evaluate.
+- [Repository assessment](docs/REPOSITORY_ASSESSMENT.md)
+- [First milestone plan](docs/FIRST_MILESTONE_PLAN.md)
+- [New Game configuration](docs/NEW_GAME_CONFIGURATION.md)
+- [Drawing architecture](docs/DRAWING_ARCHITECTURE.md)
+- [Rules compliance matrix](docs/RULES_COMPLIANCE_MATRIX.md)
+- [Big Box rulebook](docs/hansa-teutonica-big-box-rulebook.md)
+- [Official FAQ](docs/Hansa_Teutonica_FAQ_v5.md)
+- [Promo bonus-marker rules](docs/BigBoxPromoBonusMarkers.md)
+
+`GameConfiguration` is the reusable boundary for validated setup. The game
+engine owns state, legal-action masking, and mutation. The drawing layer renders
+that state, maps user input to currently legal action indices, and does not own
+rules legality.
+
+## Development Priorities
+
+1. Complete and verify game rules and turn structure.
+2. Keep deterministic setup, action application, and complete-game tests green.
+3. Implement exact state save/load and reproducible action history.
+4. Add manual continuation, single-AI turns, and batch alternate-outcome
+   simulation from saved positions.
+5. Improve reinforcement-learning observations, rewards, models, evaluation,
+   and suggested moves.
+6. Improve statistics and presentation.
+
+The long-term goal is a dependable engine that can generate and reproduce game
+positions, complete games through self-play, and train AI opponents without
+coupling game rules to the GUI or model implementation.
