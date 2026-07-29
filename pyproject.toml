@@ -1,0 +1,18 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["__pycache__", "*.pth"]
+
+[tool.ruff.lint]
+# Begin with high-confidence correctness failures so CI does not force an
+# unrelated cleanup of the legacy engine. Additional rules can be enabled
+# incrementally as existing findings are corrected.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.ruff.lint.per-file-ignores]
+# Pre-existing ranking code assigns `last_player` on the only path that can
+# precede its use. Keep the baseline explicit until reward logic is refactored.
+"player_info/reward_options.py" = ["F821"]
+
+[tool.ruff.format]
+line-ending = "lf"
