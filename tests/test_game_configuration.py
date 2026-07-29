@@ -250,6 +250,15 @@ class GameConfigurationTests(unittest.TestCase):
 
         self.assertEqual(requested, (1960, 1880))
 
+    def test_presentation_canvas_scales_up_to_fill_enlarged_window(self):
+        presentation = ScaledDisplay.fit_size(
+            (980, 940),
+            (1960, 1880),
+            allow_upscale=True,
+        )
+
+        self.assertEqual(presentation, (1960, 1880))
+
     def test_tiny_display_never_requests_a_window_larger_than_desktop(self):
         available = ScaledDisplay.available_size((600, 400), (980, 940))
         requested = ScaledDisplay.fit_size((980 * 2, 940 * 2), available)
