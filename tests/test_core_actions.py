@@ -436,6 +436,35 @@ class CoreActionTests(unittest.TestCase):
         self.assertTrue(game.displaced_player.played_displaced_shape)
         self.assertEqual(game.legal_action_mask()[618].item(), 1)
 
+    def test_same_shape_stock_piece_is_canonicalized_to_mandatory_piece_first(self):
+        game = create_headless_game(2, 3, seed=124)
+        actor, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 1
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "circle")
+        refresh_displacement_targets(game)
+
+        mask = game.legal_action_mask()
+        target_index = next(
+            index for index in mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.apply(game, MAX_POSTS + target_index)
+
+        self.assertTrue(game.displaced_player.played_displaced_shape)
+        self.assertEqual(opponent.general_stock_circles, 1)
+        self.assertEqual(game.legal_action_mask()[618].item(), 1)
+        self.assertGreater(
+            game.legal_action_mask()[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(),
+            0,
+        )
+
     def test_maritime_post_forces_displaced_merchant_before_optional_traders(self):
         game = create_headless_game(2, 3, seed=124)
         actor, opponent = game.players[:2]

@@ -241,6 +241,10 @@ def displacement_shapes_to_place(game):
         )
 
     for shape, count in source_counts:
+        # Pieces have no identity beyond shape. When an optional source contains
+        # the displaced shape, one post action represents both choices; applying
+        # it to the mandatory piece first preserves every possible board result
+        # and leaves the identical optional piece available (and declinable).
         if count and shape not in shapes:
             shapes.append(shape)
     return tuple(shapes)
