@@ -331,6 +331,51 @@ class GameConfigurationTests(unittest.TestCase):
         self.assertEqual(window.action_for_click(left, 2, legal_actions), choices[0])
         self.assertEqual(window.action_for_click(right, 2, legal_actions), choices[1])
 
+    def test_special_prestige_city_zones_expose_all_four_values(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        city = next(
+            city
+            for city in game.selected_map.cities
+            if "SpecialPrestigePoints" in city.upgrade_city_type
+        )
+        route = city.routes[0]
+        for post in route.posts:
+            post.owner = game.current_player
+            post.owner_piece_shape = "circle"
+        route_index = game.selected_map.routes.index(route)
+        base = 242 + 120 + route_index * 4
+        choices = list(range(base, base + 4))
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+        window.action_rects = []
+        positions = [
+            (
+                city.x_pos + int((index + 0.5) * city.width / 4),
+                city.y_pos + city.height // 2,
+            )
+            for index in range(4)
+        ]
+
+        self.assertEqual(
+            [window.action_for_click(position, 2, choices) for position in positions],
+            choices,
+        )
+
+    def test_additional_office_route_choices_have_contextual_labels(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        route = game.selected_map.routes[0]
+        game.waiting_for_bm_place_adjacent = True
+        base = 242 + 120
+
+        self.assertEqual(
+            action_label(base, game),
+            f"Additional Trader office in {route.cities[0].name}",
+        )
+        self.assertEqual(
+            action_label(base + 1, game),
+            f"Additional Merchant office in {route.cities[0].name}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

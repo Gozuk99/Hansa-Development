@@ -35,6 +35,11 @@ def action_label(index: int, game=None) -> str:
         choice = relative - MAX_ROUTES * 3
         route_index, route_choice = divmod(choice, 4)
         route = game.selected_map.routes[route_index]
+        if getattr(game, "waiting_for_bm_place_adjacent", False):
+            city_index, shape_index = divmod(route_choice, 2)
+            city = route.cities[city_index]
+            shape = ("Trader", "Merchant")[shape_index]
+            return f"Additional {shape} office in {city.name}"
         special_city = next(
             (city for city in route.cities if "SpecialPrestigePoints" in city.upgrade_city_type),
             None,
@@ -226,7 +231,15 @@ class GameWindow:
                     city_choices = [
                         action for action in choices if ((action - base) // 2) == city_index
                     ]
-                    available = city_choices or choices
+                    special_city = next(
+                        (
+                            city
+                            for city in route.cities
+                            if "SpecialPrestigePoints" in city.upgrade_city_type
+                        ),
+                        None,
+                    )
+                    available = choices if special_city is not None else (city_choices or choices)
                     if not available:
                         return None
                     relative_x = max(
