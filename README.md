@@ -29,11 +29,27 @@ import random
 import torch
 import gc
 
-### How to Run:
-		python sample_hansa_game.py
-You may change the map and players by editing the line in the sample_hansa_game.py:
+### How to Run
 
-		game = Game(map_num=2, num_players=5)
+Start the interactive game:
+
+		python hansa_game.py
+
+The New Game menu configures player count, map, every player's controller,
+Mission Cards, Emperor's Favour tiles, and promotional bonus markers before
+constructing the game. Every player defaults to Human. AI seats may independently
+use Easy (top 15), Medium (top 10), Hard (top 5), or Impossible/Magnus (top 1);
+these thresholds live in `game/game_config.py` rather than in the UI.
+
+`sample_hansa_game.py` remains as a compatibility launcher and forwards to the
+same entry point. Importing either module does not start a game, train a model,
+or save checkpoints.
+
+All setup choices are represented by one reusable `GameConfiguration`. Manual
+Emperor's Favour selection requires exactly one distinct tile per player.
+Promotional markers are disabled by default; random mode generates a legal mix,
+while manual mode selects the exact promo copies included in the twelve-marker
+supply. Mission Cards appear only for Map 1.
 
 ### Headless Engine Verification
 
