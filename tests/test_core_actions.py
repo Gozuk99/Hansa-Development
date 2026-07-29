@@ -3,6 +3,7 @@ import io
 import unittest
 
 from ai.action_options import InvalidActionError
+from game.game_actions import refresh_displacement_targets
 from game.game_runner import create_headless_game
 from game.turn_state import TurnPhase
 
@@ -108,6 +109,17 @@ class CoreActionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             player.income_action(0, 0)
 
+    def test_income_mask_rejects_zero_piece_composition(self):
+        game = create_headless_game(2, 3, seed=124)
+        player = game.current_player
+        player.general_stock_squares = 0
+        player.general_stock_circles = 1
+
+        mask = game.legal_action_mask()
+
+        self.assertEqual(mask[522].item(), 0)
+        self.assertEqual(mask[523].item(), 1)
+
     def test_place_tradesman_costs_one_action_and_one_supply_piece(self):
         game = create_headless_game(2, 3, seed=124)
         player = game.current_player
@@ -197,10 +209,7 @@ class CoreActionTests(unittest.TestCase):
 
         for _ in range(2):
             mask = game.legal_action_mask()
-            target = next(
-                index
-                for index in mask[:121].nonzero(as_tuple=True)[0].tolist()
-            )
+            target = next(index for index in mask[:121].nonzero(as_tuple=True)[0].tolist())
             self.apply(game, target)
 
         self.assertFalse(game.waiting_for_displaced_player)
@@ -227,10 +236,7 @@ class CoreActionTests(unittest.TestCase):
 
         for _ in range(2):
             target = next(
-                index
-                for index in game.legal_action_mask()[:121]
-                .nonzero(as_tuple=True)[0]
-                .tolist()
+                index for index in game.legal_action_mask()[:121].nonzero(as_tuple=True)[0].tolist()
             )
             self.apply(game, target)
 
@@ -244,16 +250,11 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, post_index(game, route.posts[0]))
 
         directly_adjacent = {
-            adjacent
-            for city in route.cities
-            for adjacent in city.routes
-            if adjacent is not route
+            adjacent for city in route.cities for adjacent in city.routes if adjacent is not route
         }
         legal_post_numbers = {
             index % MAX_POSTS
-            for index in game.legal_action_mask()[:242]
-            .nonzero(as_tuple=True)[0]
-            .tolist()
+            for index in game.legal_action_mask()[:242].nonzero(as_tuple=True)[0].tolist()
         }
         actual_routes = set()
         running_index = 0
@@ -280,10 +281,7 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, post_index(game, displaced_post))
 
         first_target = next(
-            index
-            for index in game.legal_action_mask()[:121]
-            .nonzero(as_tuple=True)[0]
-            .tolist()
+            index for index in game.legal_action_mask()[:121].nonzero(as_tuple=True)[0].tolist()
         )
         self.apply(game, first_target)
         self.assertEqual(opponent.pieces_to_pickup, 1)
@@ -293,29 +291,209 @@ class CoreActionTests(unittest.TestCase):
         )
         self.apply(game, post_index(game, board_fallback_post))
         final_target = next(
-            index
-            for index in game.legal_action_mask()[:121]
-            .nonzero(as_tuple=True)[0]
-            .tolist()
+            index for index in game.legal_action_mask()[:121].nonzero(as_tuple=True)[0].tolist()
         )
         self.apply(game, final_target)
 
         self.assertFalse(game.waiting_for_displaced_player)
         self.assertEqual(
             sum(
-                post.owner is opponent
-                for route in game.selected_map.routes
-                for post in route.posts
+                post.owner is opponent for route in game.selected_map.routes for post in route.posts
             ),
             2,
+        )
+
+    def test_empty_supply_relocated_merchant_stops_at_nearest_circle_post(self):
+        game = create_headless_game(2, 3, seed=124)
+        actor, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        adjacent_routes = {
+            route
+            for city in original_route.cities
+            for route in city.routes
+            if route is not original_route
+        }
+
+        # Leave only Merchant posts open at distance one so the displaced
+        # Tradesman must continue outward. These blockers belong to the actor,
+        # so the empty-supply fallback cannot select them for relocation.
+        for route in adjacent_routes:
+            for post in route.posts:
+                if post.required_shape is None:
+                    post.claim(actor, "square")
+
+        displaced_post = next(post for post in original_route.posts if post.required_shape is None)
+        displaced_post.claim(opponent, "square")
+        board_circle = next(
+            post
+            for route in reversed(game.selected_map.routes)
+            for post in route.posts
+            if route is not original_route
+            and route not in adjacent_routes
+            and post.required_shape is None
+            and not post.is_owned()
+        )
+        board_circle.claim(opponent, "circle")
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 0
+        opponent.personal_supply_squares = 0
+        opponent.personal_supply_circles = 0
+
+        self.apply(game, post_index(game, displaced_post))
+        initial_mask = game.legal_action_mask()
+        self.assertFalse(
+            any(
+                initial_mask[post_index(game, post)].item()
+                for route in adjacent_routes
+                for post in route.posts
+                if post.required_shape == "circle"
+            )
+        )
+        outward_square = next(
+            index for index in initial_mask[:MAX_POSTS].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.apply(game, outward_square)
+
+        self.apply(game, post_index(game, board_circle))
+        relocated_mask = game.legal_action_mask()
+        adjacent_circle = next(
+            post
+            for route in adjacent_routes
+            for post in route.posts
+            if post.required_shape == "circle" and not post.is_owned()
+        )
+        self.assertEqual(
+            relocated_mask[post_index(game, adjacent_circle, "circle")].item(),
+            1,
+        )
+        farther_circle_targets = [
+            index
+            for index in relocated_mask[MAX_POSTS : MAX_POSTS * 2]
+            .nonzero(as_tuple=True)[0]
+            .tolist()
+            if index
+            not in {post_index(game, post) for route in adjacent_routes for post in route.posts}
+        ]
+        self.assertEqual(farther_circle_targets, [])
+
+        self.apply(game, post_index(game, adjacent_circle, "circle"))
+        self.assertFalse(game.waiting_for_displaced_player)
+        self.assertIs(adjacent_circle.owner, opponent)
+        self.assertEqual(adjacent_circle.owner_piece_shape, "circle")
+
+    def test_displaced_merchant_extra_stock_pieces_must_be_merchants(self):
+        game = create_headless_game(2, 3, seed=124)
+        actor, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        displaced_post = next(post for post in original_route.posts if post.required_shape is None)
+        displaced_post.claim(opponent, "circle")
+        opponent.general_stock_circles = 2
+        opponent.general_stock_squares = 2
+
+        self.apply(game, post_index(game, displaced_post))
+        first_circle = next(
+            index
+            for index in game.legal_action_mask()[MAX_POSTS : MAX_POSTS * 2]
+            .nonzero(as_tuple=True)[0]
+            .tolist()
+        )
+        self.apply(game, MAX_POSTS + first_circle)
+
+        stock_squares_before = opponent.general_stock_squares
+        stock_circles_before = opponent.general_stock_circles
+        extra_mask = game.legal_action_mask()
+        adjacent_routes = {
+            route
+            for city in original_route.cities
+            for route in city.routes
+            if route is not original_route
+        }
+        adjacent_post_indices = {
+            post_index(game, post) for route in adjacent_routes for post in route.posts
+        }
+        legal_circle_indices = set(
+            extra_mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.assertEqual(extra_mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertTrue(legal_circle_indices)
+        self.assertTrue(legal_circle_indices.issubset(adjacent_post_indices))
+        self.assertEqual(extra_mask[618].item(), 1)
+
+        second_circle = next(iter(legal_circle_indices))
+        self.apply(game, MAX_POSTS + second_circle)
+        self.assertEqual(opponent.general_stock_squares, stock_squares_before)
+        self.assertEqual(
+            opponent.general_stock_circles,
+            stock_circles_before - 1,
+        )
+
+    def test_britannia_board_fallback_keeps_shape_and_country_search_rules(self):
+        game = create_headless_game(3, 4, seed=124)
+        opponent = game.players[1]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Carlisle", "IsleOfMan"}
+        )
+        legal_adjacent_routes = {
+            route
+            for city in original_route.cities
+            for route in city.routes
+            if route is not original_route and route.region in ("Scotland", None)
+        }
+        wales_maritime_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Conway", "IsleOfMan"}
+        )
+        nearest_circle_route = next(
+            route
+            for route in legal_adjacent_routes
+            if {city.name for city in route.cities} == {"Carlisle", "Chester"}
+        )
+
+        # Force the nearest valid distance to contain only Merchant spaces.
+        for route in legal_adjacent_routes:
+            for post in route.posts:
+                if post.required_shape is None:
+                    post.claim(game.current_player, "square")
+
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 0
+        opponent.personal_supply_squares = 0
+        opponent.personal_supply_circles = 0
+        opponent.holding_pieces = [("circle", opponent, "Scotland")]
+        opponent.pieces_to_pickup = 0
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "square")
+        game.displaced_player.played_displaced_shape = True
+
+        targets = refresh_displacement_targets(game)
+        mask = game.legal_action_mask()
+
+        self.assertTrue(targets)
+        self.assertTrue(all(post in nearest_circle_route.posts for post in targets))
+        self.assertTrue(all(post.required_shape == "circle" for post in targets))
+        self.assertFalse(any(post in wales_maritime_route.posts for post in targets))
+        self.assertEqual(mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertEqual(
+            {index for index in mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()},
+            {post_index(game, post) for post in targets},
         )
 
     def test_britannia_place_requires_and_consumes_one_regional_permission(self):
         game = create_headless_game(3, 4, seed=124)
         player = game.current_player
-        wales_route = next(
-            route for route in game.selected_map.routes if route.region == "Wales"
-        )
+        wales_route = next(route for route in game.selected_map.routes if route.region == "Wales")
         target = wales_route.posts[0]
         target_shape = target.required_shape or "square"
         target_index = post_index(game, target, target_shape)
@@ -332,9 +510,7 @@ class CoreActionTests(unittest.TestCase):
     def test_london_permission_is_one_shared_wales_or_scotland_use(self):
         game = create_headless_game(3, 4, seed=124)
         player = game.current_player
-        wales_route = next(
-            route for route in game.selected_map.routes if route.region == "Wales"
-        )
+        wales_route = next(route for route in game.selected_map.routes if route.region == "Wales")
         scotland_route = next(
             route for route in game.selected_map.routes if route.region == "Scotland"
         )
@@ -445,9 +621,7 @@ class CoreActionTests(unittest.TestCase):
     def test_pending_replacement_marker_obeys_all_three_route_restrictions(self):
         game = create_headless_game(2, 3, seed=124)
         player = game.current_player
-        claimed_route = next(
-            route for route in game.selected_map.routes if route.bonus_marker
-        )
+        claimed_route = next(route for route in game.selected_map.routes if route.bonus_marker)
         occupy_route(player, claimed_route)
         self.apply(game, route_points_index(game, claimed_route))
         player.forfeit_remaining_actions()
@@ -530,9 +704,7 @@ class CoreActionTests(unittest.TestCase):
             for route in game.selected_map.routes
             if any(city.get_next_open_office_shape() == "square" for city in route.cities)
         )
-        city = next(
-            city for city in route.cities if city.get_next_open_office_shape() == "square"
-        )
+        city = next(city for city in route.cities if city.get_next_open_office_shape() == "square")
         player.personal_supply_circles = len(route.posts)
         occupy_route(player, route, ["circle"] * len(route.posts))
 
@@ -598,13 +770,9 @@ class CoreActionTests(unittest.TestCase):
     def test_tenth_completed_city_ends_after_office_route_action(self):
         game = create_headless_game(1, 3, seed=124)
         player = game.current_player
-        one_office_cities = [
-            city for city in game.selected_map.cities if len(city.offices) == 1
-        ]
+        one_office_cities = [city for city in game.selected_map.cities if len(city.offices) == 1]
         target_city = one_office_cities[0]
-        other_cities = [
-            city for city in game.selected_map.cities if city is not target_city
-        ][:9]
+        other_cities = [city for city in game.selected_map.cities if city is not target_city][:9]
         for city in other_cities:
             for office in city.offices:
                 office.controller = game.players[1]
@@ -668,9 +836,7 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, action_index)
 
         self.assertEqual(
-            game.selected_map.specialprestigepoints.get_special_prestige_points_for_player(
-                player
-            ),
+            game.selected_map.specialprestigepoints.get_special_prestige_points_for_player(player),
             7,
         )
         self.assertEqual(
@@ -700,9 +866,7 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, base_action + 1)
 
         self.assertEqual(
-            game.selected_map.specialprestigepoints.get_special_prestige_points_for_player(
-                player
-            ),
+            game.selected_map.specialprestigepoints.get_special_prestige_points_for_player(player),
             8,
         )
 
