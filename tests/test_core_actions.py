@@ -3,6 +3,7 @@ import io
 import unittest
 
 from ai.action_options import InvalidActionError
+from game.game_actions import refresh_displacement_targets
 from game.game_runner import create_headless_game
 from game.turn_state import TurnPhase
 
@@ -432,6 +433,61 @@ class CoreActionTests(unittest.TestCase):
         self.assertEqual(
             opponent.general_stock_circles,
             stock_circles_before - 1,
+        )
+
+    def test_britannia_board_fallback_keeps_shape_and_country_search_rules(self):
+        game = create_headless_game(3, 4, seed=124)
+        opponent = game.players[1]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Carlisle", "IsleOfMan"}
+        )
+        legal_adjacent_routes = {
+            route
+            for city in original_route.cities
+            for route in city.routes
+            if route is not original_route and route.region in ("Scotland", None)
+        }
+        wales_maritime_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Conway", "IsleOfMan"}
+        )
+        nearest_circle_route = next(
+            route
+            for route in legal_adjacent_routes
+            if {city.name for city in route.cities} == {"Carlisle", "Chester"}
+        )
+
+        # Force the nearest valid distance to contain only Merchant spaces.
+        for route in legal_adjacent_routes:
+            for post in route.posts:
+                if post.required_shape is None:
+                    post.claim(game.current_player, "square")
+
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 0
+        opponent.personal_supply_squares = 0
+        opponent.personal_supply_circles = 0
+        opponent.holding_pieces = [("circle", opponent, "Scotland")]
+        opponent.pieces_to_pickup = 0
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "square")
+        game.displaced_player.played_displaced_shape = True
+
+        targets = refresh_displacement_targets(game)
+        mask = game.legal_action_mask()
+
+        self.assertTrue(targets)
+        self.assertTrue(all(post in nearest_circle_route.posts for post in targets))
+        self.assertTrue(all(post.required_shape == "circle" for post in targets))
+        self.assertFalse(any(post in wales_maritime_route.posts for post in targets))
+        self.assertEqual(mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertEqual(
+            {index for index in mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()},
+            {post_index(game, post) for post in targets},
         )
 
     def test_britannia_place_requires_and_consumes_one_regional_permission(self):
