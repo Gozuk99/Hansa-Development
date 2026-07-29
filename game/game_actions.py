@@ -270,6 +270,28 @@ def displacement_piece_available(game, shape):
     return shape in displacement_shapes_to_place(game)
 
 
+def optional_displacement_piece_available(game, shape):
+    """Whether the current optional source contains a piece of this shape."""
+    displaced = game.displaced_player
+    if displaced.is_general_stock_empty():
+        return displaced.player.has_personal_supply(shape)
+    return displaced.has_general_stock(shape)
+
+
+def select_optional_displaced_shape(game):
+    """Use an optional source piece before the identical mandatory piece."""
+    displaced = game.displaced_player
+    if (
+        displaced.played_displaced_shape
+        or displaced.use_optional_displaced_shape
+        or displaced.total_pieces_to_place <= 1
+        or not optional_displacement_piece_available(game, displaced.displaced_shape)
+    ):
+        raise RuntimeError("No identical optional displacement piece is available")
+    displaced.use_optional_displaced_shape = True
+    refresh_displacement_targets(game)
+
+
 def can_pick_up_displacement_fallback(game, post):
     displaced = game.displaced_player
     return (
@@ -504,6 +526,7 @@ def displace_claim(game, post, desired_shape):
     wants_to_use_displaced_piece = (
         not displaced_player.played_displaced_shape
         and desired_shape == displaced_player.displaced_shape
+        and not displaced_player.use_optional_displaced_shape
     )
     refresh_displacement_targets(game)
 
@@ -536,6 +559,8 @@ def displace_claim(game, post, desired_shape):
         displace_move_action(game, post)
     else:
         displace_to(game, post, desired_shape)
+
+    displaced_player.use_optional_displaced_shape = False
 
     if game.displaced_player.all_pieces_placed():
         print(f"All pieces have been placed by the displaced player.")

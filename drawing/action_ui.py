@@ -76,6 +76,10 @@ def action_label(index: int, game=None) -> str:
             return "Finish displacement (decline optional pieces)"
         return "Finish / End turn"
     if index == 619:
+        if game is not None and game.turn_phase == TurnPhase.DISPLACEMENT:
+            shape = game.displaced_player.displaced_shape
+            piece = "Merchant" if shape == "circle" else "Trader"
+            return f"Place optional {piece} before displaced piece"
         return "Use Additional Trading Post"
     return f"Action {index}"
 
