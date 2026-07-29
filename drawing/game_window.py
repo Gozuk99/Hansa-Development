@@ -12,7 +12,7 @@ from ai.game_state import BoardData
 from drawing.drawing_utils import draw_end_game, redraw_window
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import PlayerControl, choose_ranked_ai_action
-from map_data.constants import MAX_ROUTES, TAN
+from map_data.constants import DARK_GREEN, MAX_ROUTES, TAN
 
 
 def action_label(index: int, game=None) -> str:
@@ -48,9 +48,75 @@ def action_label(index: int, game=None) -> str:
         return f"Route choice: {route.cities[0].name}—{route.cities[1].name}"
     if index < 527:
         return f"Income choice {index - 522}"
+    bonus_markers = (
+        "Swap Office",
+        "Move 3",
+        "Upgrade Ability",
+        "+3 Actions",
+        "+4 Actions",
+        "Exchange Bonus Marker",
+        "Tribute Trading Post",
+        "Block Trade Route",
+    )
+    if index < 535:
+        verb = "Take used" if getattr(game, "exchange_target_player", None) else "Use"
+        return f"{verb} {bonus_markers[index - 527]}"
+    if index < 543:
+        choice = index - 535
+        if getattr(game, "pending_income_favour_owner", None) is not None:
+            return ("Income favour: Trader", "Income favour: Merchant", "Decline income favour")[
+                choice
+            ]
+        if getattr(game, "waiting_for_buy_tile_with_bm", False):
+            return f"Pay {bonus_markers[choice]}"
+        tiles = (
+            "Buy Displace Anywhere",
+            "Buy +1 Action",
+            "Buy Income Favour",
+            "Buy +1 Displaced Piece",
+            "Buy City Scoring",
+            "Buy Ability Scoring",
+        )
+        return tiles[choice] if choice < len(tiles) else f"Tile choice {choice + 1}"
+    if index < 583 and game is not None:
+        route = game.selected_map.routes[index - 543]
+        return f"Place marker: {route.cities[0].name}—{route.cities[1].name}"
+    if index < 613 and game is not None:
+        choice = index - 583
+        if getattr(game, "waiting_for_bm_exchange_bm", False):
+            if getattr(game, "exchange_target_player", None) is None:
+                return f"Exchange with Player {choice + 1}"
+        if getattr(game, "waiting_for_bm_swap_office", False):
+            pairs = [
+                (city, pair)
+                for city in game.selected_map.cities
+                for pair in city.eligible_swap_pairs(game.current_player)
+            ]
+            if choice < len(pairs):
+                city, pair = pairs[choice]
+                return f"Swap offices {pair[0] + 1}/{pair[1] + 1} in {city.name}"
+        if getattr(game, "waiting_for_bm_green_city", False):
+            choices = [
+                (city, shape)
+                for city in game.selected_map.cities
+                if city.color == DARK_GREEN
+                for shape in ("square", "circle")
+                if game.current_player.has_personal_supply(shape)
+            ]
+            if choice < len(choices):
+                city, shape = choices[choice]
+                return f"Green office in {city.name}: {shape.title()}"
+        return f"City choice {choice + 1}"
+    if index < 618 and game is not None:
+        choice = index - 613
+        if choice < len(game.selected_map.upgrade_cities):
+            return f"Upgrade {game.selected_map.upgrade_cities[choice].upgrade_type}"
+        return f"Ability choice {choice + 1}"
     if index == 618:
         return "Finish / End turn"
-    return f"Context action {index}"
+    if index == 619:
+        return "Use Additional Trading Post"
+    return f"Action {index}"
 
 
 class GameWindow:
@@ -122,11 +188,14 @@ class GameWindow:
                 return action
 
         post_index = 0
-        for route in self.game.selected_map.routes:
+        for route_index, route in enumerate(self.game.selected_map.routes):
             for post in route.posts:
                 if abs(position[0] - post.pos[0]) <= 24 and abs(position[1] - post.pos[1]) <= 24:
                     action = post_index + (121 if button == 3 else 0)
-                    return action if action in legal_actions else None
+                    if action in legal_actions:
+                        return action
+                    replacement_action = 543 + route_index
+                    return replacement_action if replacement_action in legal_actions else None
                 post_index += 1
 
         clicked_city = next(
@@ -157,7 +226,14 @@ class GameWindow:
                     city_choices = [
                         action for action in choices if ((action - base) // 2) == city_index
                     ]
-                    return next(iter(city_choices or choices), None)
+                    available = city_choices or choices
+                    if not available:
+                        return None
+                    relative_x = max(
+                        0, min(clicked_city.width - 1, position[0] - clicked_city.x_pos)
+                    )
+                    selection = int(relative_x * len(available) / clicked_city.width)
+                    return available[selection]
 
         board = self.game.current_player.board
         for index, rect in enumerate(getattr(board, "circle_buttons", ())):

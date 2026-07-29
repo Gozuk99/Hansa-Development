@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 
 import hansa_game
-from drawing.game_window import GameWindow
+from drawing.game_window import GameWindow, action_label
 from drawing.new_game_menu import NewGameMenu, NewGameMenuState
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import (
@@ -291,6 +291,45 @@ class GameConfigurationTests(unittest.TestCase):
             window.action_for_click(center, 3, legal_actions),
             points_action,
         )
+
+    def test_game_window_labels_and_maps_bonus_marker_replacement_route(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        route = game.selected_map.routes[0]
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+        window.action_rects = []
+
+        self.assertEqual(
+            action_label(543, game),
+            f"Place marker: {route.cities[0].name}—{route.cities[1].name}",
+        )
+        self.assertEqual(action_label(527, game), "Use Swap Office")
+        self.assertEqual(
+            window.action_for_click(route.posts[0].pos, 1, [543]),
+            543,
+        )
+
+    def test_middle_click_zones_expose_each_city_upgrade(self):
+        game = GameConfiguration(map_num=2, seed=124).create_game()
+        city = next(city for city in game.selected_map.cities if city.name == "Waren")
+        route = city.routes[0]
+        for post in route.posts:
+            post.owner = game.current_player
+            post.owner_piece_shape = "square"
+        route_index = game.selected_map.routes.index(route)
+        base = 242 + 120 + route_index * 4
+        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        choices = [action for action in range(base, base + 4) if action in legal_actions]
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+        window.action_rects = []
+
+        left = (city.x_pos + 1, city.y_pos + city.height // 2)
+        right = (city.x_pos + city.width - 1, city.y_pos + city.height // 2)
+
+        self.assertEqual(len(choices), 2)
+        self.assertEqual(window.action_for_click(left, 2, legal_actions), choices[0])
+        self.assertEqual(window.action_for_click(right, 2, legal_actions), choices[1])
 
 
 if __name__ == "__main__":
