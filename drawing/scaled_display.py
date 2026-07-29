@@ -19,8 +19,10 @@ class ScaledDisplay:
         self.canvas = pygame.Surface(logical_size)
         pygame.display.set_caption(caption)
         info = pygame.display.Info()
+        desktop_sizes = pygame.display.get_desktop_sizes()
+        desktop_size = desktop_sizes[0] if desktop_sizes else (info.current_w, info.current_h)
         available = self.available_size(
-            (info.current_w, info.current_h),
+            desktop_size,
             logical_size,
         )
         requested = (

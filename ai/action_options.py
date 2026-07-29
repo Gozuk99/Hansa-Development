@@ -16,7 +16,6 @@ from game.game_actions import (
     displace_claim,
     can_pick_up_displacement_fallback,
     can_place_displacement_piece,
-    displacement_shape_to_place,
     finish_displacement,
     assign_new_bonus_marker_on_route,
     claim_route_for_office,
@@ -1033,10 +1032,10 @@ def mask_post_action(game):
                     post_tensor[post_idx] = 1
                     post_tensor[MAX_POSTS + post_idx] = 1
                 else:
-                    required_shape = displacement_shape_to_place(game)
-                    if can_place_displacement_piece(game, post, required_shape):
-                        shape_offset = MAX_POSTS if required_shape == "circle" else 0
-                        post_tensor[shape_offset + post_idx] = 1
+                    for available_shape in ("square", "circle"):
+                        if can_place_displacement_piece(game, post, available_shape):
+                            shape_offset = MAX_POSTS if available_shape == "circle" else 0
+                            post_tensor[shape_offset + post_idx] = 1
             # handle BM Move any2 or #handle BM Move 3:
             elif game.waiting_for_bm_move_any_2:
                 if post.is_owned() and current_player.pieces_to_pickup > 0:

@@ -326,6 +326,13 @@ class GameConfigurationTests(unittest.TestCase):
         game.apply_action(circle_action)
         updated_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
         self.assertFalse(any(MAX_POSTS <= action < MAX_POSTS * 2 for action in updated_actions))
+        square_action = next(action for action in updated_actions if action < MAX_POSTS)
+        square_target = posts[square_action]
+        self.assertEqual(
+            window.action_for_click(square_target.pos, 1, updated_actions),
+            square_action,
+        )
+        self.assertIsNone(window.action_for_click(square_target.pos, 3, updated_actions))
         self.assertIn(618, updated_actions)
         self.assertEqual(
             action_label(618, game),

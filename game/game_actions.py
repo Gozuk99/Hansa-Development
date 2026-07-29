@@ -154,16 +154,23 @@ def displace_action(game, post, route, displacing_piece_shape):
     )
 
 
-def gather_all_empty_posts(game, required_shape=None):
+def _post_accepts_any_shape(post, shapes):
+    return not post.is_owned() and (post.required_shape is None or post.required_shape in shapes)
+
+
+def gather_all_empty_posts(game, required_shapes=("square", "circle")):
     all_empty_posts = []
     for route in game.selected_map.routes:
         for post in route.posts:
-            if not post.is_owned() and post.required_shape in (None, required_shape):
+            if _post_accepts_any_shape(post, required_shapes):
                 all_empty_posts.append(post)
     return all_empty_posts
 
 
-def gather_empty_adjacent_posts(start_route, required_shape=None):
+def gather_empty_adjacent_posts(
+    start_route,
+    required_shapes=("square", "circle"),
+):
     """Return compatible empty posts at the nearest reachable route distance."""
     if not start_route:
         print("Error: start_route is None in gather_empty_adjacent_posts")
@@ -191,7 +198,7 @@ def gather_empty_adjacent_posts(start_route, required_shape=None):
                     next_level_routes.append(route)
 
             for post in current_route.posts:
-                if not post.is_owned() and post.required_shape in (None, required_shape):
+                if _post_accepts_any_shape(post, required_shapes):
                     empty_posts.append(post)
 
         if empty_posts:
@@ -202,12 +209,39 @@ def gather_empty_adjacent_posts(start_route, required_shape=None):
     return []
 
 
-def displacement_shape_to_place(game):
-    """Return the shape whose nearest legal destination must be searched."""
+def displacement_shapes_to_place(game):
+    """Return shapes available from the rule-ordered displacement source."""
+    displaced = game.displaced_player
     player = game.displaced_player.player
     if player.holding_pieces:
-        return player.holding_pieces[0][0]
-    return game.displaced_player.displaced_shape
+        return (player.holding_pieces[0][0],)
+    if not displaced.played_displaced_shape:
+        return (displaced.displaced_shape,)
+    if displacement_uses_board_fallback(game):
+        return ()
+    if not displaced.is_general_stock_empty():
+        return tuple(
+            shape
+            for shape, count in (
+                ("square", player.general_stock_squares),
+                ("circle", player.general_stock_circles),
+            )
+            if count
+        )
+    return tuple(
+        shape
+        for shape, count in (
+            ("square", player.personal_supply_squares),
+            ("circle", player.personal_supply_circles),
+        )
+        if count
+    )
+
+
+def displacement_shape_to_place(game):
+    """Return the single mandatory or held shape, when one exists."""
+    shapes = displacement_shapes_to_place(game)
+    return shapes[0] if len(shapes) == 1 else None
 
 
 def displacement_uses_board_fallback(game):
@@ -219,20 +253,9 @@ def displacement_uses_board_fallback(game):
     )
 
 
-def displacement_piece_available(game):
-    """Whether the required piece exists in the rule-ordered source."""
-    displaced = game.displaced_player
-    shape = displacement_shape_to_place(game)
-
-    if displaced.player.holding_pieces:
-        return True
-    if not displaced.played_displaced_shape:
-        return shape == displaced.displaced_shape
-    if displacement_uses_board_fallback(game):
-        return False
-    if displaced.has_general_stock(shape):
-        return True
-    return displaced.is_general_stock_empty() and displaced.has_personal_supply(shape)
+def displacement_piece_available(game, shape):
+    """Whether a shape exists in the current rule-ordered source."""
+    return shape in displacement_shapes_to_place(game)
 
 
 def can_pick_up_displacement_fallback(game, post):
@@ -249,9 +272,9 @@ def can_place_displacement_piece(game, post, shape):
     return (
         post in game.all_empty_posts
         and not post.is_owned()
-        and shape == displacement_shape_to_place(game)
+        and shape in displacement_shapes_to_place(game)
         and post.required_shape in (None, shape)
-        and displacement_piece_available(game)
+        and displacement_piece_available(game, shape)
     )
 
 
@@ -260,13 +283,13 @@ def refresh_displacement_targets(game):
     for candidate in game.all_empty_posts:
         candidate.reset_post()
 
-    required_shape = displacement_shape_to_place(game)
+    available_shapes = displacement_shapes_to_place(game)
     if game.DisplaceAnywhereOwner == game.displaced_player.player:
-        targets = gather_all_empty_posts(game, required_shape)
+        targets = gather_all_empty_posts(game, available_shapes)
     else:
         targets = gather_empty_adjacent_posts(
             game.original_route_of_displacement,
-            required_shape,
+            available_shapes,
         )
 
     game.all_empty_posts = targets
@@ -516,12 +539,11 @@ def displace_claim(game, post, desired_shape):
         # game.switch_player_if_needed()
     else:
         # Official displacement search restarts after each placement and stops
-        # at the nearest distance containing a legal post for the required
-        # shape. Extra stock pieces retain the displaced piece's shape.
+        # at the nearest distance containing a legal post for an available
+        # shape from the current rule-ordered source.
         refresh_displacement_targets(game)
         if not game.all_empty_posts:
-            print("ERROR::No empty posts found in adjacent routes either!")  # Debugging log
-            sys.exit()
+            print("No compatible optional displacement posts remain; the player may finish.")
         print(f"displace_claim: Processed {len(game.all_empty_posts)} posts.")
 
 
@@ -547,15 +569,6 @@ def finish_displacement(game):
 
 def displace_to(game, post, shape, use_displaced_piece=False):
     displaced_player = game.displaced_player
-    # Issue #8: optional pieces retain the displaced piece's shape. An
-    # incompatible stock piece cannot substitute; the player may decline the
-    # remaining optional placement instead.
-    if shape != displaced_player.displaced_shape:
-        print(
-            "Cannot place an extra displacement piece with a different shape "
-            f"({shape} instead of {displaced_player.displaced_shape})."
-        )
-        return
     if use_displaced_piece:
         print(f"Placed the displaced piece {shape} - no affect to the GS or PS.")
         claim_and_update(game, post, shape, use_displaced_piece=True)

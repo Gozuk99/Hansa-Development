@@ -62,7 +62,9 @@ a model, or save a checkpoint.
   prestige value.
 - Displacement: left-click to place a displaced Trader and right-click to place
   a displaced Merchant. After placing the displaced piece, use **Finish
-  Displacement** when optional matching pieces are unavailable or declined.
+  Displacement** when optional pieces are unavailable or declined. Additional
+  pieces may use any shape available from the current stock/supply source that
+  fits a nearest legal post.
 - Legal-action browser: Up/Down selects an action and Enter applies it.
 - Press `E` to finish the turn when End Turn is legal.
 
