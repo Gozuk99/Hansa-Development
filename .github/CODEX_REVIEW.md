@@ -22,6 +22,17 @@ cannot post a review, run a separate fresh-context review task and record its
 findings on the pull request. A normal implementation-task self-assessment does
 not satisfy this requirement.
 
+Every review summary must include the full commit SHA it reviewed:
+
+```text
+Reviewed head: <40-character commit SHA>
+```
+
+A review is current only when that SHA exactly matches the pull request's
+current head. Pushing any new commit immediately makes the prior review stale;
+do not mark independent review complete or report the pull request ready until
+another fresh-context review covers the new head.
+
 Advisory review findings are not required status checks and never approve,
 reject, or merge a pull request automatically. The repository owner retains the
 final merge decision.
@@ -69,6 +80,7 @@ Use these severities:
 Post concise inline comments where useful and a summary containing:
 
 ```text
+Reviewed head: <40-character commit SHA>
 Issue compliance: Complete | Partial | Incomplete
 Required checks: Passed | Failed
 Blocking findings: N

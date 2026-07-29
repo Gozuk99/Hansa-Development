@@ -27,6 +27,7 @@ Describe what changed and why.
 ## Independent AI Review
 
 - [ ] An advisory fresh-context review was requested
+- [ ] The recorded review names the current pull-request head SHA
 - [ ] The reviewer compared the complete diff with the linked issue
 - [ ] Blocking findings are resolved
 - [ ] Major findings are resolved or explicitly acknowledged
