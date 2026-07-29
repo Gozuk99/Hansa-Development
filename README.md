@@ -56,8 +56,8 @@ a model, or save a checkpoint.
 
 - Route post: left-click to place/displace with a Trader (square); right-click
   for a Merchant (circle).
-- Controlled-route city: left-click to claim an office; right-click to score
-  route points.
+- Controlled-route city: left-click to claim an office; right-click to complete
+  the route without claiming an office (endpoint controllers still score).
 - Drawn upgrade or Special Prestige box: left-click the desired upgrade or
   prestige value.
 - Displacement: left-click to place a displaced Trader and right-click to place

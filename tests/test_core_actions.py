@@ -480,6 +480,46 @@ class CoreActionTests(unittest.TestCase):
         self.assertFalse(game.waiting_for_displaced_player)
         self.assertIsNone(game.displaced_player.player)
 
+    def test_optional_same_shape_selection_constrains_shape_and_nearest_search(self):
+        game = create_headless_game(2, 3, seed=124)
+        _, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        opponent.general_stock_squares = 1
+        opponent.general_stock_circles = 1
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "circle")
+        refresh_displacement_targets(game)
+
+        initial_mask = game.legal_action_mask()
+        self.assertGreater(initial_mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertGreater(
+            initial_mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(),
+            0,
+        )
+
+        self.apply(game, 619)
+        selected_mask = game.legal_action_mask()
+        self.assertEqual(selected_mask[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertGreater(
+            selected_mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(),
+            0,
+        )
+
+        circle_index = next(
+            index
+            for index in selected_mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
+        )
+        self.apply(game, MAX_POSTS + circle_index)
+        self.assertFalse(game.displaced_player.use_optional_displaced_shape)
+        self.assertFalse(game.displaced_player.played_displaced_shape)
+        self.assertEqual(opponent.general_stock_circles, 0)
+        self.assertGreater(game.legal_action_mask()[:MAX_POSTS].count_nonzero().item(), 0)
+
     def test_maritime_post_forces_displaced_merchant_before_optional_traders(self):
         game = create_headless_game(2, 3, seed=124)
         actor, opponent = game.players[:2]

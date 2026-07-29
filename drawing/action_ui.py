@@ -122,7 +122,7 @@ def _route_action_label(index: int, game) -> str:
     relative = index - 242
     if relative < MAX_ROUTES:
         route = game.selected_map.routes[relative]
-        return f"Score route: {route.cities[0].name}—{route.cities[1].name}"
+        return f"Complete route (no office): {route.cities[0].name}—{route.cities[1].name}"
     if relative < MAX_ROUTES * 3:
         route_index, city_index = divmod(relative - MAX_ROUTES, 2)
         route = game.selected_map.routes[route_index]

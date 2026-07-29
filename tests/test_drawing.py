@@ -1,11 +1,12 @@
 import unittest
+from unittest.mock import patch
 
 import pygame
 
 from ai.game_state import BoardData
 from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
-from drawing.drawing_utils import draw_upgrades, redraw_window
+from drawing.drawing_utils import draw_upgrades, draw_used_bm_section, redraw_window
 from drawing.game_window import GameWindow
 from game.game_config import GameConfiguration, PlayerControl
 from map_data.map_attributes import BonusMarker
@@ -15,6 +16,16 @@ class DrawingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pygame.font.init()
+
+    def test_empty_used_bonus_marker_section_is_hidden(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        player = game.current_player
+        surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
+
+        with patch("drawing.drawing_utils.draw_text") as draw_text:
+            draw_used_bm_section(surface, player.board, player)
+
+        draw_text.assert_not_called()
 
     def test_render_pass_does_not_store_layout_on_engine_objects(self):
         game = GameConfiguration(map_num=1, seed=124).create_game()

@@ -515,29 +515,6 @@ def draw_bonus_marker_pool(win, game):
     )
 
 
-def draw_opponents_used_bms(win, game):
-    start_x = game.selected_map.map_width + 265
-    start_y = game.selected_map.map_height - 170
-    used_bm_text_box_width = 140
-    used_bm_text_box_height = 140
-    tiles_pool_rect = pygame.Rect(start_x, start_y, used_bm_text_box_width, used_bm_text_box_height)
-
-    # Draw the tiles_pool label at the top
-    label = FONT_SMALL.render("Opponents BMs:", True, BLACK)
-    win.blit(label, tiles_pool_rect.topleft)
-
-    # Set initial Y offset for player scores just below the label
-    y_offset = label.get_height() + 5
-
-    acting_player = game.players[game.active_player]
-    opponents = [player for player in game.players if player is not acting_player]
-    for index, player in enumerate(opponents):
-        opponent_bm_text = f"Player {player.order}: {len(player.used_bonus_markers)} face-down"
-        text_surface = FONT_SMALL.render(opponent_bm_text, True, BLACK)
-        text_position = (start_x, start_y + y_offset + (index * 25))
-        win.blit(text_surface, text_position)
-
-
 def redraw_window(win, game, legal_actions=()):
     selected_map = game.selected_map
     layout = DrawLayout()
@@ -572,7 +549,6 @@ def redraw_window(win, game, legal_actions=()):
         layout.action_rects[618] = draw_end_turn(win, game)
 
     draw_bonus_marker_pool(win, game)
-    draw_opponents_used_bms(win, game)
     return layout
 
 
@@ -589,15 +565,6 @@ def draw_player_board(window, player, current_player, game=None, legal_actions=(
         pygame.Rect(board.x, board.y, board.width, board.height),
         5 if player == current_player else 2,
     )
-    draw_text(
-        window,
-        f"Player {player.order} — {player.score} points",
-        board.x + board.width - 210,
-        board.y + board.height - 28,
-        FONT_SMALL,
-        BLACK,
-    )
-
     draw_city_keys_section(window, board)
     draw_privilegium_section(window, board)
     draw_bonus_markers_section(window, board)
@@ -843,6 +810,9 @@ def draw_bank_section(window, board):
 
 
 def draw_used_bm_section(window, board, current_player):
+    if not board.player.used_bonus_markers:
+        return
+
     # Calculate initial y-position for the "Used BMs" section based on "Actiones" section height
     used_bm_y = board.y + 10
 

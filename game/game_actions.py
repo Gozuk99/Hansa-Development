@@ -221,6 +221,8 @@ def displacement_shapes_to_place(game):
     player = game.displaced_player.player
     if player.holding_pieces:
         return (player.holding_pieces[0][0],)
+    if displaced.use_optional_displaced_shape:
+        return (displaced.displaced_shape,)
 
     shapes = []
     if not displaced.played_displaced_shape:

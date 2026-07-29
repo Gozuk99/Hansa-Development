@@ -53,7 +53,7 @@ class GameWindow:
         prompt = self.font.render(prompt_text, True, (117, 70, 42))
         self.screen.blit(prompt, (panel.x + 10, panel.y + 54))
         city_help = self.font.render(
-            "City — L: office  R: points | Upgrade box — L: develop",
+            "City — L: office | R: complete route, no office",
             True,
             (30, 25, 20),
         )

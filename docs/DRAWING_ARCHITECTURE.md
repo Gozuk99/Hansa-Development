@@ -39,7 +39,8 @@ mask and is applied through `Game.apply_action()`.
 ## Interaction Conventions
 
 - Route posts: left-click Trader; right-click Merchant.
-- Controlled-route city: left-click office; right-click route points.
+- Controlled-route city: left-click office; right-click to complete the route
+  without claiming an office.
 - Drawn upgrade box: left-click the desired ability or Special Prestige value.
 - When several controlled routes meet at one city, clicking toward a route
   selects that route.
