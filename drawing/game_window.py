@@ -12,16 +12,40 @@ from ai.game_state import BoardData
 from drawing.drawing_utils import draw_end_game, redraw_window
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import PlayerControl, choose_ranked_ai_action
-from map_data.constants import TAN
+from map_data.constants import MAX_ROUTES, TAN
 
 
-def action_label(index: int) -> str:
+def action_label(index: int, game=None) -> str:
     if index < 121:
         return f"Post {index}: Trader"
     if index < 242:
         return f"Post {index - 121}: Merchant"
     if index < 522:
-        return f"Route/office/upgrade action {index}"
+        if game is None:
+            return f"Route action {index}"
+        relative = index - 242
+        if relative < MAX_ROUTES:
+            route = game.selected_map.routes[relative]
+            return f"Score route: {route.cities[0].name}—{route.cities[1].name}"
+        if relative < MAX_ROUTES * 3:
+            choice = relative - MAX_ROUTES
+            route_index, city_index = divmod(choice, 2)
+            route = game.selected_map.routes[route_index]
+            return f"Office in {route.cities[city_index].name}"
+        choice = relative - MAX_ROUTES * 3
+        route_index, route_choice = divmod(choice, 4)
+        route = game.selected_map.routes[route_index]
+        special_city = next(
+            (city for city in route.cities if "SpecialPrestigePoints" in city.upgrade_city_type),
+            None,
+        )
+        if special_city is not None:
+            return f"Prestige {((7, 8, 9, 11)[route_choice])}: {special_city.name}"
+        city_index, upgrade_index = divmod(route_choice, 2)
+        city = route.cities[city_index]
+        if upgrade_index < len(city.upgrade_city_type):
+            return f"Upgrade {city.upgrade_city_type[upgrade_index]} in {city.name}"
+        return f"Route choice: {route.cities[0].name}—{route.cities[1].name}"
     if index < 527:
         return f"Income choice {index - 522}"
     if index == 618:
@@ -60,6 +84,12 @@ class GameWindow:
         self.screen.blit(heading, (panel.x + 10, panel.y + 10))
         help_text = self.font.render("Up/Down + Enter; E ends when legal", True, (30, 25, 20))
         self.screen.blit(help_text, (panel.x + 10, panel.y + 34))
+        city_help = self.font.render(
+            "City click — L: office  M: upgrade  R: points",
+            True,
+            (30, 25, 20),
+        )
+        self.screen.blit(city_help, (panel.x + 10, panel.y + 54))
 
         if not actions:
             return
@@ -68,8 +98,8 @@ class GameWindow:
         for row, action in enumerate(actions[start : start + 15]):
             actual = start + row
             color = (70, 110, 75) if actual == self.selected else (30, 25, 20)
-            label = self.font.render(action_label(action), True, color)
-            position = (panel.x + 12, panel.y + 65 + row * 22)
+            label = self.font.render(action_label(action, self.game), True, color)
+            position = (panel.x + 12, panel.y + 82 + row * 22)
             self.screen.blit(label, position)
             self.action_rects.append((pygame.Rect(position, (panel.width - 24, 21)), action))
 
@@ -99,6 +129,36 @@ class GameWindow:
                     return action if action in legal_actions else None
                 post_index += 1
 
+        clicked_city = next(
+            (
+                city
+                for city in self.game.selected_map.cities
+                if city.x_pos <= position[0] <= city.x_pos + city.width
+                and city.y_pos <= position[1] <= city.y_pos + city.height
+            ),
+            None,
+        )
+        if clicked_city is not None:
+            route = self._route_toward_click(clicked_city, position)
+            if route is not None:
+                route_index = self.game.selected_map.routes.index(route)
+                city_index = route.cities.index(clicked_city)
+                if button == 1:
+                    action = 242 + MAX_ROUTES + route_index * 2 + city_index
+                    return action if action in legal_actions else None
+                if button == 3:
+                    action = 242 + route_index
+                    return action if action in legal_actions else None
+                if button == 2:
+                    base = 242 + MAX_ROUTES * 3 + route_index * 4
+                    choices = [
+                        action for action in range(base, base + 4) if action in legal_actions
+                    ]
+                    city_choices = [
+                        action for action in choices if ((action - base) // 2) == city_index
+                    ]
+                    return next(iter(city_choices or choices), None)
+
         board = self.game.current_player.board
         for index, rect in enumerate(getattr(board, "circle_buttons", ())):
             if rect.collidepoint(position):
@@ -127,6 +187,29 @@ class GameWindow:
                 action = tile_actions[tile]
                 return action if action in legal_actions else None
         return None
+
+    def _route_toward_click(self, city, position):
+        controlled_routes = [
+            route for route in city.routes if route.is_controlled_by(self.game.current_player)
+        ]
+        if not controlled_routes:
+            return None
+        if len(controlled_routes) == 1:
+            return controlled_routes[0]
+
+        center = (city.x_pos + city.width / 2, city.y_pos + city.height / 2)
+        click_vector = (position[0] - center[0], position[1] - center[1])
+
+        def alignment(route):
+            other = route.cities[0] if route.cities[1] is city else route.cities[1]
+            route_vector = (
+                other.x_pos + other.width / 2 - center[0],
+                other.y_pos + other.height / 2 - center[1],
+            )
+            length = max(1, (route_vector[0] ** 2 + route_vector[1] ** 2) ** 0.5)
+            return (click_vector[0] * route_vector[0] + click_vector[1] * route_vector[1]) / length
+
+        return max(controlled_routes, key=alignment)
 
     def run(self):
         running = True

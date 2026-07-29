@@ -17,13 +17,19 @@ from drawing.scaled_display import ScaledDisplay
 from map_data.map_attributes import Map
 
 
-WINDOW_SIZE = (980, 900)
+WINDOW_SIZE = (980, 940)
 BACKGROUND = (237, 222, 190)
 PANEL = (250, 243, 224)
 INK = (38, 31, 24)
 ACCENT = (117, 70, 42)
 ACTIVE = (72, 121, 86)
 ERROR = (160, 45, 45)
+INACTIVE = (155, 151, 143)
+
+BONUS_MARKER_OPTIONS = {
+    **Map.STANDARD_BONUS_MARKER_SUPPLY,
+    **Map.PROMO_BONUS_MARKERS,
+}
 
 
 @dataclass
@@ -80,13 +86,16 @@ class NewGameMenu:
         self.buttons: list[tuple[pygame.Rect, object]] = []
         self.error = ""
 
-    def button(self, rect, text, action, selected=False, small=False):
+    def button(self, rect, text, action, selected=False, small=False, enabled=True):
         color = ACTIVE if selected else ACCENT
+        if not enabled:
+            color = INACTIVE
         pygame.draw.rect(self.screen, color, rect, border_radius=6)
         font = self.small_font if small else self.font
         label = font.render(text, True, (255, 255, 255))
         self.screen.blit(label, label.get_rect(center=rect.center))
-        self.buttons.append((rect, action))
+        if enabled:
+            self.buttons.append((rect, action))
 
     def label(self, text, x, y, *, small=False, color=INK):
         font = self.small_font if small else self.font
@@ -95,7 +104,7 @@ class NewGameMenu:
     def draw(self):
         self.buttons.clear()
         self.screen.fill(BACKGROUND)
-        pygame.draw.rect(self.screen, PANEL, (24, 20, 932, 840), border_radius=12)
+        pygame.draw.rect(self.screen, PANEL, (24, 20, 932, 890), border_radius=12)
         self.screen.blit(
             self.title_font.render("Create New Game", True, INK),
             (48, 38),
@@ -104,7 +113,7 @@ class NewGameMenu:
         self.label("Players", 48, 100)
         for offset, count in enumerate(range(MIN_PLAYERS, MAX_PLAYERS + 1)):
             self.button(
-                pygame.Rect(180 + offset * 92, 94, 78, 38),
+                pygame.Rect(180 + offset * 68, 94, 58, 34),
                 str(count),
                 lambda value=count: self.state.set_player_count(value),
                 selected=self.state.player_count == count,
@@ -113,7 +122,7 @@ class NewGameMenu:
         self.label("Map", 500, 100)
         for offset, map_num in enumerate(SUPPORTED_MAPS):
             self.button(
-                pygame.Rect(580 + offset * 92, 94, 78, 38),
+                pygame.Rect(580 + offset * 68, 94, 58, 34),
                 str(map_num),
                 lambda value=map_num: self.state.set_map(value),
                 selected=self.state.map_num == map_num,
@@ -121,28 +130,27 @@ class NewGameMenu:
 
         self.label("Player controllers (all seats default to Human)", 48, 155)
         controls = tuple(PlayerControl)
-        for index in range(self.state.player_count):
-            y = 190 + index * 47
+        for index in range(MAX_PLAYERS):
+            active_seat = index < self.state.player_count
+            y = 188 + index * 39
             self.label(f"Player {index + 1}", 55, y + 8, small=True)
             for control_index, control in enumerate(controls):
-                width = 140 if control is PlayerControl.MAGNUS else 92
-                x = 145 + sum(
-                    148 if prior is PlayerControl.MAGNUS else 100
-                    for prior in controls[:control_index]
-                )
+                width = 138
+                x = 145 + control_index * 148
                 self.button(
                     pygame.Rect(x, y, width, 36),
                     "Magnus" if control is PlayerControl.MAGNUS else control.value,
                     lambda seat=index, value=control: self._set_control(seat, value),
-                    selected=self.state.player_controls[index] is control,
+                    selected=(active_seat and self.state.player_controls[index] is control),
                     small=True,
+                    enabled=active_seat,
                 )
 
-        y = 440
+        y = 398
         if self.state.map_num == 1:
             self.label("Mission Cards", 48, y + 7)
             self.button(
-                pygame.Rect(210, y, 100, 36),
+                pygame.Rect(270, y, 100, 36),
                 "Enabled" if self.state.use_mission_cards else "Disabled",
                 self._toggle_missions,
                 selected=self.state.use_mission_cards,
@@ -152,14 +160,14 @@ class NewGameMenu:
 
         self.label("Emperor's Favour", 48, y + 7)
         self.button(
-            pygame.Rect(210, y, 100, 36),
+            pygame.Rect(270, y, 100, 36),
             "Enabled" if self.state.use_emperors_favour else "Disabled",
             self._toggle_emperor,
             selected=self.state.use_emperors_favour,
             small=True,
         )
         if self.state.use_emperors_favour:
-            self._draw_mode_buttons(y, "emperor")
+            self._draw_mode_buttons(y, "emperor", x=390)
             y += 48
             if self.state.emperor_tile_mode == "manual":
                 self.label(
@@ -182,7 +190,7 @@ class NewGameMenu:
                 y += 82
         y += 48
 
-        self.label("Promotional Bonus Markers", 48, y + 7)
+        self.label("Custom Bonus-Marker Supply", 48, y + 7)
         self.button(
             pygame.Rect(350, y, 100, 36),
             "Enabled" if self.state.use_promo_markers else "Disabled",
@@ -194,23 +202,34 @@ class NewGameMenu:
             self._draw_mode_buttons(y, "promo", x=470)
             y += 48
             if self.state.promo_marker_mode == "manual":
-                self.label("Click to add; right-click to remove:", 70, y, small=True)
+                self.label(
+                    f"Choose exactly 12 markers ({len(self.state.promo_markers)}/12): "
+                    "left-click to add; right-click to remove",
+                    70,
+                    y,
+                    small=True,
+                )
                 y += 28
-                for index, (marker, maximum) in enumerate(Map.PROMO_BONUS_MARKERS.items()):
+                for index, (marker, maximum) in enumerate(BONUS_MARKER_OPTIONS.items()):
                     count = self.state.promo_markers.count(marker)
                     self.button(
-                        pygame.Rect(70 + index * 285, y, 270, 34),
+                        pygame.Rect(
+                            70 + (index % 3) * 285,
+                            y + (index // 3) * 36,
+                            270,
+                            32,
+                        ),
                         f"{marker}: {count}/{maximum}",
                         ("promo_count", marker),
                         selected=count > 0,
                         small=True,
                     )
-                y += 45
+                y += 113
 
         if self.error:
-            self.label(self.error, 48, 790, small=True, color=ERROR)
+            self.label(self.error, 48, 850, small=True, color=ERROR)
         self.button(
-            pygame.Rect(710, 810, 210, 44),
+            pygame.Rect(710, 856, 210, 44),
             "Start Game",
             self._start,
             selected=True,
@@ -229,7 +248,8 @@ class NewGameMenu:
             )
 
     def _set_control(self, index, control):
-        self.state.player_controls[index] = control
+        if index < self.state.player_count:
+            self.state.player_controls[index] = control
 
     def _toggle_missions(self):
         self.state.use_mission_cards = not self.state.use_mission_cards
@@ -260,8 +280,8 @@ class NewGameMenu:
 
     def _change_promo_count(self, marker, direction):
         count = self.state.promo_markers.count(marker)
-        maximum = Map.PROMO_BONUS_MARKERS[marker]
-        if direction > 0 and count < maximum:
+        maximum = BONUS_MARKER_OPTIONS[marker]
+        if direction > 0 and count < maximum and len(self.state.promo_markers) < 12:
             self.state.promo_markers.append(marker)
         elif direction < 0 and count:
             self.state.promo_markers.remove(marker)

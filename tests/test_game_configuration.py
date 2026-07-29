@@ -7,7 +7,7 @@ from unittest import mock
 
 import hansa_game
 from drawing.game_window import GameWindow
-from drawing.new_game_menu import NewGameMenuState
+from drawing.new_game_menu import NewGameMenu, NewGameMenuState
 from drawing.scaled_display import ScaledDisplay
 from game.game_config import (
     EMPERORS_FAVOUR_TILES,
@@ -55,6 +55,17 @@ class GameConfigurationTests(unittest.TestCase):
         state.set_map(2)
         self.assertFalse(state.use_mission_cards)
 
+    def test_stale_inactive_player_callback_is_ignored(self):
+        state = NewGameMenuState()
+        state.set_player_count(5)
+        menu = object.__new__(NewGameMenu)
+        menu.state = state
+
+        state.set_player_count(3)
+        menu._set_control(4, PlayerControl.MAGNUS)
+
+        self.assertEqual(state.player_controls, [PlayerControl.HUMAN] * 3)
+
     def test_configuration_rejects_invalid_module_combinations(self):
         with self.assertRaisesRegex(ValueError, "only be enabled on map 1"):
             GameConfiguration(
@@ -77,7 +88,12 @@ class GameConfigurationTests(unittest.TestCase):
                 player_controls=(PlayerControl.HUMAN,) * 3,
                 use_promo_markers=True,
                 promo_marker_mode="manual",
-                promo_markers=("ExchangeBonusMarker",) * 3,
+                promo_markers=("ExchangeBonusMarker",) * 3
+                + ("PlaceAdjacent",) * 3
+                + ("SwapOffice",) * 2
+                + ("Move3",)
+                + ("UpgradeAbility",) * 2
+                + ("3Actions",),
             )
 
     def test_manual_options_are_applied_to_game_initialization(self):
@@ -92,6 +108,14 @@ class GameConfigurationTests(unittest.TestCase):
             "Tribute4EstablishingTP",
             "BlockTradeRoute",
         )
+        selected_supply = (
+            selected_promos
+            + ("PlaceAdjacent",) * 3
+            + ("SwapOffice",) * 2
+            + ("Move3",)
+            + ("UpgradeAbility",) * 2
+            + ("3Actions",)
+        )
         configuration = GameConfiguration(
             map_num=1,
             player_count=3,
@@ -102,7 +126,7 @@ class GameConfigurationTests(unittest.TestCase):
             emperor_tiles=selected_tiles,
             use_promo_markers=True,
             promo_marker_mode="manual",
-            promo_markers=selected_promos,
+            promo_markers=selected_supply,
             seed=124,
         )
 
@@ -120,8 +144,7 @@ class GameConfigurationTests(unittest.TestCase):
         self.assertEqual(game.players[2].ai_top_k, 1)
         marker_pool = game.selected_map.bonus_marker_pool
         self.assertEqual(len(marker_pool), 12)
-        for marker in selected_promos:
-            self.assertEqual(marker_pool.count(marker), 1)
+        self.assertCountEqual(marker_pool, selected_supply)
 
     def test_seeded_random_optional_pools_are_reproducible_and_legal(self):
         configuration = GameConfiguration(
@@ -245,6 +268,28 @@ class GameConfigurationTests(unittest.TestCase):
                 1,
                 [],
             )
+        )
+
+    def test_game_window_city_click_maps_to_legal_route_outcome(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        player = game.current_player
+        route = game.selected_map.routes[0]
+        for post in route.posts:
+            post.owner = player
+            post.owner_piece_shape = "square"
+
+        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        points_action = 242
+        city = route.cities[0]
+        center = (city.x_pos + city.width // 2, city.y_pos + city.height // 2)
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+        window.action_rects = []
+
+        self.assertIn(points_action, legal_actions)
+        self.assertEqual(
+            window.action_for_click(center, 3, legal_actions),
+            points_action,
         )
 
 

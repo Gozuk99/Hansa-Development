@@ -43,14 +43,23 @@ class ScaledDisplay:
         )
 
     def to_logical(self, position: tuple[int, int]) -> tuple[int, int]:
-        window_width, window_height = self.window.get_size()
+        target = self.presentation_rect()
         return (
-            round(position[0] * self.logical_size[0] / window_width),
-            round(position[1] * self.logical_size[1] / window_height),
+            round((position[0] - target.x) * self.logical_size[0] / target.width),
+            round((position[1] - target.y) * self.logical_size[1] / target.height),
+        )
+
+    def presentation_rect(self) -> pygame.Rect:
+        target_size = self.fit_size(self.logical_size, self.window.get_size())
+        return pygame.Rect(
+            (self.window.get_width() - target_size[0]) // 2,
+            (self.window.get_height() - target_size[1]) // 2,
+            *target_size,
         )
 
     def present(self) -> None:
-        target_size = self.window.get_size()
-        frame = pygame.transform.smoothscale(self.canvas, target_size)
-        self.window.blit(frame, (0, 0))
+        target = self.presentation_rect()
+        frame = pygame.transform.smoothscale(self.canvas, target.size)
+        self.window.fill((20, 20, 20))
+        self.window.blit(frame, target)
         pygame.display.flip()

@@ -47,9 +47,9 @@ or save checkpoints.
 
 All setup choices are represented by one reusable `GameConfiguration`. Manual
 Emperor's Favour selection requires exactly one distinct tile per player.
-Promotional markers are disabled by default; random mode generates a legal mix,
-while manual mode selects the exact promo copies included in the twelve-marker
-supply. Mission Cards appear only for Map 1.
+Custom bonus-marker supplies are disabled by default; random mode generates a
+legal standard/promo mix, while manual mode selects all twelve exact copies from
+the complete standard-and-promo pool. Mission Cards appear only for Map 1.
 
 ### Headless Engine Verification
 

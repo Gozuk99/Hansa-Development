@@ -100,9 +100,12 @@ class GameConfiguration:
             enabled=self.use_promo_markers,
             mode=self.promo_marker_mode,
             selected=self.promo_markers,
-            allowed=Map.PROMO_BONUS_MARKERS,
-            exact_count=None,
-            label="promotional bonus markers",
+            allowed={
+                **Map.STANDARD_BONUS_MARKER_SUPPLY,
+                **Map.PROMO_BONUS_MARKERS,
+            },
+            exact_count=12,
+            label="bonus-marker supply",
             unique=False,
         )
 
@@ -181,7 +184,7 @@ class GameConfiguration:
             marker for marker, count in Map.PROMO_BONUS_MARKERS.items() for _ in range(count)
         ]
         if self.promo_marker_mode == "manual":
-            promos = list(self.promo_markers)
+            return tuple(self.promo_markers)
         else:
             promos = rng.sample(
                 available_promos,
