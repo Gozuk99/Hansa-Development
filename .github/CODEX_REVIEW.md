@@ -3,17 +3,28 @@
 Codex review must run as a new task with fresh context. The task that authored
 the implementation must not be the sole reviewer of its own work.
 
-## Requesting a Review
+## Review Integration Boundary
 
-After validation jobs finish, comment on the pull request:
+The GitHub Actions validation workflow does not run Codex, call the OpenAI API,
+or submit `APPROVE`/`REQUEST_CHANGES` reviews. It has no external AI service
+dependency and requires no OpenAI API key.
+
+Codex review is advisory and runs separately through an authorized Codex GitHub
+integration or a fresh-context Codex task. When repository-integrated review is
+available, request it after validation finishes by commenting:
 
 ```text
 @codex review
 ```
 
-Request the review again after substantive updates. Until automatic review is
-enabled in the repository's Codex settings, this explicit request is the
-supported fallback.
+Request the review again after substantive updates. If the GitHub integration
+cannot post a review, run a separate fresh-context review task and record its
+findings on the pull request. A normal implementation-task self-assessment does
+not satisfy this requirement.
+
+Advisory review findings are not required status checks and never approve,
+reject, or merge a pull request automatically. The repository owner retains the
+final merge decision.
 
 ## Required Reviewer Context
 
@@ -67,5 +78,4 @@ Unrelated changes: None | description
 ```
 
 Avoid duplicate comments. On later reviews, mark prior findings resolved or do
-not repeat them. Review is advisory at initial rollout; it never merges a pull
-request. Human approval remains required.
+not repeat them.

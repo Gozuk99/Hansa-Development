@@ -57,8 +57,10 @@ because the project does not currently have a type-checker configuration.
 
 Pull requests automatically run the equivalent checks through
 `.github/workflows/pull-request-validation.yml`. Each pull request should link
-its issue and request a fresh-context independent review using `@codex review`;
-see `.github/CODEX_REVIEW.md`.
+its issue and request a fresh-context advisory review; see
+`.github/CODEX_REVIEW.md`. AI review runs outside GitHub Actions: CI requires no
+OpenAI API key, incurs no OpenAI API billing, and never approves or merges a
+pull request automatically.
 
 Run one deterministic headless game:
 

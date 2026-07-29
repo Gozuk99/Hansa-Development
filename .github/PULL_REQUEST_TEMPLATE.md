@@ -26,10 +26,11 @@ Describe what changed and why.
 
 ## Independent AI Review
 
-- [ ] A fresh-context review was requested with `@codex review`
+- [ ] An advisory fresh-context review was requested
 - [ ] The reviewer compared the complete diff with the linked issue
 - [ ] Blocking findings are resolved
 - [ ] Major findings are resolved or explicitly acknowledged
 
 The implementation conversation's self-assessment does not count as the
-independent review. Follow [.github/CODEX_REVIEW.md](CODEX_REVIEW.md).
+independent review. AI review is not an automated approval or required status
+check. Follow [.github/CODEX_REVIEW.md](CODEX_REVIEW.md).
