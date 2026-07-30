@@ -4,35 +4,64 @@
 
 ## Game Overview
 
-The German Hanseatic League [Latin: Hansa Teutonica] is the name for a medieval association of merchants in northern Germany. Cities that joined the Hanseatic League of Merchants and Cities were known as Hanseatic cities. This association was loosely organized and never depended on any contracts. Therefore, it’s difficult to determine exactly all of the cities that belonged to the Hanseatic League, especially since it’s also important to know when they belonged. Overall, at any one time, there were approximately 200 locations that directly or indirectly belonged to the Hanseatic League of Cities. You are trying to increase your reputation as merchants in the Hanseatic era. There are various methods you can use to accomplish this. Establishing trading posts in as many cities as possible is one tactic, or building a network of linked cities with tradesmen. Improving your merchant abilities can be equally effective as well. During your turn, you perform 2-5 actions. You can move your traders and merchants on the game map or use them to displace opposing tradesmen. If you manage to occupy all of the connections between 2 cities, you can set up a trade route and establish a trading post. In some cities, instead of establishing a trading post, you may choose to develop one of your abilities. This allows you to perform more powerful actions as the game progresses. In the end, the player who has scored the most prestige points wins.
+Players compete to earn the most prestige points by establishing Kontors, developing abilities, controlling cities, and building connected trade networks.
+
+On each turn, perform 2–5 actions to move or place Traders and Merchants, displace opponents, and claim trade routes. Completing a trade route allows you to establish a Kontor or develop an ability, depending on the city. Improved abilities provide stronger actions throughout the game.
+
+The player with the most prestige points at the end of the game wins.
 
 ## Components
 
-- **3 game boards**
+- **3 Game Boards**
   - The Hanseatic League Game Board (front: 4–5 players; back: 3 players)
   - The Eastern Hanseatic League Game Board (3–5 players)
   - Britannia Game Board (front: 4–5 players; back: 3 players)
-- **20 merchants** — wooden disks, 4 per player color
-- **135 traders** — wooden cubes, 27 per player color
-- **1 black wooden cube** — for the Completed Cities track
-- **5 writing desks/player boards** — 1 in each player color
-- **15 bonus markers** — 3 gold, plus 2 blank markers
+- **20 Merchants** (4 per player)
+- **135 Traders** (27 per player)
+- **1 Completed Cities marker** — for the Completed Cities track
+- **5 Writing Desks / Player Boards** — 1 in each player color
+- **15 Bonus Markers** — 3 gold, plus 2 blank markers
   - 4x Additional Trading Post
   - 3x Exchange Trading Posts
   - 2x Move 3 Tradesmen
   - 2x Develop 1 Ability
   - 2x +3 Actions
   - 2x +4 Actions
-- **6 Emperor’s Favour tiles**
-- **9 mission cards**
+- **6 Emperor's Favour Tiles**
+- **9 Mission Cards**
 
-## The Gameboard
+### Traders and Merchants
 
-The game board shows cities that are part of the Hanseatic League, each with 1 to 4 trading posts (square or round in 4 colors). Connecting the cities are trade routes with 2 to 4 connection points. Certain abilities can be developed (as shown by pictograms in a scroll) by creating a trade route next to each of 5 cities (Groningen, Stade, Lübeck, Göttingen and Halle). In addition, one city (Coellen) provides the opportunity to win special prestige points, and 2 cities with red banners (Stendal, Arnheim) are necessary to complete the East-West Connection. Next to 3 trade routes on the map, there are also 3 taverns (Taberna on the game board) where the first 3 (gold) bonus markers are placed at the beginning of the game. The game board also has a Prestige Point track for scoring and a Completed Cities track (to mark cities that have had all of their trading posts filled with tradesmen).
+“Tradesmen” refers collectively to Traders and Merchants.
 
-## The Player’s Writing Desk - Player Boards
+Merchants differ from Traders in three ways:
 
-Your writing desk is divided into several areas (see illustration on the right side below): The silver plate in the middle at the top of the desk is used to store bonus markers that you must place at the end of your turn. The 5 actions you have available are shown on the bottom in the form of small pictograms. The 5 ability spaces make up the largest part of your writing desk. These abilities provide different action options that can also be developed. At the start of the game, you only have the lowest value of each ability available – the leftmost empty space. To develop abilities, you must complete trade routes for cities with the corresponding pictogram. The following 5 abilities are available (with their respective values in brackets):
+- Displacing a Merchant costs 2 additional Tradesmen and grants its owner up to 2 additional Tradesmen.
+- Square Kontors require Traders; round Kontors require Merchants.
+- Only Merchants may occupy Coellen’s special prestige point spaces.
+
+## The Game Board
+
+The game board contains:
+
+- Cities with 1–4 office spaces.
+- Trade routes connecting cities with 2–4 route posts.
+- Five ability cities where completing adjacent trade routes may develop an ability.
+- Coellen, which awards special prestige points.
+- Stendal and Arnheim, which are used for the East-West Connection.
+- Three taverns where the initial gold bonus markers are placed.
+- A Prestige Point track.
+- A Completed Cities track.
+
+## The Player's Writing Desk (Player Board)
+
+Each player's writing desk contains:
+
+- A Bonus Marker area for markers that must be placed at the end of the turn.
+- An Actions reference showing the available actions.
+- Five abilities that can be developed by completing trade routes adjacent to the corresponding ability cities.
+
+Each ability begins at its lowest value. Developing an ability increases its effectiveness.
 
 ### City Keys
 
@@ -56,320 +85,625 @@ Your writing desk is divided into several areas (see illustration on the right s
 
 ## Game Setup
 
-Take the game board of your choice and place it in the middle of the playing area. (For your first game we recommend using The Hanseatic League.) Take the 3 start bonus markers (gold) and randomly place one on each of the 3 Taverns so that the small arrow on the front of the markers clearly points to the assigned trade route. Shuffle the remaining bonus markers and place them facedown next to the game board as a supply. Place the black wooden cube on field 0 of the Completed Cities track. Then, everyone chooses a color and takes the corresponding writing desk and tradesmen:
-- 1 Writing Desk
-- 27 Traders (wooden cubes)
-- 4 Merchants (wooden discs) Note: In the rules, traders and merchants are referred to collectively as tradesmen. Whenever tradesmen are mentioned, it is understood to include both traders and merchants. In places where this is not the case, the specific terms trader and merchant will be used instead. Place 3 merchants on the round spaces for the Book of Knowledge ability and 15 traders on the square spaces for the other 4 abilities on your writing desk, leaving the white-shaded, left-most spaces of each ability empty. The numerical values showing in these spaces are the respective start values for each ability. (All values are identical on all of the writing desks). Place 1 of your traders on the 0 space of the Prestige Points track. Determine a start player and then each player distributes their remaining tradesmen as follows: First, everyone places their single remaining merchant in their personal supply. Then in clockwise order, the start player takes 5 traders and places them in their personal supply and each successive player does the same but takes 1 more than the player before them (the second player takes 6 traders, the third takes 7 traders, etc.). Place any remaining traders in the general stock where they are easily available (see also table below). You must hire tradesmen from the general stock to transfer them to your personal supply before you can use them for other actions.
+1. Place the chosen game board in the play area.
+2. Randomly place one gold bonus marker on each tavern, with its arrow pointing toward the assigned trade route.
+3. Shuffle the remaining bonus markers and place them face down as a supply.
+4. Place the Completed Cities marker on space 0 of the Completed Cities track.
+5. Each player chooses a color and takes:
+   - 1 Writing Desk
+   - 27 Traders
+   - 4 Merchants
+6. Set up each Writing Desk:
+   - Place 3 Merchants on the Book of Knowledge ability.
+   - Place 15 Traders on the remaining ability tracks, leaving the leftmost space of each track empty.
+   - Place 1 Trader on space 0 of the Prestige Point track.
+7. Determine the start player.
+8. Each player places 1 remaining Merchant into their personal supply.
+9. In player order, each player places Traders into their personal supply:
+   - Start player: 5
+   - Player 2: 6
+   - Player 3: 7
+   - Player 4: 8
+   - Player 5: 9
+10. Place all remaining Traders in the general stock.
 
-| Player order | Personal supply | General stock |
-| --- | ---: | ---: |
-| Start player | 5 traders + 1 merchant | 6 traders |
-| Player 2 | 6 traders + 1 merchant | 5 traders |
-| Player 3 | 7 traders + 1 merchant | 4 traders |
-| Player 4 | 8 traders + 1 merchant | 3 traders |
-| Player 5 | 9 traders + 1 merchant | 2 traders |
+Tradesmen in the general stock must be hired before they can be placed on the game board.
 
 ## Game Play
 
-Players take turns in clockwise order until 1 of the 3 end game conditions has been triggered (see End of Game on page 7). On your turn, you have five actions to choose from:
+Players take turns clockwise until one of the end game conditions is triggered (see End of Game).
 
-1. **A) Income**
-2. **B) Place 1 tradesman**
-3. **C) Displace 1 opponent’s tradesman and replace it with 1 of your own**
-4. **D) Move your tradesmen on the board**
-5. **E) Create 1 trade route** At the start of the game you may only take 2 actions per turn. By developing the Actions ability, you can increase this up to 5 actions per turn. During your turn, you can carry out your actions in any order and may repeat the same action as desired. However, you must always completely finish each action before selecting another (or selecting it again).
+On your turn, perform up to your current number of actions by choosing from:
+
+1. **Income**
+2. **Place 1 Tradesman**
+3. **Displace 1 Opponent's Tradesman**
+4. **Move Your Tradesmen**
+5. **Establish 1 Trade Route**
+
+Your **Actions** ability determines how many actions you may perform each turn (2–5).
+
+Actions may be performed in any order and repeated as desired, but each action must be completed before another action begins.
 
 Details for each action:
 
 ### A) Income
 
-With this action, depending on your development level of your Bank ability, you can hire up to 3, 5, 7 or all of your tradesmen in the general stock to transfer them to your personal supply (all if you have uncovered the C). Details: If there are not enough tradesmen in the general stock you only transfer those available. You can only use tradesmen in your personal supply for action B) Place 1 tradesman.
+Hire up to your current **Bank** value (3, 5, 7, or all) of your Traders from the general stock into your personal supply. If fewer Traders are available, hire all remaining Traders.
+
+Only Traders in your personal supply may be placed using **Place 1 Tradesman**.
 
 ### B) Place 1 Tradesman
 
-With this action you can place 1 tradesman from your personal supply in a free connection point on a trade route (a connection point not already occupied by you or an opponent). Details: It doesn’t matter if your or your opponents’ tradesmen occupy any other connection points on this trade route. If you repeat this action during your turn, you can choose any valid trade route connection point for each placement.
+Place 1 Tradesman from your personal supply onto any unoccupied route post.
+
+Each use of this action may place a Tradesman on a different trade route.
 
 ### C) Displace an Opponent’s Tradesman
 
-With this action you may displace one of your opponents’ tradesmen from a connection point on a trade route and replace it with 1 of your own tradesmen from your personal supply. If you displace a trader, you must also return 1 additional tradesman from your personal supply back to the general stock as a cost. If you displace a merchant, you must return 2 tradesmen. If you do not have enough tradesmen in your personal supply, you may not perform this action. Your opponent must immediately place their displaced trader plus 1 additional tradesman from the general stock, or their displaced merchant plus 2 additional tradesmen from the general stock, on any free connection points on adjacent trade routes of their choice. Details: The opponent may place these tradesmen on 1 or more adjacent trade routes. If all of the connection points are occupied on all of the directly adjacent trade routes, they may then choose trade routes adjacent to those trade routes (and so on). If your opponent no longer has any tradesmen in the general stock, they may use tradesmen from their personal supply instead. If the opponent’s personal supply is also empty, they may choose to use any of their tradesmen that have already been placed on trade routes. However, the opponent may not place any of these tradesmen into their personal supply. They must immediately place the tradesmen on a trade route before the active player’s next action. An opponent may decline taking any additional tradesmen from the general stock or personal supply. The red player displaces 1 of the blue player’s traders on the trade route between Dortmund and Paderborn. To do so, red must transfer 1 of their tradesmen from their personal supply to the general stock. In addition, blue receives 1 tradesman from the general stock and then places both this and the displaced tradesman on an adjacent trade route - in this example on 2 different adjacent trade routes.
+Choose an opponent’s Tradesman on a route post and replace it with 1 Tradesman from your personal supply.
+
+Pay an additional displacement cost from your personal supply to the general stock:
+
+- **Trader:** 1 Tradesman
+- **Merchant:** 2 Tradesmen
+
+You may not perform this action unless you can place the replacement Tradesman and pay the full cost.
+
+The opponent immediately places the displaced piece on a free post on a trade route adjacent to the route where it was displaced. They may also place:
+
+- **Displaced Trader:** up to 1 additional Tradesman
+- **Displaced Merchant:** up to 2 additional Tradesmen
+
+These pieces may be split among multiple adjacent trade routes. Only when every post on every directly adjacent trade route is occupied may the opponent place them on routes one step farther away, continuing outward as necessary.
+
+Additional Tradesmen are taken from the opponent’s general stock. If none remain there, they may use Tradesmen from their personal supply. If both are empty, they may move their Tradesmen already occupying trade routes. The opponent may decline any additional Tradesmen.
+
+The displaced piece and any additional Tradesmen must be placed directly onto trade routes before the active player begins another action. They may not be placed into the opponent’s personal supply.
 
 ### D) Move Your Tradesmen
 
-With this action, depending on the development level of your Book of Knowledge ability, you can move 2 to 5 of your own tradesmen from connection points on 1 or more trade routes and place them on free connection points on 1 or more trade routes. Details: This also allows you to swap the positions of one of your traders with one of your merchants. (For example, with 2 of your moves you could have a trader on one connection point swap places with a merchant on another connection point.) When moving, you may not displace any of your opponents’ tradesmen.
+Move up to your current **Book of Knowledge** value (2–5) of your Tradesmen between route posts. Each moved Tradesman may be placed on any free route post.
+
+You may use 2 moves to swap the positions of one of your Traders and one of your Merchants. You may not displace opponents’ Tradesmen.
 
 ### E) Create a Trade Route
 
-You can only perform this action if all the connection points on a trade route between 2 cities are occupied by your own tradesmen. Occupying all of the connections on a trade route doesn’t automatically create a trade route – you must explicitly perform this action to create it. When you perform this action, carry out the following steps in order – steps 1) and 2) must always be done (as far as possible) and then 1 of the 3 alternatives in step 3 may also be done, if possible: 1) Score Prestige Points 2) Take Bonus Marker 3a) Establish Trading Post 3b) Develop Ability 3c) Score Special Prestige Points
+You may perform this action only when all route posts between two cities are occupied by your Tradesmen. Filling every route post does not automatically create the trade route; you must perform this action explicitly.
 
+Resolve the following steps in order:
+
+1. **Score Prestige Points** — mandatory, if applicable.
+2. **Take Bonus Marker** — mandatory, if possible.
+3. Perform one of the following, if possible:
+   - **Establish a Trading Post**
+   - **Develop an Ability**
+   - **Score Special Prestige Points**
+   
 #### 1) Score Prestige Points
 
-First determine who, if anyone, controls each of the two cities on either end of the trade route being created. The player who has the most trading posts in each city controls the city and immediately gains 1 prestige point. In the event of a tie, the tied player who occupies the higher valued trading post – furthest to the right – controls the city. If one player controls both cities, they immediately gain 2 prestige points (1 for each city). Track prestige points by advancing a player’s trader on the Prestige Points track the appropriate number of spaces. If anyone now has 20 or more prestige points, the game ends immediately after this action. Details: Scoring prestige points is independent of whether or not you claim a trading post in either of the two cities (as described in step 3a). You can also create a trade route to gain additional prestige points (and possibly surprise your opponents with an accelerated end of game), or to take a bonus marker (see step 2) Take Bonus Marker). The red player has created the trade route between Dortmund and Paderborn. First, he checks whether and who controls the two cities on each end. At this point, Dortmund has 1 trading post established by red who now gains 1 prestige point. Red also established 1 trading post in Paderborn, but the blue player has established 1 as well. Since the blue player established the higher valued trading post further to the right, blue now gains 1 prestige point for controlling this city.
+Determine control of each city at the ends of the trade route.
+
+The player with the most Kontors in a city controls it and gains 1 prestige point. If tied, the tied player with the furthest-right Kontor controls the city.
+
+A player controlling both cities gains 2 prestige points.
+
+City-control scoring occurs regardless of which option is chosen in step 3.
+
+If any player reaches 20 or more prestige points, complete the entire **Create a Trade Route** action before ending the game.
 
 #### 2) Take Bonus Marker
 
-If there is a bonus marker next to the newly created trade route, take it and place it faceup next to the left side of your writing desk. You can use this bonus marker once at any time during any of your turns after completing this action - that is, on this or a later turn. Using a bonus marker does not cost you an action. After you have used the one-time bonus marker, place it facedown to the right of your writing desk. At the end of the game, all of your collected bonus markers (faceup and facedown) will be counted for prestige points. Then, immediately take 1 new bonus marker from the supply and place it facedown on the silver plate on your writing desk. However, if there aren’t any more bonus markers in the supply, the game ends immediately after this action. If not, you must place this bonus marker on the game board at the end of your turn. You can place the bonus marker next to any trade route you like. The following 3 restrictions apply:
-- The trade route can’t already have a bonus marker.
-- There can’t be any tradesmen on this trade route.
-- At least 1 trading post space must be empty in 1 of the 2 cities at either end of the trade route. Further details for bonus markers can be found on pages 8 and 9. The red player now takes the bonus marker +3 actions that is next to the trade route. After completing their action (Create 1 trade route), red may use this bonus marker during any one of their turns, including this one. Also, to complete this action, red must now take 1 bonus marker from the supply and place it facedown on their silver plate. Then, at the end of this turn – and after the use of the bonus marker for +3 actions if red decides to use it during this turn – red must place this new bonus marker on the game board, observing the 3 restrictions.
+If the established trade route has a bonus marker, take it.
 
-In step 3, you can only choose 1 of the following 3 options (3a, 3b, or 3c) or you may choose to skip step 3 altogether.
+After completing the current **Establish a Trade Route** action, you may use the bonus marker during this or a later turn. Using it does not cost an action. Used and unused collected bonus markers count during final scoring.
 
-#### 3a) Establish Trading Post
+Immediately draw 1 replacement bonus marker from the supply. If none can be drawn, complete the current **Establish a Trade Route** action, then end the game.
 
-Remove all of your tradesmen on this trade route and return all but 1 to the general stock. Use the remaining tradesman to establish the leftmost vacant trading post space in one of the two cities on either end of the trade route. Details: This means you cannot skip over a vacant trading post space, and must establish your trading post in the lowest vacant space. The value of spaces begins with white – the lowest – to orange to pink to black. You must qualify to establish a trading post in spaces higher than a white one by developing your Privilege ability. In addition, a trader must always be placed on a square trading post space and a merchant on a round trading post space. You may only place a tradesman in a trading post that was on the trade route – it cannot be one taken from the general stock or your personal supply. The red player now wants to establish another trading post in Dortmund. First they return 2 of their 3 tradesmen from the trade route back to the general stock and then they place the remaining tradesman, in this case a trader, on the orange space. Red is allowed to do this because they have already developed their Privilege ability up to pink – high. Although red could theoretically establish a trading post on the far right due to their privilege; they can’t do this because you are not allowed to skip a vacant trading post space. Therefore red must establish their trader in the orange space instead.
+At the end of your turn, place each replacement bonus marker beside a trade route that meets all three requirements:
 
-Further Details: On the Hanseatic game board, you immediately gain 1 prestige point when you establish the first trading post on each of 6 cities on the 3-player side (Groningen, Stade, Lübeck, Coellen, Warburg and Halle) or on each of 4 cities on the 4 to 5-player side (Groningen, Lübeck, Coellen and Halle) – illustrated by an icon of a 1 in a gold circle. If this causes anyone to have 20 or more prestige points, the game ends immediately after this action. If you establish a trading post in the last vacant space in a city, immediately advance the black wooden marker on the Completed Cities track 1 space. If the 10th city is fully occupied, the game ends immediately after this action. If all of the trading post spaces in a city have been established, no further tradesmen can be placed in this city (exception: bonus marker Additional Trading Post; see page 8). A trade route may still be created even if the cities on both ends have already been completed. For example, a player may want to earn prestige points for the cities on either end.
+- It has no bonus marker.
+- It contains no Tradesmen.
+- At least one city at either end has an empty Kontor.
+
+#### 3a) Establish Trading Post/Kontor
+
+Remove all of your Tradesmen from the established trade route. Return all but 1 to the general stock, then use the remaining piece to establish the leftmost vacant Kontor in either city at the route’s ends.
+
+The Kontor must meet both requirements:
+
+- Your **Privilege** permits its color: white, orange, pink, or black.
+- A Trader may occupy only a square Kontor; a Merchant may occupy only a round Kontor.
+
+You may not skip a vacant Kontor or use a piece from your personal supply or the general stock.
+
+On the Hanseatic League board, establishing the first Kontor in a city marked with a gold coin immediately awards 1 prestige point.
+
+If this fills the final vacant Kontor in a city, advance the Completed Cities track by 1. Once a city is complete, no additional Kontors may normally be established there, except through **Additional Trading Post**.
+
+A trade route may still be established when both endpoint cities are complete.
+
+If a player reaches 20 prestige points or the tenth city becomes complete, finish the current **Establish a Trade Route** action, then end the game.
 
 #### East-West Connection
 
-Immediately after you establish a trading post that creates a continuous chain of your trading posts from Stendal to Arnheim (indicated by red banners), you have created an East-West Connection and immediately gain prestige points as follows: If you are the first player to create the connection, you gain 7 prestige points, 4 prestige points if you are second, and 2 prestige points if you are third. If anyone now has 20 or more prestige points, the game ends immediately after completing this action. The length of this route, the positions of your trading posts in the cities, and whether you control the cities are all irrelevant for creating the East-West Connection. Two examples of possible East-West Connections; yellow shows the shortest possible East-West Connection.
+After establishing a Kontor that creates a continuous network of your Kontors from Stendal to Arnheim, gain:
+
+- **7 prestige points** if first
+- **4 prestige points** if second
+- **2 prestige points** if third
+
+The network’s length, Kontor positions within cities, and city control do not matter.
+
+If this causes a player to reach 20 prestige points, finish the current **Establish a Trade Route** action, then end the game.
 
 #### 3b) Develop an Ability
 
-If one of the two adjacent cities has a pictogram of one of the 5 abilities (City Keys / Actions / Privilege / Book of Knowledge / Bank), you can develop the corresponding ability instead of occupying a trading post. First return all of the tradesmen on the trade route back to the general stock. Then, from your writing desk, remove the left-most trader (City Keys / Actions / Privilege / Bank) or merchant (Book of Knowledge) from the corresponding ability and place it in your personal supply. Details: From now on you can use the improved value of this ability. For example, if you have just revealed the first 3, the first 4, or the 5 for the Actions ability, you gain one additional action that is immediately available this turn (even if this happens when using a bonus marker for +3 or +4 actions).
+If either city at the route’s ends shows an ability pictogram, you may develop that ability instead of establishing a Kontor.
 
-#### 3c) Special Prestige Points
+Return all Tradesmen from the route to the general stock. Then remove the leftmost piece from the corresponding ability on your Writing Desk and place it in your personal supply:
 
-If you create a trade route between the cities of Coellen and Warburg, instead of establishing a trading post, you may place a merchant on 1 of the 4 spaces for special prestige points (7, 8, 9, 11). Details: This space must be empty and the merchant must come from the trade route; return any remaining tradesmen to the general stock. However, you are free to choose any vacant space, in other words, you can skip empty spaces. You must still have the appropriate privilege color exposed on your writing desk (the color of the figure carrying the barrel with the number). This merchant remains in this space until the end of the game when these special prestige points are finally scored. The red player has created a trade route between Coellen and Warburg. He has already developed his Privilege ability to level orange – low. Red decides to move his merchant from the trade route to the orange space for 8 special prestige points. Alternatively, red could have used a trader from the trade route to establish the orange trading post space in Warburg or the white trading post space in Coellen (for which red would have gained 1 additional prestige point). The remaining 3 tradesmen from the trade route are returned to the general stock.
+- Trader: **City Keys, Actions, Privilege, or Bank**
+- Merchant: **Book of Knowledge**
+
+The newly revealed value takes effect immediately. If **Actions** increases, the additional action is available during the current turn.
+
+#### 3c) Score Special Prestige Points
+
+When establishing the trade route between Coellen and Warburg, you may place a Merchant from that route on any vacant special prestige point space instead of establishing a Kontor.
+
+Your **Privilege** must permit the space’s color. Return all remaining Tradesmen from the route to the general stock.
+
+The Merchant remains there until final scoring and scores the indicated 7, 8, 9, or 11 prestige points.
 
 ## End of Game
 
-The end of a Hansa Teutonica game can be triggered in 3 ways that all occur during action E) Create 1 trade route. If the game end is triggered, the active player completes this action, but any remaining actions are lost and the game ends immediately - there are no more turns for any player. The 3 ways to trigger the end of the game are:
-- When anyone has scored 20 or more prestige points on the Prestige Points track – and it doesn’t have to be that player’s turn.
-- When the active player needs to draw a bonus marker (to place it on the game board at the end of their turn) but the bonus marker supply has been used up. Note: The player won’t have the chance to use the bonus marker they’ve just taken from the game board!
-- When the active player establishes a trading post that completes the tenth city, in other words, when the Completed Cities marker has reached the last space (10). Note: During the game you only gain prestige points when performing the following steps of action E) Create 1 trade route:
-- control over the cities on each end of the trade route
-- establishing certain trading posts
-- completing an East-West Connection All other prestige points are only scored after the end of the game has been triggered.
+The game ends when one of these conditions is triggered during **Establish a Trade Route**:
+
+- Any player reaches 20 or more prestige points.
+- A replacement bonus marker must be drawn, but the supply is empty.
+- The tenth city is completed.
+
+Complete the current **Establish a Trade Route** action, then end the game immediately. The active player loses any remaining actions, and no other player takes another turn.
+
+During the game, prestige points are gained only from:
+
+- Controlling either city at the ends of an established trade route.
+- Establishing a Kontor on a gold coin office.
+- Completing the East-West Connection.
+
+All other prestige points are awarded during final scoring.
 
 ## Final Scoring
 
-There are two ways to tally your prestige points: You can use either the Prestige Points track on the game board
+Add prestige points from the following categories:
 
-**Or:**
-the scorepad (which is useful for keeping statistics). The following 6 categories all provide prestige points – add all these points together to determine the winner of a game:
+### A) Prestige Point Track
 
-### A) Prestige Points from the Prestige Points track
+Score the prestige points gained during the game.
 
- These are the prestige points gained for certain actions during the game.
+### B) Fully Developed Abilities
 
-### B) Prestige Points for fully developed abilities
+Gain 4 prestige points for each fully developed ability except **City Keys**.
 
- For each ability that you have fully developed (there are no tradesmen left – all spaces are empty), gain 4 prestige points. (Exception: No prestige points are gained for fully developing the City Keys ability.)
+An ability is fully developed when all of its spaces are empty.
 
-### C) Prestige Points for total bonus markers collected
+### C) Collected Bonus Markers
 
- For your total collected bonus markers (whether used during the game or not) you gain prestige points as follows: Number of Bonus Markers Prestige Points 1 1 2 or 3 3 4 or 5 6 6 or 7 10 8 or 9 15 10 or more 21
+Used and unused collected bonus markers score:
 
-### D) Special Prestige Points for Coellen
+| Bonus markers | Prestige points |
+| ---: | ---: |
+| 1 | 1 |
+| 2–3 | 3 |
+| 4–5 | 6 |
+| 6–7 | 10 |
+| 8–9 | 15 |
+| 10+ | 21 |
 
- If you occupied 1 or more spaces in Coellen with a merchant, you now gain these special prestige points as indicated.
+### D) Coellen
 
-### E) Prestige Points for Cities
+Score the value of each special prestige point space occupied by your Merchants.
 
- Now all of the cities are scored. You gain 2 prestige points for each city you control – those where you have the most trading posts. (Trading posts you’ve established using the bonus marker Additional Trading Post – to the left of the lowest trading post – count towards your total.) If there is a tie for most trading posts in a city, the tied player with the highest valued trading post – furthest right – gains the 2 points for the city. (This means only 1 player per city will gain 2 points.)
+### E) City Control
+
+Gain 2 prestige points for each city you control.
+
+The player with the most Kontors controls the city. If tied, the tied player with the furthest-right Kontor controls it.
+
+Extra Kontors created with **Additional Trading Post** count toward city control.
 
 ### F) Prestige Points for Network
 
- Finally, identify your largest network of connected trading posts. A network is comprised of all adjacent cities in which you have at least 1 trading post. Choose a city where you have at least 1 trading post to begin counting your trading posts for your network. Use an adjacent trade route to trace to the next adjacent city where you have at least 1 trading post and add your trading posts there to your network count. Repeat the previous step to continue tracing to additional adjacent cities where you have at least 1 trading post. (Of course, the trading posts in any valid city can only be added to your network count once.) Finally, multiply the total number of trading posts in your network by the largest number you have uncovered in your City Keys ability. Add these prestige points to your total. The red player has built a network of 7 cities with a total of 9 trading posts. (The trading post in Kampen is not included because it is not adjacent to any other city in this network.) Because he has developed his City Keys ability to 3, he receives 3 prestige points per trading post in this network for a total of 27 PP. The player who now has the most prestige points wins the game. If there is a tie, the tied player who has developed their Actions ability the least wins. If there is still a tie, the player who scored the most points for their network wins. If there is still a tie, the tied players share the victory.
+Identify your largest network of connected cities containing at least 1 of your Kontors.
+
+Count all of your Kontors in that network, including multiple Kontors in the same city. Each city is counted only once.
+
+Multiply the number of Kontors by your highest uncovered **City Keys** value.
+
+### Winner and Ties
+
+The player with the most prestige points wins.
+
+Resolve ties in this order:
+
+1. The tied player with the least-developed **Actions** ability wins.
+2. If still tied, the tied player who scored the most prestige points from their network wins.
+3. If still tied, share the victory.
 
 ## Bonus Markers
 
-At the beginning of your turn, there will always be 3 bonus markers on the game board. When you create a trade route that has a bonus marker next to it, take it and place it faceup to the left of your writing desk (see also page 5 E) Create a trade route step 2) Take Bonus Marker.) Then, immediately draw a new bonus marker and place it facedown (with the side showing bread and meat visible) on the silver plate on your writing desk. (This serves as a reminder so that you don’t forget to place the new bonus marker(s) at the end of your turn.) If you can’t draw a new bonus marker because the supply is empty, the game ends immediately after this action. (This also means that you won’t be able to use the bonus marker you’ve just taken from the game board!) At the end of your turn, place 1 new bonus marker for each one you have taken this turn on your silver plate. (This placement happens after the play of any +3 or +4 Actions bonus markers.) You can place them on any trading route with the following 3 restrictions:
-- The trade route can’t already have a bonus marker.
-- There can’t be any tradesmen on the trade route.
-- At least 1 trading post space must be empty in 1 of the 2 cities at either end of the trade route. The small dark gray arrow on each bonus marker serves as an aid to clearly assign a bonus marker to a trade route. You can use bonus markers at any time during your turn, but not in the same action in which you took it. Using a bonus marker does not cost an action. After using it once, flip the bonus marker over and place it to the right of your player board. It remains there until the end of the game, at which time all of your collected bonus markers are counted for prestige points regardless of whether they are faceup or facedown.
+When you establish a trade route with a bonus marker, take it and immediately draw 1 replacement marker from the supply.
 
-Here is an explanation of all of the bonus markers:
+If no replacement marker can be drawn, complete the current **Establish a Trade Route** action, then end the game.
+
+At the end of your turn, place each replacement marker beside a trade route that meets all three requirements:
+
+- It has no bonus marker.
+- It contains no Tradesmen.
+- At least one city at either end has an empty Kontor.
+
+A collected bonus marker may be used during this or a later turn, but not during the **Establish a Trade Route** action in which it was taken. Using a bonus marker does not cost an action.
+
+Each bonus marker may be used once. Used and unused collected bonus markers count during final scoring.
 
 ### Exchange Trading Posts
 
-This bonus marker allows you to exchange the positions of 2 tradesmen in adjacent established trading posts in a city. You must own one of the two trading posts exchanged. The shape and color required for the 2 adjacent spaces are irrelevant. This means that a trader and a merchant can exchange trading posts and that you can occupy a trading post for which you have not yet developed the privilege. The red player uses an Exchange Trading Posts bonus marker to exchange trading posts with the blue player in Perleberg. They can do this even though their Privilege ability hasn’t been developed to black and they are placing a trader in a space that normally requires a merchant.
+Exchange two adjacent Kontors in the same city. You must own at least one of them.
+
+Ignore Kontor color, piece shape, and **Privilege** requirements when exchanging them. Extra Kontors cannot be exchanged.
 
 ### Develop an Ability
 
-This bonus marker allows you to develop 1 ability of your choice by removing the leftmost trader or merchant from this ability and placing it in your personal supply – as in action E) Create 1 trade route – step 3b) Develop 1 Ability. The red player decides to use the bonus marker Develop 1 Ability to develop their Book of Knowledge ability. They take the leftmost merchant and place it in their personal stock. If they now choose action D) Move your Tradesmen on the board, they will now be able to move 3 tradesmen instead of 2.
+Develop any one ability by removing its leftmost piece and placing it in your personal supply.
+
+The newly revealed ability value takes effect immediately.
 
 ### Additional Trading Post
 
-When taking the action E) Create 1 trade route – step 3a) Establish Trading Post, you can use this bonus marker to change the rules for occupying a trading post as follows: Place 1 of your tradesmen from the trade route to the left of the trading post spaces to create an additional trading post in 1 of the 2 cities at either end of the trade route. The only requirement is that the left most (lowest) space must already have a trading post established by any player (including yourself). For the rest of the game, each additional trading post counts like any other for evaluations. Their value is lower than that of any trading post to their right. If more additional trading posts are established in this city, they will always be placed to the left of any previously established additional trading posts. You may not apply the Exchange Trading Posts bonus marker to any of these additional trading posts. The red player has created a trade route between Bremen and Hannover. In step 3a) of this action, they decide to establish a trading post in Hannover. Since all of the trading post spaces there are already occupied, they use the bonus marker Additional Trading Post to allow them to place one of their tradesmen from the trade route to the left of those already present in the city. Now the red player has established a trading post in this city.
+Use this marker while choosing **Establish a Kontor** during **Establish a Trade Route**.
+
+Instead of occupying a printed Kontor, place 1 Tradesman from the route immediately left of all existing Kontors in either endpoint city. The city’s leftmost printed Kontor must already be occupied.
+
+An Extra Kontor:
+
+- Counts as a normal Kontor for scoring and city control.
+- Has a lower value than every Kontor to its right.
+- Is placed left of all existing Extra Kontors.
+- Cannot be involved in **Exchange Trading Posts**.
 
 ### +3 / +4 Actions
 
-These bonus markers grant you 3 or 4 additional actions regardless of how many you can perform based on your Actions ability.
+Gain 3 or 4 additional actions this turn, regardless of your **Actions** ability.
 
 ### Move 3 Tradesmen
 
-Using this bonus marker, you can remove a total of up to 3 of your opponents’ tradesmen of your choice from occupied connection points on 1 or more trade routes to then replace them on free connection points on 1 or more trade routes. The 3 tradesmen may belong to 1, 2 or 3 different players. You can use this to change the positions of tradesmen. (A merchant could be moved to a new connection point and then a trader taken from another connection could be placed in the merchant’s former position.) In the process of moving a tradesman, you can’t displace another tradesman.
+Move up to 3 opponents’ Tradesmen from route posts to free route posts.
 
-Important Rules to Remember
-- Creating a trade route is a separate action.
-- For action E) 1 Create 1 trade route, the tradesmen from the trade route must be returned to the general stock; if you establish a trading post in one of the cities on either end of the trade route, the tradesman used must be one from this trade route.
-- When creating a trade route, players may gain prestige points for controlling a city on either end of the trade route.
-- At the end of your turn, any new bonus markers (on your silver plate) must be placed on the game board.
-- After a trade route has been created and a trading post has been established, you must check whether either of the cities has been filled and update the Completed Cities track accordingly.
-- When an ability is developed, the tradesman from the ability is placed in your personal supply.
-- For action C) Displace 1 of your opponent’s tradesmen and replace it with one of your own, the player who displaces an opponent’s tradesman must move 1 (for a trader) or 2 (for a merchant) of their tradesmen from their personal supply to the general stock. The opponent who has been displaced gets the same number of tradesmen from the general stock and places them on the game board.
-- Merchants are almost always treated like traders, except in the following 3 situations: - when displacing, they cost/transfer more tradesmen, - trading post spaces require specific tradesmen: square spaces require traders and round spaces require merchants, - You can only use merchants for the special prestige points in Coellen. Tips for Good Play
-- In the first couple of games, we recommend playing with 3 or 4 players in order not to exceed the specified playing time. Experienced players can finish a game in about 90 minutes even with 5 players.
-- We recommend players count their individual actions out loud to avoid confusion.
-- This game offers many different ways to score prestige points. After you play your first game you’ll gain a stronger understanding for the diverse ways they can be used.
+The moved pieces may belong to any number of opponents and may be moved between different trade routes. Each piece is moved separately, so a vacated post may be occupied by another moved piece.
 
-Additional Material for The Hanseatic League Game Board for Experienced MerchantsOnce you have gained some experience with Hansa Teutonica, you can add the following two additional elements – Mission Cards and Emperor’s Favour – either individually or together using The Hanseatic League game board.
+You may not displace a Tradesman while resolving this marker.
 
 ### Mission Cards
 
-In the Hanseatic League of Cities, some cities enjoyed a greater reputation than others among the merchants striving for power and political influence. That is why merchants compete to establish the most trading posts in a manageable number of cities in order to gain the most prestige for themselves. During Game Setup, shuffle the 9 Mission cards and deal each player 1 card facedown. Keep this card secret from your opponents until the end of the game. Return any remaining cards to the box, you won’t need them for this game. At the end of the game, you gain 1 prestige point for each city listed on your Mission card in which you have established at least 1 trading post (i.e., a maximum of 3 prestige points). If you also manage to establish the most trading posts in all 3 cities on your Mission card (or if there is a tie, the highest valued one, furthest to the right), you will receive an additional bonus of 5 prestige points. In total, your Mission card can earn you a total of 8 prestige points at the end of the game. 1 2 3 There are 3 cities named on each card. The names of the first two cities appear on 2 other cards 1 (opponents could also have them on their card). The third city is only represented on this card 2. The coin icons on the small illustration below show the location of the 3 cities on the game map 3.
+During setup, shuffle the 9 Mission Cards and deal 1 facedown to each player. Keep it secret until final scoring and return the remaining cards to the box.
+
+During final scoring:
+
+- Gain 1 prestige point for each listed city containing at least 1 of your Kontors, up to 3 points.
+- Gain an additional 5 prestige points if you control all 3 listed cities.
+
+City control is determined normally: most Kontors, with ties broken by the furthest-right Kontor.
+
+A Mission Card can score up to 8 prestige points.
 
 ### Emperor’s Favour
 
-Merchants in the Hanseatic League steadily gained power and political influence through brisk trade and expansion. They purchased special permits and privileges directly from the emperor for large sums of money and were legally subordinate to him alone. This meant Hansa members were free from paying taxes to regional princes and dukes. During Game Setup, mix the Emperor’s Favour tiles together facedown. Randomly select a number of tiles equal to the player number and place them faceup next to the game board. These create the display of tiles you can buy this game. Return all remaining tiles back to the box, you won’t need them for this game. At the beginning of your turn, you may choose to forego all of your actions for that turn in order to acquire 1 Emperor’s Favour tile by flipping 2 of your unused bonus tokens over and placing them both to the right of your writing desk (they will still count at the end of the game when calculating the prestige points for bonus tokens). You may only acquire 1 Emperor’s Favor tile per turn. Place the acquired Emperor’s Favour tile faceup in front of you. Four of these tiles grant you permanent advantages during the game and two earn you additional prestige points at the end of the game: During the game Whenever you are displaced, you can place your dis-placed tradesmen on free connection points of trade routes of your choice instead of on adjacent trade routes. From now on, you have 1 additional action available each turn. (This makes it possible to perform more than 5 actions per turn.) Whenever another player carries out the Income action, you may take 1 tradesman from the general stock and place it in your personal supply. Whenever one of your traders is displaced, you receive 2 tradesmen from the general stock instead of 1. At the end of the game At the end of the game, you gain 2 additional prestige points for each city in which you have established the most trading posts (i.e. a total of 4 instead of 2). At the end of the game, you gain 7 prestige points instead of 4 for each fully developed ability.
+During setup, randomly place a number of Emperor’s Favour tiles faceup equal to the number of players. Return the remaining tiles to the box.
+
+At the beginning of your turn, you may forgo all actions to acquire 1 available tile by turning 2 unused bonus markers facedown. They can no longer be used, but still count during final scoring.
+
+You may acquire only 1 Emperor’s Favour tile per turn. Each tile grants one permanent effect.
+
+#### During-the-Game Tiles
+
+Four tiles each grant one of the following effects:
+
+- When displaced, you may place the displaced piece and any additional Tradesmen on any free route posts instead of following the normal adjacency restrictions.
+- Gain 1 additional action each turn, even if this increases your total above 5.
+- Whenever another player performs **Income**, take 1 Tradesman from the general stock into your personal supply.
+- When one of your Traders is displaced, you may place 2 additional Tradesmen instead of 1.
+
+#### Final-Scoring Tiles
+
+Two tiles each grant one of the following effects:
+
+- Gain 4 prestige points, rather than 2, for each city you control.
+- Gain 7 prestige points, rather than 4, for each fully developed ability.
 
 ## Other Game Boards
 
-As an alternative to playing with The Hanseatic League, you can also use either of the other two game boards included: The Eastern Hanseatic League or Britannia.
-
-Both of these game boards include new elements and therefore play differently.
+The **Eastern Hanseatic League** and **Britannia** boards use the base rules with the changes described in their sections.
 
 ### The Eastern Hanseatic League
 
-The Hanseatic League expands into the eastern regions of Europe. New connections must be made; now maritime routes requiring merchants play an important role. Cities that don’t belong to the Hanseatic League want to create their own networks. You must meet these new challenges to confirm your reputation as a accomplished merchant. Game Setup for The Eastern Hanseatice League is the same as for The Hanseatic League, and is suitable for 3-5 players. To establish an East- West Connection on this map, you must create a continuous chain of trading posts from Lübeck to Danzig (as indicated by the red banners). You can gain special prestige points in Königsberg. All rules for The Hanseatic League apply unchanged. The Eastern Hanseatic League has the following new elements:
+Setup is the same as for the Hanseatic League board. This board supports 3–5 players.
+
+The following changes apply:
+
+- The East-West Connection runs from Lübeck to Danzig.
+- Special prestige points are available in Königsberg.
+- Maritime routes and other board-specific elements use the rules below.
+
+All other base-game rules remain unchanged.
 
 #### The City of Waren
 
-This city provides a choice of 2 abilities to develop. If you create 1 of the 3 trade routes for Waren, you can either develop 1 of the 2 abilities (Actions or Bank) or you can establish 1 trading post according to the rules for (yellow and) green cities (see next paragraph).
+When establishing any trade route adjacent to Waren, you may:
 
-#### (Yellow and) Green Cities
+- Develop **Actions**.
+- Develop **Bank**.
+- Establish a Kontor in Waren, if permitted by the rules for Yellow and Green Cities.
 
-The cities of Belgard, Waren, and Dresden are not Hanseatic cities and are identified by a green (Belgard) or yellow and green (Waren, Dresden) banner. You cannot establish a trading post in these cities as usual; you can only establish a trading post there if you either:
-- use the permanent bonus marker Establish a Trading Post in a (Yellow and) Green City when creating a maritime trade route (see explanation below),
-- use the bonus marker Additional Trading Post when creating a trade route adjacent to a (yellow and) green city. With this you can place 1 tradesman from the trade route to establish a trading post in a (yellow and) green city. If there are already 1 or more tradesmen in this city, you must add your additional tradesman to the left of all other tradesmen there to establish your trading post. As soon as you have placed 1 tradesman in a (yellow and) green city to establish a trading post, it counts as fully occupied. Advance the Completed Cities marker on its track 1 space. Treat the (yellow and) green cities like any other Hanseatic city when awarding prestige points (when creating a trade route and at the end of the game when evaluating categories E) and F)).
+#### Yellow and Green Cities
+
+Belgard, Waren, and Dresden are Yellow and/or Green Cities. Kontors may be established there only by one of the following methods:
+
+- **Additional Trading Post:** When establishing an adjacent trade route, place 1 Tradesman from that route to the left of all existing Kontors. If the city is empty, it becomes the first Kontor.
+- **Establish a Trading Post in a Yellow or Green City:** After establishing the corresponding maritime trade route, place 1 Tradesman from your personal supply in any Yellow or Green City, to the right of all existing Kontors.
+
+A Yellow or Green City becomes complete when its first Kontor is established. Advance the Completed Cities track by 1.
+
+Kontors in these cities count normally for city control, city scoring, and network scoring.
 
 #### Maritime Trade Routes
 
-Maritime trade routes have two special features: 1. You need 1 or 2 merchants to create a maritime sea route. (These connection points are depicted as a boat instead of a house and only have circles for merchants and no squares for traders.) 2. After creating a maritime trade route, you immediately gain use of a permanent bonus marker (see below). You cannot place a bonus marker on maritime trade routes as there is already a permanent bonus marker there. Note: In addition, maritime trade routes are the shortest route for creating the East-West Connection between the cities of Lübeck and Danzig.
+Maritime trade routes:
+
+- Require Merchants on all route posts; Traders may not occupy them.
+- Grant access to the printed permanent bonus marker when established.
+- Cannot receive normal bonus markers.
+
+They may also provide the shortest East-West Connection between Lübeck and Danzig.
 
 #### Permanent Bonus Markers
 
-One permanent bonus marker is assigned to each of the 4 maritime trade routes. Whenever you create one of these maritime trade routes, you can use the permanent bonus marker for the corresponding route immediately at the end of this action and only then. Note: Since you can’t take permanent bonus markers, you won’t receive any prestige points for them at the end of the game. Explanations of the 4 permanent bonus markers: Move any 2 tradesmen of your choice: If you create this maritime trade route, you may move 2 tradesmen of your choice on trade routes (your own and/or opponents’). Exchanging places with the two tradesmen is permitted. Develop the Privilege ability: If you create this maritime trade route, you may develop your Privilege ability following the usual rules. Establish a Trading Post in a (yellow and) green City: If you create this maritime trading route, you may establish a trading post by placing 1 tradesman from your personal supply in a (yellow and) green city of your choice. Important: You must always place your tradesman to the right of any other tradesmen that may already be in the city. Place 2 Tradesmen: If you create this maritime trade route, you can use 2 tradesmen from this trade route to place on free connection points on the board – instead of returning them to the general stock.
+Each maritime trade route has a permanent bonus marker. After establishing the route, you may resolve its marker immediately after completing the **Establish a Trade Route** action. It cannot be used later.
+
+Permanent bonus markers are not collected and do not count during final scoring.
+
+The four effects are:
+
+- **Move Any 2 Tradesmen:** Move 2 Tradesmen belonging to any players between route posts. The two pieces may exchange positions.
+- **Develop Privilege:** Develop your **Privilege** ability normally.
+- **Establish a Kontor in a Yellow or Green City:** Place 1 Tradesman from your personal supply in any Yellow or Green City, to the right of all existing Kontors.
+- **Place 2 Tradesmen:** Instead of returning them to the general stock, move 2 Tradesmen from the established maritime route to free route posts.
 
 ## Britannia
 
-Game Setup for Britannia is the same as for The Hanseatic League. The 3-player game map only includes England and Wales. The 4 to 5-player map on the other side adds Scotland. Trade routes are highlighted in white for England, brown for Wales, and blue for Scotland. The city names are also highlighted with brown in Wales and blue in Scotland. The division into these 3 countries is important to game play, as is shown below. To establish an East-West Connection on this map, you must create a continuous chain of trading posts from Oxford to York (as indicated by the red banners and red score shield). You can gain special prestige points in Plymouth. All rules for The Hanseatic League apply unchanged. with the following exceptions:
-- The game ends immediately at the end of action E) Create 1 Trade Route once you have established trading posts in all spaces in an 8th city (instead of 10th).
-- The placement of new bonus markers is subject to 2 additional restrictions, however, the basic rule remains unchanged. - You may not place bonus markers on maritime trade routes with a permanent bonus marker. - Likewise, you may not place bonus markers on trade routes in Wales (highlighted in brown) and Scotland (highlighted in blue). The Britannia game board has the following new elements: The countries of England, Wales, and Scotland Within England, you can perform the actions B) Place 1 tradesman and C) Displace 1 of your opponent’s tradesmen and replace it with 1 of your own according to the usual rules. However, in Wales and Scotland, you need permission to perform these 2 actions:
+Setup follows the Hanseatic League board.
 
-#### Cardiff (Wales)
+- The 3-player side includes England and Wales.
+- The 4–5-player side also includes Scotland.
+- England routes are white, Wales routes brown, and Scotland routes blue.
+- The East-West Connection runs from Oxford to York.
+- Special prestige points are available in Plymouth.
 
-If you have the highest-valued trading post in Cardiff – furthest to the right – you have permission to perform 1 of the following 2 actions once per turn in Wales:
+All base-game rules apply except:
 
-**Either:**
+- The game ends after the current **Establish a Trade Route** action when the eighth city is completed.
+- Replacement bonus markers cannot be placed:
+  - On maritime trade routes with permanent bonus markers.
+  - On routes in Wales or Scotland.
 
-- B) Place 1 tradesman
+### England, Wales, and Scotland
 
-**Or:**
+In England, **Place 1 Tradesman** and **Displace an Opponent’s Tradesman** follow the normal rules.
 
-- C) Displace 1 of your opponent’s tradesmen and replace it with 1 of your own.
+Performing either action in Wales or Scotland requires permission, as described below.
 
-#### Carlisle (Scotland, 4–5 Players)
+#### Regional Permission
 
-If you have the highest-valued trading post in Carlisle – furthest to the right – you have permission to perform 1 of the following 2 actions once per turn in Scotland:
+If you occupy the furthest-right Kontor in:
 
-**Either:**
+- **Cardiff**, you may perform either **Place 1 Tradesman** or **Displace an Opponent’s Tradesman** once per turn in Wales.
+- **Carlisle** (4–5 players), you may perform either **Place 1 Tradesman** or **Displace an Opponent’s Tradesman** once per turn in Scotland.
 
-- B) Place 1 tradesman
+#### London
 
-**Or:**
+If you occupy the furthest-right Kontor in **London**, you may perform either **Place 1 Tradesman** or **Displace an Opponent’s Tradesman** once per turn in Wales or, in a 4–5 player game, Scotland.
 
-- C) Displace 1 of your opponent’s tradesmen and replace it with 1 of your own.
+London also allows development of **Privilege**.
 
-#### London (England)
+Permissions from Cardiff, Carlisle, and London are separate and may be used during the same turn. For example, controlling Cardiff and London permits two qualifying actions outside England.
 
-If you have the highest-valued trading post in London – furthest to the right – you can perform 1 of the following 2 actions once per turn in Wales or (when playing with 4-5) in Scotland:
+No permission is required to perform these actions in England.
 
-**Either:**
+#### Displacement Placement Restrictions
 
-- B) Place 1 tradesman
+A Tradesman displaced in Wales or Scotland may be relocated only to adjacent routes in:
 
-**Or:**
+- Its country of origin.
+- England.
 
-- C) Displace 1 of your opponent’s tradesmen and replace it with 1 of your own. Note: You can develop your Privilege ability in London – that’s why the city banner has 2 colors on the 3-player map and 3 colors in the 4 to 5-player map. Remarks: Each of the 3 cities gives you permission to perform 1 of the 2 actions once per turn. Therefore, if you have the highest-valued trading post in Cardiff and London, you have permission to perform this action outside England twice on your turn – (either twice in Wales or once in Wales and once in Scotland). You can always perform these actions in England regardless of permissions in Wales and/or Scotland. Tradesmen displaced in action C) Displace 1 of your opponent’s tradesmen and replace it with 1 of your own may only be re-placed on connection points of adjacent trade routes of the country of origin or England. You do not need any special permission for action D) Move your tradesmen on the board, but you must observe the following guidelines:
-- You can only move tradesmen in England to free connection points in England.
-- You can only move tradesmen in Wales to free connection points in Wales or England.
-- You can only move tradesmen in Scotland to free connection points in Scotland or England. You do not need special permission for the action E) Create 1 Trade Route in either Wales or Scotland. For this action, it doesn’t matter what color the trade route is (that is, which country it’s assigned to) or in where each of the two cites on each end of the trade route are located. For example, you could create a trade route between Conway and Chester, or between Chester and Carlisle, or between Chester and Hereford, to establish a trading post in Chester or to develop the Actions ability. Limitations for the bonus marker Move 3 Tradesmen: If you use this bonus marker, you may only displace tradesmen within one country (e.g. a tradesman from England must still be in England after the action is completed). An exchange of positions (within the same country) is still permitted. Maritime Trade Routes Maritime trade routes have 2 special features: 1. You need 1 or 2 merchants to create a maritime sea route. (These connection points are depicted as a boat instead of a house and only have circles for merchants and no squares for traders.) 2. After creating a maritime trade route, you immediately gain use of a permanent bonus marker on 2 of the maritime trade routes on the 4 to 5-player map and on 3 of the maritime trade routes on the 3-player map (see below).
+Normal outward expansion applies if all eligible adjacent route posts are occupied.
 
-Permanent Bonus Markers One permanent bonus marker is assigned to the 2 maritime trade routes in southeast England (on both maps) as well as the maritime trade route between the Isle of Man and Carlisle on the 3-player map. Whenever you create one of these maritime trade routes, you can use the permanent bonus marker for the corresponding route immediately at the end of this action and only then. Note 1: You cannot place a bonus marker on these routes - there is already a permanent bonus marker there. Note 2: Since you can’t take permanent bonus markers, you won’t receive any prestige points for them at the end of the game. Explanations of the 2 types of permanent bonus markers: Move any 2 tradesmen of your choice If you create this maritime trade route, you may move 2 tradesmen of your choice on the game board (your own and/or opponents’). You can only move a tradesman within one country (for example, a trader in England must still be in England after the move). Exchanging places with the two tradesmen is permitted. Place 2 Tradesmen You may take 2 of your tradesmen from the general stock and place them on free connection points in Wales and/or Scotland. (If there are none in the general stock, you can take them from your personal supply. If there are none in your personal supply, you can take them from the game board).
+#### Move Your Tradesmen
+
+No regional permission is required, but each Tradesman must remain within its permitted countries:
+
+- From England: move only to England.
+- From Wales: move to Wales or England.
+- From Scotland: move to Scotland or England.
+
+#### Establish a Trade Route
+
+No regional permission is required to establish a trade route in Wales or Scotland.
+
+The route’s country and the countries containing its endpoint cities do not restrict this action.
+
+#### Move 3 Tradesmen
+
+Each moved Tradesman must remain within its current country. Tradesmen may exchange positions only if both remain in that country.
+
+#### Maritime Trade Routes
+
+Maritime route posts require Merchants; Traders may not occupy them.
+
+Some maritime routes grant access to a permanent bonus marker after the route is established:
+
+- Two routes in southeast England on both sides of the board.
+- The Isle of Man–Carlisle route on the 3-player side.
+
+Routes with permanent bonus markers cannot receive normal bonus markers.
+
+#### Permanent Bonus Markers
+
+After establishing a qualifying maritime route, you may resolve its permanent bonus marker immediately after completing the **Establish a Trade Route** action. It cannot be used later.
+
+Permanent bonus markers are not collected and do not count during final scoring.
+
+- **Move Any 2 Tradesmen:** Move 2 Tradesmen belonging to any players. Each must remain within its current country. The two pieces may exchange positions.
+- **Place 2 Tradesmen:** Place 2 of your Tradesmen on free route posts in Wales and/or Scotland. Take them from the general stock, then your personal supply if necessary, then from route posts if neither contains enough.
 
 #### Scoring Wales and Scotland
 
-Whoever controls the most cities in Wales at the end of the game gains 7 prestige points, second place gains 4, and third place gains 2 (as shown on the brown score shield). You control a city if you have established the most trading posts there (if there is a tie, as usual, the highest valued one wins – furthest to the right). If there is a tie for most cities controlled, the tied players count their trading posts in Wales. The tied player with the most trading posts wins the tie. If there is still a tie, divide the prestige points for this position and the next lower position by the number of players in the tie. Round the result down, if necessary. Example: 2 players each control 2 cities and have the same number of trading posts in Wales. Both players gain (7 + 4) / 2 = 5 prestige points. The player that controls the next most cities gain only 2 prestige points for third place. After players who controlled cities in Wales have received their awards, any players who didn’t control a city in Wales may qualify for any remaining prestige points. Compare the number of trading posts each of these players have in Wales. The player who has the most trading posts gains the higher number of prestige points remaining, etc. Players without any trading posts in Wales can’t earn prestige points there. If you use the scorepad, add these points to the row for Prestige Points for Cities. Perform an additional scoring for Scotland in the same way when playing on the 4 to 5-player board (as shown on the blue score shield). The Isle of Man belongs to both Wales and Scotland (refer to the banner colors) and therefore counts for scoring both countries.
+At final scoring, rank players in Wales by:
+
+1. Number of cities controlled.
+2. If tied, number of Kontors in Wales.
+
+Award:
+
+- **1st:** 7 prestige points
+- **2nd:** 4 prestige points
+- **3rd:** 2 prestige points
+
+If players remain tied, combine the points for the tied position and the corresponding lower positions, divide them equally, and round down.
+
+After ranking all players who control at least one city, award any remaining positions to players with Kontors in Wales, ranked by number of Kontors. A player with no Kontors in Wales cannot score.
+
+On the 4–5 player board, score Scotland separately using the same rules.
+
+The Isle of Man counts as part of both Wales and Scotland.
 
 ## Rules Summary
 
 ### Game Setup
 
-Choose a game board. Take the 3 start bonus markers (marked with gold) and randomly place one on each of the 3 Taverns pointing to their assigned trade route. Place the black wooden cube on field 0 of the Completed Cities track. Then, everyone chooses a color and takes the corresponding writing desk and places 15 traders and 3 merchants in their respective spaces. Place your remaining tradesmen (traders and merchants) in your personal supply and the general stock as follows:
+1. Choose a game board.
+2. Randomly place the 3 gold start bonus markers on the Taverns, with each arrow pointing to its assigned trade route.
+3. Place the Completed Cities marker on space 0.
+4. Each player chooses a color and sets up their Writing Desk with:
+   - 15 Traders
+   - 3 Merchants
+5. Give each player 1 Merchant and the following number of Traders in their personal supply. Place the remaining Traders in their general stock:
 
 | Player order | Personal supply | General stock |
 | --- | ---: | ---: |
-| Start player | 5 traders + 1 merchant | 6 traders |
-| Player 2 | 6 traders + 1 merchant | 5 traders |
-| Player 3 | 7 traders + 1 merchant | 4 traders |
-| Player 4 | 8 traders + 1 merchant | 3 traders |
-| Player 5 | 9 traders + 1 merchant | 2 traders |
+| Start player | 5 Traders + 1 Merchant | 6 Traders |
+| Player 2 | 6 Traders + 1 Merchant | 5 Traders |
+| Player 3 | 7 Traders + 1 Merchant | 4 Traders |
+| Player 4 | 8 Traders + 1 Merchant | 3 Traders |
+| Player 5 | 9 Traders + 1 Merchant | 2 Traders |
 
 ### Game Play
 
 #### A) Income
 
-With this action, depending on your development of this ability, you can hire up to 3, 5, 7 or all of your tradesmen in the general stock to transfer them to your personal supply (all if you have uncovered the C).
+Move up to your current **Bank** value (3, 5, 7, or all) of your Tradesmen from the general stock to your personal supply.
 
 #### B) Place 1 Tradesman
 
-With this action you can place 1 tradesman from your personal supply in a free connection point on a trade route (a connection point not already occupied by you or an opponent).
+Place 1 Tradesman from your personal supply on any free route post.
 
 #### C) Displace an Opponent’s Tradesman
 
-With this action you may displace one of your opponents’ tradesmen from a connection point on a trade route and replace it with 1 of your own tradesmen from your personal supply. If you displace a trader, you must also return 1 additional tradesman from your personal supply back to the general stock as a cost. If you displace a merchant, you must return 2 tradesmen. Your opponent must immediately place their displaced trader plus 1 additional tradesman from the general stock, or their displaced merchant plus 2 additional tradesmen from the general stock, on any free connection points on adjacent trade routes of their choice.
+Replace an opponent’s Tradesman on a route post with 1 from your personal supply.
+
+Return additional Tradesmen from your personal supply to the general stock:
+
+- **Displaced Trader:** 1
+- **Displaced Merchant:** 2
+
+The opponent immediately relocates the displaced piece and may add:
+
+- **Displaced Trader:** 1 additional Tradesman
+- **Displaced Merchant:** 2 additional Tradesmen
+
+Place them on free posts on adjacent trade routes.
 
 #### D) Move Your Tradesmen
 
-With this action, depending on the development level of your Book of Knowledge ability, you can move 2 to 5 of your own tradesmen from connection points on 1 or more trade routes and place them on free connection points on 1 or more trade routes.
+Move up to your current **Book of Knowledge** value (2–5) of your Tradesmen to free route posts.
 
-#### E) Create a Trade Route
+#### E) Establish a Trade Route
 
-You can only perform this action if all the connection points on a trade route between 2 cities are occupied by your own tradesmen. When you perform this action, carry out the following steps in order – steps 1) and 2) must always be done (as far as possible) and then 1 of the 3 alternatives in step 3 may also be done, if possible:
+You may perform this action when all posts on a trade route are occupied by your Tradesmen.
+
+Resolve in order:
+
+1. **Score Prestige Points**
+2. **Take Bonus Marker**, if present
+3. Choose up to one:
+   - **Establish a Kontor**
+   - **Develop an Ability**
+   - **Score Special Prestige Points**
 
 ##### 1) Score Prestige Points
 
-The player who has the most trading posts in each of the 2 cities at either end of the trade route controls the city and immediately gains 1 prestige point. (In the event of a tie, the tied player who occupies the higher valued trading post – furthest to the right – controls the city).
+The player who controls each city at the route’s ends gains 1 prestige point per city.
+
+The player with the most Kontors controls a city. If tied, the tied player with the furthest-right Kontor controls it.
 
 ##### 2) Take Bonus Marker
 
-If there is a bonus marker next to the newly created trade route, take it and place it faceup next to the left side of your writing desk. You can use this bonus marker once at any time during any of your turns after completing this action. Using a bonus marker does not cost you an action. Immediately take 1 new bonus marker from the supply. You must place this bonus marker on the game board at the end of your turn. The following 3 restrictions apply:
-- The trade route can’t already have a bonus marker.
-- There can’t be any tradesmen on this trade route.
-- At least 1 trading post space must be empty in 1 of the 2 cities at either end of the trade route.
+If the established trade route has a bonus marker, take it. It may be used after the current **Establish a Trade Route** action, during this or a later turn, without spending an action.
 
-##### 3a) Establish Trading Post
+Draw 1 replacement bonus marker and place it at the end of your turn beside a trade route that:
 
-Use 1 tradesman from this route to establish a trading post in the leftmost empty trading post space in one of the two cities on either end of the trade route.
+- Has no bonus marker.
+- Contains no Tradesmen.
+- Has an empty Kontor in at least one endpoint city.
+
+##### 3a) Establish a Kontor
+
+Use 1 Tradesman from the route to establish the leftmost vacant Kontor in either endpoint city, following the normal Privilege and piece-shape requirements.
 
 ##### East-West Connection
 
-If this trading post creates a continuous chain of your trading posts from Stendal to Arnheim / from Lübeck to Danzing / from Oxford to York (with red banners), you have established an East-West Connection and immediately gain prestige points as follows: 7 prestige points if you are the first to establish the connection, 4 points if you are second, and 2 points if you are third.
+If the new Kontor completes your continuous network between the board’s marked cities, gain:
 
-##### 3b) Develop Ability
+- **7 prestige points** if first
+- **4 prestige points** if second
+- **2 prestige points** if third
 
-If one of the two adjacent cities has a pictogram of one of the 5 abilities, you can develop the corresponding ability.
+The required cities are:
 
-##### 3c) Special Prestige Points
+- Hanseatic League: Stendal–Arnheim
+- Eastern Hanseatic League: Lübeck–Danzig
+- Britannia: Oxford–York
 
-You can place a merchant in 1 of the 4 spaces for special end game prestige points in Coellen on The Hanseatic League map, on Königsberg on The Eastern Hanseatic League map, and on Plymouth on the Britannia map.
+##### 3b) Develop an Ability
+
+If either endpoint city shows an ability pictogram, develop the corresponding ability.
+
+##### 3c) Score Special Prestige Points
+
+Place a Merchant from the route on an eligible vacant special prestige point space:
+
+- Coellen on the Hanseatic League board
+- Königsberg on the Eastern Hanseatic League board
+- Plymouth on the Britannia board
+
+Your **Privilege** must permit the selected space.
 
 ### End of Game
 
-The game’s end can be triggered in 3 ways. The active player completes their action, but any remaining actions are lost and the game ends immediately - there are no more turns for any player.
-- A player scores 20 or more prestige points.
-- The active player cannot take a replacement bonus marker because the supply is empty.
-- The active player establishes a trading post that completes the tenth city on the Completed Cities track (or the 8th city on the Britannia map). See the scorepad for summary of prestige points gained at the end of the game.
+The game ends when one of these conditions is triggered:
+
+- Any player reaches 20 or more prestige points.
+- A replacement bonus marker must be drawn, but the supply is empty.
+- The tenth city is completed, or the eighth city on the Britannia board.
+
+Complete the current **Establish a Trade Route** action, then end the game immediately. The active player loses any remaining actions, and no other player takes another turn.
