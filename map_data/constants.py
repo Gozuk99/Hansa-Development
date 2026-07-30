@@ -1,4 +1,3 @@
-
 CIRCLE_RADIUS = 20
 SQUARE_SIZE = 26
 BUFFER = 10  # Buffer around the rectangle
@@ -6,7 +5,7 @@ SPACING = 10  # Increased spacing between the shapes
 
 # Constants for input and output sizes
 INPUT_SIZE = 4445
-OUTPUT_SIZE = 620
+OUTPUT_SIZE = 768
 
 MAX_CITIES = 30
 MAX_ROUTES = 40
@@ -33,9 +32,9 @@ COLOR_NAMES = {
     BLACK: "BLACK",
     BLACKISH_BROWN: "BLACKISH_BROWN",
     BLUE: "BLUE",
-    DARK_BLUE : "DARK_BLUE",
-    DARK_GREEN : "DARK_GREEN",
-    DARK_RED : "DARK_RED",
+    DARK_BLUE: "DARK_BLUE",
+    DARK_GREEN: "DARK_GREEN",
+    DARK_RED: "DARK_RED",
     GREEN: "GREEN",
     GREY: "GREY",
     ORANGE: "ORANGE",
@@ -44,7 +43,7 @@ COLOR_NAMES = {
     RED: "RED",
     TAN: "TAN",
     WHITE: "WHITE",
-    YELLOW: "YELLOW"
+    YELLOW: "YELLOW",
 }
 
 CITY_KEYS_MAX_VALUES = [1, 2, 2, 3, 4]
@@ -59,13 +58,12 @@ UPGRADE_METHODS_MAP = {
     "actions": "upgrade_actions",
     "privilege": "upgrade_privilege",
     "book": "upgrade_book",
-    "bank": "upgrade_bank"
+    "bank": "upgrade_bank",
 }
 UPGRADE_MAX_VALUES = {
-    'keys': CITY_KEYS_MAX_VALUES[-1],
-    'privilege': PRIVILEGE_COLORS[-1],
-    'book': BOOK_OF_KNOWLEDGE_MAX_VALUES[-1],
-    'actions': ACTIONS_MAX_VALUES[-1],
-    'bank': BANK_MAX_VALUES[-1]
+    "keys": CITY_KEYS_MAX_VALUES[-1],
+    "privilege": PRIVILEGE_COLORS[-1],
+    "book": BOOK_OF_KNOWLEDGE_MAX_VALUES[-1],
+    "actions": ACTIONS_MAX_VALUES[-1],
+    "bank": BANK_MAX_VALUES[-1],
 }
-

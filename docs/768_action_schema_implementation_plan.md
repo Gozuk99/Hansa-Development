@@ -7,7 +7,7 @@ Replace the current 620-entry, partially contextual action layout with a stable,
 The finished system must have:
 
 - exactly 768 action indices, `0–767`;
-- one documented meaning per active index;
+- one complete documented action-family meaning per active index;
 - unused indices permanently masked;
 - no unrelated meanings sharing one index;
 - one centralized action registry;
@@ -31,17 +31,13 @@ The rules engine should work with meaningful action objects rather than raw inte
 Examples:
 
 ```python
-PlacePost(post_id=12, shape=PieceShape.MERCHANT)
+PlaceFromPersonalSupply(post_id="route-7-post-2", shape=PieceShape.MERCHANT)
 
-CompleteRoute(
-    route_id=7,
-    outcome=RouteOutcome.OFFICE,
-    city_id=3,
-)
+ClaimRouteOffice(route_id="route-7", city_id="lubeck")
 
-SelectDisplacementPiece(
-    source=PieceSource.GENERAL_STOCK,
+PlaceOptionalDisplacementPiece(
     shape=PieceShape.TRADER,
+    destination_post_id="route-12-post-1",
 )
 
 FinishDisplacement()
@@ -61,13 +57,13 @@ Example interface:
 
 ```python
 class ActionCodec:
-    def encode(self, action: GameAction) -> int:
+    def encode(self, action: GameAction, context: ActionCodecContext) -> int:
         ...
 
-    def decode(self, index: int, state: GameState) -> GameAction:
+    def decode(self, index: int, context: ActionCodecContext) -> GameAction:
         ...
 
-    def describe(self, index: int) -> str:
+    def describe(self, index: int, context: ActionCodecContext) -> str:
         ...
 ```
 
@@ -86,8 +82,9 @@ Conceptually:
 ```python
 mask = [False] * ACTION_SPACE_SIZE
 
+context = action_codec.context_for(game_state)
 for action in game_state.get_legal_actions():
-    index = action_codec.encode(action)
+    index = action_codec.encode(action, context)
     mask[index] = True
 ```
 
@@ -99,26 +96,24 @@ The mask should not independently recreate game legality wherever that can be av
 
 ```python
 ACTION_SPACE_SIZE = 768
-ACTION_SCHEMA_VERSION = 1
+ACTION_SCHEMA_VERSION = 2
 ```
 
-The exact allocation must be finalized only after the current 620-entry action inventory is complete.
-
-A provisional range layout is:
+The completed inventory and Hansa decision-boundary review produced this
+allocation:
 
 | Range | Capacity | Family |
 |---|---:|---|
-| `0–255` | 256 | Post placement and post selection |
-| `256–575` | 320 | Route completion and route outcomes |
-| `576–607` | 32 | Income and piece selection |
-| `608–639` | 32 | Bonus-marker activation |
-| `640–671` | 32 | Tiles, payments, and marker choices |
-| `672–703` | 32 | City and office choices |
-| `704–719` | 16 | Upgrade and ability choices |
-| `720–751` | 32 | Displacement-specific choices |
-| `752–767` | 16 | Finish, decline, pass, and reserved controls |
-
-This table is provisional. Do not hard-code it before completing the inventory.
+| `0–351` | 352 | Complete position and displacement decisions |
+| `352–511` | 160 | Complete route outcomes and route targets |
+| `512–557` | 46 | Complete city-context decisions |
+| `558–568` | 11 | Income and piece-composition decisions |
+| `569–577` | 9 | Bonus-marker activation |
+| `578–609` | 32 | Complete opponent/used-marker exchange decisions |
+| `610–617` | 8 | Tiles, payments, and Income Favour |
+| `618–622` | 5 | Ability choices |
+| `623–625` | 3 | Workflow controls |
+| `626–767` | 142 | Reserved |
 
 ---
 
@@ -135,9 +130,10 @@ Codex must follow these rules throughout the work:
 - Run targeted tests during development and full validation at milestone completion.
 - Keep every commit focused on the current milestone.
 - Do not begin AI training changes until the final audit passes.
-- Do not reuse one index for unrelated actions, even when they occur in different phases.
+- Contextual reuse is permitted only inside one documented semantic family
+  across mutually exclusive authoritative workflows.
 - Reserved indices must always be masked.
-- Any incompatible schema change after version 1 must require a schema version bump.
+- Any incompatible schema change after version 2 must require a schema version bump.
 
 ---
 
@@ -190,14 +186,16 @@ The document must include:
 
 ## Goal
 
-Create the authoritative version-1 mapping using the completed inventory.
+Create the authoritative atomic mapping using the completed inventory and
+Hansa decision-boundary review. Version 1 was superseded before activation;
+the corrected mapping is version 2.
 
 ## Deliverables
 
 Create:
 
 ```text
-docs/action-schema-v1.md
+docs/action-schema-v2.md
 ```
 
 Create or designate one central schema module, for example:
@@ -210,7 +208,7 @@ game/action_schema.py
 
 ```python
 ACTION_SPACE_SIZE = 768
-ACTION_SCHEMA_VERSION = 1
+ACTION_SCHEMA_VERSION = 2
 ```
 
 ## Suggested range type
@@ -232,9 +230,11 @@ class ActionRange:
 
 ## Requirements
 
-- Every active action must have one stable documented meaning.
-- No unrelated contextual reuse may remain in the proposed mapping.
-- Every family must include reserved capacity.
+- Every enabled index must identify one complete, executable Hansa decision.
+- UI selection fragments must not be engine actions.
+- Related mutually exclusive workflows may share a state-aware family range.
+- The engine owns legality; the codec only translates complete legal actions.
+- The schema must retain explicit global reserved capacity.
 - All ranges must fit within `0–767`.
 - No ranges may overlap.
 - Reserved indices must be explicitly identified.
@@ -251,10 +251,10 @@ class ActionRange:
 ## Acceptance criteria
 
 - `ACTION_SPACE_SIZE == 768`.
-- `ACTION_SCHEMA_VERSION == 1`.
+- `ACTION_SCHEMA_VERSION == 2`.
 - Every range is centrally defined.
 - No overlap exists.
-- No active index has more than one semantic meaning.
+- Identical state revisions and indices decode to identical complete actions.
 - All reserved indices are documented.
 - The schema document and code agree exactly.
 - No engine behavior changes yet.
@@ -284,20 +284,16 @@ Add:
 
 Include structured representations for:
 
-- post placement;
-- post selection;
-- route completion;
-- office choice;
-- city choice;
+- complete post placement, pickup, movement, and displacement decisions;
+- complete route outcomes and route targets;
+- complete office and city-effect decisions;
 - income choice;
-- piece-source choice;
+- complete optional-piece placement;
 - bonus-marker activation;
 - tile choice;
 - payment choice;
 - upgrade choice;
 - ability choice;
-- displacement source;
-- displacement shape;
 - displacement board fallback;
 - finish displacement;
 - end turn;
@@ -309,13 +305,13 @@ Include structured representations for:
 
 ```python
 class ActionCodec:
-    def encode(self, action: GameAction) -> int:
+    def encode(self, action: GameAction, context: ActionCodecContext) -> int:
         ...
 
-    def decode(self, index: int, state: GameState) -> GameAction:
+    def decode(self, index: int, context: ActionCodecContext) -> GameAction:
         ...
 
-    def describe(self, index: int) -> str:
+    def describe(self, index: int, context: ActionCodecContext) -> str:
         ...
 
     def is_reserved(self, index: int) -> bool:
@@ -325,7 +321,7 @@ class ActionCodec:
 ## Acceptance criteria
 
 - Encoding always returns an index from `0–767`.
-- Every supported structured action round-trips correctly.
+- Every legal structured action round-trips in the same frozen context.
 - Duplicate mappings fail validation.
 - Out-of-range indices fail clearly.
 - Reserved indices cannot decode into legal actions.
@@ -377,17 +373,17 @@ It must cover every supported game phase, including:
 
 ## Displacement requirements
 
-The engine must represent these as distinct structured choices:
+The engine must expose complete displacement decisions:
 
-- select displaced piece;
-- select optional same-shape stock piece;
-- identify piece source;
-- identify piece shape;
-- identify legal fallback destination;
-- finish displacement;
-- decline unused optional pieces.
+- place the mandatory displaced piece at a legal destination;
+- place an optional piece, including its shape and destination;
+- pick up a legal board-fallback piece;
+- place the held fallback piece;
+- decline remaining optional pieces and finish displacement.
 
 `FinishDisplacement` must not share semantics with `EndTurn`.
+Declining remaining optional displacement pieces is part of
+`FinishDisplacement`, not a separate engine action.
 
 ## Acceptance criteria
 
@@ -757,10 +753,10 @@ Update the milestone status in the plan or associated documentation.
 Use this section to track progress.
 
 - [x] Milestone 1 — Inventory current 620-entry action space
-- [ ] Milestone 2 — Define versioned 768-entry schema
-- [ ] Milestone 3 — Add structured action types and codec
-- [ ] Milestone 4 — Expose structured legal actions
-- [ ] Milestone 5 — Replace AI mask and dispatcher
+- [x] Milestone 2 — Define versioned 768-entry schema
+- [x] Milestone 3 — Add structured action types and codec
+- [x] Milestone 4 — Expose structured legal actions
+- [x] Milestone 5 — Replace AI mask and dispatcher
 - [ ] Milestone 6 — Add exhaustive action-schema validation
 - [ ] Milestone 7 — Add schema versioning
 - [ ] Milestone 8 — Complete final pre-training audit
@@ -778,3 +774,34 @@ Use this section to track progress.
 7. Schema versioning prevents silent incompatibility.
 8. Tests prove that legality, masking, decoding, and execution agree.
 9. Training begins only after the final audit passes.
+
+---
+
+# Standard Implementation Workflow
+
+For every milestone:
+
+1. Implement only the current milestone.
+2. Run Python parsing, Ruff, the required validation, and the full test suite.
+3. Perform an independent read-only review.
+4. Classify every review finding as:
+   - Blocking
+   - Major
+   - Minor
+   - Optional
+5. If any Blocking or Major findings exist:
+   - fix them;
+   - rerun validation;
+   - perform another independent review.
+6. Repeat the fix, validation, and review cycle until:
+   - Blocking = 0;
+   - Major = 0;
+   - Minor = 0, preferably; otherwise explain why each remaining Minor
+     finding is not being resolved.
+7. When the milestone is complete:
+   - stage only the milestone files;
+   - create a commit;
+   - report the commit SHA;
+   - report the validation results;
+   - report the final review summary.
+8. Stop and wait for user approval before beginning the next milestone.

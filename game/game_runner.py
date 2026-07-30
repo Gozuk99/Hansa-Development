@@ -1,9 +1,15 @@
 from dataclasses import dataclass
 import random
 
-from ai.action_options import masking_out_invalid_actions
+from game.action_codec import DEFAULT_ACTION_CODEC
 from game.game_info import Game
 from game.invariants import validate_game
+from game.structured_actions import (
+    ControlInteraction,
+    IncomeInteraction,
+    PostInteraction,
+    RouteInteraction,
+)
 
 
 @dataclass(frozen=True)
@@ -44,14 +50,14 @@ def create_headless_game(
 
 
 def legal_action_indices(game):
-    mask = masking_out_invalid_actions(game)
-    if mask.numel() != 620:
-        raise GameRunError(f"Expected a 620-entry action mask, got {mask.numel()}")
-    return tuple(int(index) for index in mask.nonzero().flatten().tolist())
+    mask = game.ai_action_mask()
+    if len(mask) != 768:
+        raise GameRunError(f"Expected a 768-entry action mask, got {len(mask)}")
+    return tuple(index for index, enabled in enumerate(mask) if enabled)
 
 
-def _post_context_for_action(game, action_index):
-    post_index = action_index % 121
+def _post_context_for_action(game, action):
+    post_index = action.post_slot
     current_index = 0
     for route in game.selected_map.routes:
         for post in route.posts:
@@ -63,46 +69,48 @@ def _post_context_for_action(game, action_index):
 
 def select_progress_action(game, legal_actions, policy_rng):
     """Choose a legal action with a bias toward reaching a terminal state."""
-    if 618 in legal_actions:
-        return 618
+    indexed_actions = [(index, DEFAULT_ACTION_CODEC.decode(index)) for index in legal_actions]
+    controls = [
+        index for index, action in indexed_actions if isinstance(action, ControlInteraction)
+    ]
+    if controls:
+        return controls[0]
 
-    route_actions = [action for action in legal_actions if 242 <= action <= 521]
+    route_actions = [
+        (index, action) for index, action in indexed_actions if isinstance(action, RouteInteraction)
+    ]
     if route_actions:
-        def route_index_for_action(action):
-            if action < 282:
-                return action - 242
-            if action < 362:
-                return (action - 282) // 2
-            return (action - 362) // 4
-
         marker_route_actions = [
-            action
-            for action in route_actions
-            if game.selected_map.routes[route_index_for_action(action)].bonus_marker
+            index
+            for index, action in route_actions
+            if game.selected_map.routes[action.route_slot].bonus_marker
         ]
         if marker_route_actions:
             return policy_rng.choice(marker_route_actions)
-        return policy_rng.choice(route_actions)
+        return policy_rng.choice(route_actions)[0]
 
-    income_actions = [action for action in legal_actions if 522 <= action <= 526]
+    income_actions = [
+        index for index, action in indexed_actions if isinstance(action, IncomeInteraction)
+    ]
     personal_supply = (
-        game.current_player.personal_supply_squares
-        + game.current_player.personal_supply_circles
+        game.current_player.personal_supply_squares + game.current_player.personal_supply_circles
     )
     if income_actions and personal_supply <= 1:
         return policy_rng.choice(income_actions)
 
-    post_actions = [action for action in legal_actions if 0 <= action <= 241]
+    post_actions = [
+        (index, action) for index, action in indexed_actions if isinstance(action, PostInteraction)
+    ]
     pending_post_workflow = game.waiting_for_displaced_player or any(
         value for name, value in vars(game).items() if name.startswith("waiting_for_bm_")
     )
     progressing_post_actions = []
     post_action_scores = {}
-    for action in post_actions:
+    for index, action in post_actions:
         route, post = _post_context_for_action(game, action)
         if pending_post_workflow or (post is not None and post.owner is not game.current_player):
-            progressing_post_actions.append(action)
-            post_action_scores[action] = sum(
+            progressing_post_actions.append(index)
+            post_action_scores[index] = sum(
                 route_post.owner is game.current_player for route_post in route.posts
             ) + (100 if route.bonus_marker is not None else 0)
     if progressing_post_actions:
@@ -118,7 +126,7 @@ def select_progress_action(game, legal_actions, policy_rng):
         return policy_rng.choice(income_actions)
 
     if post_actions:
-        return policy_rng.choice(post_actions)
+        return policy_rng.choice(post_actions)[0]
 
     return policy_rng.choice(legal_actions)
 
@@ -165,7 +173,7 @@ def run_game(
 
         action_index = select_progress_action(game, legal_actions, policy_rng)
         action_trace.append(action_index)
-        game.apply_action(action_index)
+        game.apply_ai_action(action_index)
         validate_game(game)
 
     raise GameRunError(

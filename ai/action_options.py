@@ -46,8 +46,8 @@ NUM_BM_UPGRADE = 5  # Actions for BM upgrades, index range: 613 - 617
 NUM_END_TURN_ACTIONS = 1  # Action to end turn, index range: 618
 NUM_PLACE_ADJACENT_ACTIONS = 1  # Additional Trading Post activation, index 619
 
-# Calculating the total actions
-TOTAL_ACTIONS = (
+# Compatibility size for the legacy GUI/manual dispatcher.
+LEGACY_ACTION_COUNT = (
     NUM_CLAIM_POST_ACTIONS
     + NUM_CLAIM_ROUTE_ACTIONS
     + NUM_INCOME_ACTIONS
@@ -896,72 +896,12 @@ def map_end_turn_action(game):
 
 
 def masking_out_invalid_actions(game):
-    claim_post_tensor = mask_post_action(game)  # size 242 (claiming with a square or circle)
-    claim_route_tensor = mask_claim_route(game)  # size 280 (claim for points, office, or upgrade)
-    # print(f"claim_route_tensor - {claim_route_tensor.size()}")
-    income_tensor = mask_income_actions(game)  # size 5 (0-4 circles + leftover squares)
-    bonus_marker_tensor = mask_bm(game)  # size 8 (8 total BM types to use)
-    buy_tile_tensor = mask_buy_tile(game)  # size 8 (6 tiles or 8 BMs to pay for the tiles)
-    replace_bm_tensor = mask_replace_bm(game)  # size 40
-    bm_city_actions_tensor = mask_bm_city_actions(game)  # size 30
-    bm_upgrade_ability_tensor = mask_bm_upgrade_ability(game)  # size 5
-    end_turn_tensor = mask_end_turn(
-        game
-    )  # size 1 (allowed to end turn if no bonus markers to replace)
-    place_adjacent_tensor = mask_place_adjacent(game)
+    from game.legal_actions import to_legacy_index
 
-    # Concatenate all tensors into one big tensor representing all possible actions
-    all_actions_tensor = torch.cat(
-        [
-            claim_post_tensor,
-            claim_route_tensor,
-            income_tensor,
-            bonus_marker_tensor,
-            buy_tile_tensor,
-            replace_bm_tensor,
-            bm_city_actions_tensor,
-            bm_upgrade_ability_tensor,
-            end_turn_tensor,
-            place_adjacent_tensor,
-        ],
-        dim=0,
-    )
-    return restrict_mask_to_turn_phase(game, all_actions_tensor)
-
-
-def restrict_mask_to_turn_phase(game, action_mask):
-    """Prevent a pending workflow from exposing actions belonging to another phase."""
-    phase = game.turn_phase
-    if phase == TurnPhase.ACTIONS:
-        return action_mask
-
-    allowed_ranges = {
-        TurnPhase.DISPLACEMENT: ((0, 242), (618, 620)),
-        TurnPhase.MOVE_PIECES: ((0, 242),),
-        TurnPhase.BONUS_MARKER_CHOICE: (
-            (0, 242),
-            (527, 535),
-            (583, 613),
-            (613, 618),
-            (618, 619),
-        ),
-        TurnPhase.BUY_TILE_PAYMENT: ((535, 543),),
-        TurnPhase.INCOME_FAVOUR_RESPONSE: ((535, 543),),
-        TurnPhase.TRIBUTE_INCOME_RESPONSE: ((522, 527),),
-        TurnPhase.PLACE_ADJACENT_ROUTE: ((362, 522),),
-        TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION: ((522, 527),),
-        # End-turn is selected once to confirm that optional markers are being
-        # forgone; replacement actions become available after that confirmation.
-        TurnPhase.REPLACE_BONUS_MARKERS: ((543, 583), (618, 619)),
-        # A player with no ordinary actions may still use an optional marker or
-        # explicitly forgo it by ending the turn.
-        TurnPhase.TURN_COMPLETE: ((527, 535), (618, 619)),
-        TurnPhase.GAME_OVER: (),
-    }
-    phase_mask = torch.zeros_like(action_mask)
-    for start, end in allowed_ranges[phase]:
-        phase_mask[start:end] = 1
-    return action_mask * phase_mask
+    mask = torch.zeros(LEGACY_ACTION_COUNT, device=device, dtype=torch.uint8)
+    for action in game.get_legal_actions():
+        mask[to_legacy_index(game, action)] = 1
+    return mask
 
 
 def mask_place_adjacent(game):
