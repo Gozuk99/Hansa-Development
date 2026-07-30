@@ -56,6 +56,35 @@ def legal_action_indices(game):
     return tuple(index for index, enabled in enumerate(mask) if enabled)
 
 
+def replay_game(
+    action_trace,
+    map_num=2,
+    num_players=3,
+    seed=124,
+    use_mission_cards=False,
+    use_emperors_favour=False,
+    bonus_marker_supply=None,
+):
+    """Restore a seeded headless game by replaying validated action indices."""
+    game = create_headless_game(
+        map_num,
+        num_players,
+        seed,
+        use_mission_cards=use_mission_cards,
+        use_emperors_favour=use_emperors_favour,
+        bonus_marker_supply=bonus_marker_supply,
+    )
+    for step, action_index in enumerate(action_trace):
+        if action_index not in legal_action_indices(game):
+            raise GameRunError(
+                f"Replay action {action_index} is illegal at step {step}; "
+                f"player={game.current_player_index}, phase={game.turn_phase.value}"
+            )
+        game.apply_ai_action(action_index)
+        validate_game(game)
+    return game
+
+
 def _post_context_for_action(game, action):
     post_index = action.post_slot
     current_index = 0

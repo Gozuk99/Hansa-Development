@@ -737,7 +737,7 @@ def claim_route_for_office(game, city, route):
             print(
                 f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}"
             )
-            city.update_next_open_office_ownership(game)
+            city.update_next_open_office_ownership(game, placed_piece_shape)
             finalize_route_claim(game, route, placed_piece_shape)
             route.award_tributes(game)
     elif "PlaceAdjacent" in (bm.type for bm in current_player.bonus_markers):
