@@ -1,3 +1,4 @@
+# fmt: off
 # map_attributes.py
 import random
 from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN, DARK_BLUE, BLACKISH_BROWN
@@ -94,13 +95,14 @@ class City:
     def add_office(self, office):
         self.offices.append(office)
 
-    def update_next_open_office_ownership(self, game):
+    def update_next_open_office_ownership(self, game, piece_shape=None):
         player = game.current_player
         color = player.color
 
         for office in self.offices:
             if office.controller is None:
                 office.controller = player
+                office.owner_piece_shape = piece_shape or office.shape
                 office.color = color
                 if office.awards_points:
                     player.score += office.awards_points
@@ -212,9 +214,11 @@ class City:
         if pair not in self.eligible_swap_pairs(current_player):
             return False
         left_index, right_index = pair
-        self.offices[left_index].controller, self.offices[right_index].controller = (
-            self.offices[right_index].controller,
-            self.offices[left_index].controller,
+        left, right = self.offices[left_index], self.offices[right_index]
+        left.controller, right.controller = right.controller, left.controller
+        left.owner_piece_shape, right.owner_piece_shape = (
+            right.owner_piece_shape,
+            left.owner_piece_shape,
         )
         return True
 
@@ -243,6 +247,7 @@ class City:
         # Use the bonus marker to create a new office to the left of the leftmost office
         new_office = self.create_new_office(player.color, shape)
         new_office.controller = player
+        new_office.owner_piece_shape = shape
         new_office.color = player.color
         new_office.place_adjacent_office = True
 
@@ -308,6 +313,7 @@ class City:
         office = self.offices[target_index]
         office.shape = shape
         office.controller = player
+        office.owner_piece_shape = shape
         if shape == "square":
             player.personal_supply_squares -= 1
         else:
@@ -400,6 +406,7 @@ class Office:
         self.color = color
         self.awards_points = awards_points
         self.controller = None  # Initialize controller as None
+        self.owner_piece_shape = None
         self.place_adjacent_office = False
     def is_open(self):
         """Return True if the office is unclaimed."""

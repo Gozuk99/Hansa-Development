@@ -757,7 +757,7 @@ Use this section to track progress.
 - [x] Milestone 3 — Add structured action types and codec
 - [x] Milestone 4 — Expose structured legal actions
 - [x] Milestone 5 — Replace AI mask and dispatcher
-- [ ] Milestone 6 — Add exhaustive action-schema validation
+- [x] Milestone 6 — Add exhaustive action-schema validation
 - [ ] Milestone 7 — Add schema versioning
 - [ ] Milestone 8 — Complete final pre-training audit
 

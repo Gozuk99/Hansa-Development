@@ -51,22 +51,22 @@ def validate_game(game):
             for post in route.posts
         )
         office_squares = sum(
-            office.controller is player and office.shape == "square"
+            office.controller is player and (office.owner_piece_shape or office.shape) == "square"
             for city in game.selected_map.cities
             for office in city.offices
         )
         office_circles = sum(
-            office.controller is player and office.shape == "circle"
+            office.controller is player and (office.owner_piece_shape or office.shape) == "circle"
             for city in game.selected_map.cities
             for office in city.offices
         )
+        held_pieces = (piece for holder in game.players for piece in holder.holding_pieces)
         held_squares = sum(
-            shape == "square" and owner is player
-            for shape, owner, _region in player.holding_pieces
+            shape == "square" and owner is player for shape, owner, _region in held_pieces
         )
+        held_pieces = (piece for holder in game.players for piece in holder.holding_pieces)
         held_circles = sum(
-            shape == "circle" and owner is player
-            for shape, owner, _region in player.holding_pieces
+            shape == "circle" and owner is player for shape, owner, _region in held_pieces
         )
         prestige_circles = 0
         special_prestige = game.selected_map.specialprestigepoints
@@ -87,8 +87,7 @@ def validate_game(game):
             and game.displaced_player.displaced_shape == "circle"
         )
         promo_marker_squares = sum(
-            route.tribute_owners.count(player)
-            + route.block_marker_owners.count(player)
+            route.tribute_owners.count(player) + route.block_marker_owners.count(player)
             for route in game.selected_map.routes
         )
 
