@@ -282,6 +282,17 @@ class ActionCodec:
         family = self._family_by_index[index]
         return family.describe_action(action)
 
+    def create_mask(self, legal_actions: Iterable[GameAction]) -> tuple[bool, ...]:
+        mask = [False] * ACTION_SPACE_SIZE
+        for action in legal_actions:
+            index = self.encode(action)
+            if mask[index]:
+                raise ActionCodecValidationError(
+                    f"Multiple legal interactions encoded to index {index}"
+                )
+            mask[index] = True
+        return tuple(mask)
+
     def validate(self) -> None:
         active_ranges = tuple(
             action_range for action_range in ACTION_RANGES if action_range.active_capacity

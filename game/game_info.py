@@ -252,17 +252,43 @@ class Game:
 
         return get_legal_actions(self)
 
+    def ai_action_mask(self):
+        """Return the authoritative 768-entry AI action mask."""
+        from game.action_codec import DEFAULT_ACTION_CODEC
+
+        return DEFAULT_ACTION_CODEC.create_mask(self.get_legal_actions())
+
+    def apply_structured_action(self, action):
+        """Validate and execute one structured interaction."""
+        from ai.action_options import InvalidActionError, _perform_action_from_index
+        from game.legal_actions import to_legacy_index
+
+        if action not in self.get_legal_actions():
+            raise InvalidActionError(f"Structured action is not legal: {action!r}")
+        _perform_action_from_index(self, to_legacy_index(self, action))
+
+    def apply_ai_action(self, action_index):
+        """Decode and execute one action from the 768-entry AI schema."""
+        from ai.action_options import InvalidActionError
+        from game.action_codec import ActionCodecError, DEFAULT_ACTION_CODEC
+
+        try:
+            action = DEFAULT_ACTION_CODEC.decode(action_index)
+        except ActionCodecError as error:
+            raise InvalidActionError(str(error)) from error
+        self.apply_structured_action(action)
+
     def apply_action(self, action_index):
-        """Validate and apply one action through the supported engine boundary."""
+        """Apply one legacy GUI/manual action through the supported boundary."""
         from ai.action_options import (
             InvalidActionError,
-            TOTAL_ACTIONS,
+            LEGACY_ACTION_COUNT,
             _perform_action_from_index,
         )
 
         if not isinstance(action_index, int) or isinstance(action_index, bool):
             raise InvalidActionError(f"Action index must be an integer: {action_index!r}")
-        if not 0 <= action_index < TOTAL_ACTIONS:
+        if not 0 <= action_index < LEGACY_ACTION_COUNT:
             raise InvalidActionError(f"Action index out of range: {action_index}")
 
         legal_mask = self.legal_action_mask()

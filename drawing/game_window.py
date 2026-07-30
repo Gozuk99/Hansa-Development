@@ -76,12 +76,13 @@ class GameWindow:
             self.screen.blit(label, position)
             self.action_rects.append((pygame.Rect(position, (panel.width - 24, 21)), action))
 
-    def choose_ai_action(self, legal_actions):
+    def choose_ai_action(self, _legacy_legal_actions):
         player = self.acting_player
         state = public_game_state(self.board_data, self.game, player).float()
+        ai_actions = [index for index, enabled in enumerate(self.game.ai_action_mask()) if enabled]
         with torch.no_grad():
             scores = player.hansa_nn(state.unsqueeze(0)).squeeze(0)
-        ranked = [(index, float(scores[index])) for index in legal_actions]
+        ranked = [(index, float(scores[index])) for index in ai_actions]
         return choose_ranked_ai_action(
             ranked,
             player.control,
@@ -295,5 +296,5 @@ class GameWindow:
                         action_applied = True
 
             if running and not control.is_human and not self.game.game_end and actions:
-                self.game.apply_action(self.choose_ai_action(actions))
+                self.game.apply_ai_action(self.choose_ai_action(actions))
             self.clock.tick(30)

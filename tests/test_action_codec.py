@@ -90,6 +90,20 @@ class ActionCodecTests(unittest.TestCase):
         with self.assertRaises(ReservedActionIndexError):
             DEFAULT_ACTION_CODEC.decode(ACTION_SPACE_SIZE - 1)
 
+    def test_mask_enables_exactly_the_encoded_actions(self):
+        actions = (
+            PostInteraction(4, PieceShape.TRADER),
+            RouteInteraction(2, 1),
+            ControlInteraction(1),
+        )
+        mask = DEFAULT_ACTION_CODEC.create_mask(actions)
+        self.assertEqual(len(mask), ACTION_SPACE_SIZE)
+        self.assertEqual(sum(mask), len(actions))
+        self.assertEqual(
+            {index for index, enabled in enumerate(mask) if enabled},
+            {DEFAULT_ACTION_CODEC.encode(action) for action in actions},
+        )
+
     def test_invalid_indices_fail(self):
         for index in (-1, ACTION_SPACE_SIZE, True, 1.5):
             with self.subTest(index=index):

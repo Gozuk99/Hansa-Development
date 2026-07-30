@@ -17,8 +17,7 @@ random.seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
-#current input size is 2314
-#current output size is 616
+
 class HansaNN(nn.Module):
     def __init__(self, input_size, output_size, model_file=None):
         super(HansaNN, self).__init__()
@@ -34,7 +33,7 @@ class HansaNN(nn.Module):
         else:
             if model_file:
                 print(f"No saved model found at {model_file}. Initializing new model.")
-        
+
         # Define the optimizer
         self.optimizer = optim.Adam(self.parameters(), lr=0.001)
 
@@ -50,8 +49,10 @@ class HansaNN(nn.Module):
         with torch.no_grad():  # Ensure no gradients are calculated
             layer = getattr(self, layer_name)
             weights = layer.weight.data.flatten()[:n]
-            formatted_weights = torch.round(weights * (10 ** precision)) / (10 ** precision)
-            print(f"{layer_name} first {n} weights: {formatted_weights.cpu().numpy()}")  # Convert to CPU and NumPy array for printing
+            formatted_weights = torch.round(weights * (10**precision)) / (10**precision)
+            print(
+                f"{layer_name} first {n} weights: {formatted_weights.cpu().numpy()}"
+            )  # Convert to CPU and NumPy array for printing
 
     def save_model(self, player_order):
         model_path = f"hansa_nn_model{player_order}.pth"
@@ -62,6 +63,7 @@ class HansaNN(nn.Module):
             print(f"Error saving model: {e}")
             return False
         return True
+
 
 # # Step 1: Displacement Decision
 # state = get_current_state(game)

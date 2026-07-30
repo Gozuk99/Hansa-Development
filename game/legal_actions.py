@@ -126,7 +126,7 @@ def get_legal_actions(game):
         if game.waiting_for_bm_exchange_bm and game.exchange_target_player is not None:
             opponents = [player for player in game.players if player is not game.current_player]
             opponent = opponents.index(game.exchange_target_player)
-            actions.append(BonusMarkerInteraction(16 + opponent * 8 + local))
+            actions.append(BonusMarkerInteraction(9 + opponent * 8 + local))
         else:
             actions.append(BonusMarkerInteraction(local))
 
@@ -208,7 +208,10 @@ def to_legacy_index(game, action):
     if isinstance(action, BonusMarkerInteraction):
         if action.marker_slot == 8:
             return 619
-        return 527 + (action.marker_slot % 8)
+        marker_type_slot = (
+            (action.marker_slot - 9) % 8 if action.marker_slot >= 9 else action.marker_slot
+        )
+        return 527 + marker_type_slot
     if isinstance(action, TileInteraction):
         return 535 + action.tile_slot
     if isinstance(action, PlayerInteraction):

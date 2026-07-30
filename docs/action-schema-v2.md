@@ -2,7 +2,7 @@
 
 ## Status
 
-This document defines the unactivated 768-entry interaction schema.
+This document defines the active 768-entry AI interaction schema.
 
 - `ACTION_SCHEMA_VERSION = 2`
 - `ACTION_SPACE_SIZE = 768`
@@ -10,7 +10,8 @@ This document defines the unactivated 768-entry interaction schema.
 - reserved family capacity: 127
 - registry: `game/action_schema.py`
 
-The production 620-entry mask and dispatcher remain unchanged.
+AI and headless play use this schema. The 620-entry adapter remains only for
+legacy GUI/manual interaction compatibility.
 
 ## Interaction boundary
 
@@ -104,6 +105,6 @@ must not share the Additional Trading Post marker slot.
 ## Compatibility
 
 Version 2 is incompatible with both the superseded version-1 draft and the
-earlier semantic-decision version-2 proposal. Neither proposal was activated in
-production, so no runtime migration exists. The legacy 620-entry production
-system remains active until a later milestone deliberately replaces it.
+earlier semantic-decision version-2 proposal. Existing 620-output checkpoints
+cannot load into the 768-output network and are rejected by normal model shape
+validation. The legacy 620-entry GUI/manual adapter is not an AI action space.

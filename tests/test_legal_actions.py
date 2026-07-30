@@ -1,5 +1,7 @@
 import unittest
 
+from ai.action_options import masking_out_invalid_actions
+from game.action_codec import DEFAULT_ACTION_CODEC
 from game.game_actions import refresh_displacement_targets
 from game.game_runner import create_headless_game, legal_action_indices
 from game.invariants import validate_game
@@ -18,9 +20,16 @@ class LegalActionTests(unittest.TestCase):
         actions = game.get_legal_actions()
         self.assertEqual(len(actions), len(set(actions)))
         self.assertEqual(actions, game.get_legal_actions())
+        ai_mask = game.ai_action_mask()
+        self.assertEqual(len(ai_mask), 768)
+        self.assertEqual(sum(ai_mask), len(actions))
+        self.assertEqual(
+            {DEFAULT_ACTION_CODEC.encode(action) for action in actions},
+            {index for index, enabled in enumerate(ai_mask) if enabled},
+        )
         self.assertEqual(
             {to_legacy_index(game, action) for action in actions},
-            set(legal_action_indices(game)),
+            set(masking_out_invalid_actions(game).nonzero().flatten().tolist()),
         )
         if game.turn_phase != TurnPhase.GAME_OVER:
             self.assertTrue(actions)
@@ -29,7 +38,7 @@ class LegalActionTests(unittest.TestCase):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         actions = legal_action_indices(game)
         self.assertTrue(actions)
-        self.assertTrue(all(0 <= action < 620 for action in actions))
+        self.assertTrue(all(0 <= action < 768 for action in actions))
         self.assertTrue(validate_game(game))
         self.assert_structured_matches_legacy(game)
 
@@ -46,6 +55,16 @@ class LegalActionTests(unittest.TestCase):
         self.assertEqual(game.turn_phase, TurnPhase.GAME_OVER)
         self.assertEqual(game.get_legal_actions(), [])
         self.assertEqual(legal_action_indices(game), ())
+
+    def test_ai_index_decodes_and_executes_through_engine(self):
+        game = create_headless_game(2, 3, seed=124)
+        index = legal_action_indices(game)[0]
+        DEFAULT_ACTION_CODEC.decode(index)
+        game.apply_ai_action(index)
+        self.assertTrue(validate_game(game))
+
+        with self.assertRaisesRegex(RuntimeError, "reserved"):
+            game.apply_ai_action(767)
 
     def test_displacement_exposes_posts_optional_supply_and_finish(self):
         game = create_headless_game(2, 3, seed=124)
@@ -99,6 +118,22 @@ class LegalActionTests(unittest.TestCase):
         self.assertEqual(len(used_markers), 1)
         self.assertEqual(to_legacy_index(game, used_markers[0]), 528)
         self.assert_structured_matches_legacy(game)
+
+    def test_exchange_last_opponent_and_marker_type_fit_reserved_family(self):
+        game = create_headless_game(1, 5, seed=124)
+        target = game.players[-1]
+        target.used_bonus_markers = [BonusMarker("BlockTradeRoute", owner=target)]
+        game.waiting_for_bm_exchange_bm = True
+        game.exchange_target_player = target
+
+        actions = [
+            action
+            for action in game.get_legal_actions()
+            if isinstance(action, BonusMarkerInteraction)
+        ]
+        self.assertEqual(actions, [BonusMarkerInteraction(40)])
+        self.assertEqual(DEFAULT_ACTION_CODEC.encode(actions[0]), 632)
+        self.assertEqual(to_legacy_index(game, actions[0]), 534)
 
 
 if __name__ == "__main__":

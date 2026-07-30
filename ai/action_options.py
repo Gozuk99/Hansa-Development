@@ -46,8 +46,8 @@ NUM_BM_UPGRADE = 5  # Actions for BM upgrades, index range: 613 - 617
 NUM_END_TURN_ACTIONS = 1  # Action to end turn, index range: 618
 NUM_PLACE_ADJACENT_ACTIONS = 1  # Additional Trading Post activation, index 619
 
-# Calculating the total actions
-TOTAL_ACTIONS = (
+# Compatibility size for the legacy GUI/manual dispatcher.
+LEGACY_ACTION_COUNT = (
     NUM_CLAIM_POST_ACTIONS
     + NUM_CLAIM_ROUTE_ACTIONS
     + NUM_INCOME_ACTIONS
@@ -898,45 +898,10 @@ def map_end_turn_action(game):
 def masking_out_invalid_actions(game):
     from game.legal_actions import to_legacy_index
 
-    mask = torch.zeros(TOTAL_ACTIONS, device=device, dtype=torch.uint8)
+    mask = torch.zeros(LEGACY_ACTION_COUNT, device=device, dtype=torch.uint8)
     for action in game.get_legal_actions():
         mask[to_legacy_index(game, action)] = 1
     return mask
-
-
-def restrict_mask_to_turn_phase(game, action_mask):
-    """Prevent a pending workflow from exposing actions belonging to another phase."""
-    phase = game.turn_phase
-    if phase == TurnPhase.ACTIONS:
-        return action_mask
-
-    allowed_ranges = {
-        TurnPhase.DISPLACEMENT: ((0, 242), (618, 620)),
-        TurnPhase.MOVE_PIECES: ((0, 242),),
-        TurnPhase.BONUS_MARKER_CHOICE: (
-            (0, 242),
-            (527, 535),
-            (583, 613),
-            (613, 618),
-            (618, 619),
-        ),
-        TurnPhase.BUY_TILE_PAYMENT: ((535, 543),),
-        TurnPhase.INCOME_FAVOUR_RESPONSE: ((535, 543),),
-        TurnPhase.TRIBUTE_INCOME_RESPONSE: ((522, 527),),
-        TurnPhase.PLACE_ADJACENT_ROUTE: ((362, 522),),
-        TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION: ((522, 527),),
-        # End-turn is selected once to confirm that optional markers are being
-        # forgone; replacement actions become available after that confirmation.
-        TurnPhase.REPLACE_BONUS_MARKERS: ((543, 583), (618, 619)),
-        # A player with no ordinary actions may still use an optional marker or
-        # explicitly forgo it by ending the turn.
-        TurnPhase.TURN_COMPLETE: ((527, 535), (618, 619)),
-        TurnPhase.GAME_OVER: (),
-    }
-    phase_mask = torch.zeros_like(action_mask)
-    for start, end in allowed_ranges[phase]:
-        phase_mask[start:end] = 1
-    return action_mask * phase_mask
 
 
 def mask_place_adjacent(game):
