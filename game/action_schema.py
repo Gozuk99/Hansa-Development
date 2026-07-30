@@ -1,4 +1,4 @@
-"""Authoritative allocation for the unactivated atomic Hansa action schema."""
+"""Fixed interaction ranges for the unactivated Hansa action schema."""
 
 from dataclasses import dataclass
 
@@ -9,13 +9,13 @@ ACTION_SCHEMA_VERSION = 2
 
 @dataclass(frozen=True)
 class ActionRange:
-    """One contiguous schema range."""
+    """One permanent family range with padding that never shifts later families."""
 
     name: str
     start: int
     capacity: int
-    family: str | None
-    reserved: bool = False
+    active_capacity: int
+    interaction_type: str | None
 
     @property
     def stop(self) -> int:
@@ -25,33 +25,47 @@ class ActionRange:
     def end(self) -> int:
         return self.stop - 1
 
+    @property
+    def active_stop(self) -> int:
+        return self.start + self.active_capacity
 
-POSITION = ActionRange("position", 0, 352, "position")
-ROUTE = ActionRange("route", 352, 160, "route")
-CITY = ActionRange("city", 512, 46, "city")
-INCOME = ActionRange("income", 558, 5, "income")
-EXACT_TWO = ActionRange("exact_two", 563, 3, "exact_two")
-TRIBUTE_INCOME = ActionRange("tribute_income", 566, 3, "tribute_income")
-BONUS_MARKER = ActionRange("bonus_marker", 569, 9, "bonus_marker")
-USED_BONUS_MARKER = ActionRange("used_bonus_marker", 578, 32, "used_bonus_marker")
-TILE = ActionRange("tile", 610, 8, "tile")
-ABILITY = ActionRange("ability", 618, 5, "ability")
-CONTROL = ActionRange("control", 623, 3, "control")
-RESERVED = ActionRange("reserved", 626, 142, None, reserved=True)
+    @property
+    def reserved_capacity(self) -> int:
+        return self.capacity - self.active_capacity
+
+    def contains(self, index: int) -> bool:
+        return self.start <= index < self.stop
+
+    def is_assigned(self, index: int) -> bool:
+        return self.start <= index < self.active_stop
+
+
+# The first eight families have permanent boundaries. Activating a padded slot
+# inside one family never changes any later family's action numbers.
+POST = ActionRange("post", 0, 256, 242, "PostInteraction")
+ROUTE = ActionRange("route", 256, 320, 280, "RouteInteraction")
+INCOME = ActionRange("income", 576, 16, 5, "IncomeInteraction")
+BONUS_MARKER = ActionRange("bonus_marker", 592, 48, 41, "BonusMarkerInteraction")
+TILE = ActionRange("tile", 640, 16, 8, "TileInteraction")
+CITY = ActionRange("city", 656, 64, 52, "CityInteraction")
+ABILITY = ActionRange("ability", 720, 8, 5, "AbilityInteraction")
+SUPPLY = ActionRange("supply", 728, 2, 1, "SupplyInteraction")
+PLAYER = ActionRange("player", 730, 6, 5, "PlayerInteraction")
+CONTROL = ActionRange("control", 736, 8, 2, "ControlInteraction")
+EXPANSION = ActionRange("expansion", 744, 24, 0, None)
 
 ACTION_RANGES = (
-    POSITION,
+    POST,
     ROUTE,
-    CITY,
     INCOME,
-    EXACT_TWO,
-    TRIBUTE_INCOME,
     BONUS_MARKER,
-    USED_BONUS_MARKER,
     TILE,
+    CITY,
     ABILITY,
+    SUPPLY,
+    PLAYER,
     CONTROL,
-    RESERVED,
+    EXPANSION,
 )
 
 
@@ -64,13 +78,18 @@ def validate_action_schema() -> None:
         names.add(action_range.name)
         if action_range.capacity <= 0:
             raise ValueError(f"{action_range.name} must have positive capacity")
+        if not 0 <= action_range.active_capacity <= action_range.capacity:
+            raise ValueError(f"{action_range.name} has invalid active capacity")
         if action_range.start != expected_start:
             raise ValueError(
                 f"Expected {action_range.name} to start at {expected_start}, "
                 f"got {action_range.start}"
             )
-        if action_range.reserved != (action_range.family is None):
-            raise ValueError(f"{action_range.name} must be reserved or name one action family")
+        if (action_range.active_capacity == 0) != (action_range.interaction_type is None):
+            raise ValueError(
+                f"{action_range.name} must assign an interaction type exactly "
+                "when it has active slots"
+            )
         expected_start = action_range.stop
 
     if expected_start != ACTION_SPACE_SIZE:

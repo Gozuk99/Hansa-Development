@@ -1,185 +1,109 @@
-# Atomic Hansa Action Schema Version 2
+# Hansa Interaction Schema Version 2
 
 ## Status
 
-This document defines the unactivated 768-entry schema that replaces the
-superseded version-1 draft.
+This document defines the unactivated 768-entry interaction schema.
 
 - `ACTION_SCHEMA_VERSION = 2`
 - `ACTION_SPACE_SIZE = 768`
-- active capacity: 626
-- reserved capacity: 142
+- assigned interaction slots: 641
+- reserved family capacity: 127
 - registry: `game/action_schema.py`
 
-The current 620-entry production mask and dispatcher remain unchanged.
+The production 620-entry mask and dispatcher remain unchanged.
 
-## Decision boundary
+## Interaction boundary
 
-One enabled neural-network index must decode into one complete, immediately
-executable Hansa decision. The codec does not encode UI clicks or incomplete
-route, city, shape, source, or outcome selections.
+One index identifies one permanent physical interaction location. Authoritative
+engine state determines what selecting that location means and whether it is
+legal. The codec neither calculates legality nor numbers a filtered list of
+currently legal decisions.
 
-Legitimate rules workflows remain staged when an action changes authoritative
-engine state. Examples include Move pickup and placement, tile payments, and
-board-fallback pickup followed by placement.
+Examples:
+
+- a post interaction can place, pick up, displace, or relocate a piece;
+- a route-body interaction can complete a route, select a Tribute/Block target,
+  or place a replacement bonus marker;
+- an Income interaction selects a piece composition whose total is defined by
+  the active workflow.
 
 ## Allocation
 
-| Range | Indices | Capacity | Active semantic family |
-|---|---:|---:|---|
-| `POSITION` | `0–351` | 352 | Complete post, movement, and displacement decisions |
-| `ROUTE` | `352–511` | 160 | Complete route outcomes and route targets |
-| `CITY` | `512–557` | 46 | Complete Swap Office and green-city decisions |
-| `INCOME` | `558–562` | 5 | Normal Income composition |
-| `EXACT_TWO` | `563–565` | 3 | Exact-two-piece composition |
-| `TRIBUTE_INCOME` | `566–568` | 3 | Tribute income composition |
-| `BONUS_MARKER` | `569–577` | 9 | Bonus-marker activation |
-| `USED_BONUS_MARKER` | `578–609` | 32 | Complete opponent/used-marker exchange |
-| `TILE` | `610–617` | 8 | Tile, payment, or Income Favour decision |
-| `ABILITY` | `618–622` | 5 | Ability decisions |
-| `CONTROL` | `623–625` | 3 | Finish pickup, finish displacement, end turn |
-| `RESERVED` | `626–767` | 142 | Reserved |
+| Range | Indices | Capacity | Used | Padding | Permanent interaction |
+|---|---:|---:|---:|---:|---|
+| `POST` | `0–255` | 256 | 242 | 14 | Post and piece shape |
+| `ROUTE` | `256–575` | 320 | 280 | 40 | Route body, endpoint office, or drawn endpoint outcome |
+| `INCOME` | `576–591` | 16 | 5 | 11 | Resource composition |
+| `BONUS_MARKER` | `592–639` | 48 | 41 | 7 | Owned marker or opponent-used marker |
+| `TILE` | `640–655` | 16 | 8 | 8 | Tile, payment, or Favour response |
+| `CITY` | `656–719` | 64 | 52 | 12 | Adjacent-office boundary or green-city/shape |
+| `ABILITY` | `720–727` | 8 | 5 | 3 | Player-board ability box |
+| `SUPPLY` | `728–729` | 2 | 1 | 1 | Optional same-shape displacement piece source |
+| `PLAYER` | `730–735` | 6 | 5 | 1 | Fixed player seat, including Exchange target |
+| `CONTROL` | `736–743` | 8 | 2 | 6 | Finish current workflow or end turn |
+| `EXPANSION` | `744–767` | 24 | 0 | 24 | Future interaction family |
 
-The active total is:
+The 127 reserved slots are distributed inside permanent family boundaries.
+Activating padding in one family cannot shift a later family.
 
-```text
-352 + 160 + 46 + 5 + 3 + 3 + 9 + 32 + 8 + 5 + 3 = 626
-```
+## Route interactions
 
-## Capacity basis
+The original route layout is retained inside the first 280 route-family slots:
 
-### Position and displacement
+- local `0–39`: route bodies;
+- local `40–119`: two endpoint-office locations per route;
+- local `120–279`: four drawn endpoint-outcome locations per route;
+- local `280–319`: reserved route capacity.
 
-Ordinary post selection needs at most `121 × 2 = 242` identities. Atomic
-displacement is larger. On the largest supported map, after excluding the
-occupied displacement origin, the maximum is:
+Route body, office, upgrade, and prestige are separate interactions because the
+rules can offer them simultaneously after controlling a route. The player must
+distinguish skipping step 3, taking the leftmost office at either endpoint,
+developing one of two printed abilities, or taking one of four printed prestige
+spaces. These are selectable board locations, not staged abstract verbs.
 
-```text
-2 Merchant identities × 120 Merchant-compatible destinations
-+ 1 Trader identity × 112 Trader-compatible destinations
-= 352
-```
+The route-body slot is also the target during mutually exclusive workflows for:
 
-The contexts are mutually exclusive, so the family needs 352 slots.
+- Tribute for Establishing a Trading Post;
+- Block Trade Route;
+- replacement bonus-marker placement.
 
-### Route
+Both promo-marker rules say to place the marker above a chosen trade route.
+Selecting a post is therefore not the rules interaction. Replacement also
+selects a route, so a second 40-entry route numbering is unnecessary.
 
-Ordinary completion requires no more than 136 map-specific outcomes. Additional
-Trading Post requires:
+## City interactions
 
-```text
-40 routes × 2 endpoints × 2 shapes = 160
-```
+City slots are assigned from static map topology, never from the filtered legal
+list:
 
-Tribute, Block, and marker replacement require at most 40 route targets each
-and are mutually exclusive contexts. The family therefore needs 160 slots.
+- local `0–45`: each adjacent pair of standard printed offices, enumerated by
+  map city order and left-office position;
+- local `46–51`: each `(green city, Trader)` and
+  `(green city, Merchant)` location on the Eastern map;
+- local `52–63`: reserved city capacity.
 
-### City
+Map 2/3 has the maximum 46 printed adjacent-office boundaries and three green
+cities, requiring six shape-specific green-city interactions. A city alone is
+insufficient for Swap Office because one city can have multiple eligible
+adjacent pairs. A shape-neutral green-city slot is also insufficient when both
+piece shapes are legally available.
 
-Map 2 contains the largest static adjacent-office-pair catalogue at 46.
-Green-city placement requires at most six `(city, shape)` choices. These
-workflows are mutually exclusive, so the family needs 46 slots.
+## Control interactions
 
-## Complete action families
+Two permanent controls are sufficient:
 
-Position actions include:
+1. `Finish current workflow` ends optional pickup/placement work or declines
+   remaining optional displacement placements.
+2. `End turn` forgoes remaining optional turn opportunities and advances into
+   replacement processing or the next player.
 
-- `PlaceFromPersonalSupply`
-- `DisplaceOpponent`
-- `PickUpPiece`
-- `PlaceHeldPiece`
-- `PlaceDisplacedPiece`
-- `PlaceOptionalDisplacementPiece`
-- `PickUpDisplacementFallbackPiece`
-- `PlaceHeldDisplacementFallbackPiece`
-
-Route actions include:
-
-- `CompleteRouteForPoints`
-- `ClaimRouteOffice`
-- `UpgradeFromRoute`
-- `ClaimRoutePrestige`
-- `ClaimAdditionalTradingPost`
-- `SelectTributeRoute`
-- `SelectBlockedRoute`
-- `SelectBonusMarkerReplacementRoute`
-
-City actions include:
-
-- `SwapAdjacentOffices`
-- `ClaimGreenCity`
-
-The remaining families contain complete income, marker, tile, ability, and
-control decisions defined in `game/structured_actions.py`.
-
-Exchange Bonus Marker uses one complete
-`ExchangeForUsedBonusMarker(target_player_id, marker_type)` decision. With up
-to four opponents and eight exchangeable marker types, its stable family
-requires `4 × 8 = 32` slots; there is no separate player-selection stage.
-
-## Displacement semantics
-
-The displaced piece, optional piece, shape, and destination are not separate
-codec stages.
-
-- `PlaceDisplacedPiece(destination)` places the mandatory piece whose shape is
-  already stored in engine state.
-- `PlaceOptionalDisplacementPiece(shape, destination)` distinguishes an
-  optional piece, including an optional piece matching the displaced shape.
-- General Stock and Personal Supply priority is determined by rules state, not
-  selected through another action.
-- Board fallback legitimately uses a pickup action followed by a held-piece
-  placement action.
-- `FinishDisplacement` declines all remaining optional pieces and finishes the
-  workflow. Decline and finish are not separate actions.
-
-## Route semantics
-
-Route, outcome, endpoint, upgrade, prestige value, and Additional Trading Post
-shape are combined into outcome-specific actions. The schema contains no
-executable `SelectRouteOutcome`, `SelectRouteEndpoint`,
-`SelectCityUpgradeSlot`, `SelectPrestigeValue`, or generic shape fragment.
-
-## State-aware codec
-
-`ActionCodec` receives a frozen `ActionCodecContext` containing a stable
-workflow catalogue and the complete legal subset for one authoritative state
-revision. The engine will own the legal set in the later legality milestone.
-Map and workflow definitions provide the catalogue of complete actions that
-may occupy the family in that context.
-
-```python
-context = ActionCodecContext.from_actions(
-    state_revision,
-    legal_actions,
-    action_catalogue,
-)
-decision = codec.build_decision(context)
-index = codec.encode(action, context)
-action = codec.decode(index, context)
-label = codec.describe(index, context)
-```
-
-Within each family, the complete action catalogue is sorted deterministically
-and assigned to family-local slots. Legality changes the mask but does not
-compact the catalogue or shift another action's index. The same frozen context
-must be used to create the mask and interpret the selected index.
-
-Required invariants:
-
-- every legal action maps to exactly one enabled index;
-- every enabled index maps to exactly one legal action;
-- duplicate actions are rejected;
-- a family exceeding capacity is rejected;
-- reserved indices never decode;
-- inactive indices fail distinctly;
-- identical context and index always produce the same action.
-
-The codec translates legality; it does not calculate legality.
+The active workflow makes the first control unambiguous. Optional displacement
+piece selection occupies the first `SUPPLY` slot, not a finish control, and
+must not share the Additional Trading Post marker slot.
 
 ## Compatibility
 
-Version 2 is incompatible with the superseded version-1 draft. Version 1 had no
-production artifacts, so no runtime migration is provided. The legacy
-620-entry production action system remains in service until a later milestone
-switches it deliberately.
+Version 2 is incompatible with both the superseded version-1 draft and the
+earlier semantic-decision version-2 proposal. Neither proposal was activated in
+production, so no runtime migration exists. The legacy 620-entry production
+system remains active until a later milestone deliberately replaces it.

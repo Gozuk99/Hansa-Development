@@ -896,37 +896,12 @@ def map_end_turn_action(game):
 
 
 def masking_out_invalid_actions(game):
-    claim_post_tensor = mask_post_action(game)  # size 242 (claiming with a square or circle)
-    claim_route_tensor = mask_claim_route(game)  # size 280 (claim for points, office, or upgrade)
-    # print(f"claim_route_tensor - {claim_route_tensor.size()}")
-    income_tensor = mask_income_actions(game)  # size 5 (0-4 circles + leftover squares)
-    bonus_marker_tensor = mask_bm(game)  # size 8 (8 total BM types to use)
-    buy_tile_tensor = mask_buy_tile(game)  # size 8 (6 tiles or 8 BMs to pay for the tiles)
-    replace_bm_tensor = mask_replace_bm(game)  # size 40
-    bm_city_actions_tensor = mask_bm_city_actions(game)  # size 30
-    bm_upgrade_ability_tensor = mask_bm_upgrade_ability(game)  # size 5
-    end_turn_tensor = mask_end_turn(
-        game
-    )  # size 1 (allowed to end turn if no bonus markers to replace)
-    place_adjacent_tensor = mask_place_adjacent(game)
+    from game.legal_actions import to_legacy_index
 
-    # Concatenate all tensors into one big tensor representing all possible actions
-    all_actions_tensor = torch.cat(
-        [
-            claim_post_tensor,
-            claim_route_tensor,
-            income_tensor,
-            bonus_marker_tensor,
-            buy_tile_tensor,
-            replace_bm_tensor,
-            bm_city_actions_tensor,
-            bm_upgrade_ability_tensor,
-            end_turn_tensor,
-            place_adjacent_tensor,
-        ],
-        dim=0,
-    )
-    return restrict_mask_to_turn_phase(game, all_actions_tensor)
+    mask = torch.zeros(TOTAL_ACTIONS, device=device, dtype=torch.uint8)
+    for action in game.get_legal_actions():
+        mask[to_legacy_index(game, action)] = 1
+    return mask
 
 
 def restrict_mask_to_turn_phase(game, action_mask):

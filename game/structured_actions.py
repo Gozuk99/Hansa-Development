@@ -1,11 +1,15 @@
-"""Complete Hansa player decisions for atomic action schema version 2."""
+"""Fixed player interactions for action schema version 2.
+
+These values identify what the player selected. The authoritative game state
+determines what that interaction means and whether it is legal.
+"""
 
 from dataclasses import dataclass
 from enum import Enum
 
 
 class GameAction:
-    """Immutable semantic decision accepted by the Hansa rules engine."""
+    """Base type for one fixed Hansa interaction location."""
 
 
 class PieceShape(str, Enum):
@@ -13,191 +17,79 @@ class PieceShape(str, Enum):
     MERCHANT = "merchant"
 
 
-class BonusMarkerType(str, Enum):
-    SWAP_OFFICE = "SwapOffice"
-    MOVE_THREE = "Move3"
-    UPGRADE_ABILITY = "UpgradeAbility"
-    THREE_ACTIONS = "3Actions"
-    FOUR_ACTIONS = "4Actions"
-    EXCHANGE_BONUS_MARKER = "ExchangeBonusMarker"
-    TRIBUTE_TRADING_POST = "Tribute4EstablishingTP"
-    BLOCK_TRADE_ROUTE = "BlockTradeRoute"
-    PLACE_ADJACENT = "PlaceAdjacent"
-
-
-class EmperorsFavourType(str, Enum):
-    DISPLACE_ANYWHERE = "DisplaceAnywhere"
-    ONE_ACTION = "+1Action"
-    INCOME_FAVOUR = "+1IncomeIfOthersIncome"
-    ONE_DISPLACED_PIECE = "+1DisplacedPiece"
-    OWNED_CITY_POINTS = "+4PtsPerOwnedCity"
-    COMPLETED_ABILITY_POINTS = "+7PtsPerCompletedAbility"
-
-
-class IncomeFavourChoice(str, Enum):
-    TRADER = "trader"
-    MERCHANT = "merchant"
-    DECLINE = "decline"
-
-
 @dataclass(frozen=True)
-class PlaceFromPersonalSupply(GameAction):
-    post_id: str
+class PostInteraction(GameAction):
+    """Select one map post using the Trader or Merchant interaction."""
+
+    post_slot: int
     shape: PieceShape
 
 
 @dataclass(frozen=True)
-class DisplaceOpponent(GameAction):
-    post_id: str
-    shape: PieceShape
+class RouteInteraction(GameAction):
+    """Select one fixed interaction location belonging to a route.
+
+    Slots retain the original route layout:
+    0 = route body / points or contextual route target
+    1-2 = endpoint office interactions
+    3-6 = endpoint outcome boxes (upgrade, prestige, or Additional TP)
+    """
+
+    route_slot: int
+    interaction_slot: int
 
 
 @dataclass(frozen=True)
-class PickUpPiece(GameAction):
-    post_id: str
+class IncomeInteraction(GameAction):
+    """Select one of five composition interactions interpreted by workflow."""
 
-
-@dataclass(frozen=True)
-class PlaceHeldPiece(GameAction):
-    post_id: str
-
-
-@dataclass(frozen=True)
-class PlaceDisplacedPiece(GameAction):
-    destination_post_id: str
-
-
-@dataclass(frozen=True)
-class PlaceOptionalDisplacementPiece(GameAction):
-    shape: PieceShape
-    destination_post_id: str
-
-
-@dataclass(frozen=True)
-class PickUpDisplacementFallbackPiece(GameAction):
-    source_post_id: str
-
-
-@dataclass(frozen=True)
-class PlaceHeldDisplacementFallbackPiece(GameAction):
-    destination_post_id: str
-
-
-@dataclass(frozen=True)
-class CompleteRouteForPoints(GameAction):
-    route_id: str
-
-
-@dataclass(frozen=True)
-class ClaimRouteOffice(GameAction):
-    route_id: str
-    city_id: str
-
-
-@dataclass(frozen=True)
-class UpgradeFromRoute(GameAction):
-    route_id: str
-    city_id: str
-    ability_id: str
-
-
-@dataclass(frozen=True)
-class ClaimRoutePrestige(GameAction):
-    route_id: str
-    prestige_value: int
-
-
-@dataclass(frozen=True)
-class ClaimAdditionalTradingPost(GameAction):
-    route_id: str
-    city_id: str
-    shape: PieceShape
-
-
-@dataclass(frozen=True)
-class SelectTributeRoute(GameAction):
-    route_id: str
-
-
-@dataclass(frozen=True)
-class SelectBlockedRoute(GameAction):
-    route_id: str
-
-
-@dataclass(frozen=True)
-class SelectBonusMarkerReplacementRoute(GameAction):
-    route_id: str
-
-
-@dataclass(frozen=True)
-class SwapAdjacentOffices(GameAction):
-    city_id: str
-    left_office_id: str
-    right_office_id: str
-
-
-@dataclass(frozen=True)
-class ClaimGreenCity(GameAction):
-    city_id: str
-    shape: PieceShape
-
-
-@dataclass(frozen=True)
-class TakeIncome(GameAction):
     merchant_count: int
 
 
 @dataclass(frozen=True)
-class SelectTwoPieceMix(GameAction):
-    merchant_count: int
+class BonusMarkerInteraction(GameAction):
+    """Select a fixed unused-marker or opponent-used-marker location."""
+
+    marker_slot: int
 
 
 @dataclass(frozen=True)
-class SelectTributeIncome(GameAction):
-    merchant_count: int
+class TileInteraction(GameAction):
+    """Select a fixed tile/payment/Income-Favour interaction location."""
+
+    tile_slot: int
 
 
 @dataclass(frozen=True)
-class ActivateBonusMarker(GameAction):
-    marker_type: BonusMarkerType
+class CityInteraction(GameAction):
+    """Select one map-defined city interaction location."""
+
+    city_interaction_slot: int
 
 
 @dataclass(frozen=True)
-class ExchangeForUsedBonusMarker(GameAction):
-    target_player_id: str
-    marker_type: BonusMarkerType
+class AbilityInteraction(GameAction):
+    """Select one player-board ability box."""
+
+    ability_slot: int
 
 
 @dataclass(frozen=True)
-class BuyEmperorsFavour(GameAction):
-    tile_type: EmperorsFavourType
+class SupplyInteraction(GameAction):
+    """Select one fixed player-supply source."""
+
+    supply_slot: int
 
 
 @dataclass(frozen=True)
-class SelectBonusMarkerPayment(GameAction):
-    marker_type: BonusMarkerType
+class PlayerInteraction(GameAction):
+    """Select one fixed player seat."""
+
+    player_slot: int
 
 
 @dataclass(frozen=True)
-class RespondToIncomeFavour(GameAction):
-    choice: IncomeFavourChoice
+class ControlInteraction(GameAction):
+    """Select one fixed workflow control."""
 
-
-@dataclass(frozen=True)
-class SelectAbility(GameAction):
-    ability_id: str
-
-
-@dataclass(frozen=True)
-class FinishMovePickup(GameAction):
-    pass
-
-
-@dataclass(frozen=True)
-class FinishDisplacement(GameAction):
-    """Decline all remaining optional pieces and finish displacement."""
-
-
-@dataclass(frozen=True)
-class EndTurn(GameAction):
-    """Forgo unused optional markers and advance to replacement or next player."""
+    control_slot: int

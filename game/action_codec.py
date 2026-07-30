@@ -1,8 +1,7 @@
-"""State-aware codec for complete Hansa decisions."""
+"""Codec for stable Hansa interaction locations."""
 
-from dataclasses import dataclass, fields, is_dataclass
-from enum import Enum
-from typing import Iterable
+from dataclasses import dataclass
+from typing import Callable, Iterable
 
 from game.action_schema import (
     ABILITY,
@@ -11,48 +10,27 @@ from game.action_schema import (
     BONUS_MARKER,
     CITY,
     CONTROL,
-    EXACT_TWO,
     INCOME,
-    POSITION,
-    RESERVED,
+    POST,
+    PLAYER,
     ROUTE,
+    SUPPLY,
     TILE,
-    TRIBUTE_INCOME,
-    USED_BONUS_MARKER,
     ActionRange,
 )
 from game.structured_actions import (
-    ActivateBonusMarker,
-    BuyEmperorsFavour,
-    ClaimAdditionalTradingPost,
-    ClaimGreenCity,
-    ClaimRouteOffice,
-    ClaimRoutePrestige,
-    CompleteRouteForPoints,
-    DisplaceOpponent,
-    EndTurn,
-    ExchangeForUsedBonusMarker,
-    FinishDisplacement,
-    FinishMovePickup,
+    AbilityInteraction,
+    BonusMarkerInteraction,
+    CityInteraction,
+    ControlInteraction,
     GameAction,
-    PickUpDisplacementFallbackPiece,
-    PickUpPiece,
-    PlaceDisplacedPiece,
-    PlaceFromPersonalSupply,
-    PlaceHeldDisplacementFallbackPiece,
-    PlaceHeldPiece,
-    PlaceOptionalDisplacementPiece,
-    RespondToIncomeFavour,
-    SelectAbility,
-    SelectBlockedRoute,
-    SelectBonusMarkerPayment,
-    SelectBonusMarkerReplacementRoute,
-    SelectTributeIncome,
-    SelectTributeRoute,
-    SelectTwoPieceMix,
-    SwapAdjacentOffices,
-    TakeIncome,
-    UpgradeFromRoute,
+    IncomeInteraction,
+    PieceShape,
+    PostInteraction,
+    PlayerInteraction,
+    RouteInteraction,
+    SupplyInteraction,
+    TileInteraction,
 )
 
 
@@ -68,19 +46,11 @@ class ReservedActionIndexError(ActionCodecError):
     pass
 
 
-class InactiveActionIndexError(ActionCodecError):
-    pass
-
-
 class UnknownActionError(ActionCodecError):
     pass
 
 
-class DuplicateActionError(ActionCodecError):
-    pass
-
-
-class ActionFamilyCapacityError(ActionCodecError):
+class InvalidInteractionError(ActionCodecError):
     pass
 
 
@@ -88,109 +58,193 @@ class ActionCodecValidationError(ActionCodecError):
     pass
 
 
-POSITION_TYPES = (
-    PlaceFromPersonalSupply,
-    DisplaceOpponent,
-    PickUpPiece,
-    PlaceHeldPiece,
-    PlaceDisplacedPiece,
-    PlaceOptionalDisplacementPiece,
-    PickUpDisplacementFallbackPiece,
-    PlaceHeldDisplacementFallbackPiece,
-)
-ROUTE_TYPES = (
-    CompleteRouteForPoints,
-    ClaimRouteOffice,
-    UpgradeFromRoute,
-    ClaimRoutePrestige,
-    ClaimAdditionalTradingPost,
-    SelectTributeRoute,
-    SelectBlockedRoute,
-    SelectBonusMarkerReplacementRoute,
-)
-CITY_TYPES = (SwapAdjacentOffices, ClaimGreenCity)
-TILE_TYPES = (BuyEmperorsFavour, SelectBonusMarkerPayment, RespondToIncomeFavour)
-CONTROL_TYPES = (FinishMovePickup, FinishDisplacement, EndTurn)
-
-
 @dataclass(frozen=True)
-class ActionFamily:
+class InteractionFamily:
     name: str
+    action_type: type[GameAction]
     action_range: ActionRange
-    action_types: tuple[type[GameAction], ...]
+    encode_local: Callable[[GameAction], int]
+    decode_local: Callable[[int], GameAction]
+    validate_action: Callable[[GameAction], None]
+    describe_action: Callable[[GameAction], str]
 
 
-DEFAULT_ACTION_FAMILIES = (
-    ActionFamily("position", POSITION, POSITION_TYPES),
-    ActionFamily("route", ROUTE, ROUTE_TYPES),
-    ActionFamily("city", CITY, CITY_TYPES),
-    ActionFamily("income", INCOME, (TakeIncome,)),
-    ActionFamily("exact_two", EXACT_TWO, (SelectTwoPieceMix,)),
-    ActionFamily("tribute_income", TRIBUTE_INCOME, (SelectTributeIncome,)),
-    ActionFamily("bonus_marker", BONUS_MARKER, (ActivateBonusMarker,)),
-    ActionFamily("used_bonus_marker", USED_BONUS_MARKER, (ExchangeForUsedBonusMarker,)),
-    ActionFamily("tile", TILE, TILE_TYPES),
-    ActionFamily("ability", ABILITY, (SelectAbility,)),
-    ActionFamily("control", CONTROL, CONTROL_TYPES),
-)
+def _require_int(value, field: str) -> None:
+    if type(value) is not int:
+        raise InvalidInteractionError(f"{field} must be an integer")
 
 
-def _canonical_value(value):
-    if isinstance(value, Enum):
-        return value.value
-    if is_dataclass(value):
-        return tuple(
-            (field.name, _canonical_value(getattr(value, field.name))) for field in fields(value)
+def _validate_slot(value, field: str, capacity: int) -> None:
+    _require_int(value, field)
+    if not 0 <= value < capacity:
+        raise InvalidInteractionError(f"{field} must be between 0 and {capacity - 1}")
+
+
+def _post_family() -> InteractionFamily:
+    def validate(action):
+        _validate_slot(action.post_slot, "post_slot", 121)
+        if type(action.shape) is not PieceShape:
+            raise InvalidInteractionError("shape must be a PieceShape")
+
+    def encode(action):
+        shape_offset = 121 if action.shape is PieceShape.MERCHANT else 0
+        return shape_offset + action.post_slot
+
+    def decode(local):
+        shape = PieceShape.MERCHANT if local >= 121 else PieceShape.TRADER
+        return PostInteraction(local % 121, shape)
+
+    return InteractionFamily(
+        "post",
+        PostInteraction,
+        POST,
+        encode,
+        decode,
+        validate,
+        lambda action: f"Post {action.post_slot}: {action.shape.value} interaction",
+    )
+
+
+def _route_family() -> InteractionFamily:
+    def validate(action):
+        _validate_slot(action.route_slot, "route_slot", 40)
+        _validate_slot(action.interaction_slot, "interaction_slot", 7)
+
+    def encode(action):
+        slot = action.interaction_slot
+        if slot == 0:
+            return action.route_slot
+        if slot <= 2:
+            return 40 + action.route_slot * 2 + (slot - 1)
+        return 120 + action.route_slot * 4 + (slot - 3)
+
+    def decode(local):
+        if local < 40:
+            return RouteInteraction(local, 0)
+        if local < 120:
+            relative = local - 40
+            route_slot, endpoint = divmod(relative, 2)
+            return RouteInteraction(route_slot, endpoint + 1)
+        relative = local - 120
+        route_slot, outcome = divmod(relative, 4)
+        return RouteInteraction(route_slot, outcome + 3)
+
+    return InteractionFamily(
+        "route",
+        RouteInteraction,
+        ROUTE,
+        encode,
+        decode,
+        validate,
+        lambda action: (f"Route {action.route_slot}: interaction {action.interaction_slot}"),
+    )
+
+
+def _linear_family(
+    *,
+    name: str,
+    action_type: type[GameAction],
+    action_range: ActionRange,
+    field: str,
+    label: str,
+) -> InteractionFamily:
+    def validate(action):
+        _validate_slot(
+            getattr(action, field),
+            field,
+            action_range.active_capacity,
         )
-    if isinstance(value, tuple):
-        return tuple(_canonical_value(item) for item in value)
-    return value
+
+    return InteractionFamily(
+        name,
+        action_type,
+        action_range,
+        lambda action: getattr(action, field),
+        lambda local: action_type(local),
+        validate,
+        lambda action: f"{label} {getattr(action, field)}",
+    )
 
 
-def _action_sort_key(action: GameAction):
-    return (type(action).__name__, _canonical_value(action))
-
-
-@dataclass(frozen=True)
-class ActionCodecContext:
-    """Stable family catalogue and legal subset for one state revision."""
-
-    state_revision: int | str
-    action_catalogue: tuple[GameAction, ...]
-    legal_actions: tuple[GameAction, ...]
-
-    @classmethod
-    def from_actions(
-        cls,
-        state_revision: int | str,
-        legal_actions: Iterable[GameAction],
-        action_catalogue: Iterable[GameAction] | None = None,
-    ) -> "ActionCodecContext":
-        legal = tuple(legal_actions)
-        catalogue = legal if action_catalogue is None else tuple(action_catalogue)
-        return cls(state_revision, catalogue, legal)
-
-
-@dataclass(frozen=True)
-class EncodedDecision:
-    state_revision: int | str
-    mask: tuple[bool, ...]
-    action_by_index: dict[int, GameAction]
-    index_by_action: dict[GameAction, int]
+DEFAULT_INTERACTION_FAMILIES = (
+    _post_family(),
+    _route_family(),
+    _linear_family(
+        name="income",
+        action_type=IncomeInteraction,
+        action_range=INCOME,
+        field="merchant_count",
+        label="Income interaction",
+    ),
+    _linear_family(
+        name="bonus_marker",
+        action_type=BonusMarkerInteraction,
+        action_range=BONUS_MARKER,
+        field="marker_slot",
+        label="Bonus-marker interaction",
+    ),
+    _linear_family(
+        name="tile",
+        action_type=TileInteraction,
+        action_range=TILE,
+        field="tile_slot",
+        label="Tile interaction",
+    ),
+    _linear_family(
+        name="city",
+        action_type=CityInteraction,
+        action_range=CITY,
+        field="city_interaction_slot",
+        label="City interaction",
+    ),
+    _linear_family(
+        name="ability",
+        action_type=AbilityInteraction,
+        action_range=ABILITY,
+        field="ability_slot",
+        label="Ability interaction",
+    ),
+    _linear_family(
+        name="supply",
+        action_type=SupplyInteraction,
+        action_range=SUPPLY,
+        field="supply_slot",
+        label="Player-supply interaction",
+    ),
+    _linear_family(
+        name="player",
+        action_type=PlayerInteraction,
+        action_range=PLAYER,
+        field="player_slot",
+        label="Player interaction",
+    ),
+    _linear_family(
+        name="control",
+        action_type=ControlInteraction,
+        action_range=CONTROL,
+        field="control_slot",
+        label="Control interaction",
+    ),
+)
 
 
 class ActionCodec:
-    """Translate complete engine-owned decisions through family-local slots."""
+    """Translate stable interaction objects without calculating legality."""
 
-    def __init__(self, families: Iterable[ActionFamily] = DEFAULT_ACTION_FAMILIES):
+    def __init__(
+        self,
+        families: Iterable[InteractionFamily] = DEFAULT_INTERACTION_FAMILIES,
+    ):
         self.families = tuple(families)
-        self._family_by_type: dict[type[GameAction], ActionFamily] = {}
-        self._family_by_index: list[ActionFamily | None] = [None] * ACTION_SPACE_SIZE
+        self._family_by_type = {}
+        self._family_by_index: list[InteractionFamily | None] = [None] * ACTION_SPACE_SIZE
         self.validate()
         for family in self.families:
-            for action_type in family.action_types:
-                self._family_by_type[action_type] = family
-            for index in range(family.action_range.start, family.action_range.stop):
+            self._family_by_type[family.action_type] = family
+            for index in range(
+                family.action_range.start,
+                family.action_range.active_stop,
+            ):
                 self._family_by_index[index] = family
 
     @staticmethod
@@ -202,119 +256,70 @@ class ActionCodec:
 
     def is_reserved(self, index: int) -> bool:
         self._validate_index(index)
-        return RESERVED.start <= index < RESERVED.stop
+        return self._family_by_index[index] is None
 
-    def _group_catalogue(
-        self, context: ActionCodecContext
-    ) -> dict[ActionFamily, tuple[GameAction, ...]]:
-        if len(context.action_catalogue) != len(set(context.action_catalogue)):
-            raise DuplicateActionError("Action catalogue contains duplicate decisions")
-        if len(context.legal_actions) != len(set(context.legal_actions)):
-            raise DuplicateActionError("Legal action context contains duplicate decisions")
-        if not set(context.legal_actions).issubset(context.action_catalogue):
-            raise UnknownActionError("Every legal action must appear in the action catalogue")
+    def encode(self, action: GameAction) -> int:
+        family = self._family_by_type.get(type(action))
+        if family is None:
+            raise UnknownActionError(
+                f"No interaction family is registered for {type(action).__name__}"
+            )
+        family.validate_action(action)
+        local = family.encode_local(action)
+        if not 0 <= local < family.action_range.active_capacity:
+            raise ActionCodecValidationError(f"{family.name} encoded inactive local slot {local}")
+        return family.action_range.start + local
 
-        grouped: dict[ActionFamily, list[GameAction]] = {family: [] for family in self.families}
-        for action in context.action_catalogue:
-            family = self._family_by_type.get(type(action))
-            if family is None:
-                raise UnknownActionError(
-                    f"No action family is registered for {type(action).__name__}"
-                )
-            grouped[family].append(action)
-
-        result = {}
-        for family, actions in grouped.items():
-            ordered = tuple(sorted(actions, key=_action_sort_key))
-            if len(ordered) > family.action_range.capacity:
-                raise ActionFamilyCapacityError(
-                    f"{family.name} has {len(ordered)} legal decisions but only "
-                    f"{family.action_range.capacity} schema slots"
-                )
-            result[family] = ordered
-        return result
-
-    def build_decision(self, context: ActionCodecContext) -> EncodedDecision:
-        grouped = self._group_catalogue(context)
-        action_by_index = {}
-        index_by_action = {}
-        legal_actions = set(context.legal_actions)
-        for family, actions in grouped.items():
-            for local_index, action in enumerate(actions):
-                index = family.action_range.start + local_index
-                index_by_action[action] = index
-                if action in legal_actions:
-                    action_by_index[index] = action
-
-        mask = tuple(index in action_by_index for index in range(ACTION_SPACE_SIZE))
-        return EncodedDecision(
-            context.state_revision,
-            mask,
-            action_by_index,
-            index_by_action,
-        )
-
-    def encode(self, action: GameAction, context: ActionCodecContext) -> int:
-        if action not in context.legal_actions:
-            if type(action) not in self._family_by_type:
-                raise UnknownActionError(
-                    f"No action family is registered for {type(action).__name__}"
-                )
-            raise UnknownActionError(f"{action!r} is not legal in this context")
-        try:
-            return self.build_decision(context).index_by_action[action]
-        except KeyError as exc:
-            if type(action) not in self._family_by_type:
-                raise UnknownActionError(
-                    f"No action family is registered for {type(action).__name__}"
-                ) from exc
-            raise UnknownActionError(f"{action!r} is not legal in this context") from exc
-
-    def decode(self, index: int, context: ActionCodecContext) -> GameAction:
+    def decode(self, index: int) -> GameAction:
         self._validate_index(index)
-        if self.is_reserved(index):
+        family = self._family_by_index[index]
+        if family is None:
             raise ReservedActionIndexError(f"Action index {index} is reserved")
-        try:
-            return self.build_decision(context).action_by_index[index]
-        except KeyError as exc:
-            raise InactiveActionIndexError(
-                f"Action index {index} is inactive in state {context.state_revision}"
-            ) from exc
+        return family.decode_local(index - family.action_range.start)
 
-    def describe(self, index: int, context: ActionCodecContext) -> str:
-        action = self.decode(index, context)
-        values = ", ".join(
-            f"{field.name}={_canonical_value(getattr(action, field.name))}"
-            for field in fields(action)
-        )
-        return f"{type(action).__name__}({values})"
+    def describe(self, index: int) -> str:
+        action = self.decode(index)
+        family = self._family_by_index[index]
+        return family.describe_action(action)
 
     def validate(self) -> None:
         active_ranges = tuple(
-            action_range for action_range in ACTION_RANGES if not action_range.reserved
+            action_range for action_range in ACTION_RANGES if action_range.active_capacity
         )
         registered_ranges = tuple(family.action_range for family in self.families)
         if len(set(registered_ranges)) != len(registered_ranges):
-            raise ActionCodecValidationError("An action range is registered more than once")
+            raise ActionCodecValidationError("An interaction range is registered more than once")
         if set(active_ranges) != set(registered_ranges):
-            raise ActionCodecValidationError(
-                "Registered action-family ranges differ from the active schema"
-            )
+            raise ActionCodecValidationError("Registered interaction ranges differ from the schema")
 
         claimed_types = set()
         for family in self.families:
-            if family.name != family.action_range.family:
+            if family.name != family.action_range.name:
                 raise ActionCodecValidationError(
-                    f"{family.name} does not match schema family {family.action_range.family}"
+                    f"{family.name} does not match range {family.action_range.name}"
                 )
-            if not family.action_types:
-                raise ActionCodecValidationError(f"{family.name} has no action types")
-            for action_type in family.action_types:
-                if action_type in claimed_types:
+            if family.action_type in claimed_types:
+                raise ActionCodecValidationError(
+                    f"{family.action_type.__name__} is registered twice"
+                )
+            claimed_types.add(family.action_type)
+
+        decoded = {}
+        for action_range in active_ranges:
+            for index in range(action_range.start, action_range.active_stop):
+                family = next(item for item in self.families if item.action_range == action_range)
+                action = family.decode_local(index - action_range.start)
+                family.validate_action(action)
+                encoded = action_range.start + family.encode_local(action)
+                if encoded != index:
                     raise ActionCodecValidationError(
-                        f"{action_type.__name__} is registered by multiple families"
+                        f"Round trip changed index {index} into {encoded}"
                     )
-                claimed_types.add(action_type)
+                if action in decoded:
+                    raise ActionCodecValidationError(
+                        f"Duplicate interaction {action!r} at {decoded[action]} and {index}"
+                    )
+                decoded[action] = index
 
 
 DEFAULT_ACTION_CODEC = ActionCodec()

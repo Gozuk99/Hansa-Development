@@ -17,6 +17,7 @@ EMPERORS_FAVOUR_TILES = (
     "+7PtsPerCompletedAbility",
 )
 
+
 class Game:
     def __init__(
         self,
@@ -59,7 +60,9 @@ class Game:
         self.waiting_for_displaced_player = False
 
         self.east_west_completed_count = 0
-        self.players_who_completed_east_west = set()  # Track players who have completed the connection
+        self.players_who_completed_east_west = (
+            set()
+        )  # Track players who have completed the connection
 
         self.waiting_for_bm_swap_office = False
         self.waiting_for_bm_place_adjacent = False
@@ -112,23 +115,27 @@ class Game:
     def create_players(self, num_players):
         colors = [GREEN, BLUE, PURPLE, RED, YELLOW]
         players = []
-        
+
         for i, color in enumerate(colors[:num_players]):
-            new_player = Player(color, i+1, load_model=self.load_models)
-            new_player.board = PlayerBoard(self.selected_map.map_width, i * 220, new_player)  # Create and assign the board directly here
+            new_player = Player(color, i + 1, load_model=self.load_models)
+            new_player.board = PlayerBoard(
+                self.selected_map.map_width, i * 220, new_player
+            )  # Create and assign the board directly here
             new_player.start_turn()
 
             if self.use_mission_cards:
-                self.selected_map.assign_mission_cards(new_player)  # Assign a mission card to the player
+                self.selected_map.assign_mission_cards(
+                    new_player
+                )  # Assign a mission card to the player
 
             players.append(new_player)
-        
+
         return players
 
     def initialize_tile_pool(self):
         tiles = list(EMPERORS_FAVOUR_TILES)
         self.rng.shuffle(tiles)
-        self.tile_pool.extend(tiles[:self.num_players])
+        self.tile_pool.extend(tiles[: self.num_players])
 
     def assign_map(self, map_num, num_players):
         # Logic to assign a map based on map_num
@@ -138,7 +145,7 @@ class Game:
             return Map2(rng=self.rng)
         elif map_num == 3:
             return Map3(num_players, rng=self.rng)
-    
+
     @property
     def pending_workflows(self):
         workflows = []
@@ -159,18 +166,20 @@ class Game:
         if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
             workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
 
-        bonus_pending = any((
-            self.waiting_for_bm_swap_office,
-            self.waiting_for_bm_upgrade_ability,
-            self.waiting_for_bm_move_any_2,
-            self.waiting_for_bm_move3,
-            self.waiting_for_bm_exchange_bm,
-            self.waiting_for_bm_tribute_trading_post,
-            self.waiting_for_bm_block_trade_route,
-            self.waiting_for_bm_green_city,
-            self.waiting_for_place2_from_route,
-            self.waiting_for_place2_in_scotland_or_wales,
-        ))
+        bonus_pending = any(
+            (
+                self.waiting_for_bm_swap_office,
+                self.waiting_for_bm_upgrade_ability,
+                self.waiting_for_bm_move_any_2,
+                self.waiting_for_bm_move3,
+                self.waiting_for_bm_exchange_bm,
+                self.waiting_for_bm_tribute_trading_post,
+                self.waiting_for_bm_block_trade_route,
+                self.waiting_for_bm_green_city,
+                self.waiting_for_place2_from_route,
+                self.waiting_for_place2_in_scotland_or_wales,
+            )
+        )
         if bonus_pending:
             workflows.append(TurnPhase.BONUS_MARKER_CHOICE)
         elif self.current_player.holding_pieces:
@@ -184,9 +193,7 @@ class Game:
             return TurnPhase.GAME_OVER
         workflows = self.pending_workflows
         immediate_workflows = tuple(
-            workflow
-            for workflow in workflows
-            if workflow != TurnPhase.REPLACE_BONUS_MARKERS
+            workflow for workflow in workflows if workflow != TurnPhase.REPLACE_BONUS_MARKERS
         )
         if len(immediate_workflows) > 1:
             names = ", ".join(workflow.value for workflow in immediate_workflows)
@@ -201,9 +208,7 @@ class Game:
 
     def advance_turn(self):
         if self.turn_phase != TurnPhase.TURN_COMPLETE:
-            raise TurnStateError(
-                f"Cannot advance player during phase {self.turn_phase.value}"
-            )
+            raise TurnStateError(f"Cannot advance player during phase {self.turn_phase.value}")
 
         previous_player = self.current_player
         previous_player.ending_turn = False
@@ -221,19 +226,31 @@ class Game:
 
     def switch_player_if_needed(self):
         if self.turn_phase == TurnPhase.TURN_COMPLETE:
-            print(f"Conditions met. Switching from Player {self.current_player_index+1} - {COLOR_NAMES[self.current_player.color]}.")
+            print(
+                f"Conditions met. Switching from Player {self.current_player_index + 1} - {COLOR_NAMES[self.current_player.color]}."
+            )
             self.advance_turn()
-            print(f"Switched to Player {self.current_player_index+1} - {COLOR_NAMES[self.current_player.color]}.")
+            print(
+                f"Switched to Player {self.current_player_index + 1} - {COLOR_NAMES[self.current_player.color]}."
+            )
             return True
         if self.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS:
-            print(f"{COLOR_NAMES[self.current_player.color]} - Place a Bonus Marker to Finish your Turn.")
+            print(
+                f"{COLOR_NAMES[self.current_player.color]} - Place a Bonus Marker to Finish your Turn."
+            )
         return False
 
     def legal_action_mask(self):
-        """Return the authoritative legal-action mask for the current state."""
+        """Return the legacy AI mask derived from authoritative legal actions."""
         from ai.action_options import masking_out_invalid_actions
 
         return masking_out_invalid_actions(self)
+
+    def get_legal_actions(self):
+        """Return authoritative structured legal interactions."""
+        from game.legal_actions import get_legal_actions
+
+        return get_legal_actions(self)
 
     def apply_action(self, action_index):
         """Validate and apply one action through the supported engine boundary."""
@@ -255,7 +272,7 @@ class Game:
             )
 
         _perform_action_from_index(self, action_index)
-    
+
     def reset_valid_posts(self):
         for post in self.all_empty_posts:
             post.reset_post()
@@ -358,13 +375,19 @@ class Game:
 
     def check_for_east_west_connection(self):
         if self.current_player in self.players_who_completed_east_west:
-            print(f"{COLOR_NAMES[self.current_player.color]} has already completed the East-West Connection.")
-            return
-        
-        if not self.check_if_player_has_matching_offices_in_east_west(self.selected_map.east_west_cities[0], self.selected_map.east_west_cities[1]):
+            print(
+                f"{COLOR_NAMES[self.current_player.color]} has already completed the East-West Connection."
+            )
             return
 
-        if self.has_east_west_connection(self.selected_map.east_west_cities[0], self.selected_map.east_west_cities[1]):
+        if not self.check_if_player_has_matching_offices_in_east_west(
+            self.selected_map.east_west_cities[0], self.selected_map.east_west_cities[1]
+        ):
+            return
+
+        if self.has_east_west_connection(
+            self.selected_map.east_west_cities[0], self.selected_map.east_west_cities[1]
+        ):
             # Points for the 1st, 2nd, and 3rd completions
             east_west_points = [7, 4, 2]
 
@@ -375,29 +398,40 @@ class Game:
                 self.east_west_completed_count += 1
                 self.players_who_completed_east_west.add(self.current_player)
 
-                print(f"{COLOR_NAMES[self.current_player.color]} has created an East-West Connection and is awarded {awarded_points} points! Total score is now {self.current_player.score}.")
+                print(
+                    f"{COLOR_NAMES[self.current_player.color]} has created an East-West Connection and is awarded {awarded_points} points! Total score is now {self.current_player.score}."
+                )
             else:
-                print(f"East West Connection has been completed 3+ times. No points awarded to {COLOR_NAMES[self.current_player.color]}.")
-    
+                print(
+                    f"East West Connection has been completed 3+ times. No points awarded to {COLOR_NAMES[self.current_player.color]}."
+                )
+
     def check_if_player_has_matching_offices_in_east_west(self, start_city_name, end_city_name):
-        start_city = next((city for city in self.selected_map.cities if city.name == start_city_name), None)
-        end_city = next((city for city in self.selected_map.cities if city.name == end_city_name), None)
+        start_city = next(
+            (city for city in self.selected_map.cities if city.name == start_city_name), None
+        )
+        end_city = next(
+            (city for city in self.selected_map.cities if city.name == end_city_name), None
+        )
 
         if not start_city or not end_city:
             return False
 
-        return (
-            start_city.has_office_controlled_by(self.current_player)
-            and end_city.has_office_controlled_by(self.current_player)
-        )
-    
+        return start_city.has_office_controlled_by(
+            self.current_player
+        ) and end_city.has_office_controlled_by(self.current_player)
+
     def has_east_west_connection(self, start_city_name, end_city_name, visited=None):
         # This is a recursive depth-first search (DFS) algorithm.
         if visited is None:
             visited = set()
 
-        start_city = next((city for city in self.selected_map.cities if city.name == start_city_name), None)
-        end_city = next((city for city in self.selected_map.cities if city.name == end_city_name), None)
+        start_city = next(
+            (city for city in self.selected_map.cities if city.name == start_city_name), None
+        )
+        end_city = next(
+            (city for city in self.selected_map.cities if city.name == end_city_name), None
+        )
 
         # Check if both cities exist in the game.
         if start_city is None or end_city is None:
@@ -419,7 +453,9 @@ class Game:
             # Check all cities connected to this route
             for connected_city in route.cities:
                 # Skip if we've already visited this city or if the connected city doesn't have the player's office
-                if connected_city in visited or not connected_city.has_office_controlled_by(self.current_player):
+                if connected_city in visited or not connected_city.has_office_controlled_by(
+                    self.current_player
+                ):
                     continue
 
                 # Recursively check if the connected city leads to the end city
@@ -428,7 +464,7 @@ class Game:
 
         # If none of the routes lead to the end city, return False
         return False
-        
+
     def get_bonus_marker_points(self, total_bms):
         if total_bms == 1:
             return 1
@@ -444,15 +480,15 @@ class Game:
             return 21
         else:
             return 0
-        
-        #1 initial points
-        #2 fully developed abilities
-        #3 prestige points for total bonus markers collected
+
+        # 1 initial points
+        # 2 fully developed abilities
+        # 3 prestige points for total bonus markers collected
         #  1-1, 2or3-3, 4or5-6, 6or7-10, 8or9-15, 10+ - 21
-        #4 specialprestigepoints 7/8/9/11
-        #5 prestige points for cities, 2 per control
-        #6 largest network x key       
-    
+        # 4 specialprestigepoints 7/8/9/11
+        # 5 prestige points for cities, 2 per control
+        # 6 largest network x key
+
     def dfs_network_size(self, player, city, visited_cities):
         if city in visited_cities:
             return 0  # This city is already part of the current network
@@ -463,7 +499,11 @@ class Game:
 
         for route in city.routes:
             for connected_city in route.cities:
-                if connected_city != city and connected_city.has_office_owned_by(player) and connected_city not in visited_cities:
+                if (
+                    connected_city != city
+                    and connected_city.has_office_owned_by(player)
+                    and connected_city not in visited_cities
+                ):
                     network_size += self.dfs_network_size(player, connected_city, visited_cities)
 
         return network_size
@@ -499,7 +539,7 @@ class Game:
                 if getattr(player, ability) == UPGRADE_MAX_VALUES[ability]:
                     ability_points += 4  # Assuming 4 points for each fully developed ability
                     if self.SevenPtsPerCompletedAbilityOwner == player:
-                        ability_points += 3 # for a total of 7 points per fully developed ability
+                        ability_points += 3  # for a total of 7 points per fully developed ability
 
             # 3. Prestige points for total bonus markers collected
             total_bms = len(player.bonus_markers) + len(player.used_bonus_markers)
@@ -508,8 +548,9 @@ class Game:
             # 5. Add Special Prestige Points
             if self.selected_map.specialprestigepoints is not None:
                 special_prestige_points = (
-                    self.selected_map.specialprestigepoints
-                    .get_special_prestige_points_for_player(player)
+                    self.selected_map.specialprestigepoints.get_special_prestige_points_for_player(
+                        player
+                    )
                 )
 
             # 6. Add points for control of cities
@@ -523,7 +564,15 @@ class Game:
             largest_network_points += self.calculate_largest_network(player) * player.keys
 
             # Sum up the final score
-            player.final_score = (initial_points + ability_points + bonus_marker_points + special_prestige_points + city_control_points + largest_network_points + regional_points)
+            player.final_score = (
+                initial_points
+                + ability_points
+                + bonus_marker_points
+                + special_prestige_points
+                + city_control_points
+                + largest_network_points
+                + regional_points
+            )
 
             if self.use_mission_cards and player.mission_card:
                 mission_city_points = self.get_mission_card_points(player)
@@ -531,22 +580,24 @@ class Game:
 
             # Update the score breakdown for display
             score_breakdown = {
-                'Initial Points': initial_points,
-                'Ability Points': ability_points,
-                'Bonus Marker Points': bonus_marker_points,
-                'Special Prestige Points': special_prestige_points,
-                'City Control Points': city_control_points,
-                'Largest Network Points': largest_network_points,
-                'Britannia Region Points': regional_points,
+                "Initial Points": initial_points,
+                "Ability Points": ability_points,
+                "Bonus Marker Points": bonus_marker_points,
+                "Special Prestige Points": special_prestige_points,
+                "City Control Points": city_control_points,
+                "Largest Network Points": largest_network_points,
+                "Britannia Region Points": regional_points,
             }
 
             if self.use_mission_cards and player.mission_card:
-                score_breakdown['Mission City Points'] = mission_city_points
+                score_breakdown["Mission City Points"] = mission_city_points
             player.final_score_breakdown = score_breakdown
 
             # Ensure final score is not less than the initial score
             if player.final_score < player.score:
-                print(f"ERROR: Player {COLOR_NAMES[player.color]}: Final score is less than or equal to the initial score. No change made.")
+                print(
+                    f"ERROR: Player {COLOR_NAMES[player.color]}: Final score is less than or equal to the initial score. No change made."
+                )
                 exit(1)
 
             # You can print the score breakdown here if needed
@@ -580,9 +631,7 @@ class Game:
                 ]
                 controlled = sum(city.get_controller() == player for city in cities)
                 offices = sum(
-                    office.controller == player
-                    for city in cities
-                    for office in city.offices
+                    office.controller == player for city in cities for office in city.offices
                 )
                 if offices:
                     standings.append((player, controlled, offices))
@@ -596,7 +645,7 @@ class Game:
                 while index < len(standings) and standings[index][1:] == metric:
                     tied.append(standings[index][0])
                     index += 1
-                available = awards[position:min(position + len(tied), len(awards))]
+                available = awards[position : min(position + len(tied), len(awards))]
                 shared = sum(available) // len(tied)
                 for player in tied:
                     totals[player] += shared
@@ -612,20 +661,22 @@ class Game:
             city for city in self.selected_map.cities if city.name in player.mission_card
         ]
         occupied = sum(city.has_office_owned_by(player) for city in mission_cities)
-        controls_all = (
-            len(mission_cities) == len(player.mission_card)
-            and all(city.get_controller() == player for city in mission_cities)
+        controls_all = len(mission_cities) == len(player.mission_card) and all(
+            city.get_controller() == player for city in mission_cities
         )
         return occupied + (5 if controls_all else 0)
 
     def check_for_game_end(self):
+        self.current_full_cities_count = sum(
+            1 for city in self.selected_map.cities if city.city_is_full()
+        )
 
-        self.current_full_cities_count = sum(1 for city in self.selected_map.cities if city.city_is_full())
-        
         # Check if the bonus marker pool is empty or any player has reached the score threshold
-        end_conditions_met = (self.bonus_pool_exhausted_during_claim or
-                              any(player.score >= 20 for player in self.players) or
-                              self.current_full_cities_count >= self.selected_map.max_full_cities)
+        end_conditions_met = (
+            self.bonus_pool_exhausted_during_claim
+            or any(player.score >= 20 for player in self.players)
+            or self.current_full_cities_count >= self.selected_map.max_full_cities
+        )
 
         if end_conditions_met:
             immediate = [
@@ -640,27 +691,20 @@ class Game:
             # Finalize points before determining the winner
             self.finalize_end_of_game_points()
             self.game_end = True
-    
+
     def end_the_game(self):
         highest_score = max(player.final_score for player in self.players)
-        tied = [
-            player for player in self.players if player.final_score == highest_score
-        ]
+        tied = [player for player in self.players if player.final_score == highest_score]
         if len(tied) <= 1:
             return tied
 
         least_developed_actions = min(player.actions_index for player in tied)
-        tied = [
-            player
-            for player in tied
-            if player.actions_index == least_developed_actions
-        ]
+        tied = [player for player in tied if player.actions_index == least_developed_actions]
         if len(tied) <= 1:
             return tied
 
         largest_network_score = max(
-            player.final_score_breakdown.get("Largest Network Points", 0)
-            for player in tied
+            player.final_score_breakdown.get("Largest Network Points", 0) for player in tied
         )
         return [
             player

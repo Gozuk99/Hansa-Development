@@ -5,25 +5,23 @@ from game.action_schema import (
     ACTION_RANGES,
     ACTION_SCHEMA_VERSION,
     ACTION_SPACE_SIZE,
-    RESERVED,
     validate_action_schema,
 )
 
 
 class ActionSchemaTests(unittest.TestCase):
     EXPECTED = (
-        ("position", 0, 352, "position", False),
-        ("route", 352, 160, "route", False),
-        ("city", 512, 46, "city", False),
-        ("income", 558, 5, "income", False),
-        ("exact_two", 563, 3, "exact_two", False),
-        ("tribute_income", 566, 3, "tribute_income", False),
-        ("bonus_marker", 569, 9, "bonus_marker", False),
-        ("used_bonus_marker", 578, 32, "used_bonus_marker", False),
-        ("tile", 610, 8, "tile", False),
-        ("ability", 618, 5, "ability", False),
-        ("control", 623, 3, "control", False),
-        ("reserved", 626, 142, None, True),
+        ("post", 0, 256, 242, "PostInteraction"),
+        ("route", 256, 320, 280, "RouteInteraction"),
+        ("income", 576, 16, 5, "IncomeInteraction"),
+        ("bonus_marker", 592, 48, 41, "BonusMarkerInteraction"),
+        ("tile", 640, 16, 8, "TileInteraction"),
+        ("city", 656, 64, 52, "CityInteraction"),
+        ("ability", 720, 8, 5, "AbilityInteraction"),
+        ("supply", 728, 2, 1, "SupplyInteraction"),
+        ("player", 730, 6, 5, "PlayerInteraction"),
+        ("control", 736, 8, 2, "ControlInteraction"),
+        ("expansion", 744, 24, 0, None),
     )
 
     def test_version_size_and_registry(self):
@@ -35,8 +33,8 @@ class ActionSchemaTests(unittest.TestCase):
                     item.name,
                     item.start,
                     item.capacity,
-                    item.family,
-                    item.reserved,
+                    item.active_capacity,
+                    item.interaction_type,
                 )
                 for item in ACTION_RANGES
             ),
@@ -52,21 +50,27 @@ class ActionSchemaTests(unittest.TestCase):
         ]
         self.assertEqual(indices, list(range(ACTION_SPACE_SIZE)))
 
-    def test_exact_active_and_reserved_capacity(self):
-        active = sum(item.capacity for item in ACTION_RANGES if not item.reserved)
-        reserved = sum(item.capacity for item in ACTION_RANGES if item.reserved)
-        self.assertEqual(active, 626)
-        self.assertEqual(reserved, 142)
-        self.assertEqual((RESERVED.start, RESERVED.stop), (626, 768))
+    def test_padding_is_distributed_inside_families(self):
+        active = sum(item.active_capacity for item in ACTION_RANGES)
+        reserved = sum(item.reserved_capacity for item in ACTION_RANGES)
+        self.assertEqual(active, 641)
+        self.assertEqual(reserved, 127)
+        for item in ACTION_RANGES[:-1]:
+            with self.subTest(family=item.name):
+                self.assertGreater(item.reserved_capacity, 0)
 
     def test_documented_allocation_matches_registry(self):
         document = (Path(__file__).resolve().parents[1] / "docs" / "action-schema-v2.md").read_text(
             encoding="utf-8"
         )
-        for name, start, capacity, _family, _reserved in self.EXPECTED:
+        for name, start, capacity, active, _interaction in self.EXPECTED:
             end = start + capacity - 1
             with self.subTest(name=name):
-                self.assertIn(f"| `{name.upper()}` | `{start}–{end}` | {capacity} |", document)
+                self.assertIn(
+                    f"| `{name.upper()}` | `{start}–{end}` | {capacity} | "
+                    f"{active} | {capacity - active} |",
+                    document,
+                )
 
 
 if __name__ == "__main__":
