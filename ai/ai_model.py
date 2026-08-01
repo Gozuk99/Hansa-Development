@@ -1,5 +1,10 @@
 import os
 import torch
+from game.action_schema import (
+    ACTION_SPACE_SIZE,
+    action_schema_metadata,
+    validate_action_schema_metadata,
+)
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -21,6 +26,10 @@ if torch.cuda.is_available():
 class HansaNN(nn.Module):
     def __init__(self, input_size, output_size, model_file=None):
         super(HansaNN, self).__init__()
+        if output_size != ACTION_SPACE_SIZE:
+            raise ValueError(
+                f"HansaNN output size {output_size} does not match action space {ACTION_SPACE_SIZE}"
+            )
         self.layer1 = nn.Linear(input_size, 2048).to(device)
         self.layer2 = nn.Linear(2048, 1024).to(device)
         self.layer3 = nn.Linear(1024, output_size).to(device)
@@ -28,7 +37,13 @@ class HansaNN(nn.Module):
         # self.softmax = nn.Softmax(dim=-1)
 
         if model_file and os.path.isfile(model_file):
-            self.load_state_dict(torch.load(model_file, map_location=device))
+            loaded = torch.load(model_file, map_location=device)
+            if not isinstance(loaded, dict) or "state_dict" not in loaded:
+                raise ValueError(
+                    f"Model checkpoint {model_file} is missing its state_dict and action-schema metadata"
+                )
+            validate_action_schema_metadata(loaded, f"Model checkpoint {model_file}")
+            self.load_state_dict(loaded["state_dict"])
             print(f"Model loaded from {model_file}")
         else:
             if model_file:
@@ -58,7 +73,10 @@ class HansaNN(nn.Module):
         model_path = f"hansa_nn_model{player_order}.pth"
         try:
             print(f"Saving model for Player: {player_order} as {model_path}")
-            torch.save(self.state_dict(), model_path)
+            torch.save(
+                {"state_dict": self.state_dict(), **action_schema_metadata()},
+                model_path,
+            )
         except Exception as e:  # Catch a broader range of exceptions for robustness
             print(f"Error saving model: {e}")
             return False

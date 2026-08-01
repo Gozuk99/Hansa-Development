@@ -16,7 +16,7 @@ class ActionSchemaTests(unittest.TestCase):
         ("route", 256, 320, 280, "RouteInteraction"),
         ("income", 576, 16, 5, "IncomeInteraction"),
         ("bonus_marker", 592, 48, 41, "BonusMarkerInteraction"),
-        ("tile", 640, 16, 8, "TileInteraction"),
+        ("tile", 640, 16, 6, "TileInteraction"),
         ("city", 656, 64, 52, "CityInteraction"),
         ("ability", 720, 8, 5, "AbilityInteraction"),
         ("supply", 728, 2, 1, "SupplyInteraction"),
@@ -55,8 +55,8 @@ class ActionSchemaTests(unittest.TestCase):
     def test_padding_is_distributed_inside_families(self):
         active = sum(item.active_capacity for item in ACTION_RANGES)
         reserved = sum(item.reserved_capacity for item in ACTION_RANGES)
-        self.assertEqual(active, 641)
-        self.assertEqual(reserved, 127)
+        self.assertEqual(active, 639)
+        self.assertEqual(reserved, 129)
         for item in ACTION_RANGES[:-1]:
             with self.subTest(family=item.name):
                 self.assertGreater(item.reserved_capacity, 0)
