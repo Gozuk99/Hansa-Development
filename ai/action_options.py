@@ -1,3 +1,4 @@
+# fmt: off
 import sys
 import torch
 import time
@@ -624,6 +625,9 @@ def map_income_action(game, index):
 
 
 def map_bm_action(game, index):
+    if game.waiting_for_buy_tile_with_bm and game.tile_to_buy is not None:
+        map_buy_tile_action(game, index)
+        return
     current_player = game.current_player
 
     bm_mapping = {
@@ -668,6 +672,8 @@ def map_bm_action(game, index):
                     selected_bm = bm
                     print(f"1Selected BM: {selected_bm.type}")
                     break
+        if selected_bm is None:
+            raise InvalidActionError("Selected bonus marker is unavailable")
         print(f"2Selected BM: {selected_bm.type}")
         if selected_bm.type == "SwapOffice":
             game.waiting_for_bm_swap_office = True
@@ -702,6 +708,9 @@ def map_bm_action(game, index):
 
 
 def map_place_adjacent_action(game):
+    if game.waiting_for_buy_tile_with_bm and game.tile_to_buy is not None:
+        map_buy_tile_action(game, 8)
+        return
     if not any(marker.type == "PlaceAdjacent" for marker in game.current_player.bonus_markers):
         raise InvalidActionError("No Additional Trading Post marker is available")
     game.waiting_for_bm_place_adjacent = True
@@ -730,6 +739,7 @@ def map_buy_tile_action(game, index):
         "ExchangeBonusMarker",
         "Tribute4EstablishingTP",
         "BlockTradeRoute",
+        "PlaceAdjacent",
     )
 
     if game.waiting_for_buy_tile_with_bm:
@@ -828,10 +838,10 @@ def map_bm_city_actions(game, index):
         pairs = [
             (city, pair)
             for city in game.selected_map.cities
-            for pair in city.eligible_swap_pairs(game.current_player)
+            for pair in city.eligible_swap_pairs(game.current_player, game)
         ]
         city, pair = pairs[index]
-        if not city.swap_office_pair(game.current_player, pair):
+        if not city.swap_office_pair(game.current_player, pair, game):
             raise InvalidActionError("Trading-post exchange is no longer legal")
         game.waiting_for_bm_swap_office = False
         return
@@ -1420,7 +1430,7 @@ def mask_bm(game):
                 # TODO: Check if the BM is valid to use
                 if bm.type == "SwapOffice":
                     for city in game.selected_map.cities:
-                        if city.check_if_eligible_to_swap_offices(game.current_player):
+                        if city.check_if_eligible_to_swap_offices(game.current_player, game):
                             bm_tensor[bm_index] = 1
                 elif bm.type == "ExchangeBonusMarker":
                     if any(
@@ -1447,8 +1457,8 @@ def mask_buy_tile(game):
     current_player = game.current_player
 
     buy_tile_tensor = torch.zeros(
-        8, device=device, dtype=torch.uint8
-    )  # 6 possible tiles to buy and 8 BMs
+        9, device=device, dtype=torch.uint8
+    )  # 6 possible tiles to buy and 9 BMs
     tile_mapping = {
         "DisplaceAnywhere": 0,
         "+1Action": 1,
@@ -1466,6 +1476,7 @@ def mask_buy_tile(game):
         "ExchangeBonusMarker": 5,
         "Tribute4EstablishingTP": 6,
         "BlockTradeRoute": 7,
+        "PlaceAdjacent": 8,
     }
 
     if game.pending_income_favour_owner is not None:
@@ -1536,7 +1547,7 @@ def mask_bm_city_actions(game):
         pairs = [
             (city, pair)
             for city in game.selected_map.cities
-            for pair in city.eligible_swap_pairs(game.current_player)
+            for pair in city.eligible_swap_pairs(game.current_player, game)
         ]
         bm_city_tensor[: len(pairs)] = 1
         return bm_city_tensor
@@ -1639,7 +1650,7 @@ def check_if_player_has_usable_BMs(game):
             # Check if there's a city where the player is eligible to swap offices
             swap_office_possible = False
             for city in game.selected_map.cities:
-                if city.check_if_eligible_to_swap_offices(game.current_player):
+                if city.check_if_eligible_to_swap_offices(game.current_player, game):
                     swap_office_possible = True
                     break
             if not swap_office_possible:

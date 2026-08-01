@@ -72,6 +72,17 @@ class StandardBonusMarkerTests(unittest.TestCase):
 
         self.assertEqual(city.eligible_swap_pairs(player), [])
 
+    def test_exchange_includes_all_offices_in_map_two_green_cities(self):
+        game = create_headless_game(2, 3, seed=124)
+        player, opponent = game.players[:2]
+        city = next(city for city in game.selected_map.cities if city.name == "Belgard")
+        extra = city.create_new_office(player.color)
+        extra.controller = player
+        extra.place_adjacent_office = True
+        city.offices[1].controller = opponent
+
+        self.assertIn((0, 1), city.eligible_swap_pairs(player, game))
+
     def test_develop_ability_releases_piece_and_masks_fully_developed_tracks(self):
         game = self.game()
         player = game.current_player

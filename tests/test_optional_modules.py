@@ -10,6 +10,7 @@ from player_info.player_attributes import UPGRADE_MAX_VALUES
 
 
 TILE_ACTION_START = 535
+BM_ACTION_START = 527
 TILES = (
     "DisplaceAnywhere",
     "+1Action",
@@ -27,6 +28,7 @@ MARKER_TYPES = (
     "ExchangeBonusMarker",
     "Tribute4EstablishingTP",
     "BlockTradeRoute",
+    "PlaceAdjacent",
 )
 
 
@@ -114,16 +116,33 @@ class OptionalModuleTests(unittest.TestCase):
 
         game.apply_action(TILE_ACTION_START + 1)
         self.assertTrue(game.waiting_for_buy_tile_with_bm)
-        game.apply_action(TILE_ACTION_START)
+        game.apply_action(BM_ACTION_START)
         self.assertIs(game.first_bm_to_spend_on_tile, markers[0])
-        self.assertEqual(game.legal_action_mask()[TILE_ACTION_START].item(), 1)
+        self.assertEqual(game.legal_action_mask()[BM_ACTION_START].item(), 1)
 
         with contextlib.redirect_stdout(io.StringIO()):
-            game.apply_action(TILE_ACTION_START)
+            game.apply_action(BM_ACTION_START)
 
         self.assertEqual(player.used_bonus_markers, markers[:2])
         self.assertEqual(player.bonus_markers, [markers[2]])
         self.assertEqual(player.tiles, [TILES[1]])
+
+    def test_additional_trading_post_marker_may_pay_for_tile(self):
+        game = self.game()
+        player = game.current_player
+        game.tile_pool = [TILES[0]]
+        place_adjacent = BonusMarker("PlaceAdjacent")
+        swap = BonusMarker("SwapOffice")
+        player.bonus_markers = [place_adjacent, swap, BonusMarker("Move3")]
+
+        game.apply_action(TILE_ACTION_START)
+        game.apply_action(619)
+        with contextlib.redirect_stdout(io.StringIO()):
+            game.apply_action(BM_ACTION_START)
+
+        self.assertIn(place_adjacent, player.used_bonus_markers)
+        self.assertIn(swap, player.used_bonus_markers)
+        self.assertEqual(player.tiles, [TILES[0]])
 
     def test_tile_purchase_rejects_used_actions_and_invalid_payment(self):
         game = self.game()
@@ -229,7 +248,9 @@ class OptionalModuleTests(unittest.TestCase):
 
                 game.begin_income_favour_response(other)
                 mask = game.legal_action_mask()
-                self.assertEqual(mask[TILE_ACTION_START:TILE_ACTION_START + 3].tolist(), [1, 1, 1])
+                self.assertEqual(
+                    mask[TILE_ACTION_START : TILE_ACTION_START + 3].tolist(), [1, 1, 1]
+                )
                 game.apply_action(TILE_ACTION_START + action_offset)
 
                 for shape in ("square", "circle"):

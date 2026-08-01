@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+import json
 import random
 
 from game.action_codec import DEFAULT_ACTION_CODEC
+from game.action_schema import action_schema_metadata, validate_action_schema_metadata
 from game.game_info import Game
 from game.invariants import validate_game
 from game.structured_actions import (
@@ -21,6 +23,45 @@ class GameRunResult:
     terminal_reason: str
     final_scores: tuple
     action_trace: tuple
+
+    def replay_record(self):
+        return ReplayRecord(
+            map_num=self.map_num,
+            num_players=self.num_players,
+            seed=self.seed,
+            action_trace=self.action_trace,
+        )
+
+
+@dataclass(frozen=True)
+class ReplayRecord:
+    map_num: int
+    num_players: int
+    seed: int
+    action_trace: tuple[int, ...]
+
+    def to_dict(self):
+        return {**action_schema_metadata(), **vars(self), "action_trace": list(self.action_trace)}
+
+    @classmethod
+    def from_dict(cls, data):
+        validate_action_schema_metadata(data, "Replay")
+        return cls(
+            map_num=data["map_num"],
+            num_players=data["num_players"],
+            seed=data["seed"],
+            action_trace=tuple(data["action_trace"]),
+        )
+
+
+def save_replay(record, filename):
+    with open(filename, "w", encoding="utf-8") as replay_file:
+        json.dump(record.to_dict(), replay_file, indent=2)
+
+
+def load_replay(filename):
+    with open(filename, encoding="utf-8") as replay_file:
+        return ReplayRecord.from_dict(json.load(replay_file))
 
 
 class GameRunError(RuntimeError):

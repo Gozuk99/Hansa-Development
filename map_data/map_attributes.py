@@ -192,13 +192,27 @@ class City:
                 return office.color
         return None
     
-    def eligible_swap_pairs(self, current_player):
+    def eligible_swap_pairs(self, current_player, game=None):
         pairs = []
         for left_index in range(len(self.offices) - 1):
             left = self.offices[left_index]
             right = self.offices[left_index + 1]
+            # By default, do not allow swapping into or from a place-adjacent (extra) office.
+            # Exception: green cities on Map2 may allow swaps involving added offices.
             if left.place_adjacent_office or right.place_adjacent_office:
-                continue
+                allow_extra = False
+                try:
+                    if (
+                        game is not None
+                        and getattr(game, "selected_map", None) is not None
+                        and game.selected_map.__class__.__name__ == "Map2"
+                        and self.color == DARK_GREEN
+                    ):
+                        allow_extra = True
+                except Exception:
+                    allow_extra = False
+                if not allow_extra:
+                    continue
             if left.controller is None or right.controller is None:
                 continue
             if left.controller is right.controller:
@@ -207,11 +221,11 @@ class City:
                 pairs.append((left_index, left_index + 1))
         return pairs
 
-    def check_if_eligible_to_swap_offices(self, current_player):
-        return bool(self.eligible_swap_pairs(current_player))
+    def check_if_eligible_to_swap_offices(self, current_player, game=None):
+        return bool(self.eligible_swap_pairs(current_player, game))
 
-    def swap_office_pair(self, current_player, pair):
-        if pair not in self.eligible_swap_pairs(current_player):
+    def swap_office_pair(self, current_player, pair, game=None):
+        if pair not in self.eligible_swap_pairs(current_player, game):
             return False
         left_index, right_index = pair
         left, right = self.offices[left_index], self.offices[right_index]
@@ -222,9 +236,9 @@ class City:
         )
         return True
 
-    def swap_offices(self, current_player):
-        pairs = self.eligible_swap_pairs(current_player)
-        return bool(pairs and self.swap_office_pair(current_player, pairs[0]))
+    def swap_offices(self, current_player, game=None):
+        pairs = self.eligible_swap_pairs(current_player, game)
+        return bool(pairs and self.swap_office_pair(current_player, pairs[0], game))
 
     def can_claim_additional_office(self, player, route, shape):
         standard_offices = [
@@ -530,10 +544,10 @@ class BonusMarker:
         distance_squared = (self.position[0] - mouse_pos[0]) ** 2 + (self.position[1] - mouse_pos[1]) ** 2
         return distance_squared <= CIRCLE_RADIUS ** 2
         
-    def handle_swap_office(self, city, player):
-        if city.check_if_eligible_to_swap_offices(player):
+    def handle_swap_office(self, city, player, game=None):
+        if city.check_if_eligible_to_swap_offices(player, game):
             print ("Valid City to swap offices")
-            city.swap_offices(player)
+            city.swap_offices(player, game)
             return True
         else:
             print ("Invalid City to Swap offices, please try another city.")

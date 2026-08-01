@@ -294,6 +294,7 @@ class ExhaustiveActionValidationTests(unittest.TestCase):
         restored = pickle.loads(pickle.dumps(game, protocol=pickle.HIGHEST_PROTOCOL))
 
         self.assertEqual(game.get_legal_actions(), restored.get_legal_actions())
+        self.assertEqual(game.ai_action_mask(), restored.ai_action_mask())
         restored_office = next(
             office for city in restored.selected_map.cities for office in city.offices
         )
@@ -314,6 +315,7 @@ class ExhaustiveActionValidationTests(unittest.TestCase):
         replay = replay_game(trace, map_num=2, num_players=3, seed=124)
 
         self.assertEqual(state_fingerprint(original), state_fingerprint(replay))
+        self.assertEqual(original.ai_action_mask(), replay.ai_action_mask())
         self.validate_quietly(replay)
 
 

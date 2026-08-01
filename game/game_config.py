@@ -229,15 +229,7 @@ class GameConfiguration:
         from map_data.constants import INPUT_SIZE, OUTPUT_SIZE
 
         model_file = f"hansa_nn_model{player_order}.pth"
-        try:
-            return HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=model_file)
-        except RuntimeError as error:
-            summary = str(error).splitlines()[0]
-            print(
-                f"Cannot load {model_file}; starting Player {player_order} with "
-                f"a new model. Checkpoint error: {summary}"
-            )
-            return HansaNN(INPUT_SIZE, OUTPUT_SIZE)
+        return HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=model_file)
 
 
 def choose_ranked_ai_action(

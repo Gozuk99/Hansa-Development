@@ -5,6 +5,43 @@ from dataclasses import dataclass
 
 ACTION_SPACE_SIZE = 768
 ACTION_SCHEMA_VERSION = 2
+# SHA-256 of every assigned ``index:decoded-action`` pair in index order.
+# The compatibility test fails if an assigned index or meaning changes without
+# an intentional schema-version/fingerprint update.
+ACTION_SCHEMA_FINGERPRINT = "f0ef36c33722b35380463b4309e09ddbed40ce8c37a2c1d48fb7a6aecacca16d"
+
+
+class ActionSchemaCompatibilityError(ValueError):
+    """Raised when an artifact cannot be used with the active action schema."""
+
+
+def action_schema_metadata() -> dict[str, int | str]:
+    """Return the exact action-schema identity stored with persisted artifacts."""
+    return {
+        "action_schema_version": ACTION_SCHEMA_VERSION,
+        "action_space_size": ACTION_SPACE_SIZE,
+        "action_schema_fingerprint": ACTION_SCHEMA_FINGERPRINT,
+    }
+
+
+def validate_action_schema_metadata(metadata, artifact="artifact") -> None:
+    """Reject missing or incompatible schema identities without guessing a migration."""
+    expected = action_schema_metadata()
+    missing = [key for key in expected if metadata.get(key) is None]
+    if missing:
+        raise ActionSchemaCompatibilityError(
+            f"{artifact} is missing action-schema metadata: {', '.join(missing)}"
+        )
+    mismatches = [
+        f"{key}={metadata.get(key)!r} (expected {value!r})"
+        for key, value in expected.items()
+        if metadata.get(key) != value
+    ]
+    if mismatches:
+        raise ActionSchemaCompatibilityError(
+            f"{artifact} uses an incompatible action schema: {'; '.join(mismatches)}. "
+            "Use an explicit migration or the matching runtime."
+        )
 
 
 @dataclass(frozen=True)
@@ -46,7 +83,7 @@ POST = ActionRange("post", 0, 256, 242, "PostInteraction")
 ROUTE = ActionRange("route", 256, 320, 280, "RouteInteraction")
 INCOME = ActionRange("income", 576, 16, 5, "IncomeInteraction")
 BONUS_MARKER = ActionRange("bonus_marker", 592, 48, 41, "BonusMarkerInteraction")
-TILE = ActionRange("tile", 640, 16, 8, "TileInteraction")
+TILE = ActionRange("tile", 640, 16, 6, "TileInteraction")
 CITY = ActionRange("city", 656, 64, 52, "CityInteraction")
 ABILITY = ActionRange("ability", 720, 8, 5, "AbilityInteraction")
 SUPPLY = ActionRange("supply", 728, 2, 1, "SupplyInteraction")

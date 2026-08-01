@@ -1,5 +1,6 @@
 """Human-readable descriptions for the engine's indexed legal actions."""
 
+# fmt: off
 from __future__ import annotations
 
 from game.turn_state import TurnPhase
@@ -178,7 +179,7 @@ def _city_context_label(index: int, game) -> str:
         pairs = [
             (city, pair)
             for city in game.selected_map.cities
-            for pair in city.eligible_swap_pairs(game.current_player)
+            for pair in city.eligible_swap_pairs(game.current_player, game)
         ]
         if choice < len(pairs):
             city, pair = pairs[choice]

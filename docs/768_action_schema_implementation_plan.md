@@ -550,6 +550,10 @@ Include this metadata in:
 - Replays and histories must record the schema version.
 - Debug output must report the active schema version.
 - Any future incompatible action remapping must increment the schema version.
+- New versions must preserve assigned indices and semantics whenever possible.
+- New actions must consume reserved indices within their existing family before ranges move.
+- Compatible extensions still require a version bump so artifacts identify the exact schema used.
+- Incompatible changes require an explicit migration or a clear rejection; never guess.
 
 ## Acceptance criteria
 
@@ -758,8 +762,8 @@ Use this section to track progress.
 - [x] Milestone 4 — Expose structured legal actions
 - [x] Milestone 5 — Replace AI mask and dispatcher
 - [x] Milestone 6 — Add exhaustive action-schema validation
-- [ ] Milestone 7 — Add schema versioning
-- [ ] Milestone 8 — Complete final pre-training audit
+- [x] Milestone 7 — Add schema versioning
+- [x] Milestone 8 — Complete final pre-training audit
 
 ---
 

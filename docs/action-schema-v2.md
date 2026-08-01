@@ -6,8 +6,8 @@ This document defines the active 768-entry AI interaction schema.
 
 - `ACTION_SCHEMA_VERSION = 2`
 - `ACTION_SPACE_SIZE = 768`
-- assigned interaction slots: 641
-- reserved family capacity: 127
+- assigned interaction slots: 639
+- reserved family capacity: 129
 - registry: `game/action_schema.py`
 
 AI and headless play use this schema. The 620-entry adapter remains only for
@@ -36,7 +36,7 @@ Examples:
 | `ROUTE` | `256–575` | 320 | 280 | 40 | Route body, endpoint office, or drawn endpoint outcome |
 | `INCOME` | `576–591` | 16 | 5 | 11 | Resource composition |
 | `BONUS_MARKER` | `592–639` | 48 | 41 | 7 | Owned marker or opponent-used marker |
-| `TILE` | `640–655` | 16 | 8 | 8 | Tile, payment, or Favour response |
+| `TILE` | `640–655` | 16 | 6 | 10 | Tile choice or Favour response |
 | `CITY` | `656–719` | 64 | 52 | 12 | Adjacent-office boundary or green-city/shape |
 | `ABILITY` | `720–727` | 8 | 5 | 3 | Player-board ability box |
 | `SUPPLY` | `728–729` | 2 | 1 | 1 | Optional same-shape displacement piece source |
@@ -44,8 +44,12 @@ Examples:
 | `CONTROL` | `736–743` | 8 | 2 | 6 | Finish current workflow or end turn |
 | `EXPANSION` | `744–767` | 24 | 0 | 24 | Future interaction family |
 
-The 127 reserved slots are distributed inside permanent family boundaries.
+The 129 reserved slots are distributed inside permanent family boundaries.
 Activating padding in one family cannot shift a later family.
+
+Emperor's Favour payment reuses the existing bonus-marker interactions. The
+player selects the marker being spent; payment does not create a second set of
+tile-family actions for the same physical markers.
 
 ## Route interactions
 

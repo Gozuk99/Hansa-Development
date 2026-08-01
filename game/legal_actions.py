@@ -70,7 +70,10 @@ def _allowed_in_phase(game, action):
                 ControlInteraction,
             ),
         )
-    if phase in (TurnPhase.BUY_TILE_PAYMENT, TurnPhase.INCOME_FAVOUR_RESPONSE):
+    if phase == TurnPhase.BUY_TILE_PAYMENT:
+        expected_type = BonusMarkerInteraction if game.tile_to_buy is not None else TileInteraction
+        return isinstance(action, expected_type)
+    if phase == TurnPhase.INCOME_FAVOUR_RESPONSE:
         return isinstance(action, TileInteraction)
     if phase in (
         TurnPhase.TRIBUTE_INCOME_RESPONSE,
@@ -122,15 +125,21 @@ def get_legal_actions(game):
 
     actions.extend(IncomeInteraction(local) for local in _enabled(mask_income_actions(game)))
 
-    for local in _enabled(mask_bm(game)):
-        if game.waiting_for_bm_exchange_bm and game.exchange_target_player is not None:
-            opponents = [player for player in game.players if player is not game.current_player]
-            opponent = opponents.index(game.exchange_target_player)
-            actions.append(BonusMarkerInteraction(9 + opponent * 8 + local))
-        else:
-            actions.append(BonusMarkerInteraction(local))
-
-    actions.extend(TileInteraction(local) for local in _enabled(mask_buy_tile(game)))
+    tile_choices = _enabled(mask_buy_tile(game))
+    choosing_tile_payment = (
+        game.turn_phase == TurnPhase.BUY_TILE_PAYMENT and game.tile_to_buy is not None
+    )
+    if choosing_tile_payment:
+        actions.extend(BonusMarkerInteraction(local) for local in tile_choices)
+    else:
+        actions.extend(TileInteraction(local) for local in tile_choices)
+        for local in _enabled(mask_bm(game)):
+            if game.waiting_for_bm_exchange_bm and game.exchange_target_player is not None:
+                opponents = [player for player in game.players if player is not game.current_player]
+                opponent = opponents.index(game.exchange_target_player)
+                actions.append(BonusMarkerInteraction(9 + opponent * 8 + local))
+            else:
+                actions.append(BonusMarkerInteraction(local))
 
     for route in _enabled(mask_replace_bm(game)):
         actions.append(RouteInteraction(route, 0))
@@ -142,7 +151,7 @@ def get_legal_actions(game):
         eligible = [
             (city, pair)
             for city in game.selected_map.cities
-            for pair in city.eligible_swap_pairs(game.current_player)
+            for pair in city.eligible_swap_pairs(game.current_player, game)
         ]
         catalogue = _city_pair_catalogue(game)
         actions.extend(
@@ -223,7 +232,7 @@ def to_legacy_index(game, action):
             eligible = [
                 (city, pair)
                 for city in game.selected_map.cities
-                for pair in city.eligible_swap_pairs(game.current_player)
+                for pair in city.eligible_swap_pairs(game.current_player, game)
             ]
             return 583 + eligible.index(choice)
         catalogue = _green_catalogue(game)

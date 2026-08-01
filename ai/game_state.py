@@ -1,8 +1,10 @@
+# fmt: off
 import torch
 import json
 import random
 import os
 from game.game_info import Game
+from game.action_schema import action_schema_metadata, validate_action_schema_metadata
 from map_data.constants import (
     GREEN,
     BLUE,
@@ -721,8 +723,15 @@ class BoardData:
         with open(filename, "r") as f:
             game_state_JSON = json.load(f)
 
+        validate_action_schema_metadata(game_state_JSON, f"Saved game {filename}")
+
+        seed = game_state_JSON.get("seed", None)
+
         game = Game(
-            game_state_JSON["game_info"]["map_num"], game_state_JSON["game_info"]["num_players"]
+            game_state_JSON["game_info"]["map_num"],
+            game_state_JSON["game_info"]["num_players"],
+            seed=seed,
+            load_models=False,
         )
 
         self.load_game_info_JSON(game, game_state_JSON["game_info"])
@@ -964,7 +973,7 @@ class BoardData:
                     for bm in player_data.get("player_used_bonus_markers", []):
                         player.used_bonus_markers.append(BonusMarker(type=bm, owner=player))
 
-    def save_game_state_JSON(self, game):
+    def save_game_state_JSON(self, game, filename="game_state_JSON.json"):
         game_state_JSON = {}
         game_info_JSON = self.fill_game_info_JSON(game)
         city_info_JSON = self.fill_city_info_JSON(game)
@@ -977,8 +986,11 @@ class BoardData:
         game_state_JSON["route_info"] = route_info_JSON
         game_state_JSON["player_info"] = player_info_JSON
 
+        game_state_JSON.update(action_schema_metadata())
+        game_state_JSON["seed"] = game.seed
+
         # save game_state_JSON to a file
-        with open("game_state_JSON.json", "w") as f:
+        with open(filename, "w") as f:
             json.dump(game_state_JSON, f, indent=4)
 
     def fill_game_info_JSON(self, game):
@@ -1035,9 +1047,12 @@ class BoardData:
 
         tile_pool_info_JSON = {}
         for i in range(len(game.players)):
-            tile_pool_info_JSON[f"available_tile{i + 1}"] = (
-                game.tile_pool[i] if game.tile_pool[i] else None
-            )
+            if i < len(game.tile_pool):
+                tile_pool_info_JSON[f"available_tile{i + 1}"] = (
+                    game.tile_pool[i] if game.tile_pool[i] else None
+                )
+            else:
+                tile_pool_info_JSON[f"available_tile{i + 1}"] = None
 
         tile_owner_info_JSON = {
             "tile_owner_DisplaceAnywhere": game.DisplaceAnywhereOwner.order
