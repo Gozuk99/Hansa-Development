@@ -14,6 +14,8 @@ from game.game_config import (
 )
 from game.setup import MAX_PLAYERS, MIN_PLAYERS, SUPPORTED_MAPS
 from drawing.scaled_display import ScaledDisplay
+from drawing.save_dialogs import choose_load_file
+from game.persistence import load_game
 from map_data.map_attributes import Map
 
 
@@ -232,12 +234,17 @@ class NewGameMenu:
                 y += 113
 
         if self.error:
-            self.label(self.error, 48, 850, small=True, color=ERROR)
+            self.label(self.error, 48, 824, small=True, color=ERROR)
         self.button(
             pygame.Rect(710, 856, 210, 44),
             "Start Game",
             self._start,
             selected=True,
+        )
+        self.button(
+            pygame.Rect(480, 856, 210, 44),
+            "Load Saved Game",
+            self._load_saved_game,
         )
         self.display.present()
 
@@ -299,7 +306,18 @@ class NewGameMenu:
         else:
             self.running = False
 
-    def run(self) -> GameConfiguration | None:
+    def _load_saved_game(self):
+        try:
+            filename = choose_load_file()
+            if filename is None:
+                return
+            self.result = load_game(filename)
+        except Exception as error:
+            self.error = str(error)
+        else:
+            self.running = False
+
+    def run(self) -> object | None:
         self.result = None
         self.running = True
         while self.running:
@@ -331,6 +349,6 @@ class NewGameMenu:
         return self.result
 
 
-def run_new_game_menu() -> GameConfiguration | None:
+def run_new_game_menu() -> object | None:
     pygame.init()
     return NewGameMenu().run()

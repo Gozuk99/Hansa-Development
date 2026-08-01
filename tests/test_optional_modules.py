@@ -2,7 +2,7 @@ import contextlib
 import io
 import unittest
 
-from ai.game_state import BoardData
+from ai.observation_encoder import ObservationEncoder
 from game.game_actions import buy_tile
 from game.game_runner import create_headless_game
 from map_data.map_attributes import BonusMarker
@@ -76,7 +76,7 @@ class OptionalModuleTests(unittest.TestCase):
 
     def test_pre_game_end_ai_observation_includes_own_mission_but_hides_opponents(self):
         game = self.game()
-        board_data = BoardData()
+        board_data = ObservationEncoder()
 
         self.assertFalse(game.game_end)
         self.assertNotEqual(

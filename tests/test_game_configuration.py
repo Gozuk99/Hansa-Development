@@ -236,6 +236,23 @@ class GameConfigurationTests(unittest.TestCase):
         window.run.assert_called_once_with()
         quit_pygame.assert_called_once_with()
 
+    def test_primary_launcher_runs_a_loaded_game_without_reinitializing_it(self):
+        loaded_game = GameConfiguration(seed=124).create_game()
+        window = mock.Mock()
+
+        with (
+            mock.patch(
+                "drawing.new_game_menu.run_new_game_menu",
+                return_value=loaded_game,
+            ),
+            mock.patch("drawing.game_window.GameWindow", return_value=window) as game_window,
+            mock.patch("pygame.quit"),
+        ):
+            self.assertEqual(hansa_game.main(), 0)
+
+        game_window.assert_called_once_with(loaded_game)
+        window.run.assert_called_once_with()
+
     def test_scaled_display_fits_large_logical_canvas_inside_viewport(self):
         self.assertEqual(
             ScaledDisplay.fit_size((980, 900), (1280, 620)),

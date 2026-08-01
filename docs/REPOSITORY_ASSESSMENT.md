@@ -2,7 +2,9 @@
 
 ## Executive Summary
 
-The project has a substantial playable rules engine, a board renderer, JSON snapshot code, a fixed neural-network observation/action interface, and an experimental self-play loop. These pieces are tightly coupled and do not yet form a reliable simulation platform.
+The project has a substantial playable rules engine, a board renderer, exact
+versioned saves, a fixed neural-network observation/action interface, and an
+experimental self-play loop.
 
 The highest priority is making the game engine deterministic, serializable, and testable without pygame or PyTorch. Training should remain paused until saving, loading, legal actions, and complete-game simulation are demonstrably reliable.
 
@@ -58,7 +60,8 @@ These fields collectively determine what can legally happen next.
 
 ### Neural-network observation
 
-`ai/game_state.py` converts the object graph into a fixed tensor of 4,445 values.
+`ai/observation_encoder.py` converts the object graph into a fixed tensor of
+4,445 values.
 
 It pads the representation to fixed maximums:
 
@@ -70,18 +73,12 @@ It pads the representation to fixed maximums:
 
 This tensor is an observation for the model, not a reversible serialization format. It necessarily loses or compresses information and should not be treated as an exact saved game.
 
-### JSON snapshot
+### Exact saved games
 
-`BoardData.save_game_state_JSON()` writes four sections:
-
-- `game_info`
-- `city_info`
-- `route_info`
-- `player_info`
-
-It always overwrites `game_state_JSON.json`; it does not accept a destination name.
-
-The JSON is useful as an early snapshot design, but it is not currently an exact or dependable checkpoint.
+`game/persistence.py` stores complete, versioned `.hansa` snapshots. The
+interactive game exposes Save Game during play and Load Saved Game from the
+main menu. `ai/observation_encoder.py` is only the neural-network input encoder;
+it is intentionally separate from persistence.
 
 ## 3. Actions and Legal-Action Masking
 

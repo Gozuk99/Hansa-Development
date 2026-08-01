@@ -8,11 +8,12 @@ def main() -> int:
     try:
         from drawing.game_window import GameWindow
         from drawing.new_game_menu import run_new_game_menu
+        from game.game_info import Game
 
-        configuration = run_new_game_menu()
-        if configuration is None:
+        selection = run_new_game_menu()
+        if selection is None:
             return 0
-        game = configuration.create_game()
+        game = selection if isinstance(selection, Game) else selection.create_game()
         GameWindow(game).run()
         return 0
     finally:
