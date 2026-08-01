@@ -1,7 +1,7 @@
 """
-CLI helper to validate action schema metadata in saved game JSON files or model checkpoints.
+CLI helper to validate action schema metadata in Hansa saves or model checkpoints.
 Usage:
-  python tools/check_schema_compat.py --game path/to/game_state_JSON.json
+  python tools/check_schema_compat.py --game path/to/position.hansa
   python tools/check_schema_compat.py --model path/to/hansa_nn_model1.pth
 
 Exit code 0 on success, non-zero on incompatibility.
@@ -26,14 +26,15 @@ from game.action_schema import ActionSchemaCompatibilityError, validate_action_s
 
 
 def check_game(path: str) -> int:
-    with open(path, "r") as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
+    metadata = data.get("metadata", {}) if isinstance(data, dict) else {}
     try:
-        validate_action_schema_metadata(data, f"Game file {path}")
+        validate_action_schema_metadata(metadata, f"Game file {path}")
     except ActionSchemaCompatibilityError as error:
         print(f"INCOMPATIBLE: {error}")
         return 3
-    print("OK: game JSON schema matches runtime")
+    print("OK: saved-game schema matches runtime")
     return 0
 
 
@@ -56,7 +57,7 @@ def check_model(path: str) -> int:
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--game", help="Path to game JSON file")
+    p.add_argument("--game", help="Path to saved game (.hansa)")
     p.add_argument("--model", help="Path to model checkpoint (.pth)")
     args = p.parse_args()
     if not args.game and not args.model:

@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pygame
 
-from ai.game_state import BoardData
+from ai.observation_encoder import ObservationEncoder
 from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
 from drawing.drawing_utils import draw_upgrades, draw_used_bm_section, redraw_window
@@ -156,7 +156,7 @@ class DrawingTests(unittest.TestCase):
         observer = game.players[0]
         opponent = game.players[1]
         opponent.used_bonus_markers = [BonusMarker("Move3")]
-        board_data = BoardData()
+        board_data = ObservationEncoder()
 
         state = public_game_state(board_data, game, observer)
         player_start = (

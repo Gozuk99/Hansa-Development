@@ -52,6 +52,7 @@ class Player:
         self.actions_index = 0
         self.actions = ACTIONS_MAX_VALUES[0]
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
+        self.actions_granted_this_turn = 0
         self.bank = 3
 
         inventory = starting_inventory(order)
@@ -72,6 +73,7 @@ class Player:
             raise ValueError("extra_actions cannot be negative")
         self.actions_remaining = self.actions + extra_actions
         self.actions_at_turn_start = self.actions_remaining
+        self.actions_granted_this_turn = 0
         self.ending_turn = False
 
     @property
@@ -104,9 +106,11 @@ class Player:
         if count < 0:
             raise ValueError("count cannot be negative")
         self.actions_remaining += count
+        self.actions_granted_this_turn += count
 
     def forfeit_remaining_actions(self):
         self.actions_remaining = 0
+        self.actions_granted_this_turn = 0
 
     def refresh_map3_priv_actions(self, game):
         self.brown_priv_count = 0

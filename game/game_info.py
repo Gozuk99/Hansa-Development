@@ -212,6 +212,7 @@ class Game:
 
         previous_player = self.current_player
         previous_player.ending_turn = False
+        previous_player.actions_granted_this_turn = 0
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
         self.turn_number += 1
         if self.current_player_index == 0:

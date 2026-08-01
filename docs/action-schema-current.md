@@ -620,15 +620,11 @@ This is a stale import, not an active action-space dependency.
 
 ### Saves and difficult-state snapshots
 
-- `BoardData.save_game_state_JSON` and load helpers in `ai/game_state.py`
-  serialize mutable game state but do not store action indices, action-space
-  size, or schema version;
-- `game_state_JSON.json` and JSON files under `training_data/` use that
-  unversioned state shape;
-- these files therefore depend indirectly on action semantics only when a
-  caller computes or applies an action after loading;
-- the existing repository assessment identifies those saves as incomplete and
-  not exact checkpoints.
+- `game/persistence.py` owns versioned `.hansa` exact-game snapshots;
+- saves include the action-schema version, size, and fingerprint;
+- loading rejects damaged, unsafe, or incompatible files;
+- `ai/observation_encoder.py` produces neural-network input only and is not a
+  reversible save format.
 
 ### History and replay
 

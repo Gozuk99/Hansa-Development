@@ -7,9 +7,8 @@ import unittest
 import torch
 
 from ai.ai_model import HansaNN
-from ai.game_state import BoardData
 from game.action_codec import DEFAULT_ACTION_CODEC
-from game.game_runner import ReplayRecord, create_headless_game, load_replay, save_replay
+from game.game_runner import ReplayRecord, load_replay, save_replay
 from game.action_schema import (
     ACTION_SCHEMA_FINGERPRINT,
     ACTION_SCHEMA_VERSION,
@@ -29,18 +28,6 @@ class TestActionSchemaVersioning(unittest.TestCase):
         )
         fingerprint = hashlib.sha256("\n".join(assigned).encode()).hexdigest()
         self.assertEqual(fingerprint, ACTION_SCHEMA_FINGERPRINT)
-
-    def test_game_save_contains_schema_metadata(self):
-        game = create_headless_game(2, 3, seed=124)
-        bd = BoardData()
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "state.json"
-            bd.save_game_state_JSON(game, path)
-            with path.open() as f:
-                data = json.load(f)
-            self.assertEqual(data["action_schema_version"], ACTION_SCHEMA_VERSION)
-            self.assertEqual(data["action_space_size"], ACTION_SPACE_SIZE)
-            self.assertEqual(data["action_schema_fingerprint"], ACTION_SCHEMA_FINGERPRINT)
 
     def test_current_metadata_is_compatible(self):
         validate_action_schema_metadata(action_schema_metadata(), "test artifact")

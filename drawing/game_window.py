@@ -8,12 +8,14 @@ import pygame
 import torch
 
 from ai.action_options import masking_out_invalid_actions
-from ai.game_state import BoardData
+from ai.observation_encoder import ObservationEncoder
 from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
 from drawing.drawing_utils import draw_end_game, redraw_window
 from drawing.scaled_display import ScaledDisplay
+from drawing.save_dialogs import choose_save_file
 from game.game_config import PlayerControl, choose_ranked_ai_action
+from game.persistence import save_game
 from map_data.constants import MAX_ROUTES, TAN
 
 
@@ -27,9 +29,17 @@ class GameWindow:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 22)
         self.selected = 0
-        self.board_data = BoardData()
-        self.rng = random.Random(game.seed)
+        self.observation_encoder = ObservationEncoder()
+        self.rng = random.Random()
+        saved_rng_state = getattr(game, "_saved_controller_rng_state", None)
+        if saved_rng_state is None:
+            self.rng.seed(game.seed)
+        else:
+            self.rng.setstate(saved_rng_state)
+            del game._saved_controller_rng_state
         self.action_rects: list[tuple[pygame.Rect, int]] = []
+        self.save_rect = pygame.Rect(0, 0, 0, 0)
+        self.save_status = ""
         self.layout = None
 
     def legal_actions(self) -> list[int]:
@@ -58,6 +68,16 @@ class GameWindow:
             (30, 25, 20),
         )
         self.screen.blit(city_help, (panel.x + 10, panel.y + 74))
+        self.save_rect = pygame.Rect(panel.x + 10, panel.bottom - 38, 120, 28)
+        pygame.draw.rect(self.screen, (117, 70, 42), self.save_rect, border_radius=5)
+        save_label = self.font.render("Save Game", True, (255, 255, 255))
+        self.screen.blit(save_label, save_label.get_rect(center=self.save_rect.center))
+        if self.save_status:
+            status = fit_text(self.font, self.save_status, panel.width - 150)
+            self.screen.blit(
+                self.font.render(status, True, (30, 25, 20)),
+                (self.save_rect.right + 8, self.save_rect.y + 5),
+            )
 
         if not actions:
             return
@@ -78,7 +98,7 @@ class GameWindow:
 
     def choose_ai_action(self, _legacy_legal_actions):
         player = self.acting_player
-        state = public_game_state(self.board_data, self.game, player).float()
+        state = public_game_state(self.observation_encoder, self.game, player).float()
         ai_actions = [index for index, enabled in enumerate(self.game.ai_action_mask()) if enabled]
         with torch.no_grad():
             scores = player.hansa_nn(state.unsqueeze(0)).squeeze(0)
@@ -89,6 +109,21 @@ class GameWindow:
             self.rng,
             dict(self.game.configuration.difficulty_top_k),
         )
+
+    def save_current_game(self):
+        try:
+            filename = choose_save_file(self.game)
+            if filename is None:
+                return
+            saved_path = save_game(
+                self.game,
+                filename,
+                controller_rng_state=self.rng.getstate(),
+            )
+        except Exception as error:
+            self.save_status = f"Save failed: {error}"
+        else:
+            self.save_status = f"Saved: {saved_path.name}"
 
     @property
     def acting_player(self):
@@ -262,6 +297,12 @@ class GameWindow:
                     running = False
                 elif event.type == pygame.VIDEORESIZE:
                     self.display.resize(event.size)
+                elif (
+                    event.type == pygame.MOUSEBUTTONUP
+                    and event.button == 1
+                    and self.save_rect.collidepoint(self.display.to_logical(event.pos))
+                ):
+                    self.save_current_game()
                 elif (
                     control.is_human
                     and not action_applied
