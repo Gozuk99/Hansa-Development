@@ -11,7 +11,6 @@ from typing import Iterable, Sequence
 from game.action_schema import TILE_TYPES
 from game.game_info import Game
 from game.setup import MAX_PLAYERS, MIN_PLAYERS, SUPPORTED_MAPS
-from map_data.constants import INPUT_SIZE, OUTPUT_SIZE
 from map_data.map_attributes import Map
 
 
@@ -200,7 +199,6 @@ class GameConfiguration:
         game = Game(
             map_num=self.map_num,
             num_players=self.player_count,
-            load_models=False,
             seed=self.seed,
             use_mission_cards=self.use_mission_cards,
             use_emperors_favour=self.use_emperors_favour,
@@ -210,20 +208,19 @@ class GameConfiguration:
             game.tile_pool = list(self.emperor_tiles)
 
         game.configuration = self
+        if self.has_ai_players:
+            game.ai_model = self._load_ai_model()
         for player, control in zip(game.players, self.player_controls):
             player.control = control
             player.ai_top_k = None if control.is_human else self.top_k_for(control)
-            if not control.is_human:
-                player.hansa_nn = self._load_ai_model(player.order)
         return game
 
     @staticmethod
-    def _load_ai_model(player_order: int):
+    def _load_ai_model():
         # AI models are optional; human-only games must not import PyTorch.
-        from ai.ai_model import HansaNN
+        from ai.ai_model import HansaNN, SHARED_MODEL_FILE
 
-        model_file = f"hansa_nn_model{player_order}.pth"
-        return HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=model_file)
+        return HansaNN(model_file=SHARED_MODEL_FILE)
 
 
 def choose_ranked_ai_action(

@@ -80,7 +80,6 @@ def create_headless_game(
     game = Game(
         map_num=map_num,
         num_players=num_players,
-        load_models=False,
         seed=seed,
         interactive_errors=False,
         use_mission_cards=use_mission_cards,

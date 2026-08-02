@@ -107,8 +107,10 @@ class GameWindow:
         player = self.acting_player
         state = public_game_state(self.observation_encoder, self.game, player).float()
         ai_actions = [index for index, enabled in enumerate(self.game.ai_action_mask()) if enabled]
+        if self.game.ai_model is None:
+            raise RuntimeError("The game has no shared AI model")
         with torch.no_grad():
-            scores = player.hansa_nn(state.unsqueeze(0)).squeeze(0)
+            scores = self.game.ai_model(state.unsqueeze(0)).squeeze(0)
         ranked = [(index, float(scores[index])) for index in ai_actions]
         return choose_ranked_ai_action(
             ranked,

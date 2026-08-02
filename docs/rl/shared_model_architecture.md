@@ -34,32 +34,18 @@ evaluation harder without providing a Hansa-specific benefit.
 ### Model ownership
 
 `HansaNN` is a three-layer network with one output per action-schema entry. It
-also constructs its own Adam optimizer.
+accepts the authoritative 4,241-value observation and returns 768 action scores.
+Inference-only model objects do not own an optimizer.
 
-The interactive configuration currently creates a separate `HansaNN` object
-for every AI player. `GameConfiguration.create_game()` calls
-`_load_ai_model(player.order)`, which looks for seat-specific files such as
-`hansa_nn_model2.pth`. `Player.__init__()` contains the same older seat-specific
-loading behavior when `load_model=True`.
+`GameConfiguration.create_game()` loads at most one `hansa_nn_model.pth` and
+stores it on the game runtime. Every AI-controlled seat uses that same object.
+Human-only games load no model, and `Player` has no model field or model-loading
+behavior.
 
-In a configured game, each AI-controlled seat therefore receives one model and
-each Human seat receives none. The older direct `Player(load_model=True)` path
-instead constructs one model for every player created through that path.
-
-Consequently, two AI seats currently have:
-
-- separate model objects;
-- separate randomly initialized weights when files are absent;
-- separate optimizers; and
-- separate seat-numbered checkpoint names.
-
-The GUI is intended to perform inference only: it builds the acting player's
-observation, passes it to that player's model, and selects among legal actions
-using the configured difficulty. That path is currently broken before scoring.
-`ObservationEncoder.FEATURE_SIZE` is 4,241, while `INPUT_SIZE` remains 4,445;
-the configured `HansaNN` therefore expects the wrong input width and an AI turn
-fails with a matrix-shape error. This must be corrected and versioned before AI
-inference or training can be considered usable.
+The GUI builds the acting player's observation, passes it to the shared model,
+masks illegal actions, and selects among legal scores using the configured
+difficulty. Checkpoints must contain matching action- and observation-schema
+metadata; old seat-numbered or otherwise incompatible checkpoints are rejected.
 
 ### Observations and actions
 
@@ -76,8 +62,8 @@ own mission card is visible only to that observer.
 
 The engine owns legal actions through `Game.get_legal_actions()`. The central
 codec maps them to stable indices, and `Game.apply_ai_action()` executes the
-selected index. The player-relative observation design and action interface
-support a shared policy after the input-width compatibility defect is fixed.
+selected index. The player-relative observation and action interfaces therefore
+support the implemented shared inference policy.
 
 ### Current trajectory format
 
@@ -153,27 +139,20 @@ The exact target—win, placement, score difference, return, or another
 combination—is intentionally unresolved here. Issue #3 must define it before a
 training loop is implemented.
 
-## Migration Plan
+## Remaining Training Plan
 
 1. Complete issue #3 and select the training objective and credit-assignment
    rules.
 2. Define a versioned trajectory record containing observation, mask, action,
    acting player, and final target. Integrate it with the action-history work
    without treating a replay trace as sufficient training data.
-3. Replace the stale 4,445 input constant with the versioned 4,241 observation
-   contract, and reject checkpoints whose observation identity or input width
-   does not match. Current checkpoints contain action-schema metadata but no
-   observation-schema identity.
-4. Change AI construction so a caller supplies a model to AI seats. Remove
-   seat-numbered model ownership from `Player` and `GameConfiguration`, and
-   remove optimizer ownership from inference-only `HansaNN` instances.
-5. Add a dedicated headless self-play entry point that creates one shared model,
+3. Add a dedicated headless self-play entry point that creates one shared model,
    freezes it during games, and records separate player trajectories.
-6. Add one learner that updates the shared model only after the configured game
+4. Add one learner that updates the shared model only after the configured game
    or batch boundary.
-7. Save one versioned checkpoint containing model state, optimizer state,
+5. Save one versioned checkpoint containing model state, optimizer state,
    action-schema identity, observation-schema identity, and training progress.
-8. Verify that every seat uses the same model object during self-play, every
+6. Verify that every seat uses the same model object during self-play, every
    sample has one acting owner, hidden information remains excluded, and no
    weights change before the update boundary.
 
@@ -184,8 +163,7 @@ initial shared model, but rejection is safer by default.
 
 ## Decision
 
-The future training architecture will use one shared policy model for all Hansa
-players, with separate player-owned trajectories and one learner-controlled
-optimizer. The current observation and action interfaces support this design;
-the current input-size constant, model-loading, and reward code do not yet
-implement a usable shared training path.
+Inference now uses one shared policy model for all Hansa players. Future
+training will retain separate player-owned trajectories and one
+learner-controlled optimizer. Reward targets, trajectory collection, and model
+updates remain deliberately unimplemented.

@@ -19,7 +19,6 @@ class Game:
         self,
         map_num,
         num_players,
-        load_models=True,
         seed=None,
         interactive_errors=True,
         use_mission_cards=False,
@@ -32,7 +31,7 @@ class Game:
 
         self.seed = seed
         self.rng = random.Random(seed)
-        self.load_models = load_models
+        self.ai_model = None
         self.interactive_errors = interactive_errors
         self.map_num = map_num
         self.use_mission_cards = use_mission_cards
@@ -112,7 +111,7 @@ class Game:
         players = []
 
         for i, color in enumerate(colors[:num_players]):
-            new_player = Player(color, i + 1, load_model=self.load_models)
+            new_player = Player(color, i + 1)
             new_player.board = PlayerBoard(
                 self.selected_map.map_width, i * 220, new_player
             )  # Create and assign the board directly here

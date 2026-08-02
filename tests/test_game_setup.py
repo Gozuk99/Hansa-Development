@@ -9,7 +9,8 @@ from map_data.constants import BANK_MAX_VALUES
 class GameSetupTests(unittest.TestCase):
     def test_headless_game_does_not_create_models(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
-        self.assertTrue(all(player.hansa_nn is None for player in game.players))
+        self.assertIsNone(game.ai_model)
+        self.assertTrue(all(not hasattr(player, "hansa_nn") for player in game.players))
 
     def test_seeded_setup_does_not_change_global_random_state(self):
         random.seed(99)
@@ -24,16 +25,18 @@ class GameSetupTests(unittest.TestCase):
                 "use_mission_cards": map_num == 1,
                 "use_emperors_favour": True,
             }
-            first = create_headless_game(
-                map_num=map_num, num_players=5, seed=124, **options
-            )
-            second = create_headless_game(
-                map_num=map_num, num_players=5, seed=124, **options
-            )
+            first = create_headless_game(map_num=map_num, num_players=5, seed=124, **options)
+            second = create_headless_game(map_num=map_num, num_players=5, seed=124, **options)
             self.assertEqual(first.tile_pool, second.tile_pool)
             self.assertEqual(
-                [route.bonus_marker.type if route.bonus_marker else None for route in first.selected_map.routes],
-                [route.bonus_marker.type if route.bonus_marker else None for route in second.selected_map.routes],
+                [
+                    route.bonus_marker.type if route.bonus_marker else None
+                    for route in first.selected_map.routes
+                ],
+                [
+                    route.bonus_marker.type if route.bonus_marker else None
+                    for route in second.selected_map.routes
+                ],
             )
             self.assertEqual(
                 [player.mission_card for player in first.players],
@@ -84,8 +87,12 @@ class GameSetupTests(unittest.TestCase):
                 game = create_headless_game(map_num=2, num_players=num_players, seed=124)
                 for player in game.players:
                     expected = starting_inventory(player.order)
-                    self.assertEqual(player.personal_supply_squares, expected.personal_supply_squares)
-                    self.assertEqual(player.personal_supply_circles, expected.personal_supply_circles)
+                    self.assertEqual(
+                        player.personal_supply_squares, expected.personal_supply_squares
+                    )
+                    self.assertEqual(
+                        player.personal_supply_circles, expected.personal_supply_circles
+                    )
                     self.assertEqual(player.general_stock_squares, expected.general_stock_squares)
                     self.assertEqual(player.general_stock_circles, expected.general_stock_circles)
 
@@ -93,12 +100,8 @@ class GameSetupTests(unittest.TestCase):
         for num_players in range(3, 6):
             game = create_headless_game(map_num=2, num_players=num_players, seed=124)
             for player in game.players:
-                available_traders = (
-                    player.personal_supply_squares + player.general_stock_squares
-                )
-                available_merchants = (
-                    player.personal_supply_circles + player.general_stock_circles
-                )
+                available_traders = player.personal_supply_squares + player.general_stock_squares
+                available_merchants = player.personal_supply_circles + player.general_stock_circles
                 self.assertEqual(player.locked_ability_traders, 15)
                 self.assertEqual(player.locked_ability_merchants, 3)
                 # One additional trader represents the player's score-track marker.
