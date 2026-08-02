@@ -81,6 +81,29 @@ def _deserialize_snapshot(payload: bytes):
     return _GameSaveUnpickler(io.BytesIO(payload)).load()
 
 
+def _restore_office_printed_privileges(game: Game) -> None:
+    """Backfill immutable printed office data absent from older exact saves."""
+    if all(
+        hasattr(office, "printed_privilege")
+        for city in game.selected_map.cities
+        for office in city.offices
+    ):
+        return
+
+    template = Game(game.map_num, len(game.players), load_models=False, seed=game.seed).selected_map
+    template_cities = {city.name: city for city in template.cities}
+    for city in game.selected_map.cities:
+        printed = iter(template_cities[city.name].offices)
+        for office in city.offices:
+            if office.place_adjacent_office:
+                office.printed_privilege = None
+            else:
+                template_office = next(printed, None)
+                office.printed_privilege = (
+                    template_office.printed_privilege if template_office else "WHITE"
+                )
+
+
 def default_save_directory() -> Path:
     if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
         return Path(os.environ["LOCALAPPDATA"]) / "Hansa Teutonica" / "saves"
@@ -202,6 +225,7 @@ def load_game(filename: str | Path) -> Game:
     if not isinstance(restored, dict) or not isinstance(restored.get("game"), Game):
         raise SaveGameError("Saved payload does not contain a Hansa game")
     game = restored["game"]
+    _restore_office_printed_privileges(game)
     game._saved_controller_rng_state = restored.get("controller_rng_state")
     try:
         validate_loaded_game(game)

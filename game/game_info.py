@@ -259,6 +259,12 @@ class Game:
 
         return DEFAULT_ACTION_CODEC.create_mask(self.get_legal_actions())
 
+    def ai_observation(self):
+        """Return player-visible features and legal actions for the acting player."""
+        from ai.observation_encoder import ObservationEncoder
+
+        return ObservationEncoder().build(self)
+
     def apply_structured_action(self, action):
         """Validate and execute one structured interaction."""
         from ai.action_options import InvalidActionError, _perform_action_from_index
