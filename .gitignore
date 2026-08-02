@@ -6,3 +6,4 @@ __pycache__/
 venv/
 audit_*.json
 saves/
+training_data/generated/
