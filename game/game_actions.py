@@ -23,15 +23,6 @@ def claim_post_action(game, route, post, piece_to_play):
     if available_squares + available_circles < block_cost:
         raise InvalidActionError("Not enough pieces are available to pay the route block cost")
 
-    if route.has_bonus_marker:
-        player.reward += player.reward_structure.post_with_bm
-    elif route.has_permanent_bm_type:
-        player.reward += player.reward_structure.post_with_perm_bm
-    if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
-        player.reward += player.reward_structure.post_adjacent_to_upgrade_city
-    else:
-        player.reward += player.reward_structure.post_with_nothing
-
     game.consume_region_privilege(route)
     if block_cost:
         squares_to_pay = min(available_squares, block_cost)
@@ -70,15 +61,6 @@ def displace_action(game, post, route, displacing_piece_shape):
 
     game.active_player = current_displaced_player.order - 1
     game.consume_region_privilege(route)
-
-    if route.has_bonus_marker:
-        current_player.reward += current_player.reward_structure.post_with_bm - 2
-    elif route.has_permanent_bm_type:
-        current_player.reward += current_player.reward_structure.post_with_perm_bm - 2
-    if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
-        current_player.reward += current_player.reward_structure.post_adjacent_to_upgrade_city - 2
-    else:
-        current_player.reward += current_player.reward_structure.post_with_nothing
 
     if displacing_piece_shape == "square":
         current_player.personal_supply_squares -= 1
@@ -318,27 +300,12 @@ def move_action(game, route, post, shape):
             player.start_move()
         player.pick_up_piece(post)
 
-        if route.has_bonus_marker:
-            player.reward -= player.reward_structure.post_with_bm
-        elif route.has_permanent_bm_type:
-            player.reward -= player.reward_structure.post_with_perm_bm
-        if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
-            player.reward -= player.reward_structure.post_adjacent_to_upgrade_city
     elif player.holding_pieces:
         if not post.is_owned():
-            shape_to_place, owner_to_place, origin_region = player.holding_pieces[0]
+            shape_to_place, _owner_to_place, _origin_region = player.holding_pieces[0]
             player.place_piece(post, shape_to_place)
 
-            if owner_to_place == player:
-                if route.has_bonus_marker:
-                    player.reward += player.reward_structure.post_with_bm
-                elif route.has_permanent_bm_type:
-                    player.reward += player.reward_structure.post_with_perm_bm
-                if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
-                    player.reward += player.reward_structure.post_adjacent_to_upgrade_city
             if not player.holding_pieces:
-                if player.pieces_to_pickup > 0:
-                    player.reward -= 10
                 player.finish_move()
                 if not (
                     game.waiting_for_bm_move3
@@ -545,10 +512,6 @@ def score_route(current_player, route):
         player = city.get_controller()
         if player is not None:
             player.score += 1
-            if current_player.color == player.color:
-                current_player.reward += player.reward_structure.route_complete_got_points
-            else:
-                current_player.reward -= player.reward_structure.route_complete_got_points
 
 
 def claim_route_for_office(game, city, route):
@@ -556,14 +519,12 @@ def claim_route_for_office(game, city, route):
     next_open_office_color = city.get_next_open_office_color()
     if current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
         if city.has_required_piece_shape(current_player, route):
-            current_player.reward += current_player.reward_structure.city_claim_office
             score_route(current_player, route)
             placed_piece_shape = city.get_next_open_office_shape()
             city.update_next_open_office_ownership(game, placed_piece_shape)
             finalize_route_claim(game, route, placed_piece_shape)
             route.award_tributes(game)
     elif "PlaceAdjacent" in (bm.type for bm in current_player.bonus_markers):
-        current_player.reward += current_player.reward_structure.bm_place_adjacent
         score_route(current_player, route)
         city.claim_office_with_bonus_marker(current_player)
         finalize_route_claim(game, route, "square")
@@ -592,24 +553,13 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice, prestige_value=No
             else specialprestigepoints_city.claim_highest_prestige(current_player)
         )
         if claimed:
-            current_player.reward += current_player.reward_structure.upgraded_bonus_points
             score_route(current_player, route)
             finalize_route_claim(game, route, "circle")
     elif any(
         upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"]
         for upgrade_type in city.upgrade_city_type
     ):
-        upgrade_rewards = {
-            "Keys": "upgraded_keys",
-            "Privilege": "upgraded_privilege",
-            "Book": "upgraded_circles",
-            "Actions": "upgraded_actions",
-            "Bank": "upgraded_bank",
-        }
         if upgrade_choice and current_player.perform_upgrade(upgrade_choice):
-            current_player.reward += getattr(
-                current_player.reward_structure, upgrade_rewards[upgrade_choice]
-            )
             score_route(current_player, route)
             finalize_route_claim(game, route)
 
@@ -629,7 +579,6 @@ def finalize_route_claim(game, route, placed_piece_shape=None):
 
 def handle_bonus_marker(game, player, route, reset_pieces):
     if route.bonus_marker:
-        player.reward += player.reward_structure.route_complete_receive_bm
         route.bonus_marker.owner = player
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
@@ -640,7 +589,6 @@ def handle_bonus_marker(game, player, route, reset_pieces):
         else:
             game.bonus_pool_exhausted_during_claim = True
     elif route.permanent_bonus_marker:
-        player.reward += player.reward_structure.route_complete_perm_bm
         perm_bm_type = route.permanent_bonus_marker.type
         if perm_bm_type == "MoveAny2":
             game.current_player.pieces_to_pickup = 2
@@ -653,8 +601,6 @@ def handle_bonus_marker(game, player, route, reset_pieces):
                 or game.current_player.personal_supply_circles > 0
             ):
                 game.waiting_for_bm_green_city = True
-            else:
-                player.reward -= 20
         elif perm_bm_type == "Place2TradesmenFromRoute":
             game.pending_route_piece_choices = reset_pieces
         elif perm_bm_type == "Place2ScotlandOrWales":
