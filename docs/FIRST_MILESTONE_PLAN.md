@@ -1,4 +1,7 @@
-# First Milestone Plan: Run and Verify a Complete Game
+# Archived First Milestone Plan: Run and Verify a Complete Game
+
+> Historical planning document. The action counts and file paths below describe
+> the pre-migration engine and are not current implementation guidance.
 
 ## Goal
 

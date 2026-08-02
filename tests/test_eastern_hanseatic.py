@@ -2,6 +2,8 @@ import contextlib
 import io
 import unittest
 
+from tests.action_helpers import legal_action_mask
+
 from game.game_actions import handle_bonus_marker
 from game.game_runner import create_headless_game
 from game.invariants import validate_game
@@ -9,13 +11,13 @@ from map_data.constants import DARK_GREEN
 
 
 MAX_POSTS = 121
-ROUTE_ACTION_START = 242
+ROUTE_ACTION_START = 256
 ROUTE_OFFICE_OFFSET = 40
 ROUTE_UPGRADE_OFFSET = 120
-INCOME_ACTION_START = 522
-BM_CITY_ACTION_START = 583
-END_CONTEXT_ACTION = 618
-PLACE_ADJACENT_ACTION = 619
+INCOME_ACTION_START = 576
+BM_CITY_ACTION_START = 656
+END_CONTEXT_ACTION = 736
+PLACE_ADJACENT_ACTION = 600
 
 
 def post_index(game, target, shape="square"):
@@ -30,8 +32,7 @@ def post_index(game, target, shape="square"):
 
 def occupy_route(player, route, shapes=None):
     shapes = shapes or [
-        "circle" if post.required_shape == "circle" else "square"
-        for post in route.posts
+        "circle" if post.required_shape == "circle" else "square" for post in route.posts
     ]
     for post, shape in zip(route.posts, shapes):
         post.claim(player, shape)
@@ -49,25 +50,19 @@ class EasternHanseaticTests(unittest.TestCase):
         game = self.game()
         player = game.current_player
         route = next(
-            route for route in game.selected_map.routes
+            route
+            for route in game.selected_map.routes
             if any(city.name == "Waren" for city in route.cities)
         )
-        waren_index = next(
-            index for index, city in enumerate(route.cities) if city.name == "Waren"
-        )
+        waren_index = next(index for index, city in enumerate(route.cities) if city.name == "Waren")
         occupy_route(player, route)
         route_index = game.selected_map.routes.index(route)
-        mask = game.legal_action_mask()
-        office_action = (
-            ROUTE_ACTION_START + ROUTE_OFFICE_OFFSET + route_index * 2 + waren_index
-        )
-        upgrade_base = (
-            ROUTE_ACTION_START + ROUTE_UPGRADE_OFFSET + route_index * 4
-            + waren_index * 2
-        )
+        mask = legal_action_mask(game)
+        office_action = ROUTE_ACTION_START + ROUTE_OFFICE_OFFSET + route_index * 2 + waren_index
+        upgrade_base = ROUTE_ACTION_START + ROUTE_UPGRADE_OFFSET + route_index * 4 + waren_index * 2
 
         self.assertEqual(mask[office_action].item(), 0)
-        self.assertEqual(mask[upgrade_base:upgrade_base + 2].tolist(), [1, 1])
+        self.assertEqual(mask[upgrade_base : upgrade_base + 2].tolist(), [1, 1])
 
         marker = next(
             route.bonus_marker
@@ -76,7 +71,7 @@ class EasternHanseaticTests(unittest.TestCase):
         )
         marker.owner = player
         player.bonus_markers.append(marker)
-        self.assertEqual(game.legal_action_mask()[PLACE_ADJACENT_ACTION].item(), 1)
+        self.assertEqual(legal_action_mask(game)[PLACE_ADJACENT_ACTION].item(), 1)
 
     def test_maritime_routes_expose_and_require_exact_merchant_posts(self):
         game = self.game()
@@ -90,8 +85,7 @@ class EasternHanseaticTests(unittest.TestCase):
         game = self.game()
         player = game.current_player
         route = next(
-            route for route in game.selected_map.routes
-            if route.has_permanent_bm_type == "+1Priv"
+            route for route in game.selected_map.routes if route.has_permanent_bm_type == "+1Priv"
         )
         supply_before = player.personal_supply_squares
         privilege_before = player.privilege
@@ -105,21 +99,20 @@ class EasternHanseaticTests(unittest.TestCase):
     def test_green_city_marker_chooses_shape_and_places_to_right(self):
         game = self.game()
         player, opponent = game.players[:2]
-        green_city = next(
-            city for city in game.selected_map.cities if city.color == DARK_GREEN
-        )
+        green_city = next(city for city in game.selected_map.cities if city.color == DARK_GREEN)
         green_city.offices[0].controller = opponent
         route = next(
-            route for route in game.selected_map.routes
+            route
+            for route in game.selected_map.routes
             if route.has_permanent_bm_type == "ClaimGreenCity"
         )
         game.waiting_for_bm_green_city = True
         player.personal_supply_circles = max(1, player.personal_supply_circles)
 
-        choices = game.legal_action_mask()[BM_CITY_ACTION_START:613]
+        choices = legal_action_mask(game)[BM_CITY_ACTION_START:720]
         self.assertGreaterEqual(choices.sum().item(), 2)
         # The first green city contributes square then circle.
-        game.apply_action(BM_CITY_ACTION_START + 1)
+        game.apply_action(BM_CITY_ACTION_START + 47)
 
         self.assertIs(green_city.offices[0].controller, opponent)
         self.assertIs(green_city.offices[1].controller, player)
@@ -151,7 +144,8 @@ class EasternHanseaticTests(unittest.TestCase):
         game = self.game()
         player = game.current_player
         route = next(
-            route for route in game.selected_map.routes
+            route
+            for route in game.selected_map.routes
             if route.has_permanent_bm_type == "Place2TradesmenFromRoute"
         )
         occupy_route(

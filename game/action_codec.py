@@ -32,6 +32,7 @@ from game.structured_actions import (
     SupplyInteraction,
     TileInteraction,
 )
+from map_data.constants import MAX_POSTS, MAX_ROUTES
 
 
 class ActionCodecError(ValueError):
@@ -82,17 +83,17 @@ def _validate_slot(value, field: str, capacity: int) -> None:
 
 def _post_family() -> InteractionFamily:
     def validate(action):
-        _validate_slot(action.post_slot, "post_slot", 121)
+        _validate_slot(action.post_slot, "post_slot", MAX_POSTS)
         if type(action.shape) is not PieceShape:
             raise InvalidInteractionError("shape must be a PieceShape")
 
     def encode(action):
-        shape_offset = 121 if action.shape is PieceShape.MERCHANT else 0
+        shape_offset = MAX_POSTS if action.shape is PieceShape.MERCHANT else 0
         return shape_offset + action.post_slot
 
     def decode(local):
-        shape = PieceShape.MERCHANT if local >= 121 else PieceShape.TRADER
-        return PostInteraction(local % 121, shape)
+        shape = PieceShape.MERCHANT if local >= MAX_POSTS else PieceShape.TRADER
+        return PostInteraction(local % MAX_POSTS, shape)
 
     return InteractionFamily(
         "post",
@@ -107,7 +108,7 @@ def _post_family() -> InteractionFamily:
 
 def _route_family() -> InteractionFamily:
     def validate(action):
-        _validate_slot(action.route_slot, "route_slot", 40)
+        _validate_slot(action.route_slot, "route_slot", MAX_ROUTES)
         _validate_slot(action.interaction_slot, "interaction_slot", 7)
 
     def encode(action):
@@ -115,17 +116,17 @@ def _route_family() -> InteractionFamily:
         if slot == 0:
             return action.route_slot
         if slot <= 2:
-            return 40 + action.route_slot * 2 + (slot - 1)
-        return 120 + action.route_slot * 4 + (slot - 3)
+            return MAX_ROUTES + action.route_slot * 2 + (slot - 1)
+        return MAX_ROUTES * 3 + action.route_slot * 4 + (slot - 3)
 
     def decode(local):
-        if local < 40:
+        if local < MAX_ROUTES:
             return RouteInteraction(local, 0)
-        if local < 120:
-            relative = local - 40
+        if local < MAX_ROUTES * 3:
+            relative = local - MAX_ROUTES
             route_slot, endpoint = divmod(relative, 2)
             return RouteInteraction(route_slot, endpoint + 1)
-        relative = local - 120
+        relative = local - MAX_ROUTES * 3
         route_slot, outcome = divmod(relative, 4)
         return RouteInteraction(route_slot, outcome + 3)
 

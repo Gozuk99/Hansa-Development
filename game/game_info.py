@@ -1,21 +1,17 @@
-# game_attributes.py
 import random
+
+from game.action_codec import ActionCodecError, DEFAULT_ACTION_CODEC
+from game.action_schema import TILE_TYPES
+from game.action_execution import execute_action
+from game.game_actions import InvalidActionError
+from game.legal_actions import get_legal_actions
+from game.setup import validate_game_configuration
+from game.turn_state import TurnPhase, TurnStateError
 from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
 from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW
-from game.setup import validate_game_configuration
-from game.turn_state import TurnPhase, TurnStateError
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
-
-EMPERORS_FAVOUR_TILES = (
-    "DisplaceAnywhere",
-    "+1Action",
-    "+1IncomeIfOthersIncome",
-    "+1DisplacedPiece",
-    "+4PtsPerOwnedCity",
-    "+7PtsPerCompletedAbility",
-)
 
 
 class Game:
@@ -93,7 +89,6 @@ class Game:
         self.tile_pool = []
         if self.use_emperors_favour:
             self.initialize_tile_pool()
-        # print(f"Tile Pool: {self.tile_pool}")
         self.tile_rects = []
 
         self.current_full_cities_count = 0
@@ -133,7 +128,7 @@ class Game:
         return players
 
     def initialize_tile_pool(self):
-        tiles = list(EMPERORS_FAVOUR_TILES)
+        tiles = list(TILE_TYPES)
         self.rng.shuffle(tiles)
         self.tile_pool.extend(tiles[: self.num_players])
 
@@ -227,58 +222,26 @@ class Game:
 
     def switch_player_if_needed(self):
         if self.turn_phase == TurnPhase.TURN_COMPLETE:
-            print(
-                f"Conditions met. Switching from Player {self.current_player_index + 1} - {COLOR_NAMES[self.current_player.color]}."
-            )
             self.advance_turn()
-            print(
-                f"Switched to Player {self.current_player_index + 1} - {COLOR_NAMES[self.current_player.color]}."
-            )
             return True
-        if self.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS:
-            print(
-                f"{COLOR_NAMES[self.current_player.color]} - Place a Bonus Marker to Finish your Turn."
-            )
         return False
-
-    def legal_action_mask(self):
-        """Return the legacy AI mask derived from authoritative legal actions."""
-        from ai.action_options import masking_out_invalid_actions
-
-        return masking_out_invalid_actions(self)
 
     def get_legal_actions(self):
         """Return authoritative structured legal interactions."""
-        from game.legal_actions import get_legal_actions
-
         return get_legal_actions(self)
 
     def ai_action_mask(self):
         """Return the authoritative 768-entry AI action mask."""
-        from game.action_codec import DEFAULT_ACTION_CODEC
-
         return DEFAULT_ACTION_CODEC.create_mask(self.get_legal_actions())
-
-    def ai_observation(self):
-        """Return player-visible features and legal actions for the acting player."""
-        from ai.observation_encoder import ObservationEncoder
-
-        return ObservationEncoder().build(self)
 
     def apply_structured_action(self, action):
         """Validate and execute one structured interaction."""
-        from ai.action_options import InvalidActionError, _perform_action_from_index
-        from game.legal_actions import to_legacy_index
-
         if action not in self.get_legal_actions():
             raise InvalidActionError(f"Structured action is not legal: {action!r}")
-        _perform_action_from_index(self, to_legacy_index(self, action))
+        execute_action(self, action)
 
     def apply_ai_action(self, action_index):
         """Decode and execute one action from the 768-entry AI schema."""
-        from ai.action_options import InvalidActionError
-        from game.action_codec import ActionCodecError, DEFAULT_ACTION_CODEC
-
         try:
             action = DEFAULT_ACTION_CODEC.decode(action_index)
         except ActionCodecError as error:
@@ -286,25 +249,8 @@ class Game:
         self.apply_structured_action(action)
 
     def apply_action(self, action_index):
-        """Apply one legacy GUI/manual action through the supported boundary."""
-        from ai.action_options import (
-            InvalidActionError,
-            LEGACY_ACTION_COUNT,
-            _perform_action_from_index,
-        )
-
-        if not isinstance(action_index, int) or isinstance(action_index, bool):
-            raise InvalidActionError(f"Action index must be an integer: {action_index!r}")
-        if not 0 <= action_index < LEGACY_ACTION_COUNT:
-            raise InvalidActionError(f"Action index out of range: {action_index}")
-
-        legal_mask = self.legal_action_mask()
-        if legal_mask[action_index].item() != 1:
-            raise InvalidActionError(
-                f"Action {action_index} is illegal during phase {self.turn_phase.value}"
-            )
-
-        _perform_action_from_index(self, action_index)
+        """Apply one codec-backed action for GUI and manual callers."""
+        self.apply_ai_action(action_index)
 
     def reset_valid_posts(self):
         for post in self.all_empty_posts:
@@ -408,9 +354,6 @@ class Game:
 
     def check_for_east_west_connection(self):
         if self.current_player in self.players_who_completed_east_west:
-            print(
-                f"{COLOR_NAMES[self.current_player.color]} has already completed the East-West Connection."
-            )
             return
 
         if not self.check_if_player_has_matching_offices_in_east_west(
@@ -421,23 +364,12 @@ class Game:
         if self.has_east_west_connection(
             self.selected_map.east_west_cities[0], self.selected_map.east_west_cities[1]
         ):
-            # Points for the 1st, 2nd, and 3rd completions
             east_west_points = [7, 4, 2]
-
-            # Check if the connection has been completed less than 3 times
             if self.east_west_completed_count < len(east_west_points):
                 awarded_points = east_west_points[self.east_west_completed_count]
                 self.current_player.score += awarded_points
                 self.east_west_completed_count += 1
                 self.players_who_completed_east_west.add(self.current_player)
-
-                print(
-                    f"{COLOR_NAMES[self.current_player.color]} has created an East-West Connection and is awarded {awarded_points} points! Total score is now {self.current_player.score}."
-                )
-            else:
-                print(
-                    f"East West Connection has been completed 3+ times. No points awarded to {COLOR_NAMES[self.current_player.color]}."
-                )
 
     def check_if_player_has_matching_offices_in_east_west(self, start_city_name, end_city_name):
         start_city = next(
@@ -626,15 +558,10 @@ class Game:
                 score_breakdown["Mission City Points"] = mission_city_points
             player.final_score_breakdown = score_breakdown
 
-            # Ensure final score is not less than the initial score
             if player.final_score < player.score:
-                print(
-                    f"ERROR: Player {COLOR_NAMES[player.color]}: Final score is less than or equal to the initial score. No change made."
+                raise TurnStateError(
+                    f"Final score for {COLOR_NAMES[player.color]} is below the in-game score"
                 )
-                exit(1)
-
-            # You can print the score breakdown here if needed
-            print(f"Score breakdown for {COLOR_NAMES[player.color]}: {score_breakdown}")
 
     def calculate_britannia_region_points(self):
         """Award the Britannia 7/4/2 ladders for Wales and, on 4–5p, Scotland."""
@@ -745,10 +672,3 @@ class Game:
             if player.final_score_breakdown.get("Largest Network Points", 0)
             == largest_network_score
         ]
-
-    # # Example usage in your game loop:
-    # winning_players = game.check_for_game_end()
-    # if winning_players:
-    #     # Handle end of game, which might involve displaying a message with draw_end_game
-    #     draw_end_game(win, winning_players)
-    #     # Maybe break out of the game loop or wait for user input to restart or exit

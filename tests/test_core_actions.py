@@ -2,7 +2,9 @@ import contextlib
 import io
 import unittest
 
-from ai.action_options import InvalidActionError
+from tests.action_helpers import legal_action_mask
+
+from game.game_actions import InvalidActionError
 from game.game_actions import refresh_displacement_targets
 from game.game_runner import create_headless_game
 from game.turn_state import TurnPhase
@@ -23,19 +25,19 @@ def post_index(game, target_post, shape="square"):
 
 
 def route_points_index(game, route):
-    return 242 + game.selected_map.routes.index(route)
+    return 256 + game.selected_map.routes.index(route)
 
 
 def route_office_index(game, route, city):
     route_index = game.selected_map.routes.index(route)
     city_index = route.cities.index(city)
-    return 242 + MAX_ROUTES + route_index * 2 + city_index
+    return 256 + MAX_ROUTES + route_index * 2 + city_index
 
 
 def route_upgrade_index(game, route, city, upgrade_index=0):
     route_index = game.selected_map.routes.index(route)
     city_index = route.cities.index(city)
-    return 242 + MAX_ROUTES * 3 + route_index * 4 + city_index * 2 + upgrade_index
+    return 256 + MAX_ROUTES * 3 + route_index * 4 + city_index * 2 + upgrade_index
 
 
 def occupy_route(player, route, shapes=None):
@@ -71,10 +73,10 @@ class CoreActionTests(unittest.TestCase):
 
     def test_income_obeys_every_bank_capacity_and_conserves_pieces(self):
         cases = (
-            (3, 3, 0, 522),
-            (4, 3, 1, 523),
-            (7, 4, 3, 525),
-            (50, 4, 4, 526),
+            (3, 3, 0, 576),
+            (4, 3, 1, 577),
+            (7, 4, 3, 579),
+            (50, 4, 4, 580),
         )
         for bank, squares, circles, action_index in cases:
             with self.subTest(bank=bank):
@@ -115,10 +117,10 @@ class CoreActionTests(unittest.TestCase):
         player.general_stock_squares = 0
         player.general_stock_circles = 1
 
-        mask = game.legal_action_mask()
+        mask = legal_action_mask(game)
 
-        self.assertEqual(mask[522].item(), 0)
-        self.assertEqual(mask[523].item(), 1)
+        self.assertEqual(mask[576].item(), 0)
+        self.assertEqual(mask[577].item(), 1)
 
     def test_place_tradesman_costs_one_action_and_one_supply_piece(self):
         game = create_headless_game(2, 3, seed=124)
@@ -138,7 +140,7 @@ class CoreActionTests(unittest.TestCase):
         game = create_headless_game(2, 3, seed=124)
         route = next(route for route in game.selected_map.routes if route.required_circles)
         post = next(post for post in route.posts if post.required_shape == "circle")
-        mask = game.legal_action_mask()
+        mask = legal_action_mask(game)
         self.assertEqual(mask[post_index(game, post, "square")].item(), 0)
         self.assertEqual(mask[post_index(game, post, "circle")].item(), 1)
 
@@ -162,15 +164,15 @@ class CoreActionTests(unittest.TestCase):
         self.assertEqual(actor.personal_supply_squares, actor_supply_before - 2)
         self.assertEqual(actor.general_stock_squares, actor_stock_before + 1)
 
-        displacement_mask = game.legal_action_mask()
+        displacement_mask = legal_action_mask(game)
         displaced_post_index = next(
             index
             for index in displacement_mask[:242].nonzero(as_tuple=True)[0].tolist()
             if index < 121
         )
         self.apply(game, displaced_post_index)
-        self.assertEqual(game.legal_action_mask()[618].item(), 1)
-        self.apply(game, 618)
+        self.assertEqual(legal_action_mask(game)[736].item(), 1)
+        self.apply(game, 736)
 
         self.assertFalse(game.waiting_for_displaced_player)
         self.assertEqual(actor.actions_remaining, 1)
@@ -208,7 +210,7 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, post_index(game, occupied))
 
         for _ in range(2):
-            mask = game.legal_action_mask()
+            mask = legal_action_mask(game)
             target = next(index for index in mask[:121].nonzero(as_tuple=True)[0].tolist())
             self.apply(game, target)
 
@@ -236,7 +238,7 @@ class CoreActionTests(unittest.TestCase):
 
         for _ in range(2):
             target = next(
-                index for index in game.legal_action_mask()[:121].nonzero(as_tuple=True)[0].tolist()
+                index for index in legal_action_mask(game)[:121].nonzero(as_tuple=True)[0].tolist()
             )
             self.apply(game, target)
 
@@ -254,7 +256,7 @@ class CoreActionTests(unittest.TestCase):
         }
         legal_post_numbers = {
             index % MAX_POSTS
-            for index in game.legal_action_mask()[:242].nonzero(as_tuple=True)[0].tolist()
+            for index in legal_action_mask(game)[:242].nonzero(as_tuple=True)[0].tolist()
         }
         actual_routes = set()
         running_index = 0
@@ -281,17 +283,17 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, post_index(game, displaced_post))
 
         first_target = next(
-            index for index in game.legal_action_mask()[:121].nonzero(as_tuple=True)[0].tolist()
+            index for index in legal_action_mask(game)[:121].nonzero(as_tuple=True)[0].tolist()
         )
         self.apply(game, first_target)
         self.assertEqual(opponent.pieces_to_pickup, 1)
         self.assertEqual(
-            game.legal_action_mask()[post_index(game, board_fallback_post)].item(),
+            legal_action_mask(game)[post_index(game, board_fallback_post)].item(),
             1,
         )
         self.apply(game, post_index(game, board_fallback_post))
         final_target = next(
-            index for index in game.legal_action_mask()[:121].nonzero(as_tuple=True)[0].tolist()
+            index for index in legal_action_mask(game)[:121].nonzero(as_tuple=True)[0].tolist()
         )
         self.apply(game, final_target)
 
@@ -344,7 +346,7 @@ class CoreActionTests(unittest.TestCase):
         opponent.personal_supply_circles = 0
 
         self.apply(game, post_index(game, displaced_post))
-        initial_mask = game.legal_action_mask()
+        initial_mask = legal_action_mask(game)
         self.assertFalse(
             any(
                 initial_mask[post_index(game, post)].item()
@@ -359,7 +361,7 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, outward_square)
 
         self.apply(game, post_index(game, board_circle))
-        relocated_mask = game.legal_action_mask()
+        relocated_mask = legal_action_mask(game)
         adjacent_circle = next(
             post
             for route in adjacent_routes
@@ -414,19 +416,19 @@ class CoreActionTests(unittest.TestCase):
         game.displaced_player.populate_displaced_player(game, opponent, "circle")
         refresh_displacement_targets(game)
 
-        initial_mask = game.legal_action_mask()
+        initial_mask = legal_action_mask(game)
         nearest_index = post_index(game, nearest_open_post)
         self.assertEqual(initial_mask[nearest_index].item(), 1)
         self.assertEqual(initial_mask[MAX_POSTS + nearest_index].item(), 1)
-        self.assertEqual(initial_mask[618].item(), 0)
+        self.assertEqual(initial_mask[736].item(), 0)
 
         stock_squares_before = opponent.general_stock_squares
         self.apply(game, nearest_index)
         self.assertEqual(opponent.general_stock_squares, stock_squares_before - 1)
         self.assertFalse(game.displaced_player.played_displaced_shape)
-        self.assertEqual(game.legal_action_mask()[618].item(), 0)
+        self.assertEqual(legal_action_mask(game)[736].item(), 0)
 
-        outward_mask = game.legal_action_mask()
+        outward_mask = legal_action_mask(game)
         outward_circle = next(
             index
             for index in outward_mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
@@ -434,7 +436,7 @@ class CoreActionTests(unittest.TestCase):
         self.assertNotEqual(outward_circle, nearest_index)
         self.apply(game, MAX_POSTS + outward_circle)
         self.assertTrue(game.displaced_player.played_displaced_shape)
-        self.assertEqual(game.legal_action_mask()[618].item(), 1)
+        self.assertEqual(legal_action_mask(game)[736].item(), 1)
 
     def test_same_shape_stock_piece_can_precede_mandatory_piece_and_unlock_supply(self):
         game = create_headless_game(2, 3, seed=124)
@@ -453,9 +455,9 @@ class CoreActionTests(unittest.TestCase):
         game.displaced_player.populate_displaced_player(game, opponent, "circle")
         refresh_displacement_targets(game)
 
-        self.assertEqual(game.legal_action_mask()[619].item(), 1)
-        self.apply(game, 619)
-        mask = game.legal_action_mask()
+        self.assertEqual(legal_action_mask(game)[728].item(), 1)
+        self.apply(game, 728)
+        mask = legal_action_mask(game)
         target_index = next(
             index for index in mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()
         )
@@ -463,16 +465,16 @@ class CoreActionTests(unittest.TestCase):
 
         self.assertFalse(game.displaced_player.played_displaced_shape)
         self.assertEqual(opponent.general_stock_circles, 0)
-        self.assertEqual(game.legal_action_mask()[618].item(), 0)
+        self.assertEqual(legal_action_mask(game)[736].item(), 0)
 
         square_index = next(
             index
-            for index in game.legal_action_mask()[:MAX_POSTS].nonzero(as_tuple=True)[0].tolist()
+            for index in legal_action_mask(game)[:MAX_POSTS].nonzero(as_tuple=True)[0].tolist()
         )
         self.apply(game, square_index)
         circle_index = next(
             index
-            for index in game.legal_action_mask()[MAX_POSTS : MAX_POSTS * 2]
+            for index in legal_action_mask(game)[MAX_POSTS : MAX_POSTS * 2]
             .nonzero(as_tuple=True)[0]
             .tolist()
         )
@@ -495,15 +497,15 @@ class CoreActionTests(unittest.TestCase):
         game.displaced_player.populate_displaced_player(game, opponent, "circle")
         refresh_displacement_targets(game)
 
-        initial_mask = game.legal_action_mask()
+        initial_mask = legal_action_mask(game)
         self.assertGreater(initial_mask[:MAX_POSTS].count_nonzero().item(), 0)
         self.assertGreater(
             initial_mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(),
             0,
         )
 
-        self.apply(game, 619)
-        selected_mask = game.legal_action_mask()
+        self.apply(game, 728)
+        selected_mask = legal_action_mask(game)
         self.assertEqual(selected_mask[:MAX_POSTS].count_nonzero().item(), 0)
         self.assertGreater(
             selected_mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(),
@@ -518,7 +520,7 @@ class CoreActionTests(unittest.TestCase):
         self.assertFalse(game.displaced_player.use_optional_displaced_shape)
         self.assertFalse(game.displaced_player.played_displaced_shape)
         self.assertEqual(opponent.general_stock_circles, 0)
-        self.assertGreater(game.legal_action_mask()[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertGreater(legal_action_mask(game)[:MAX_POSTS].count_nonzero().item(), 0)
 
     def test_maritime_post_forces_displaced_merchant_before_optional_traders(self):
         game = create_headless_game(2, 3, seed=124)
@@ -547,7 +549,7 @@ class CoreActionTests(unittest.TestCase):
         opponent.general_stock_circles = 0
         refresh_displacement_targets(game)
 
-        mask = game.legal_action_mask()
+        mask = legal_action_mask(game)
         self.assertEqual(mask[:MAX_POSTS].count_nonzero().item(), 0)
         self.assertGreater(mask[MAX_POSTS : MAX_POSTS * 2].count_nonzero().item(), 0)
 
@@ -556,7 +558,7 @@ class CoreActionTests(unittest.TestCase):
         )
         self.apply(game, MAX_POSTS + circle_index)
         self.assertTrue(game.displaced_player.played_displaced_shape)
-        self.assertGreater(game.legal_action_mask()[:MAX_POSTS].count_nonzero().item(), 0)
+        self.assertGreater(legal_action_mask(game)[:MAX_POSTS].count_nonzero().item(), 0)
 
     def test_britannia_board_fallback_keeps_shape_and_country_search_rules(self):
         game = create_headless_game(3, 4, seed=124)
@@ -601,7 +603,7 @@ class CoreActionTests(unittest.TestCase):
         game.displaced_player.played_displaced_shape = True
 
         targets = refresh_displacement_targets(game)
-        mask = game.legal_action_mask()
+        mask = legal_action_mask(game)
 
         self.assertTrue(targets)
         self.assertTrue(all(post in nearest_circle_route.posts for post in targets))
@@ -621,12 +623,12 @@ class CoreActionTests(unittest.TestCase):
         target_shape = target.required_shape or "square"
         target_index = post_index(game, target, target_shape)
         self.assertTrue(all(post.region == "Wales" for post in wales_route.posts))
-        self.assertEqual(game.legal_action_mask()[target_index].item(), 0)
+        self.assertEqual(legal_action_mask(game)[target_index].item(), 0)
 
         cardiff = next(city for city in game.selected_map.cities if city.name == "Cardiff")
         cardiff.offices[0].controller = player
         player.refresh_map3_priv_actions(game)
-        self.assertEqual(game.legal_action_mask()[target_index].item(), 1)
+        self.assertEqual(legal_action_mask(game)[target_index].item(), 1)
         self.apply(game, target_index)
         self.assertEqual(player.brown_priv_count, 0)
 
@@ -648,7 +650,7 @@ class CoreActionTests(unittest.TestCase):
 
         self.assertEqual(player.london_priv_count, 0)
         self.assertEqual(
-            game.legal_action_mask()[
+            legal_action_mask(game)[
                 post_index(
                     game,
                     scotland_route.posts[0],
@@ -687,7 +689,7 @@ class CoreActionTests(unittest.TestCase):
         opponent_post.claim(opponent, "square")
 
         self.apply(game, post_index(game, own_post))
-        mask = game.legal_action_mask()
+        mask = legal_action_mask(game)
         self.assertEqual(mask[post_index(game, opponent_post)].item(), 0)
         self.assertEqual(mask[post_index(game, opponent_post, "circle")].item(), 0)
 
@@ -701,7 +703,7 @@ class CoreActionTests(unittest.TestCase):
 
         self.apply(game, post_index(game, route.posts[0]))
         self.apply(game, post_index(game, route.posts[1]))
-        mask = game.legal_action_mask()
+        mask = legal_action_mask(game)
         self.assertEqual(mask[post_index(game, route.posts[2])].item(), 0)
 
     def test_route_points_requires_full_control_and_returns_all_pieces(self):
@@ -709,14 +711,14 @@ class CoreActionTests(unittest.TestCase):
         player, opponent = game.players[:2]
         route = game.selected_map.routes[0]
         action_index = route_points_index(game, route)
-        self.assertEqual(game.legal_action_mask()[action_index].item(), 0)
+        self.assertEqual(legal_action_mask(game)[action_index].item(), 0)
 
         occupy_route(player, route)
         route.cities[0].offices[0].controller = player
         route.cities[1].offices[0].controller = opponent
         stock_before = player.general_stock_squares
 
-        self.assertEqual(game.legal_action_mask()[action_index].item(), 1)
+        self.assertEqual(legal_action_mask(game)[action_index].item(), 1)
         self.apply(game, action_index)
 
         self.assertEqual(player.score, 1)
@@ -750,8 +752,8 @@ class CoreActionTests(unittest.TestCase):
         player.forfeit_remaining_actions()
         player.ending_turn = True
 
-        mask = game.legal_action_mask()
-        legal_routes = mask[543:583].nonzero(as_tuple=True)[0].tolist()
+        mask = legal_action_mask(game)
+        legal_routes = mask[256:296].nonzero(as_tuple=True)[0].tolist()
         self.assertTrue(legal_routes)
         for route_index in legal_routes:
             route = game.selected_map.routes[route_index]
@@ -762,7 +764,7 @@ class CoreActionTests(unittest.TestCase):
 
         target_index = legal_routes[0]
         marker_type = game.pending_bonus_markers[0]
-        self.apply(game, 543 + target_index)
+        self.apply(game, 256 + target_index)
         self.assertEqual(
             game.selected_map.routes[target_index].bonus_marker.type,
             marker_type,
@@ -815,9 +817,9 @@ class CoreActionTests(unittest.TestCase):
         occupy_route(player, route)
         action_index = route_office_index(game, route, city)
 
-        self.assertEqual(game.legal_action_mask()[action_index].item(), 0)
+        self.assertEqual(legal_action_mask(game)[action_index].item(), 0)
         player.privilege = "ORANGE"
-        self.assertEqual(game.legal_action_mask()[action_index].item(), 1)
+        self.assertEqual(legal_action_mask(game)[action_index].item(), 1)
 
     def test_circle_only_route_cannot_claim_square_office(self):
         game = create_headless_game(2, 3, seed=124)
@@ -832,7 +834,7 @@ class CoreActionTests(unittest.TestCase):
         occupy_route(player, route, ["circle"] * len(route.posts))
 
         self.assertEqual(
-            game.legal_action_mask()[route_office_index(game, route, city)].item(),
+            legal_action_mask(game)[route_office_index(game, route, city)].item(),
             0,
         )
 
@@ -856,7 +858,7 @@ class CoreActionTests(unittest.TestCase):
         occupy_route(player, route, ["square"] * len(route.posts))
 
         self.assertEqual(
-            game.legal_action_mask()[route_office_index(game, route, city)].item(),
+            legal_action_mask(game)[route_office_index(game, route, city)].item(),
             0,
         )
 
@@ -932,7 +934,7 @@ class CoreActionTests(unittest.TestCase):
         occupy_route(player, route)
         player.bank = 50
         self.assertEqual(
-            game.legal_action_mask()[route_upgrade_index(game, route, city)].item(),
+            legal_action_mask(game)[route_upgrade_index(game, route, city)].item(),
             0,
         )
 
@@ -947,7 +949,7 @@ class CoreActionTests(unittest.TestCase):
         city = next(city for city in route.cities if city.name == "Coellen")
         action_index = route_upgrade_index(game, route, city)
         occupy_route(player, route)
-        self.assertEqual(game.legal_action_mask()[action_index].item(), 0)
+        self.assertEqual(legal_action_mask(game)[action_index].item(), 0)
 
         route.posts[0].reset_post()
         route.posts[0].claim(player, "circle")
@@ -982,8 +984,8 @@ class CoreActionTests(unittest.TestCase):
             route,
             ["circle"] + ["square"] * (len(route.posts) - 1),
         )
-        base_action = 242 + MAX_ROUTES * 3 + game.selected_map.routes.index(route) * 4
-        mask = game.legal_action_mask()
+        base_action = 256 + MAX_ROUTES * 3 + game.selected_map.routes.index(route) * 4
+        mask = legal_action_mask(game)
         self.assertEqual(mask[base_action : base_action + 4].tolist(), [1, 1, 1, 1])
 
         self.apply(game, base_action + 1)
@@ -1002,14 +1004,14 @@ class CoreActionTests(unittest.TestCase):
         points_action = route_points_index(game, route)
         office_action = route_office_index(game, route, city)
         upgrade_action = route_upgrade_index(game, route, city)
-        mask = game.legal_action_mask()
+        mask = legal_action_mask(game)
         self.assertEqual(mask[points_action].item(), 1)
         self.assertEqual(mask[office_action].item(), 1)
         self.assertEqual(mask[upgrade_action].item(), 1)
 
         self.apply(game, upgrade_action)
 
-        updated_mask = game.legal_action_mask()
+        updated_mask = legal_action_mask(game)
         self.assertEqual(updated_mask[points_action].item(), 0)
         self.assertEqual(updated_mask[office_action].item(), 0)
         self.assertEqual(updated_mask[upgrade_action].item(), 0)

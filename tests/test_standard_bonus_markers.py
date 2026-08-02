@@ -2,18 +2,20 @@ import contextlib
 import io
 import unittest
 
+from tests.action_helpers import legal_action_mask
+
 from game.game_runner import create_headless_game
 from game.invariants import validate_game
 from map_data.map_attributes import BonusMarker
 
 
 MAX_POSTS = 121
-BM_ACTION_START = 527
-BM_CITY_ACTION_START = 583
-BM_UPGRADE_ACTION_START = 613
-END_CONTEXT_ACTION = 618
-PLACE_ADJACENT_ACTION = 619
-ADDITIONAL_CHOICE_START = 362
+BM_ACTION_START = 592
+BM_CITY_ACTION_START = 656
+BM_UPGRADE_ACTION_START = 720
+END_CONTEXT_ACTION = 736
+PLACE_ADJACENT_ACTION = 600
+ADDITIONAL_CHOICE_START = 376
 
 
 def post_index(game, target, shape="square"):
@@ -52,9 +54,10 @@ class StandardBonusMarkerTests(unittest.TestCase):
         score_before = player.score
 
         game.apply_action(BM_ACTION_START)
-        pair_mask = game.legal_action_mask()[BM_CITY_ACTION_START:613]
+        pair_mask = legal_action_mask(game)[BM_CITY_ACTION_START:720]
         self.assertGreaterEqual(pair_mask.sum().item(), 2)
-        game.apply_action(BM_CITY_ACTION_START)
+        pair_slot = pair_mask.nonzero(as_tuple=True)[0][0].item()
+        game.apply_action(BM_CITY_ACTION_START + pair_slot)
 
         self.assertIs(city.offices[0].controller, opponent)
         self.assertIs(city.offices[1].controller, player)
@@ -91,7 +94,7 @@ class StandardBonusMarkerTests(unittest.TestCase):
         supply_before = player.personal_supply_squares
 
         game.apply_action(BM_ACTION_START + 2)
-        mask = game.legal_action_mask()[BM_UPGRADE_ACTION_START:618]
+        mask = legal_action_mask(game)[BM_UPGRADE_ACTION_START:728]
         self.assertEqual(mask.sum().item(), 5)
         game.apply_action(BM_UPGRADE_ACTION_START)
 
@@ -132,7 +135,7 @@ class StandardBonusMarkerTests(unittest.TestCase):
 
         game.apply_action(PLACE_ADJACENT_ACTION)
         circle_choice = ADDITIONAL_CHOICE_START + route_index * 4 + 1
-        self.assertEqual(game.legal_action_mask()[circle_choice].item(), 1)
+        self.assertEqual(legal_action_mask(game)[circle_choice].item(), 1)
         with contextlib.redirect_stdout(io.StringIO()):
             game.apply_action(circle_choice)
 

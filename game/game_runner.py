@@ -6,6 +6,7 @@ from game.action_codec import DEFAULT_ACTION_CODEC
 from game.action_schema import action_schema_metadata, validate_action_schema_metadata
 from game.game_info import Game
 from game.invariants import validate_game
+from game.action_schema import ACTION_SPACE_SIZE
 from game.structured_actions import (
     ControlInteraction,
     IncomeInteraction,
@@ -92,8 +93,8 @@ def create_headless_game(
 
 def legal_action_indices(game):
     mask = game.ai_action_mask()
-    if len(mask) != 768:
-        raise GameRunError(f"Expected a 768-entry action mask, got {len(mask)}")
+    if len(mask) != ACTION_SPACE_SIZE:
+        raise GameRunError(f"Expected a {ACTION_SPACE_SIZE}-entry action mask, got {len(mask)}")
     return tuple(index for index, enabled in enumerate(mask) if enabled)
 
 

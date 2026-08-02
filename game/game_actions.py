@@ -1,26 +1,27 @@
-import sys
-from map_data.constants import COLOR_NAMES, TAN, DARK_GREEN, ACTIONS_MAX_VALUES
+from collections import deque
+
+from map_data.constants import ACTIONS_MAX_VALUES, DARK_GREEN
+
+
+class InvalidActionError(RuntimeError):
+    """Raised when an interaction violates the current game rules."""
 
 
 def claim_post_action(game, route, post, piece_to_play):
     player = game.current_player
 
     if not player.has_personal_supply(piece_to_play):
-        print(
-            f"CLAIM ERROR - Cannot claim a {piece_to_play} as current_player has PS Squares: {player.personal_supply_squares} PS Circles: {player.personal_supply_circles}"
-        )
-        return
+        raise InvalidActionError(f"No {piece_to_play} is available in personal supply")
+    if not post.can_be_claimed_by(piece_to_play):
+        raise InvalidActionError("The selected post cannot accept that piece")
     if not game.check_brown_blue_priv(route):
-        print(f"CLAIM ERROR - Incorrect Privilige to claim in brown or blue")
-        return
-    game.consume_region_privilege(route)
+        raise InvalidActionError("The player lacks the required regional privilege")
 
-    if (player.personal_supply_squares + player.personal_supply_circles) == 0:
-        print("CLAIM ERROR - No pieces left to place!")
-        print(
-            f"personal_supply_squares={player.personal_supply_squares} personal_supply_circles={player.personal_supply_circles}"
-        )
-        sys.exit()
+    block_cost = len(route.block_marker_owners)
+    available_squares = player.personal_supply_squares - int(piece_to_play == "square")
+    available_circles = player.personal_supply_circles - int(piece_to_play == "circle")
+    if available_squares + available_circles < block_cost:
+        raise InvalidActionError("Not enough pieces are available to pay the route block cost")
 
     if route.has_bonus_marker:
         player.reward += player.reward_structure.post_with_bm
@@ -31,72 +32,43 @@ def claim_post_action(game, route, post, piece_to_play):
     else:
         player.reward += player.reward_structure.post_with_nothing
 
-    city_names = " and ".join([city.name for city in route.cities])
-    region_info = f" in {route.region}" if route.region else ""
-
-    block_cost = len(route.block_marker_owners)
+    game.consume_region_privilege(route)
     if block_cost:
-        available_squares = player.personal_supply_squares - int(piece_to_play == "square")
-        available_circles = player.personal_supply_circles - int(piece_to_play == "circle")
-        if available_squares + available_circles < block_cost:
-            return False
         squares_to_pay = min(available_squares, block_cost)
         circles_to_pay = block_cost - squares_to_pay
-
         player.personal_supply_squares -= squares_to_pay
         player.personal_supply_circles -= circles_to_pay
-
         player.general_stock_squares += squares_to_pay
         player.general_stock_circles += circles_to_pay
 
-    if piece_to_play == "square" and player.has_personal_supply("square"):
-        post.claim(player, "square")
-        print(
-            f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'square' between {city_names}{region_info}"
-        )
-        player.spend_action()
+    post.claim(player, piece_to_play)
+    if piece_to_play == "square":
         player.personal_supply_squares -= 1
-
-    elif piece_to_play == "circle" and player.has_personal_supply("circle"):
-        post.claim(player, "circle")
-        print(
-            f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} placed a 'circle' between {city_names}{region_info}"
-        )
-        player.spend_action()
-        player.personal_supply_circles -= 1
     else:
-        print("ERROR in claim_post_action")
-        sys.exit()
+        player.personal_supply_circles -= 1
+    player.spend_action()
 
 
 def displace_action(game, post, route, displacing_piece_shape):
     current_player = game.current_player
-
-    # Determine the shape of the piece that will be displaced
     displaced_piece_shape = post.owner_piece_shape
     current_displaced_player = post.owner
-    game.active_player = current_displaced_player.order - 1
+    if current_displaced_player is None or displaced_piece_shape is None:
+        raise InvalidActionError("The selected post has no piece to displace")
+    if current_displaced_player is current_player:
+        raise InvalidActionError("A player cannot displace their own piece")
 
-    # Calculate the cost to displace
     cost = 2 if displaced_piece_shape == "square" else 3
-
-    # Check if the current player has enough tradesmen
     if current_player.personal_supply_squares + current_player.personal_supply_circles < cost:
-        print(
-            f"DISPLACE ERROR - Not enough tradesmen! PS Squares: {current_player.personal_supply_squares} PS Circles: {current_player.personal_supply_circles}"
-        )
-        return  # Not enough tradesmen, action cannot be performed
-
-    # Before displacing with a square or circle, check if the current player has that shape in their personal supply
+        raise InvalidActionError("Not enough pieces are available to displace")
     if not current_player.has_personal_supply(displacing_piece_shape):
-        print(
-            f"DISPLACE ERROR - Cannot displace with a {displaced_piece_shape} as current_player has PS Squares: {current_player.personal_supply_squares} PS Circles: {current_player.personal_supply_circles}"
+        raise InvalidActionError(
+            f"No {displacing_piece_shape} is available to perform the displacement"
         )
-        return  # Invalid move as there's no circle in the personal supply
-
     if not game.check_brown_blue_priv(route):
-        print(f"DISPLACE ERROR - Incorrect Privilige to displace in brown or blue")
-        return
+        raise InvalidActionError("The player lacks the required regional privilege")
+
+    game.active_player = current_displaced_player.order - 1
     game.consume_region_privilege(route)
 
     if route.has_bonus_marker:
@@ -108,23 +80,13 @@ def displace_action(game, post, route, displacing_piece_shape):
     else:
         current_player.reward += current_player.reward_structure.post_with_nothing
 
-    # Handle the piece being placed
-    if displacing_piece_shape == "square" and current_player.personal_supply_squares > 0:
+    if displacing_piece_shape == "square":
         current_player.personal_supply_squares -= 1
-        post.circle_color = TAN
-        post.square_color = current_player.color
-    elif displacing_piece_shape == "circle" and current_player.personal_supply_circles > 0:
-        current_player.personal_supply_circles -= 1
-        post.circle_color = current_player.color
-        post.square_color = TAN
     else:
-        print("ERROR in displace_action")
-        sys.exit()
+        current_player.personal_supply_circles -= 1
+    post.claim(current_player, displacing_piece_shape)
 
-    # Handle the cost of displacement with priority to squares
-    squares_to_pay = min(
-        current_player.personal_supply_squares, cost - 1
-    )  # Subtract 1 for the piece being placed
+    squares_to_pay = min(current_player.personal_supply_squares, cost - 1)
     circles_to_pay = cost - 1 - squares_to_pay
 
     current_player.personal_supply_squares -= squares_to_pay
@@ -133,14 +95,6 @@ def displace_action(game, post, route, displacing_piece_shape):
     current_player.general_stock_squares += squares_to_pay
     current_player.general_stock_circles += circles_to_pay
 
-    if current_player.personal_supply_squares < 0 or current_player.personal_supply_circles < 0:
-        print(
-            f"displace_action - personal_supply_squares={current_player.personal_supply_squares} personal_supply_circles={current_player.personal_supply_circles}"
-        )
-        sys.exit()
-
-    post.owner_piece_shape = displacing_piece_shape
-    post.owner = current_player
     game.original_route_of_displacement = route
     game.waiting_for_displaced_player = True
     game.displaced_player.populate_displaced_player(
@@ -148,10 +102,6 @@ def displace_action(game, post, route, displacing_piece_shape):
     )
 
     refresh_displacement_targets(game)
-
-    print(
-        f"Waiting for Displaced Player {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} tradesmen (circle or square) from their general_stock, one must be {game.displaced_player.displaced_shape}."
-    )
 
 
 def _post_accepts_any_shape(post, shapes):
@@ -173,24 +123,21 @@ def gather_empty_adjacent_posts(
 ):
     """Return compatible empty posts at the nearest reachable route distance."""
     if not start_route:
-        print("Error: start_route is None in gather_empty_adjacent_posts")
-        return []
+        raise InvalidActionError("Displacement has no originating route")
 
-    visited_routes = [start_route]  # Mark the start route as visited immediately
-    queue = get_adjacent_routes(
-        start_route, start_route.region
-    )  # Start with the routes adjacent to the given route, considering the region
+    visited_routes = {start_route}
+    queue = deque(get_adjacent_routes(start_route, start_route.region))
 
     while queue:
         level_size = len(queue)
         empty_posts = []
-        next_level_routes = []  # Routes for the next level
+        next_level_routes = []
 
-        for i in range(level_size):
-            current_route = queue.pop(0)
+        for _ in range(level_size):
+            current_route = queue.popleft()
             if current_route in visited_routes:
                 continue
-            visited_routes.append(current_route)
+            visited_routes.add(current_route)
 
             adjacent_routes = get_adjacent_routes(current_route, start_route.region)
             for route in adjacent_routes:
@@ -227,6 +174,8 @@ def displacement_shapes_to_place(game):
     shapes = []
     if not displaced.played_displaced_shape:
         shapes.append(displaced.displaced_shape)
+        if displaced.total_pieces_to_place == 1:
+            return tuple(shapes)
 
     if displacement_uses_board_fallback(game):
         return tuple(shapes)
@@ -250,12 +199,6 @@ def displacement_shapes_to_place(game):
         if count and shape not in shapes:
             shapes.append(shape)
     return tuple(shapes)
-
-
-def displacement_shape_to_place(game):
-    """Return the single mandatory or held shape, when one exists."""
-    shapes = displacement_shapes_to_place(game)
-    return shapes[0] if len(shapes) == 1 else None
 
 
 def displacement_uses_board_fallback(game):
@@ -336,8 +279,7 @@ def refresh_displacement_targets(game):
 
 def get_adjacent_routes(current_route, start_route_region):
     if not current_route:
-        print("Error: current_route is None in get_adjacent_routes")
-        return []
+        raise InvalidActionError("Cannot find adjacent routes without a starting route")
 
     adjacent_routes = []
     for city in current_route.cities:
@@ -361,32 +303,19 @@ def valid_region_transition(start_region, target_region):
 def move_action(game, route, post, shape):
     player = game.current_player
 
-    # If no post was found, simply return without doing anything
     if post is None:
-        print("No post found!")
-        return
-
-    # If waiting_for_bm_move3 is True and a player is set, print the player's color
-    # if game.waiting_for_bm_move3 and player is not None:
-    # print(f"Player color: {COLOR_NAMES[player.color]}, post owned?: {post.is_owned()}")  # Debugging
+        raise InvalidActionError("No post was selected")
 
     if (game.waiting_for_bm_move3 and post.is_owned() and post.owner != player) or (
         game.waiting_for_bm_move_any_2 and post.is_owned()
     ):
-        # print(f"pieces to pickup = {player.pieces_to_pickup}")  # Debugging
         if player.pieces_to_pickup > 0:
             player.pick_up_piece(post)
-            # print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} BM - picked up a piece")
         else:
-            print(f"ERROR: Cannot pick up a piece. No pieces left to pick up.")
-            sys.exit()
-    # If the player is picking up pieces
+            raise InvalidActionError("No additional pieces may be picked up")
     elif post.owner == player:
-        # print(f"post owner == player, player.color = {COLOR_NAMES[player.color]}")
-        # If we have not started a move yet, start one
         if player.pieces_to_pickup == 0:
             player.start_move()
-        # Attempt to pick up a piece if within the pieces to move limit (book)
         player.pick_up_piece(post)
 
         if route.has_bonus_marker:
@@ -395,12 +324,6 @@ def move_action(game, route, post, shape):
             player.reward -= player.reward_structure.post_with_perm_bm
         if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
             player.reward -= player.reward_structure.post_adjacent_to_upgrade_city
-        # else:
-        #     player.reward -= player.reward_structure.post_with_nothing
-
-        print(f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} MOVE - picked up a piece")
-
-    # If the player has pieces in hand to place
     elif player.holding_pieces:
         if not post.is_owned():
             shape_to_place, owner_to_place, origin_region = player.holding_pieces[0]
@@ -413,26 +336,16 @@ def move_action(game, route, post, shape):
                     player.reward += player.reward_structure.post_with_perm_bm
                 if route.cities[0].upgrade_city_type or route.cities[1].upgrade_city_type:
                     player.reward += player.reward_structure.post_adjacent_to_upgrade_city
-                # else:
-                #     player.reward -= player.reward_structure.post_with_nothing
-
-            # If no pieces are left to place, finish the move
             if not player.holding_pieces:
                 if player.pieces_to_pickup > 0:
                     player.reward -= 10
-                # else:
-                #     player.reward += 10
                 player.finish_move()
-                # Deduct an action if it's a standard move (not a BM Move3 or MoveAny2)
                 if not (
                     game.waiting_for_bm_move3
                     or game.waiting_for_bm_move_any_2
                     or game.waiting_for_place2_from_route
                     or game.waiting_for_place2_in_scotland_or_wales
                 ):
-                    print(
-                        f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} finished their move action."
-                    )
                     player.spend_action()
                 else:
                     if game.waiting_for_bm_move3:
@@ -444,28 +357,19 @@ def move_action(game, route, post, shape):
                     elif game.waiting_for_place2_in_scotland_or_wales:
                         game.waiting_for_place2_in_scotland_or_wales = False
         else:
-            print(f"ERROR: Cannot place a piece here. The post is already occupied.")
+            raise InvalidActionError("The selected post is occupied")
     else:
-        print(
-            f"ERROR: Holding pieces {len(player.holding_pieces)}, shape: {post.owner_piece_shape}"
-        )
-        exit()
+        raise InvalidActionError("The selected post cannot be used during this move")
 
 
 def displace_move_action(game, post):
     displaced_player = game.displaced_player.player
-    # If no post was found, simply return without doing anything
     if post is None:
-        print("No post found!")
-        return
+        raise InvalidActionError("No displacement post was selected")
 
     if post.owner == displaced_player and displaced_player.pieces_to_pickup > 0:
         displaced_player.pick_up_piece(post)
 
-        print(f"{COLOR_NAMES[displaced_player.color]} DISPLACED MOVE - picked up a piece")
-        # Official displacement fallback: an on-board piece starts the same
-        # nearest-route search from the original displacement location, using
-        # that selected piece's own shape.
         refresh_displacement_targets(game)
 
     # If the player has pieces in hand to place
@@ -475,25 +379,8 @@ def displace_move_action(game, post):
             displaced_player.place_piece(post, shape_to_place)
             game.displaced_player.total_pieces_to_place -= 1
             game.all_empty_posts.remove(post)
-            print(
-                f"{COLOR_NAMES[displaced_player.color]} DISPLACED MOVE - Pieces to place: {displaced_player.pieces_to_place}"
-            )
-            print(f"Total pieces to place = {game.displaced_player.total_pieces_to_place}")
         else:
-            print(
-                f"post.is_owned()={post.is_owned()} post in game.all_empty_posts={post in game.all_empty_posts}"
-            )
-            print(
-                f"post.color={COLOR_NAMES[post.owner.color]} post.owner_piece_shape={post.owner_piece_shape}"
-            )
-            print(f"displaced_player.color={COLOR_NAMES[displaced_player.color]}")
-            print(
-                f"pieces_to_place={displaced_player.pieces_to_place} holding_pieces={displaced_player.holding_pieces}, pieces_to_pickup={displaced_player.pieces_to_pickup}"
-            )
-            print(f"ERROR: Cannot place a piece here. The post must be in all_empty_posts.")
-            sys.exit()
-    # else:
-    #     print(f"ERROR: Holding pieces {len(displaced_player.holding_pieces)}, shape: {post.shape}")
+            raise InvalidActionError("The displacement destination is not currently legal")
 
 
 def displace_claim(game, post, desired_shape):
@@ -514,16 +401,13 @@ def displace_claim(game, post, desired_shape):
             must_use_displaced_piece = True
 
     if must_use_displaced_piece and desired_shape != displaced_player.displaced_shape:
-        print("Invalid action. Must use the displaced piece.")
-        return
+        raise InvalidActionError("The mandatory displaced piece must be placed")
 
     is_board_fallback_pickup = can_pick_up_displacement_fallback(game, post)
     if not is_board_fallback_pickup and not can_place_displacement_piece(game, post, desired_shape):
-        print(
-            "Invalid displacement placement. The selected piece must use its "
-            "nearest compatible empty post and the required source."
+        raise InvalidActionError(
+            "The selected displacement piece must use a nearest compatible post"
         )
-        return
 
     wants_to_use_displaced_piece = (
         not displaced_player.played_displaced_shape
@@ -533,9 +417,6 @@ def displace_claim(game, post, desired_shape):
     refresh_displacement_targets(game)
 
     if wants_to_use_displaced_piece:
-        print(
-            f"Attempting to place the Displaced Piece '{desired_shape}' while Displaced Shape has NOT been played yet."
-        )
         displace_to(game, post, desired_shape, use_displaced_piece=True)
         if (
             displaced_player.is_general_stock_empty()
@@ -544,17 +425,11 @@ def displace_claim(game, post, desired_shape):
             displaced_player.player.pieces_to_pickup = displaced_player.total_pieces_to_place - len(
                 displaced_player.player.holding_pieces
             )
-            print(
-                f"Updating the pieces to pickup for the displaced player: {displaced_player.player.pieces_to_pickup}"
-            )
     elif (
         displaced_player.played_displaced_shape == True
         and displaced_player.is_general_stock_empty()
         and displaced_player.is_personal_supply_empty()
     ):
-        print(
-            f"Attempting to move ANY piece already on the board, because the GS and PS do not contain it."
-        )
         displaced_player.player.pieces_to_pickup = displaced_player.total_pieces_to_place - len(
             displaced_player.player.holding_pieces
         )
@@ -565,25 +440,16 @@ def displace_claim(game, post, desired_shape):
     displaced_player.use_optional_displaced_shape = False
 
     if game.displaced_player.all_pieces_placed():
-        print(f"All pieces have been placed by the displaced player.")
         for post in game.all_empty_posts:
             post.reset_post()
         game.all_empty_posts.clear()
         game.original_route_of_displacement = None
         game.displaced_player.reset_displaced_player()
         game.waiting_for_displaced_player = False
-        print("No longer waiting for the displaced player.")
         game.current_player.spend_action()
         game.active_player = game.current_player.order - 1
-        # game.switch_player_if_needed()
     else:
-        # Official displacement search restarts after each placement and stops
-        # at the nearest distance containing a legal post for an available
-        # shape from the current rule-ordered source.
         refresh_displacement_targets(game)
-        if not game.all_empty_posts:
-            print("No compatible optional displacement posts remain; the player may finish.")
-        print(f"displace_claim: Processed {len(game.all_empty_posts)} posts.")
 
 
 def finish_displacement(game):
@@ -609,25 +475,16 @@ def finish_displacement(game):
 def displace_to(game, post, shape, use_displaced_piece=False):
     displaced_player = game.displaced_player
     if use_displaced_piece:
-        print(f"Placed the displaced piece {shape} - no affect to the GS or PS.")
         claim_and_update(game, post, shape, use_displaced_piece=True)
     else:
         if displaced_player.has_general_stock(shape):
-            print(f"Placed a {shape} from general_stock, because use_displaced is false.")
             claim_and_update(game, post, shape)
         elif displaced_player.is_general_stock_empty() and displaced_player.has_personal_supply(
             shape
         ):
-            print(
-                f"Placed a {shape} from personal_supply, because use_displaced is false and GS is empty."
-            )
             claim_and_update(game, post, shape, from_personal_supply=True)
         else:
-            print(
-                f"Cannot place a {shape} because the GS does not contain it and the GS is not empty."
-            )
-            if displaced_player.is_general_stock_empty():
-                print(f"Cannot place a {shape} because the PS does not contain it either.")
+            raise InvalidActionError(f"No {shape} is available from the required source")
 
 
 def claim_and_update(game, post, shape, use_displaced_piece=False, from_personal_supply=False):
@@ -652,53 +509,34 @@ def claim_and_update(game, post, shape, use_displaced_piece=False, from_personal
         displaced_player.player.personal_supply_squares < 0
         or displaced_player.player.personal_supply_circles < 0
     ):
-        print(
-            f"claim_and_update - personal_supply_squares={displaced_player.player.personal_supply_squares} personal_supply_circles={displaced_player.player.personal_supply_circles}"
-        )
-        sys.exit()
+        raise InvalidActionError("Displacement produced a negative personal supply")
 
     displaced_player.total_pieces_to_place -= 1
 
 
 def assign_new_bonus_marker_on_route(game, route):
     if not route:
-        print("Invalid BM Placement: Clicked position does not correspond to any route.")
-        return
+        return False
 
     if route.bonus_marker or route.permanent_bonus_marker:
-        print(
-            f"Invalid BM Placement: Route between {route.cities[0].name} and {route.cities[1].name} already has a bonus marker."
-        )
-        return
+        return False
 
     if game.map_num == 3 and route.region in ("Wales", "Scotland"):
-        print("Invalid BM Placement: Britannia bonus markers must be placed in England.")
-        return
+        return False
 
     if route.has_tradesmen():
-        print(
-            f"Invalid BM Placement: Route between {route.cities[0].name} and {route.cities[1].name} has tradesmen on it."
-        )
-        return
+        return False
 
     if not route.has_empty_office_in_cities():
-        print(
-            f"Invalid BM Placement: Both cities at the ends of the route between {route.cities[0].name} and {route.cities[1].name} have no empty offices."
-        )
-        return
+        return False
 
     if game.pending_bonus_markers:
         bm_type = game.pending_bonus_markers.pop(0)
-        route.assign_map_new_bonus_marker(
-            bm_type
-        )  # Create a new BonusMarker instance with the type
-        print(
-            f"Bonus marker '{bm_type}' has been placed on the route between {route.cities[0].name} and {route.cities[1].name}."
-        )
+        route.assign_map_new_bonus_marker(bm_type)
         game.replace_bonus_marker -= 1
         game.switch_player_if_needed()
-    else:
-        print("No action taken: No pending bonus marker is available.")
+        return True
+    return False
 
 
 def score_route(current_player, route):
@@ -706,37 +544,21 @@ def score_route(current_player, route):
     for city in route.cities:
         player = city.get_controller()
         if player is not None:
-            print(f"Player {COLOR_NAMES[player.color]} controlled {city.name}")
             player.score += 1
             if current_player.color == player.color:
                 current_player.reward += player.reward_structure.route_complete_got_points
             else:
                 current_player.reward -= player.reward_structure.route_complete_got_points
-            print(
-                f"Player {COLOR_NAMES[player.color]} scored for controlling {city.name}, total score: {player.score}"
-            )
-        else:
-            print(f"City {city.name} is not controlled by any player.")
 
 
 def claim_route_for_office(game, city, route):
     current_player = game.current_player
     next_open_office_color = city.get_next_open_office_color()
-    # print(f"Next open office color: {next_open_office_color}")
-
     if current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
-        if not city.has_required_piece_shape(current_player, route):
-            required_shape = city.get_next_open_office_shape()
-            print(
-                f"{COLOR_NAMES[current_player.color]} tried to claim an office in {city.name} but doesn't have the required {required_shape} shape on the route."
-            )
-        else:
+        if city.has_required_piece_shape(current_player, route):
             current_player.reward += current_player.reward_structure.city_claim_office
             score_route(current_player, route)
             placed_piece_shape = city.get_next_open_office_shape()
-            print(
-                f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a {placed_piece_shape.upper()} into an office of {city.name}"
-            )
             city.update_next_open_office_ownership(game, placed_piece_shape)
             finalize_route_claim(game, route, placed_piece_shape)
             route.award_tributes(game)
@@ -744,19 +566,8 @@ def claim_route_for_office(game, city, route):
         current_player.reward += current_player.reward_structure.bm_place_adjacent
         score_route(current_player, route)
         city.claim_office_with_bonus_marker(current_player)
-        print(
-            f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} placed a square into a NEW office of {city.name}."
-        )
         finalize_route_claim(game, route, "square")
         route.award_tributes(game)
-    elif city.color == DARK_GREEN:
-        print(
-            f"{COLOR_NAMES[current_player.color]} cannot claim a GREEN City ({city.name}) without a PlaceAdjacent BM."
-        )
-    else:
-        print(
-            f"{COLOR_NAMES[current_player.color]} doesn't have the correct privilege - {current_player.privilege} - to claim an office in {city.name}."
-        )
 
 
 def claim_route_for_additional_office(game, city, route, shape):
@@ -784,10 +595,6 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice, prestige_value=No
             current_player.reward += current_player.reward_structure.upgraded_bonus_points
             score_route(current_player, route)
             finalize_route_claim(game, route, "circle")
-        else:
-            print(
-                f"{COLOR_NAMES[current_player.color]} cannot claim a SpecialPrestigePoints City ({city.name}) with a privilege of {current_player.privilege}."
-            )
     elif any(
         upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"]
         for upgrade_type in city.upgrade_city_type
@@ -800,23 +607,15 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice, prestige_value=No
             "Bank": "upgraded_bank",
         }
         if upgrade_choice and current_player.perform_upgrade(upgrade_choice):
-            print(
-                f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} upgraded {upgrade_choice}!"
-            )
             current_player.reward += getattr(
                 current_player.reward_structure, upgrade_rewards[upgrade_choice]
             )
             score_route(current_player, route)
             finalize_route_claim(game, route)
-    else:
-        print(f"Upgrade not detected")
 
 
 def claim_route_for_points(game, route):
     current_player = game.current_player
-    print(
-        f"[{current_player.actions_remaining}] {COLOR_NAMES[current_player.color]} claimed a route for Points/BM! between {route.cities[0].name} and {route.cities[1].name}"
-    )
     score_route(current_player, route)
     finalize_route_claim(game, route)
 
@@ -832,9 +631,6 @@ def handle_bonus_marker(game, player, route, reset_pieces):
     if route.bonus_marker:
         player.reward += player.reward_structure.route_complete_receive_bm
         route.bonus_marker.owner = player
-        print(
-            f"[{player.actions_remaining}] {COLOR_NAMES[player.color]} received a bonus marker: {route.bonus_marker.type}"
-        )
         player.bonus_markers.append(route.bonus_marker)
         route.bonus_marker = None
         route.has_bonus_marker = False
@@ -846,13 +642,9 @@ def handle_bonus_marker(game, player, route, reset_pieces):
     elif route.permanent_bonus_marker:
         player.reward += player.reward_structure.route_complete_perm_bm
         perm_bm_type = route.permanent_bonus_marker.type
-        print(f"Waiting for Player to handle {route.permanent_bonus_marker.type} BM")
         if perm_bm_type == "MoveAny2":
             game.current_player.pieces_to_pickup = 2
             game.waiting_for_bm_move_any_2 = True
-            print(
-                f"BM: Please pick up, upto {game.current_player.pieces_to_pickup} pieces to move!"
-            )
         elif perm_bm_type == "+1Priv":
             game.current_player.perform_upgrade("Privilege")
         elif perm_bm_type == "ClaimGreenCity":
@@ -861,20 +653,13 @@ def handle_bonus_marker(game, player, route, reset_pieces):
                 or game.current_player.personal_supply_circles > 0
             ):
                 game.waiting_for_bm_green_city = True
-                print(f"BM: Please select a GREEN city to build an office in!")
             else:
-                print(
-                    f"BM: Cannot utilize claiming a GREEN city without a square in personal supply."
-                )
                 player.reward -= 20
         elif perm_bm_type == "Place2TradesmenFromRoute":
             game.pending_route_piece_choices = reset_pieces
         elif perm_bm_type == "Place2ScotlandOrWales":
             game.pending_britannia_place2 = True
             game.current_player.pieces_to_place = 2
-            print("BM: Select and place 2 pieces in Scotland and/or Wales.")
-
-        # handle_permanent_bonus_marker(route.permanent_bonus_marker.type, reset_pieces)
 
 
 def update_stock_and_reset(route, player, placed_piece_shape=None):
@@ -937,22 +722,16 @@ def buy_tile(game, tile_type, bm_payment1=None, bm_payment2=None):
     player.tiles.append(tile_type)
 
     if tile_type == "DisplaceAnywhere":
-        print(f"Player {COLOR_NAMES[player.color]} purchased a DisplaceAnywhere tile.")
         game.DisplaceAnywhereOwner = player
     elif tile_type == "+1Action":
-        print(f"Player {COLOR_NAMES[player.color]} purchased a +1Action tile.")
         game.OneActionOwner = player
     elif tile_type == "+1IncomeIfOthersIncome":
-        print(f"Player {COLOR_NAMES[player.color]} purchased a +1IncomeIfOthersIncome tile.")
         game.OneIncomeIfOthersIncomeOwner = player
     elif tile_type == "+1DisplacedPiece":
-        print(f"Player {COLOR_NAMES[player.color]} purchased a +1DisplacedPiece tile.")
         game.OneDisplacedPieceOwner = player
     elif tile_type == "+4PtsPerOwnedCity":
-        print(f"Player {COLOR_NAMES[player.color]} purchased a +4PtsPerOwnedCity tile.")
         game.FourPtsPerOwnedCityOwner = player
     elif tile_type == "+7PtsPerCompletedAbility":
-        print(f"Player {COLOR_NAMES[player.color]} purchased a +7PtsPerCompletedAbility tile.")
         game.SevenPtsPerCompletedAbilityOwner = player
 
     player.forfeit_remaining_actions()

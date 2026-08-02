@@ -1,4 +1,4 @@
-"""Fixed interaction ranges for the unactivated Hansa action schema."""
+"""Authoritative fixed ranges and slot catalogues for Hansa interactions."""
 
 from dataclasses import dataclass
 
@@ -9,6 +9,29 @@ ACTION_SCHEMA_VERSION = 2
 # The compatibility test fails if an assigned index or meaning changes without
 # an intentional schema-version/fingerprint update.
 ACTION_SCHEMA_FINGERPRINT = "f0ef36c33722b35380463b4309e09ddbed40ce8c37a2c1d48fb7a6aecacca16d"
+
+BONUS_MARKER_TYPES = (
+    "SwapOffice",
+    "Move3",
+    "UpgradeAbility",
+    "3Actions",
+    "4Actions",
+    "ExchangeBonusMarker",
+    "Tribute4EstablishingTP",
+    "BlockTradeRoute",
+)
+BONUS_MARKER_SLOT_BY_TYPE = {name: slot for slot, name in enumerate(BONUS_MARKER_TYPES)}
+BONUS_MARKER_PAYMENT_TYPES = BONUS_MARKER_TYPES + ("PlaceAdjacent",)
+
+TILE_TYPES = (
+    "DisplaceAnywhere",
+    "+1Action",
+    "+1IncomeIfOthersIncome",
+    "+1DisplacedPiece",
+    "+4PtsPerOwnedCity",
+    "+7PtsPerCompletedAbility",
+)
+TILE_SLOT_BY_TYPE = {name: slot for slot, name in enumerate(TILE_TYPES)}
 
 
 class ActionSchemaCompatibilityError(ValueError):

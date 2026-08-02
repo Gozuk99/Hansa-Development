@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import pygame
 
 from drawing.action_ui import action_label, fit_text
+from game.action_schema import CONTROL, INCOME
 from map_data.constants import (
     TAN,
     COLOR_NAMES,
@@ -545,8 +546,9 @@ def redraw_window(win, game, legal_actions=()):
             )
         )
 
-    if 618 in legal_actions:
-        layout.action_rects[618] = draw_end_turn(win, game)
+    for control_action in range(CONTROL.start, CONTROL.active_stop):
+        if control_action in legal_actions:
+            layout.action_rects[control_action] = draw_end_turn(win, game)
 
     draw_bonus_marker_pool(win, game)
     return layout
@@ -941,7 +943,9 @@ def draw_context_action_buttons(window, board, game, legal_actions):
     button_center_y = income_y + button_height / 2
 
     # Draw the Income text centered on both axes
-    contextual_actions = [action for action in legal_actions if 522 <= action < 527]
+    contextual_actions = [
+        action for action in legal_actions if INCOME.start <= action < INCOME.active_stop
+    ]
     if not contextual_actions:
         return {}
     draw_text(

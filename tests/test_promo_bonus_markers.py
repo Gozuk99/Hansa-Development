@@ -2,6 +2,8 @@ import contextlib
 import io
 import unittest
 
+from tests.action_helpers import legal_action_mask
+
 from game.game_actions import claim_post_action
 from game.game_runner import create_headless_game
 from game.invariants import validate_game
@@ -9,9 +11,9 @@ from map_data.map_attributes import BonusMarker, Map
 
 
 POST_ACTION_COUNT = 121
-BM_ACTION_START = 527
-BM_CITY_ACTION_START = 583
-INCOME_ACTION_START = 522
+BM_ACTION_START = 592
+BM_CITY_ACTION_START = 656
+INCOME_ACTION_START = 576
 
 
 def first_post_action(game, route):
@@ -25,9 +27,7 @@ def first_post_action(game, route):
 
 def promo_supply():
     supply = [
-        marker
-        for marker, count in Map.STANDARD_BONUS_MARKER_SUPPLY.items()
-        for _ in range(count)
+        marker for marker, count in Map.STANDARD_BONUS_MARKER_SUPPLY.items() for _ in range(count)
     ]
     supply.remove("PlaceAdjacent")
     supply.remove("SwapOffice")
@@ -55,15 +55,15 @@ class PromoBonusMarkerTests(unittest.TestCase):
         game = create_headless_game(map_num=1, num_players=3, seed=124)
         self.assertEqual(len(game.selected_map.bonus_marker_pool), 12)
         self.assertTrue(
-            set(game.selected_map.bonus_marker_pool).isdisjoint(
-                Map.PROMO_BONUS_MARKERS
-            )
+            set(game.selected_map.bonus_marker_pool).isdisjoint(Map.PROMO_BONUS_MARKERS)
         )
 
     def test_explicit_mix_preserves_fifteen_total_and_is_seeded(self):
         first = self.game()
         second = self.game()
-        self.assertEqual(first.selected_map.bonus_marker_pool, second.selected_map.bonus_marker_pool)
+        self.assertEqual(
+            first.selected_map.bonus_marker_pool, second.selected_map.bonus_marker_pool
+        )
         self.assertEqual(len(first.selected_map.bonus_marker_pool) + 3, 15)
         for marker_type in Map.PROMO_BONUS_MARKERS:
             self.assertIn(marker_type, first.selected_map.bonus_marker_pool)
@@ -86,8 +86,8 @@ class PromoBonusMarkerTests(unittest.TestCase):
 
         game.apply_action(BM_ACTION_START + 5)
         self.assertTrue(game.waiting_for_bm_exchange_bm)
-        game.apply_action(BM_CITY_ACTION_START + 1)
-        game.apply_action(BM_ACTION_START + 1)
+        game.apply_action(731)
+        game.apply_action(BM_ACTION_START + 10)
 
         self.assertEqual(player.bonus_markers, [desired])
         self.assertEqual(opponent.used_bonus_markers, [exchange])
@@ -130,14 +130,11 @@ class PromoBonusMarkerTests(unittest.TestCase):
                     BonusMarker(marker_type, owner=game.current_player)
                 ]
                 game.apply_action(BM_ACTION_START + bm_offset)
-                legal_posts = game.legal_action_mask()[:POST_ACTION_COUNT].nonzero().flatten()
+                legal_posts = legal_action_mask(game)[:POST_ACTION_COUNT].nonzero().flatten()
                 self.assertEqual(len(legal_posts), len(game.selected_map.routes))
                 self.assertEqual(
                     legal_posts.tolist(),
-                    [
-                        first_post_action(game, route)
-                        for route in game.selected_map.routes
-                    ],
+                    [first_post_action(game, route) for route in game.selected_map.routes],
                 )
 
     def test_tribute_triggers_only_for_the_completed_routes_neighboring_cities(self):
@@ -168,24 +165,18 @@ class PromoBonusMarkerTests(unittest.TestCase):
         game.current_player = placing_player
         game.active_player = 1
         total_before = (
-            placing_player.personal_supply_squares
-            + placing_player.personal_supply_circles
+            placing_player.personal_supply_squares + placing_player.personal_supply_circles
         )
-        stock_before = (
-            placing_player.general_stock_squares
-            + placing_player.general_stock_circles
-        )
+        stock_before = placing_player.general_stock_squares + placing_player.general_stock_circles
         with contextlib.redirect_stdout(io.StringIO()):
             claim_post_action(game, route, route.posts[0], "square")
 
         self.assertEqual(
-            placing_player.personal_supply_squares
-            + placing_player.personal_supply_circles,
+            placing_player.personal_supply_squares + placing_player.personal_supply_circles,
             total_before - 2,
         )
         self.assertEqual(
-            placing_player.general_stock_squares
-            + placing_player.general_stock_circles,
+            placing_player.general_stock_squares + placing_player.general_stock_circles,
             stock_before + 1,
         )
         self.assertIs(route.posts[0].owner, placing_player)

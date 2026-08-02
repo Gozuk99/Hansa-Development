@@ -1,4 +1,6 @@
 import unittest
+
+from tests.action_helpers import legal_action_mask
 from unittest.mock import patch
 
 import pygame
@@ -42,7 +44,7 @@ class DrawingTests(unittest.TestCase):
             marker_positions,
         )
         surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
-        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
 
         layout = redraw_window(surface, game, legal_actions)
 
@@ -58,7 +60,7 @@ class DrawingTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertEqual(
             set(layout.action_rects),
-            {action for action in legal_actions if 522 <= action < 527 or action == 618},
+            {action for action in legal_actions if 576 <= action < 581 or action in (736, 737)},
         )
 
     def test_piece_selection_reuses_income_indices_with_phase_specific_labels(self):
@@ -69,14 +71,14 @@ class DrawingTests(unittest.TestCase):
         ]
 
         self.assertEqual(phase_prompt(game), "Choose the required two-piece mix")
-        self.assertEqual(action_label(522, game), "2 Traders")
-        self.assertEqual(action_label(523, game), "1 Trader + 1 Merchant")
-        self.assertEqual(action_label(524, game), "2 Merchants")
+        self.assertEqual(action_label(576, game), "2 Traders")
+        self.assertEqual(action_label(577, game), "1 Trader + 1 Merchant")
+        self.assertEqual(action_label(578, game), "2 Merchants")
 
     def test_render_layout_is_stable_across_repeated_frames(self):
         game = GameConfiguration(map_num=3, seed=124).create_game()
         surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
-        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
 
         first = redraw_window(surface, game, legal_actions)
         second = redraw_window(surface, game, legal_actions)
@@ -110,7 +112,7 @@ class DrawingTests(unittest.TestCase):
         for post in route.posts:
             post.owner = game.current_player
             post.owner_piece_shape = "square"
-        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
         window = GameWindow.__new__(GameWindow)
         window.game = game
         window.action_rects = []
@@ -127,15 +129,15 @@ class DrawingTests(unittest.TestCase):
         owner.general_stock_squares = 1
         owner.general_stock_circles = 0
         game.begin_tribute_income_responses([owner])
-        self.assertEqual(action_label(522, game), "1 Trader")
+        self.assertEqual(action_label(576, game), "1 Trader")
 
         game.pending_tribute_income_owners.clear()
         game.active_player = game.current_player_index
         game.current_player.bank = 50
         game.current_player.general_stock_squares = 3
         game.current_player.general_stock_circles = 2
-        self.assertEqual(action_label(523, game), "Income: 3 Traders + 1 Merchant")
-        self.assertEqual(action_label(524, game), "Income: 3 Traders + 2 Merchants")
+        self.assertEqual(action_label(577, game), "Income: 3 Traders + 1 Merchant")
+        self.assertEqual(action_label(578, game), "Income: 3 Traders + 2 Merchants")
 
     def test_acting_player_controller_follows_out_of_turn_responder(self):
         controls = (PlayerControl.HUMAN, PlayerControl.EASY, PlayerControl.HUMAN)

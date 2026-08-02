@@ -1,10 +1,23 @@
-"""Human-readable descriptions for the engine's indexed legal actions."""
+"""Human-readable descriptions for codec-backed legal interactions."""
 
-# fmt: off
 from __future__ import annotations
 
+from game.action_codec import DEFAULT_ACTION_CODEC
+from game.structured_actions import (
+    AbilityInteraction,
+    BonusMarkerInteraction,
+    CityInteraction,
+    ControlInteraction,
+    IncomeInteraction,
+    PlayerInteraction,
+    PostInteraction,
+    RouteInteraction,
+    SupplyInteraction,
+    TileInteraction,
+)
 from game.turn_state import TurnPhase
-from map_data.constants import DARK_GREEN, MAX_ROUTES
+from map_data.constants import DARK_GREEN
+
 
 BONUS_MARKER_NAMES = (
     "Swap Office",
@@ -48,45 +61,48 @@ def phase_prompt(game) -> str:
 
 
 def action_label(index: int, game=None) -> str:
-    """Translate one engine action index using its current contextual meaning."""
-    if index < 121:
-        return f"Post {index}: Trader"
-    if index < 242:
-        return f"Post {index - 121}: Merchant"
-    if index < 522:
-        return _route_action_label(index, game)
-    if index < 527:
-        return _income_action_label(index, game)
-    if index < 535:
+    """Describe one action index using its decoded structured interaction."""
+    action = DEFAULT_ACTION_CODEC.decode(index)
+    if isinstance(action, PostInteraction):
+        return f"Post {action.post_slot}: {action.shape.value.title()}"
+    if isinstance(action, RouteInteraction):
+        return _route_action_label(action, game)
+    if isinstance(action, IncomeInteraction):
+        return _income_action_label(action, game)
+    if isinstance(action, BonusMarkerInteraction):
+        if action.marker_slot == 8:
+            return "Use Additional Trading Post"
+        marker_slot = (
+            (action.marker_slot - 9) % 8 if action.marker_slot >= 9 else action.marker_slot
+        )
         verb = "Take used" if getattr(game, "exchange_target_player", None) else "Use"
-        return f"{verb} {BONUS_MARKER_NAMES[index - 527]}"
-    if index < 543:
-        return _tile_action_label(index, game)
-    if index < 583 and game is not None:
-        route = game.selected_map.routes[index - 543]
-        return f"Place marker: {route.cities[0].name}—{route.cities[1].name}"
-    if index < 613:
-        return _city_context_label(index, game)
-    if index < 618 and game is not None:
-        choice = index - 613
-        if choice < len(game.selected_map.upgrade_cities):
-            return f"Upgrade {game.selected_map.upgrade_cities[choice].upgrade_type}"
-        return f"Ability choice {choice + 1}"
-    if index == 618:
+        return f"{verb} {BONUS_MARKER_NAMES[marker_slot]}"
+    if isinstance(action, TileInteraction):
+        return _tile_action_label(action, game)
+    if isinstance(action, PlayerInteraction):
+        return f"Exchange with Player {action.player_slot + 1}"
+    if isinstance(action, CityInteraction):
+        return _city_context_label(action, game)
+    if isinstance(action, AbilityInteraction):
+        if game is not None and action.ability_slot < len(game.selected_map.upgrade_cities):
+            upgrade = game.selected_map.upgrade_cities[action.ability_slot]
+            return f"Upgrade {upgrade.upgrade_type}"
+        return f"Ability choice {action.ability_slot + 1}"
+    if isinstance(action, ControlInteraction):
         if game is not None and game.turn_phase == TurnPhase.DISPLACEMENT:
             return "Finish displacement (decline optional pieces)"
         return "Finish / End turn"
-    if index == 619:
+    if isinstance(action, SupplyInteraction):
         if game is not None and game.turn_phase == TurnPhase.DISPLACEMENT:
             shape = game.displaced_player.displaced_shape
             piece = "Merchant" if shape == "circle" else "Trader"
             return f"Place optional {piece} before displaced piece"
-        return "Use Additional Trading Post"
+        return "Select player supply"
     return f"Action {index}"
 
 
-def _income_action_label(index: int, game) -> str:
-    circles = index - 522
+def _income_action_label(action, game) -> str:
+    circles = action.merchant_count
     if game is not None and game.turn_phase == TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION:
         return _piece_mix_label(total=2, circles=circles)
     if game is not None and game.turn_phase == TurnPhase.TRIBUTE_INCOME_RESPONSE:
@@ -96,10 +112,7 @@ def _income_action_label(index: int, game) -> str:
     if game is not None:
         player = game.current_player
         selected_circles = min(player.general_stock_circles, circles)
-        selected_squares = min(
-            player.general_stock_squares,
-            player.bank - selected_circles,
-        )
+        selected_squares = min(player.general_stock_squares, player.bank - selected_circles)
         return "Income: " + _piece_mix_label(
             total=selected_squares + selected_circles,
             circles=selected_circles,
@@ -117,20 +130,18 @@ def _piece_mix_label(*, total: int, circles: int) -> str:
     return " + ".join(parts)
 
 
-def _route_action_label(index: int, game) -> str:
+def _route_action_label(action, game) -> str:
     if game is None:
-        return f"Route action {index}"
-    relative = index - 242
-    if relative < MAX_ROUTES:
-        route = game.selected_map.routes[relative]
+        return f"Route {action.route_slot}: interaction {action.interaction_slot}"
+    route = game.selected_map.routes[action.route_slot]
+    if game.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS:
+        return f"Place marker: {route.cities[0].name}—{route.cities[1].name}"
+    if action.interaction_slot == 0:
         return f"Complete route (no office): {route.cities[0].name}—{route.cities[1].name}"
-    if relative < MAX_ROUTES * 3:
-        route_index, city_index = divmod(relative - MAX_ROUTES, 2)
-        route = game.selected_map.routes[route_index]
-        return f"Office in {route.cities[city_index].name}"
+    if action.interaction_slot <= 2:
+        return f"Office in {route.cities[action.interaction_slot - 1].name}"
 
-    route_index, route_choice = divmod(relative - MAX_ROUTES * 3, 4)
-    route = game.selected_map.routes[route_index]
+    route_choice = action.interaction_slot - 3
     if getattr(game, "waiting_for_bm_place_adjacent", False):
         city_index, shape_index = divmod(route_choice, 2)
         return (
@@ -150,8 +161,8 @@ def _route_action_label(index: int, game) -> str:
     return f"Route choice: {route.cities[0].name}—{route.cities[1].name}"
 
 
-def _tile_action_label(index: int, game) -> str:
-    choice = index - 535
+def _tile_action_label(action, game) -> str:
+    choice = action.tile_slot
     if getattr(game, "pending_income_favour_owner", None) is not None:
         labels = ("Income favour: Trader", "Income favour: Merchant", "Decline income favour")
         return labels[choice] if choice < len(labels) else f"Income favour choice {choice + 1}"
@@ -168,31 +179,24 @@ def _tile_action_label(index: int, game) -> str:
     return tiles[choice] if choice < len(tiles) else f"Tile choice {choice + 1}"
 
 
-def _city_context_label(index: int, game) -> str:
+def _city_context_label(action, game) -> str:
     if game is None:
-        return f"City choice {index - 582}"
-    choice = index - 583
-    if getattr(game, "waiting_for_bm_exchange_bm", False):
-        if getattr(game, "exchange_target_player", None) is None:
-            return f"Exchange with Player {choice + 1}"
-    if getattr(game, "waiting_for_bm_swap_office", False):
-        pairs = [
-            (city, pair)
+        return f"City choice {action.city_interaction_slot}"
+    if game.waiting_for_bm_swap_office:
+        catalogue = [
+            (city, (left, left + 1))
             for city in game.selected_map.cities
-            for pair in city.eligible_swap_pairs(game.current_player, game)
+            for left in range(len(city.offices) - 1)
         ]
-        if choice < len(pairs):
-            city, pair = pairs[choice]
-            return f"Swap offices {pair[0] + 1}/{pair[1] + 1} in {city.name}"
-    if getattr(game, "waiting_for_bm_green_city", False):
-        choices = [
+        city, pair = catalogue[action.city_interaction_slot]
+        return f"Swap offices {pair[0] + 1}/{pair[1] + 1} in {city.name}"
+    if game.waiting_for_bm_green_city:
+        catalogue = [
             (city, shape)
             for city in game.selected_map.cities
             if city.color == DARK_GREEN
             for shape in ("square", "circle")
-            if game.current_player.has_personal_supply(shape)
         ]
-        if choice < len(choices):
-            city, shape = choices[choice]
-            return f"Green office in {city.name}: {shape.title()}"
-    return f"City choice {choice + 1}"
+        city, shape = catalogue[action.city_interaction_slot - 46]
+        return f"Green office in {city.name}: {shape.title()}"
+    return f"City choice {action.city_interaction_slot + 1}"
