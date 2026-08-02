@@ -2,7 +2,7 @@
 CLI helper to validate action schema metadata in Hansa saves or model checkpoints.
 Usage:
   python tools/check_schema_compat.py --game path/to/position.hansa
-  python tools/check_schema_compat.py --model path/to/hansa_nn_model1.pth
+  python tools/check_schema_compat.py --model path/to/hansa_nn_model.pth
 
 Exit code 0 on success, non-zero on incompatibility.
 """
@@ -23,6 +23,10 @@ except Exception:
     torch = None
 
 from game.action_schema import ActionSchemaCompatibilityError, validate_action_schema_metadata
+from ai.observation_schema import (
+    ObservationSchemaCompatibilityError,
+    validate_observation_schema_metadata,
+)
 
 
 def check_game(path: str) -> int:
@@ -46,7 +50,8 @@ def check_model(path: str) -> int:
     if isinstance(loaded, dict) and "state_dict" in loaded:
         try:
             validate_action_schema_metadata(loaded, f"Model checkpoint {path}")
-        except ActionSchemaCompatibilityError as error:
+            validate_observation_schema_metadata(loaded, f"Model checkpoint {path}")
+        except (ActionSchemaCompatibilityError, ObservationSchemaCompatibilityError) as error:
             print(f"INCOMPATIBLE: {error}")
             return 3
         print("OK: model checkpoint schema matches runtime")

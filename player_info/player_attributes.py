@@ -10,28 +10,18 @@ from map_data.constants import (
     COLOR_NAMES,
     UPGRADE_METHODS_MAP,
     UPGRADE_MAX_VALUES,
-    INPUT_SIZE,
-    OUTPUT_SIZE,
 )
 from game.setup import starting_inventory
 from player_info.reward_options import Rewards
 
 
 class Player:
-    def __init__(self, color, order, load_model=True):
+    def __init__(self, color, order):
         self.color = color
         self.reward = 0
         self.reward_structure = Rewards(1)
 
         self.order = order
-        self.hansa_nn = None
-        if load_model:
-            from ai.ai_model import HansaNN
-
-            self.hansa_nn = HansaNN(
-                INPUT_SIZE, OUTPUT_SIZE, model_file=f"hansa_nn_model{self.order}.pth"
-            )
-
         self.score = 0  # Initial score
         self.final_score = 0
         self.final_score_breakdown = {}

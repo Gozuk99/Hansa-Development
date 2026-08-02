@@ -7,6 +7,11 @@ import unittest
 import torch
 
 from ai.ai_model import HansaNN
+from ai.observation_schema import (
+    OBSERVATION_SCHEMA_VERSION,
+    OBSERVATION_SIZE,
+    observation_schema_metadata,
+)
 from game.action_codec import DEFAULT_ACTION_CODEC
 from game.game_runner import ReplayRecord, load_replay, save_replay
 from game.action_schema import (
@@ -45,15 +50,47 @@ class TestActionSchemaVersioning(unittest.TestCase):
                 validate_action_schema_metadata(metadata, "test artifact")
 
     def test_model_checkpoint_requires_exact_schema_metadata(self):
-        model = HansaNN(2, ACTION_SPACE_SIZE)
+        model = HansaNN()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "model.pth"
-            torch.save({"state_dict": model.state_dict(), **action_schema_metadata()}, path)
-            HansaNN(2, ACTION_SPACE_SIZE, model_file=path)
+            model.save_model(path)
+            checkpoint = torch.load(path, map_location="cpu")
+            self.assertEqual(checkpoint["observation_size"], OBSERVATION_SIZE)
+            self.assertEqual(checkpoint["observation_schema_version"], OBSERVATION_SCHEMA_VERSION)
+            self.assertEqual(checkpoint["action_space_size"], ACTION_SPACE_SIZE)
+            HansaNN(model_file=path)
 
             torch.save(model.state_dict(), path)
             with self.assertRaisesRegex(ValueError, "missing"):
-                HansaNN(2, ACTION_SPACE_SIZE, model_file=path)
+                HansaNN(model_file=path)
+
+            incompatible = {
+                "state_dict": model.state_dict(),
+                **action_schema_metadata(),
+                **observation_schema_metadata(),
+                "observation_size": OBSERVATION_SIZE + 1,
+            }
+            torch.save(incompatible, path)
+            with self.assertRaisesRegex(ValueError, "observation schema"):
+                HansaNN(model_file=path)
+
+            incompatible["observation_size"] = OBSERVATION_SIZE
+            incompatible["action_space_size"] = ACTION_SPACE_SIZE - 1
+            torch.save(incompatible, path)
+            with self.assertRaisesRegex(ValueError, "action schema"):
+                HansaNN(model_file=path)
+
+    def test_model_accepts_observation_and_is_deterministic(self):
+        observation = torch.zeros((1, OBSERVATION_SIZE))
+        first_model = HansaNN()
+        second_model = HansaNN()
+        first = first_model(observation)
+        second = second_model(observation)
+
+        self.assertEqual(tuple(first.shape), (1, ACTION_SPACE_SIZE))
+        self.assertTrue(torch.equal(first, second))
+        self.assertFalse(hasattr(first_model, "optimizer"))
+        self.assertFalse(first_model.training)
 
     def test_replay_round_trip_requires_exact_schema_metadata(self):
         record = ReplayRecord(2, 3, 124, (1, 2, 3))

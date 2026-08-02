@@ -33,7 +33,29 @@ class GameConfigurationTests(unittest.TestCase):
         )
         self.assertFalse(configuration.has_ai_players)
         game = configuration.create_game()
-        self.assertTrue(all(player.hansa_nn is None for player in game.players))
+        self.assertIsNone(game.ai_model)
+        self.assertTrue(all(not hasattr(player, "hansa_nn") for player in game.players))
+
+    def test_ai_seats_share_one_game_owned_model(self):
+        configuration = GameConfiguration(
+            player_controls=(
+                PlayerControl.HUMAN,
+                PlayerControl.EASY,
+                PlayerControl.HARD,
+            )
+        )
+        shared_model = object()
+
+        with mock.patch.object(
+            GameConfiguration,
+            "_load_ai_model",
+            return_value=shared_model,
+        ) as load_model:
+            game = configuration.create_game()
+
+        load_model.assert_called_once_with()
+        self.assertIs(game.ai_model, shared_model)
+        self.assertTrue(all(not hasattr(player, "hansa_nn") for player in game.players))
 
     def test_every_supported_map_and_player_count_builds_from_configuration(self):
         for map_num in (1, 2, 3):

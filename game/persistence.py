@@ -90,7 +90,7 @@ def _restore_office_printed_privileges(game: Game) -> None:
     ):
         return
 
-    template = Game(game.map_num, len(game.players), load_models=False, seed=game.seed).selected_map
+    template = Game(game.map_num, len(game.players), seed=game.seed).selected_map
     template_cities = {city.name: city for city in template.cities}
     for city in game.selected_map.cities:
         printed = iter(template_cities[city.name].offices)
@@ -102,6 +102,12 @@ def _restore_office_printed_privileges(game: Game) -> None:
                 office.printed_privilege = (
                     template_office.printed_privilege if template_office else "WHITE"
                 )
+
+
+def _remove_legacy_player_models(game: Game) -> None:
+    for player in game.players:
+        if hasattr(player, "hansa_nn"):
+            del player.hansa_nn
 
 
 def default_save_directory() -> Path:
@@ -225,6 +231,7 @@ def load_game(filename: str | Path) -> Game:
     if not isinstance(restored, dict) or not isinstance(restored.get("game"), Game):
         raise SaveGameError("Saved payload does not contain a Hansa game")
     game = restored["game"]
+    _remove_legacy_player_models(game)
     _restore_office_printed_privileges(game)
     game._saved_controller_rng_state = restored.get("controller_rng_state")
     try:
@@ -249,10 +256,7 @@ def load_game(filename: str | Path) -> Game:
     configuration = getattr(game, "configuration", None)
     if configuration is not None:
         try:
-            for player in game.players:
-                control = getattr(player, "control", None)
-                if control is not None and not control.is_human:
-                    player.hansa_nn = configuration._load_ai_model(player.order)
+            game.ai_model = configuration._load_ai_model() if configuration.has_ai_players else None
         except Exception as error:
             raise SaveGameError(f"Could not restore AI model: {error}") from error
     return game

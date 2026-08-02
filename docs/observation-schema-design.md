@@ -33,6 +33,10 @@ that layout.
 Schema versions and fingerprints are checkpoint/file compatibility metadata.
 They are never neural-network features.
 
+The implemented observation contract is version 1. Shared model checkpoints
+store its version, 4,241-value size, and fingerprint alongside the action-schema
+metadata. Loading rejects either schema when it does not match the runtime.
+
 ## Relative players
 
 Player slots rotate for one shared model:

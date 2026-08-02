@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import torch
 
+from ai.observation_schema import OBSERVATION_SIZE
 from game.turn_state import TurnPhase
 from map_data.constants import (
     ACTIONS_MAX_VALUES,
@@ -58,6 +59,10 @@ class ObservationEncoder:
         + OPTIONAL_COMPONENTS_SIZE
         + WORKFLOW_SIZE
     )
+    if FEATURE_SIZE != OBSERVATION_SIZE:
+        raise RuntimeError(
+            f"Observation layout has {FEATURE_SIZE} values; schema declares {OBSERVATION_SIZE}"
+        )
 
     PIECE_TYPE_TO_ID = {None: 0, "square": 1, "circle": 2}
     REQUIRED_SHAPE_TO_ID = {None: 0, "square": 1, "circle": 2}

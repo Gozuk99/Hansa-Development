@@ -8,6 +8,7 @@ from pathlib import Path
 import unittest
 from unittest import mock
 
+from ai.ai_model import HansaNN
 from drawing.game_window import GameWindow
 from drawing.new_game_menu import NewGameMenu
 from game.action_schema import ACTION_SCHEMA_VERSION
@@ -65,6 +66,32 @@ class ExactGamePersistenceTests(unittest.TestCase):
         self.assertEqual(restored.ai_action_mask(), before_mask)
         self.assertEqual(restored.configuration, game.configuration)
         self.assertTrue(all(player.control is PlayerControl.HUMAN for player in restored.players))
+        self.assertTrue(all(not hasattr(player, "hansa_nn") for player in restored.players))
+
+    def test_ai_game_restores_one_shared_external_model(self):
+        configuration = GameConfiguration(
+            player_controls=(
+                PlayerControl.HUMAN,
+                PlayerControl.EASY,
+                PlayerControl.HARD,
+            ),
+            seed=124,
+        )
+        shared_model = HansaNN()
+        with mock.patch.object(GameConfiguration, "_load_ai_model", return_value=shared_model):
+            game = configuration.create_game()
+
+        with tempfile.TemporaryDirectory() as directory:
+            filename = save_game(game, Path(directory) / "shared-ai-position")
+            restored_model = object()
+            with mock.patch.object(
+                GameConfiguration, "_load_ai_model", return_value=restored_model
+            ) as load_model:
+                restored = load_game(filename)
+
+        load_model.assert_called_once_with()
+        self.assertIs(restored.ai_model, restored_model)
+        self.assertTrue(all(not hasattr(player, "hansa_nn") for player in restored.players))
 
     def test_load_backfills_printed_office_privileges_from_older_save(self):
         game = self.configured_game()
