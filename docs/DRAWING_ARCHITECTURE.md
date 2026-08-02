@@ -1,8 +1,8 @@
 # Drawing Architecture
 
 The Pygame layer presents the engine; it does not decide legality or mutate game
-state. Every submitted move must be present in the engine's current legal-action
-mask and is applied through `Game.apply_action()`.
+state. Every submitted move must be present in `Game.get_legal_actions()` and is
+encoded through the central 768-entry codec before `Game.apply_action()`.
 
 ## Responsibilities
 
@@ -10,9 +10,9 @@ mask and is applied through `Game.apply_action()`.
   validated `GameConfiguration`.
 - `drawing/scaled_display.py` owns the resizable physical window, fixed logical
   canvas, letterboxing, and physical-to-logical pointer translation.
-- `drawing/action_ui.py` translates indexed actions and `TurnPhase` values into
-  human-readable choices and prompts. It owns the presentation meaning of reused
-  contextual indices.
+- `drawing/action_ui.py` asks the central codec to decode indices, then translates
+  structured actions and `TurnPhase` values into human-readable choices and
+  prompts. It does not own action ranges or legality.
 - `drawing/drawing_utils.py` renders maps, writing desks, markers, tiles, scores,
   and phase-specific buttons. A render pass returns `DrawLayout` hitboxes and
   does not store them on `Game`, `Player`, `Board`, or marker objects.
@@ -28,7 +28,7 @@ mask and is applied through `Game.apply_action()`.
 - Opponents' used bonus markers display only face-down counts. Their types become
   selectable through the legal-action list only while resolving the promotional
   Exchange Bonus Marker.
-- End Turn is clickable only when action `618` is legal.
+- End Turn is clickable only when the codec's End Turn control is legal.
 - Indices `522–526` describe ordinary Income, Tribute income, or mandatory
   two-piece selection according to the current `TurnPhase`.
 - Indices `535–542` describe tile purchases, tile payments, or the optional
@@ -52,7 +52,7 @@ mask and is applied through `Game.apply_action()`.
   the ability box nearest the route's other city. Each legal adjacent route is
   assigned a reachable section of the box.
 - Arrow keys navigate the legal-action browser; Enter applies the selected
-  action; `E` finishes when action `618` is legal.
+  action; `E` finishes when an engine-provided finish control is legal.
 
 The numbered action encoding remains an engine/RL compatibility boundary. New UI
 controls should use `action_label()`, the legal mask, and returned `DrawLayout`

@@ -14,7 +14,7 @@ from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
 
-from game.game_info import EMPERORS_FAVOUR_TILES
+from game.action_schema import TILE_TYPES
 from game.invariants import GameInvariantError, validate_game
 
 
@@ -191,7 +191,7 @@ def _validate_optional_modules(game, known_players):
     owned_tiles = [tile for player in game.players for tile in player.tiles]
     if game.use_emperors_favour:
         _require(
-            all(tile in EMPERORS_FAVOUR_TILES for tile in game.tile_pool + owned_tiles),
+            all(tile in TILE_TYPES for tile in game.tile_pool + owned_tiles),
             "unknown Emperor's Favour tile",
         )
         _require(

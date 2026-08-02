@@ -92,11 +92,9 @@ optional modules in one game.
 ## Known limitations
 
 - The baseline player is designed to finish games legally, not play well.
-- Legal-action generation still calls helpers in `ai/action_options.py`. The
-  engine owns the public legal-action API, but moving those helpers is remaining
-  cleanup rather than a training blocker.
-- The 620-entry manual/GUI adapter still exists for compatibility. AI models use
-  only the 768-entry action system.
+- Legality helpers and structured-action execution are engine-owned. AI,
+  headless, and GUI callers share `Game.get_legal_actions()` and the 768-entry
+  codec without a legacy 620-entry dispatch adapter.
 - Natural full games will not choose every alternate location or optional
   interaction. Focused tests provide coverage for those branches.
 

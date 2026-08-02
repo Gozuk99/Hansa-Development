@@ -7,7 +7,6 @@ import random
 import pygame
 import torch
 
-from ai.action_options import masking_out_invalid_actions
 from ai.observation_encoder import ObservationEncoder
 from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
@@ -15,8 +14,16 @@ from drawing.drawing_utils import draw_end_game, redraw_window
 from drawing.scaled_display import ScaledDisplay
 from drawing.save_dialogs import choose_save_file
 from game.game_config import PlayerControl, choose_ranked_ai_action
+from game.action_codec import DEFAULT_ACTION_CODEC
 from game.persistence import save_game
-from map_data.constants import MAX_ROUTES, TAN
+from game.structured_actions import (
+    ControlInteraction,
+    PieceShape,
+    PostInteraction,
+    RouteInteraction,
+    TileInteraction,
+)
+from map_data.constants import TAN
 
 
 class GameWindow:
@@ -43,7 +50,7 @@ class GameWindow:
         self.layout = None
 
     def legal_actions(self) -> list[int]:
-        return masking_out_invalid_actions(self.game).nonzero(as_tuple=True)[0].tolist()
+        return [index for index, enabled in enumerate(self.game.ai_action_mask()) if enabled]
 
     def draw_action_browser(self, actions):
         self.action_rects.clear()
@@ -96,7 +103,7 @@ class GameWindow:
             self.screen.blit(label, position)
             self.action_rects.append((pygame.Rect(position, (panel.width - 24, 21)), action))
 
-    def choose_ai_action(self, _legacy_legal_actions):
+    def choose_ai_action(self, _legal_actions):
         player = self.acting_player
         state = public_game_state(self.observation_encoder, self.game, player).float()
         ai_actions = [index for index, enabled in enumerate(self.game.ai_action_mask()) if enabled]
@@ -153,10 +160,13 @@ class GameWindow:
         for route_index, route in enumerate(self.game.selected_map.routes):
             for post in route.posts:
                 if abs(position[0] - post.pos[0]) <= 24 and abs(position[1] - post.pos[1]) <= 24:
-                    action = post_index + (121 if button == 3 else 0)
+                    shape = PieceShape.MERCHANT if button == 3 else PieceShape.TRADER
+                    action = DEFAULT_ACTION_CODEC.encode(PostInteraction(post_index, shape))
                     if action in legal_actions:
                         return action
-                    replacement_action = 543 + route_index
+                    replacement_action = DEFAULT_ACTION_CODEC.encode(
+                        RouteInteraction(route_index, 0)
+                    )
                     return replacement_action if replacement_action in legal_actions else None
                 post_index += 1
 
@@ -175,24 +185,26 @@ class GameWindow:
                 route_index = self.game.selected_map.routes.index(route)
                 city_index = route.cities.index(clicked_city)
                 if button == 1:
-                    action = 242 + MAX_ROUTES + route_index * 2 + city_index
+                    action = DEFAULT_ACTION_CODEC.encode(
+                        RouteInteraction(route_index, city_index + 1)
+                    )
                     return action if action in legal_actions else None
                 if button == 3:
-                    action = 242 + route_index
+                    action = DEFAULT_ACTION_CODEC.encode(RouteInteraction(route_index, 0))
                     return action if action in legal_actions else None
 
-        tile_actions = {
-            "DisplaceAnywhere": 535,
-            "+1Action": 536,
-            "+1IncomeIfOthersIncome": 537,
-            "+1DisplacedPiece": 538,
-            "+4PtsPerOwnedCity": 539,
-            "+7PtsPerCompletedAbility": 540,
-        }
+        tile_names = (
+            "DisplaceAnywhere",
+            "+1Action",
+            "+1IncomeIfOthersIncome",
+            "+1DisplacedPiece",
+            "+4PtsPerOwnedCity",
+            "+7PtsPerCompletedAbility",
+        )
         tile_rects = layout.tile_rects if layout is not None else {}
         for tile, rect in tile_rects.items():
             if rect.collidepoint(position):
-                action = tile_actions[tile]
+                action = DEFAULT_ACTION_CODEC.encode(TileInteraction(tile_names.index(tile)))
                 return action if action in legal_actions else None
         return None
 
@@ -224,7 +236,7 @@ class GameWindow:
             choice = int(relative_x * 4 / upgrade.width)
             for route in city.routes:
                 route_index = selected_map.routes.index(route)
-                action = 242 + MAX_ROUTES * 3 + route_index * 4 + choice
+                action = DEFAULT_ACTION_CODEC.encode(RouteInteraction(route_index, choice + 3))
                 if action in legal_actions:
                     candidates.append((action, route))
         else:
@@ -232,7 +244,9 @@ class GameWindow:
             for route in city.routes:
                 route_index = selected_map.routes.index(route)
                 city_index = route.cities.index(city)
-                action = 242 + MAX_ROUTES * 3 + route_index * 4 + city_index * 2 + upgrade_index
+                action = DEFAULT_ACTION_CODEC.encode(
+                    RouteInteraction(route_index, city_index * 2 + upgrade_index + 3)
+                )
                 if action in legal_actions:
                     candidates.append((action, route))
 
@@ -314,9 +328,16 @@ class GameWindow:
                         self.selected = (self.selected - 1) % len(actions)
                     elif event.key == pygame.K_DOWN:
                         self.selected = (self.selected + 1) % len(actions)
-                    elif event.key == pygame.K_e and 618 in actions:
-                        self.game.apply_action(618)
-                        action_applied = True
+                    elif event.key == pygame.K_e:
+                        controls = [
+                            DEFAULT_ACTION_CODEC.encode(ControlInteraction(slot)) for slot in (0, 1)
+                        ]
+                        control_action = next(
+                            (action for action in controls if action in actions), None
+                        )
+                        if control_action is not None:
+                            self.game.apply_action(control_action)
+                            action_applied = True
                     elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                         self.game.apply_action(actions[self.selected % len(actions)])
                         action_applied = True

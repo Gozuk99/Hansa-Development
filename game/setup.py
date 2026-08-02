@@ -27,8 +27,7 @@ def validate_game_configuration(map_num, num_players):
         raise ValueError(f"Unsupported map number: {map_num}")
     if not MIN_PLAYERS <= num_players <= MAX_PLAYERS:
         raise ValueError(
-            f"Player count must be between {MIN_PLAYERS} and {MAX_PLAYERS}, "
-            f"got {num_players}"
+            f"Player count must be between {MIN_PLAYERS} and {MAX_PLAYERS}, got {num_players}"
         )
 
 

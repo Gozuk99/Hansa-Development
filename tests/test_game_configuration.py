@@ -3,6 +3,8 @@ import random
 import subprocess
 import sys
 import unittest
+
+from tests.action_helpers import legal_action_mask
 from unittest import mock
 
 import hansa_game
@@ -288,7 +290,7 @@ class GameConfigurationTests(unittest.TestCase):
         window = GameWindow.__new__(GameWindow)
         window.game = game
         window.action_rects = []
-        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
         target_action = next(action for action in legal_actions if action < 121)
         target_post_index = target_action
         posts = [post for route in game.selected_map.routes for post in route.posts]
@@ -332,7 +334,7 @@ class GameConfigurationTests(unittest.TestCase):
         posts = [post for candidate in game.selected_map.routes for post in candidate.posts]
         displaced_index = posts.index(displaced_post)
         game.apply_action(displaced_index)
-        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
         circle_action = next(
             action for action in legal_actions if MAX_POSTS <= action < MAX_POSTS * 2
         )
@@ -348,7 +350,7 @@ class GameConfigurationTests(unittest.TestCase):
         self.assertIsNone(window.action_for_click(target.pos, 1, legal_actions))
 
         game.apply_action(circle_action)
-        updated_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        updated_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
         self.assertFalse(any(MAX_POSTS <= action < MAX_POSTS * 2 for action in updated_actions))
         square_action = next(action for action in updated_actions if action < MAX_POSTS)
         square_target = posts[square_action]
@@ -357,9 +359,9 @@ class GameConfigurationTests(unittest.TestCase):
             square_action,
         )
         self.assertIsNone(window.action_for_click(square_target.pos, 3, updated_actions))
-        self.assertIn(618, updated_actions)
+        self.assertIn(736, updated_actions)
         self.assertEqual(
-            action_label(618, game),
+            action_label(736, game),
             "Finish displacement (decline optional pieces)",
         )
 
@@ -371,8 +373,8 @@ class GameConfigurationTests(unittest.TestCase):
             post.owner = player
             post.owner_piece_shape = "square"
 
-        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
-        points_action = 242
+        legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
+        points_action = 256
         city = route.cities[0]
         center = (city.x_pos + city.width // 2, city.y_pos + city.height // 2)
         window = GameWindow.__new__(GameWindow)
@@ -391,15 +393,21 @@ class GameConfigurationTests(unittest.TestCase):
         window = GameWindow.__new__(GameWindow)
         window.game = game
         window.action_rects = []
+        game.current_player.forfeit_remaining_actions()
+        game.current_player.ending_turn = True
+        game.replace_bonus_marker = 1
 
         self.assertEqual(
-            action_label(543, game),
+            action_label(256, game),
             f"Place marker: {route.cities[0].name}—{route.cities[1].name}",
         )
-        self.assertEqual(action_label(527, game), "Use Swap Office")
+        game.current_player.actions_remaining = 1
+        game.current_player.ending_turn = False
+        game.replace_bonus_marker = 0
+        self.assertEqual(action_label(592, game), "Use Swap Office")
         self.assertEqual(
-            window.action_for_click(route.posts[0].pos, 1, [543]),
-            543,
+            window.action_for_click(route.posts[0].pos, 1, [256]),
+            256,
         )
 
     def test_left_click_on_each_waren_upgrade_box_selects_that_upgrade(self):
@@ -410,8 +418,8 @@ class GameConfigurationTests(unittest.TestCase):
             post.owner = game.current_player
             post.owner_piece_shape = "square"
         route_index = game.selected_map.routes.index(route)
-        base = 242 + 120 + route_index * 4
-        legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        base = 256 + 120 + route_index * 4
+        legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
         choices = [action for action in range(base, base + 4) if action in legal_actions]
         window = GameWindow.__new__(GameWindow)
         window.game = game
@@ -455,10 +463,10 @@ class GameConfigurationTests(unittest.TestCase):
                         for post in route.posts:
                             post.owner = game.current_player
                             post.owner_piece_shape = "square"
-                    legal_actions = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+                    legal_actions = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
                     upgrade_index = city.upgrade_city_type.index(upgrade.upgrade_type)
                     expected = {
-                        242
+                        256
                         + 120
                         + game.selected_map.routes.index(route) * 4
                         + route.cities.index(city) * 2
@@ -514,7 +522,7 @@ class GameConfigurationTests(unittest.TestCase):
             post.owner = game.current_player
             post.owner_piece_shape = "circle"
         route_index = game.selected_map.routes.index(route)
-        base = 242 + 120 + route_index * 4
+        base = 256 + 120 + route_index * 4
         choices = list(range(base, base + 4))
         window = GameWindow.__new__(GameWindow)
         window.game = game
@@ -537,7 +545,7 @@ class GameConfigurationTests(unittest.TestCase):
         game = GameConfiguration(map_num=1, seed=124).create_game()
         route = game.selected_map.routes[0]
         game.waiting_for_bm_place_adjacent = True
-        base = 242 + 120
+        base = 256 + 120
 
         self.assertEqual(
             action_label(base, game),

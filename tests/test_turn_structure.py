@@ -1,12 +1,11 @@
 import unittest
 
+from tests.action_helpers import legal_action_mask
+
 from game.game_runner import create_headless_game
 from game.turn_state import TurnPhase, TurnStateError
-from ai.action_options import (
-    InvalidActionError,
-    map_end_turn_action,
-    masking_out_invalid_actions,
-)
+from game.action_resolvers import resolve_control_interaction
+from game.game_actions import InvalidActionError
 from map_data.map_attributes import BonusMarker
 
 
@@ -101,19 +100,19 @@ class TurnStructureTests(unittest.TestCase):
 
     def test_end_turn_is_illegal_while_actions_remain(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
-        mask = masking_out_invalid_actions(game)
-        self.assertEqual(mask[618].item(), 0)
+        mask = legal_action_mask(game)
+        self.assertEqual(mask[737].item(), 0)
         with self.assertRaises(InvalidActionError):
-            map_end_turn_action(game)
+            resolve_control_interaction(game)
 
     def test_player_may_forgo_usable_bonus_marker_and_end_turn(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         game.current_player.forfeit_remaining_actions()
         game.current_player.bonus_markers.append(BonusMarker("3Actions"))
-        mask = masking_out_invalid_actions(game)
-        self.assertEqual(mask[618].item(), 1)
+        mask = legal_action_mask(game)
+        self.assertEqual(mask[737].item(), 1)
 
-        game.apply_action(618)
+        game.apply_action(737)
 
         self.assertEqual(game.current_player_index, 1)
         self.assertEqual(game.turn_number, 2)
@@ -122,10 +121,10 @@ class TurnStructureTests(unittest.TestCase):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         game.current_player.forfeit_remaining_actions()
         game.replace_bonus_marker = 1
-        mask = masking_out_invalid_actions(game)
-        self.assertEqual(mask[618].item(), 1)
+        mask = legal_action_mask(game)
+        self.assertEqual(mask[737].item(), 1)
 
-        game.apply_action(618)
+        game.apply_action(737)
 
         self.assertEqual(game.current_player_index, 0)
         self.assertTrue(game.current_player.ending_turn)
@@ -137,40 +136,42 @@ class TurnStructureTests(unittest.TestCase):
         game.displaced_player.player = game.players[1]
         game.displaced_player.displaced_shape = "square"
         game.displaced_player.total_pieces_to_place = 1
-        mask = masking_out_invalid_actions(game)
-        self.assertEqual(mask[242:].count_nonzero().item(), 0)
+        mask = legal_action_mask(game)
+        enabled = mask.nonzero(as_tuple=True)[0].tolist()
+        self.assertTrue(all(index < 242 or index in (728, 736) for index in enabled))
 
     def test_tile_payment_phase_masks_every_other_action_family(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         game.waiting_for_buy_tile_with_bm = True
+        game.tile_to_buy = "DisplaceAnywhere"
         game.current_player.bonus_markers.append(BonusMarker("3Actions"))
-        mask = masking_out_invalid_actions(game)
-        self.assertGreater(mask[535:543].count_nonzero().item(), 0)
-        self.assertEqual(mask[:535].count_nonzero().item(), 0)
-        self.assertEqual(mask[543:].count_nonzero().item(), 0)
+        mask = legal_action_mask(game)
+        self.assertGreater(mask[592:601].count_nonzero().item(), 0)
+        self.assertEqual(mask[:592].count_nonzero().item(), 0)
+        self.assertEqual(mask[601:].count_nonzero().item(), 0)
 
     def test_marker_replacement_phase_masks_every_other_action_family(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         game.current_player.forfeit_remaining_actions()
         game.current_player.ending_turn = True
         game.replace_bonus_marker = 1
-        mask = masking_out_invalid_actions(game)
-        self.assertGreater(mask[543:583].count_nonzero().item(), 0)
-        self.assertEqual(mask[:543].count_nonzero().item(), 0)
-        self.assertEqual(mask[583:].count_nonzero().item(), 0)
+        mask = legal_action_mask(game)
+        self.assertGreater(mask[256:296].count_nonzero().item(), 0)
+        self.assertEqual(mask[:256].count_nonzero().item(), 0)
+        self.assertEqual(mask[296:].count_nonzero().item(), 0)
 
     def test_apply_action_rejects_out_of_range_and_masked_actions(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         with self.assertRaises(InvalidActionError):
             game.apply_action(-1)
         with self.assertRaises(InvalidActionError):
-            game.apply_action(620)
+            game.apply_action(768)
         with self.assertRaises(InvalidActionError):
-            game.apply_action(618)
+            game.apply_action(737)
 
     def test_apply_action_is_authoritative_supported_boundary(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
-        legal_indices = game.legal_action_mask().nonzero(as_tuple=True)[0].tolist()
+        legal_indices = legal_action_mask(game).nonzero(as_tuple=True)[0].tolist()
         action_index = legal_indices[0]
         before_actions = game.current_player.actions_remaining
 
@@ -184,8 +185,8 @@ class TurnStructureTests(unittest.TestCase):
         game.current_player.refresh_map3_priv_actions(game)
         before = game.current_player.brown_priv_count
 
-        game.legal_action_mask()
-        game.legal_action_mask()
+        legal_action_mask(game)
+        legal_action_mask(game)
 
         self.assertEqual(game.current_player.brown_priv_count, before)
 

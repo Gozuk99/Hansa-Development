@@ -8,18 +8,14 @@ import math
 import random
 from typing import Iterable, Sequence
 
+from game.action_schema import TILE_TYPES
+from game.game_info import Game
 from game.setup import MAX_PLAYERS, MIN_PLAYERS, SUPPORTED_MAPS
+from map_data.constants import INPUT_SIZE, OUTPUT_SIZE
 from map_data.map_attributes import Map
 
 
-EMPERORS_FAVOUR_TILES = (
-    "DisplaceAnywhere",
-    "+1Action",
-    "+1IncomeIfOthersIncome",
-    "+1DisplacedPiece",
-    "+4PtsPerOwnedCity",
-    "+7PtsPerCompletedAbility",
-)
+EMPERORS_FAVOUR_TILES = TILE_TYPES
 
 
 class PlayerControl(str, Enum):
@@ -201,8 +197,6 @@ class GameConfiguration:
 
     def create_game(self):
         """Construct the engine and attach controller metadata to each player."""
-        from game.game_info import Game
-
         game = Game(
             map_num=self.map_num,
             num_players=self.player_count,
@@ -225,8 +219,8 @@ class GameConfiguration:
 
     @staticmethod
     def _load_ai_model(player_order: int):
+        # AI models are optional; human-only games must not import PyTorch.
         from ai.ai_model import HansaNN
-        from map_data.constants import INPUT_SIZE, OUTPUT_SIZE
 
         model_file = f"hansa_nn_model{player_order}.pth"
         return HansaNN(INPUT_SIZE, OUTPUT_SIZE, model_file=model_file)

@@ -24,9 +24,12 @@ class ObservationEncoderTests(unittest.TestCase):
     def game(self, map_num=1, players=3, **options):
         return create_headless_game(map_num, players, seed=124, **options)
 
+    def observation(self, game):
+        return ObservationEncoder().build(game)
+
     def test_fixed_shape_and_legal_mask_share_acting_player(self):
         game = self.game(use_mission_cards=True)
-        observation = game.ai_observation()
+        observation = self.observation(game)
 
         self.assertEqual(observation.features.shape, (ObservationEncoder.FEATURE_SIZE,))
         self.assertEqual(observation.features.dtype, torch.int16)
@@ -44,14 +47,14 @@ class ObservationEncoderTests(unittest.TestCase):
         second = self.game(use_mission_cards=True, use_emperors_favour=True)
 
         self.assertTrue(
-            torch.equal(first.ai_observation().features, second.ai_observation().features)
+            torch.equal(self.observation(first).features, self.observation(second).features)
         )
 
     def test_public_state_changes_observation(self):
         game = self.game()
-        before = game.ai_observation().features
+        before = self.observation(game).features
         game.players[1].score += 1
-        after = game.ai_observation().features
+        after = self.observation(game).features
 
         self.assertFalse(torch.equal(before, after))
 
@@ -92,7 +95,7 @@ class ObservationEncoderTests(unittest.TestCase):
         game.active_player = 1
         refresh_displacement_targets(game)
 
-        observation = game.ai_observation()
+        observation = self.observation(game)
 
         self.assertEqual(observation.observer_index, 1)
         self.assertTrue(
@@ -130,7 +133,7 @@ class ObservationEncoderTests(unittest.TestCase):
         game.OneIncomeIfOthersIncomeOwner = responder
         game.begin_income_favour_response(current)
 
-        observation = game.ai_observation()
+        observation = self.observation(game)
         choices = {
             action.tile_slot
             for action in game.get_legal_actions()
@@ -160,10 +163,10 @@ class ObservationEncoderTests(unittest.TestCase):
 
     def test_hidden_bonus_marker_order_does_not_change_observation(self):
         game = self.game()
-        before = game.ai_observation().features
+        before = self.observation(game).features
         game.selected_map.bonus_marker_pool.reverse()
 
-        self.assertTrue(torch.equal(before, game.ai_observation().features))
+        self.assertTrue(torch.equal(before, self.observation(game).features))
 
     def test_drawn_replacement_marker_is_hidden_until_placement(self):
         game = self.game()
@@ -192,7 +195,7 @@ class ObservationEncoderTests(unittest.TestCase):
         city.offices.extend([city.offices[0]] * (11 - len(city.offices)))
 
         with self.assertRaisesRegex(ValueError, "capacity is 10"):
-            game.ai_observation()
+            self.observation(game)
 
     def test_all_supported_setups_fit_the_schema(self):
         for map_num in (1, 2, 3):
@@ -205,7 +208,7 @@ class ObservationEncoderTests(unittest.TestCase):
                         use_emperors_favour=True,
                     )
                     self.assertEqual(
-                        game.ai_observation().features.numel(),
+                        self.observation(game).features.numel(),
                         ObservationEncoder.FEATURE_SIZE,
                     )
 
@@ -384,7 +387,7 @@ class ObservationEncoderTests(unittest.TestCase):
     def test_observation_module_has_no_gui_dependency(self):
         imported_before = set(sys.modules)
         game = self.game()
-        game.ai_observation()
+        self.observation(game)
         newly_imported = set(sys.modules) - imported_before
 
         self.assertFalse(

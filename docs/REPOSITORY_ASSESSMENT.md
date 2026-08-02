@@ -1,4 +1,7 @@
-# Hansa Teutonica AI Repository Assessment
+# Archived Hansa Teutonica AI Repository Assessment
+
+> This assessment describes the repository before the 768-entry structured-action
+> migration. Its action counts and implementation paths are historical, not current.
 
 ## Executive Summary
 

@@ -2,8 +2,8 @@ import contextlib
 import io
 import unittest
 
-from ai.action_options import (
-    map_income_action,
+from game.action_resolvers import resolve_income_interaction
+from game.action_legality import (
     mask_income_actions,
     mask_post_action,
     mask_replace_bm,
@@ -57,10 +57,11 @@ class BritanniaTests(unittest.TestCase):
         mask = mask_replace_bm(game)
         for index, route in enumerate(game.selected_map.routes):
             if route.region in ("Wales", "Scotland"):
-                self.assertEqual(mask[index].item(), 0)
+                self.assertFalse(mask[index])
 
         wales = next(
-            route for route in game.selected_map.routes
+            route
+            for route in game.selected_map.routes
             if route.region == "Wales" and not route.bonus_marker
         )
         game.pending_bonus_markers = ["Move3"]
@@ -75,8 +76,7 @@ class BritanniaTests(unittest.TestCase):
         for players in (3, 4, 5):
             game = self.game(players)
             actual = {
-                tuple(sorted(city.name for city in route.cities)):
-                    route.permanent_bonus_marker.type
+                tuple(sorted(city.name for city in route.cities)): route.permanent_bonus_marker.type
                 for route in game.selected_map.routes
                 if route.permanent_bonus_marker
             }
@@ -93,8 +93,8 @@ class BritanniaTests(unittest.TestCase):
         player.general_stock_circles = 0
         game.pending_britannia_place2 = True
 
-        self.assertEqual(mask_income_actions(game)[0].item(), 1)
-        map_income_action(game, 0)
+        self.assertTrue(mask_income_actions(game)[0])
+        resolve_income_interaction(game, 0)
         self.assertEqual(player.general_stock_squares, 0)
         self.assertEqual(len(player.holding_pieces), 2)
         self.assertTrue(game.waiting_for_place2_in_scotland_or_wales)
@@ -108,9 +108,9 @@ class BritanniaTests(unittest.TestCase):
         game.pending_britannia_place2 = True
 
         mask = mask_income_actions(game)
-        self.assertEqual(mask[0].item(), 1)
-        self.assertEqual(mask[1].item(), 0)
-        self.assertEqual(mask[2].item(), 0)
+        self.assertTrue(mask[0])
+        self.assertFalse(mask[1])
+        self.assertFalse(mask[2])
 
     def test_normal_move_and_move_markers_use_their_distinct_country_rules(self):
         game = self.game()
@@ -121,32 +121,32 @@ class BritanniaTests(unittest.TestCase):
 
         wales_post = next(
             post
-            for route in game.selected_map.routes if route.region == "Wales"
+            for route in game.selected_map.routes
+            if route.region == "Wales"
             for post in route.posts
             if post.required_shape in (None, "square")
         )
         england_post = next(
             post
-            for route in game.selected_map.routes if route.region is None
+            for route in game.selected_map.routes
+            if route.region is None
             for post in route.posts
             if post.required_shape in (None, "square")
         )
-        all_posts = [
-            post for route in game.selected_map.routes for post in route.posts
-        ]
+        all_posts = [post for route in game.selected_map.routes for post in route.posts]
         player.holding_pieces = [("square", game.players[1], "Wales")]
         player.pieces_to_pickup = 0
 
         game.waiting_for_bm_move3 = True
         move3_mask = mask_post_action(game)
-        self.assertEqual(move3_mask[all_posts.index(wales_post)].item(), 1)
-        self.assertEqual(move3_mask[all_posts.index(england_post)].item(), 0)
+        self.assertTrue(move3_mask[all_posts.index(wales_post)])
+        self.assertFalse(move3_mask[all_posts.index(england_post)])
 
         game.waiting_for_bm_move3 = False
         game.waiting_for_bm_move_any_2 = True
         move2_mask = mask_post_action(game)
-        self.assertEqual(move2_mask[all_posts.index(wales_post)].item(), 1)
-        self.assertEqual(move2_mask[all_posts.index(england_post)].item(), 0)
+        self.assertTrue(move2_mask[all_posts.index(wales_post)])
+        self.assertFalse(move2_mask[all_posts.index(england_post)])
 
     def test_regional_scoring_includes_isle_of_man_in_both_regions(self):
         game = self.game()
@@ -178,9 +178,7 @@ class BritanniaTests(unittest.TestCase):
         city(game, "Cardiff").offices[0].controller = player
         with contextlib.redirect_stdout(io.StringIO()):
             game.finalize_end_of_game_points()
-        self.assertEqual(
-            player.final_score_breakdown["Britannia Region Points"], 7
-        )
+        self.assertEqual(player.final_score_breakdown["Britannia Region Points"], 7)
 
 
 if __name__ == "__main__":

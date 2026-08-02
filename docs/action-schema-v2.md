@@ -10,8 +10,8 @@ This document defines the active 768-entry AI interaction schema.
 - reserved family capacity: 129
 - registry: `game/action_schema.py`
 
-AI and headless play use this schema. The 620-entry adapter remains only for
-legacy GUI/manual interaction compatibility.
+AI, headless play, and the GUI all use this schema. Structured actions execute
+directly through the engine; there is no 620-entry compatibility adapter.
 
 ## Interaction boundary
 
@@ -111,4 +111,4 @@ must not share the Additional Trading Post marker slot.
 Version 2 is incompatible with both the superseded version-1 draft and the
 earlier semantic-decision version-2 proposal. Existing 620-output checkpoints
 cannot load into the 768-output network and are rejected by normal model shape
-validation. The legacy 620-entry GUI/manual adapter is not an AI action space.
+validation. There is no automatic migration from those checkpoints.

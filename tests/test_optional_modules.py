@@ -2,6 +2,8 @@ import contextlib
 import io
 import unittest
 
+from tests.action_helpers import legal_action_mask
+
 from ai.observation_encoder import ObservationEncoder
 from game.game_actions import buy_tile
 from game.game_runner import create_headless_game
@@ -9,8 +11,8 @@ from map_data.map_attributes import BonusMarker
 from player_info.player_attributes import UPGRADE_MAX_VALUES
 
 
-TILE_ACTION_START = 535
-BM_ACTION_START = 527
+TILE_ACTION_START = 640
+BM_ACTION_START = 592
 TILES = (
     "DisplaceAnywhere",
     "+1Action",
@@ -118,7 +120,7 @@ class OptionalModuleTests(unittest.TestCase):
         self.assertTrue(game.waiting_for_buy_tile_with_bm)
         game.apply_action(BM_ACTION_START)
         self.assertIs(game.first_bm_to_spend_on_tile, markers[0])
-        self.assertEqual(game.legal_action_mask()[BM_ACTION_START].item(), 1)
+        self.assertEqual(legal_action_mask(game)[BM_ACTION_START].item(), 1)
 
         with contextlib.redirect_stdout(io.StringIO()):
             game.apply_action(BM_ACTION_START)
@@ -136,7 +138,7 @@ class OptionalModuleTests(unittest.TestCase):
         player.bonus_markers = [place_adjacent, swap, BonusMarker("Move3")]
 
         game.apply_action(TILE_ACTION_START)
-        game.apply_action(619)
+        game.apply_action(600)
         with contextlib.redirect_stdout(io.StringIO()):
             game.apply_action(BM_ACTION_START)
 
@@ -247,7 +249,7 @@ class OptionalModuleTests(unittest.TestCase):
                 }
 
                 game.begin_income_favour_response(other)
-                mask = game.legal_action_mask()
+                mask = legal_action_mask(game)
                 self.assertEqual(
                     mask[TILE_ACTION_START : TILE_ACTION_START + 3].tolist(), [1, 1, 1]
                 )

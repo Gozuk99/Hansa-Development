@@ -68,10 +68,10 @@ a model, or save a checkpoint.
 - Legal-action browser: Up/Down selects an action and Enter applies it.
 - Press `E` to finish the turn when End Turn is legal.
 
-All GUI moves come from the engine's current legal-action mask and pass through
-`Game.apply_action()`. When multiple routes or outcomes share a location, the
-click position selects among them; every legal choice is also available in the
-action browser.
+All GUI moves come from `Game.get_legal_actions()` and use the same 768-entry
+codec and structured-action executor as AI and headless play. When multiple
+routes or outcomes share a location, the click position selects among them;
+every legal choice is also available in the action browser.
 
 ## Run a Deterministic Headless Game
 
