@@ -130,40 +130,31 @@ class City:
         self.height = rect_height
         self.midpoint = (self.x_pos + rect_width / 2, self.y_pos + rect_height / 2)
 
-    def get_controller(self):
+    def determine_controller(self):
+        """Return current city control without mutating cached drawing state."""
         if not self.offices:
             print(f"ERROR: No offices in {self.name}, therefore no controller.")
-            return None  # No offices in the city
-        
-        # Count the number of offices controlled by each player
+            return None
+
         player_counts = {}
         for office in self.offices:
             if office.controller:
                 player_counts[office.controller] = player_counts.get(office.controller, 0) + 1
-
         if not player_counts:
-            # print(f"No players control any offices in {self.name}.")
-            return None  # No offices controlled by any player in the city
+            return None
 
-        # Determine the player with the maximum number of offices controlled
-        max_controlled_offices = max(player_counts.values())
-        players_with_max_offices = [player for player, count in player_counts.items() if count == max_controlled_offices]
+        max_count = max(player_counts.values())
+        tied = [player for player, count in player_counts.items() if count == max_count]
+        if len(tied) == 1:
+            return tied[0]
 
-        # If one player has more offices than the others, they control the city
-        if len(players_with_max_offices) == 1:
-            self.controller = players_with_max_offices[0]
-            # print(f"Player {COLOR_NAMES[self.controller.color]} controls the most offices in {self.name}.")
-            return self.controller
+        for office in reversed(self.offices):
+            if office.controller in tied:
+                return office.controller
+        return None
 
-        # If there's a tie for the number of offices, find the rightmost player among those tied
-        rightmost_office_index = -1
-        for player in players_with_max_offices:
-            for i, office in reversed(list(enumerate(self.offices))):
-                if office.controller == player and i > rightmost_office_index:
-                    rightmost_office_index = i
-                    self.controller = player
-
-        # print(f"There is a tie. Rightmost player among tied players in {self.name} is Player {COLOR_NAMES[self.controller.color]}.")
+    def get_controller(self):
+        self.controller = self.determine_controller()
         return self.controller
     
     def has_empty_office(self):

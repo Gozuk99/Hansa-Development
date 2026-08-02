@@ -485,78 +485,63 @@ class Game:
 
         return largest_network
 
-    def finalize_end_of_game_points(self):
-        britannia_region_points = (
-            self.calculate_britannia_region_points() if self.map_num == 3 else {}
-        )
-        for player in self.players:
-            initial_points = player.score
-            ability_points = 0
-            bonus_marker_points = 0
-            special_prestige_points = 0
-            city_control_points = 0
-            largest_network_points = 0
-            regional_points = britannia_region_points.get(player, 0)
-
-            # 2. Fully developed abilities (City Keys are explicitly excluded).
-            for ability in ["privilege", "book", "actions", "bank"]:
-                if getattr(player, ability) == UPGRADE_MAX_VALUES[ability]:
-                    ability_points += 4  # Assuming 4 points for each fully developed ability
-                    if self.SevenPtsPerCompletedAbilityOwner == player:
-                        ability_points += 3  # for a total of 7 points per fully developed ability
-
-            # 3. Prestige points for total bonus markers collected
-            total_bms = len(player.bonus_markers) + len(player.used_bonus_markers)
-            bonus_marker_points += self.get_bonus_marker_points(total_bms)
-
-            # 5. Add Special Prestige Points
-            if self.selected_map.specialprestigepoints is not None:
-                special_prestige_points = (
-                    self.selected_map.specialprestigepoints.get_special_prestige_points_for_player(
-                        player
-                    )
-                )
-
-            # 6. Add points for control of cities
-            for city in self.selected_map.cities:
-                if city.get_controller() == player:
-                    city_control_points += 2  # 2 points per city controlled
-                    if self.FourPtsPerOwnedCityOwner == player:
-                        city_control_points += 2  # for a total of 4 points per city controlled
-
-            # 7. Points for the largest network
-            largest_network_points += self.calculate_largest_network(player) * player.keys
-
-            # Sum up the final score
-            player.final_score = (
-                initial_points
-                + ability_points
-                + bonus_marker_points
-                + special_prestige_points
-                + city_control_points
-                + largest_network_points
-                + regional_points
+    def projected_score_breakdown(self, player, britannia_region_points=None):
+        """Calculate one player's authoritative score if the game ended now."""
+        if britannia_region_points is None:
+            britannia_region_points = (
+                self.calculate_britannia_region_points() if self.map_num == 3 else {}
             )
 
-            if self.use_mission_cards and player.mission_card:
-                mission_city_points = self.get_mission_card_points(player)
-                player.final_score += mission_city_points
+        ability_points = 0
+        for ability in ["privilege", "book", "actions", "bank"]:
+            if getattr(player, ability) == UPGRADE_MAX_VALUES[ability]:
+                ability_points += 4
+                if self.SevenPtsPerCompletedAbilityOwner == player:
+                    ability_points += 3
 
-            # Update the score breakdown for display
-            score_breakdown = {
-                "Initial Points": initial_points,
-                "Ability Points": ability_points,
-                "Bonus Marker Points": bonus_marker_points,
-                "Special Prestige Points": special_prestige_points,
-                "City Control Points": city_control_points,
-                "Largest Network Points": largest_network_points,
-                "Britannia Region Points": regional_points,
-            }
+        total_bms = len(player.bonus_markers) + len(player.used_bonus_markers)
+        special_prestige_points = 0
+        if self.selected_map.specialprestigepoints is not None:
+            special_prestige_points = (
+                self.selected_map.specialprestigepoints.get_special_prestige_points_for_player(
+                    player
+                )
+            )
 
-            if self.use_mission_cards and player.mission_card:
-                score_breakdown["Mission City Points"] = mission_city_points
-            player.final_score_breakdown = score_breakdown
+        city_control_points = 0
+        for city in self.selected_map.cities:
+            if city.determine_controller() == player:
+                city_control_points += 2
+                if self.FourPtsPerOwnedCityOwner == player:
+                    city_control_points += 2
 
+        breakdown = {
+            "Initial Points": player.score,
+            "Ability Points": ability_points,
+            "Bonus Marker Points": self.get_bonus_marker_points(total_bms),
+            "Special Prestige Points": special_prestige_points,
+            "City Control Points": city_control_points,
+            "Largest Network Points": self.calculate_largest_network(player) * player.keys,
+            "Britannia Region Points": britannia_region_points.get(player, 0),
+        }
+        if self.use_mission_cards and player.mission_card:
+            breakdown["Mission City Points"] = self.get_mission_card_points(player)
+        return breakdown
+
+    def projected_scores(self):
+        """Return final-score projections in seat order without ending the game."""
+        britannia = self.calculate_britannia_region_points() if self.map_num == 3 else {}
+        return tuple(
+            sum(self.projected_score_breakdown(player, britannia).values())
+            for player in self.players
+        )
+
+    def finalize_end_of_game_points(self):
+        britannia = self.calculate_britannia_region_points() if self.map_num == 3 else {}
+        for player in self.players:
+            breakdown = self.projected_score_breakdown(player, britannia)
+            player.final_score = sum(breakdown.values())
+            player.final_score_breakdown = breakdown
             if player.final_score < player.score:
                 raise TurnStateError(
                     f"Final score for {COLOR_NAMES[player.color]} is below the in-game score"
@@ -588,7 +573,7 @@ class Game:
                     for city in self.selected_map.cities
                     if city.name in city_names_by_region[region]
                 ]
-                controlled = sum(city.get_controller() == player for city in cities)
+                controlled = sum(city.determine_controller() == player for city in cities)
                 offices = sum(
                     office.controller == player for city in cities for office in city.offices
                 )
@@ -621,7 +606,7 @@ class Game:
         ]
         occupied = sum(city.has_office_owned_by(player) for city in mission_cities)
         controls_all = len(mission_cities) == len(player.mission_card) and all(
-            city.get_controller() == player for city in mission_cities
+            city.determine_controller() == player for city in mission_cities
         )
         return occupied + (5 if controls_all else 0)
 

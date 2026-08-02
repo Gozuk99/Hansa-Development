@@ -12,15 +12,11 @@ from map_data.constants import (
     UPGRADE_MAX_VALUES,
 )
 from game.setup import starting_inventory
-from player_info.reward_options import Rewards
 
 
 class Player:
     def __init__(self, color, order):
         self.color = color
-        self.reward = 0
-        self.reward_structure = Rewards(1)
-
         self.order = order
         self.score = 0  # Initial score
         self.final_score = 0

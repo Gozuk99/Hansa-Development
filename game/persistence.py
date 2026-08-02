@@ -104,10 +104,14 @@ def _restore_office_printed_privileges(game: Game) -> None:
                 )
 
 
-def _remove_legacy_player_models(game: Game) -> None:
+def _remove_legacy_player_state(game: Game) -> None:
     for player in game.players:
         if hasattr(player, "hansa_nn"):
             del player.hansa_nn
+        if hasattr(player, "reward"):
+            del player.reward
+        if hasattr(player, "reward_structure"):
+            del player.reward_structure
 
 
 def default_save_directory() -> Path:
@@ -231,7 +235,7 @@ def load_game(filename: str | Path) -> Game:
     if not isinstance(restored, dict) or not isinstance(restored.get("game"), Game):
         raise SaveGameError("Saved payload does not contain a Hansa game")
     game = restored["game"]
-    _remove_legacy_player_models(game)
+    _remove_legacy_player_state(game)
     _restore_office_printed_privileges(game)
     game._saved_controller_rng_state = restored.get("controller_rng_state")
     try:
