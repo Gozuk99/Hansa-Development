@@ -418,6 +418,9 @@ class Office:
     def __init__(self, shape, color, awards_points=0):
         self.shape = shape  # "circle" or "square"
         self.color = color
+        # Ownership changes the drawn color; retain the printed privilege for
+        # headless observations and rules explanations.
+        self.printed_privilege = color if isinstance(color, str) else None
         self.awards_points = awards_points
         self.controller = None  # Initialize controller as None
         self.owner_piece_shape = None

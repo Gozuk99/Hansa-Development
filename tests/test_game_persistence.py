@@ -16,7 +16,7 @@ from game.persistence import SAVE_FORMAT_VERSION, SaveGameError, load_game, save
 from game.persistence import default_save_directory
 from game.loaded_state_validation import validate_loaded_game
 from game.invariants import GameInvariantError
-from map_data.map_attributes import BonusMarker, Map
+from map_data.map_attributes import BonusMarker, Map, Office
 
 
 class UnsafeSavedObject:
@@ -65,6 +65,47 @@ class ExactGamePersistenceTests(unittest.TestCase):
         self.assertEqual(restored.ai_action_mask(), before_mask)
         self.assertEqual(restored.configuration, game.configuration)
         self.assertTrue(all(player.control is PlayerControl.HUMAN for player in restored.players))
+
+    def test_load_backfills_printed_office_privileges_from_older_save(self):
+        game = self.configured_game()
+        office = game.selected_map.cities[0].offices[0]
+        expected_privilege = office.printed_privilege
+        office.controller = game.current_player
+        office.owner_piece_shape = office.shape
+        office.color = game.current_player.color
+        if office.shape == "square":
+            game.current_player.personal_supply_squares -= 1
+        else:
+            game.current_player.personal_supply_circles -= 1
+        del office.printed_privilege
+
+        with tempfile.TemporaryDirectory() as directory:
+            filename = save_game(game, Path(directory) / "older-position")
+            restored = load_game(filename)
+
+        restored_office = restored.selected_map.cities[0].offices[0]
+        self.assertEqual(restored_office.printed_privilege, expected_privilege)
+
+    def test_load_backfills_appended_green_city_office_from_older_save(self):
+        game = GameConfiguration(map_num=2, seed=124).create_game()
+        city = next(city for city in game.selected_map.cities if city.name == "Waren")
+        appended = Office("square", "WHITE")
+        appended.controller = game.current_player
+        appended.owner_piece_shape = "square"
+        appended.color = game.current_player.color
+        city.add_office(appended)
+        game.current_player.personal_supply_squares -= 1
+        game.check_for_game_end()
+        for office in city.offices:
+            del office.printed_privilege
+
+        with tempfile.TemporaryDirectory() as directory:
+            filename = save_game(game, Path(directory) / "older-green-city")
+            restored = load_game(filename)
+
+        restored_city = next(city for city in restored.selected_map.cities if city.name == "Waren")
+        self.assertEqual(len(restored_city.offices), 7)
+        self.assertEqual(restored_city.offices[-1].printed_privilege, "WHITE")
 
     def test_save_metadata_identifies_format_schema_and_position(self):
         game = self.configured_game()

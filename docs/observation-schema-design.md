@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This document defines the future AI observation for Issue #4. It does not
-change the current model, encoder, or training code.
+This document defines the player-visible AI observation implemented by Issue
+#32. Model architecture and training behavior remain separate work.
 
 The governing rule is:
 
@@ -25,11 +25,10 @@ The observer is always `game.players[game.active_player]`, and the legal mask
 belongs to that same player. GUI and headless AI use this one builder. Drawing
 code does not filter private information.
 
-`features` is a structured fixed-shape record. Its group order is `game`,
-`players`, `cities`, `routes`, `optional_components`, then `workflow`. A model
-adapter may flatten those groups in that order after categorical expansion is
-defined. The engine-facing design does not invent a flat size before that
-adapter exists.
+`features` is a fixed 4,241-value `int16` tensor. Its groups are laid out in
+this order: `game`, `players`, `cities`, `routes`, `optional_components`, then
+`workflow`. A model adapter may cast or normalize the values but must preserve
+that layout.
 
 Schema versions and fingerprints are checkpoint/file compatibility metadata.
 They are never neural-network features.
@@ -90,6 +89,10 @@ them to floating point, but the rules engine does not normalize them.
 | `full_city_threshold` | 1 | Selected-map threshold |
 | `replacement_pool_count` | 1 | Number of face-down markers remaining |
 | `east_west_completed_count` | 1 | Public Map 1 counter |
+| `east_west_completed_players` | 5 | Relative-player flags for players who already scored this connection |
+| `bonus_pool_exhausted_during_claim` | 1 | Public end-condition progress from claiming when the supply was empty |
+| `pending_tribute_income_owners` | 5 | Relative owners queued to make public Tribute income choices |
+| `game_end_pending_immediate_resolution` | 1 | End condition reached while public responses still require resolution |
 
 Do not add a second “ending condition reached” field; it is derived from the
 scores, counters, and thresholds above.
@@ -175,7 +178,7 @@ Route completion is derived from posts and is not duplicated.
 |---|---:|---|
 | `available_tiles` | 6 | Public Emperor's Favour choices |
 | `special_prestige` | 4 × 3 | Printed value, privilege, relative owner |
-| `pending_replacement_markers` | 15 | Face-up drawn marker types, then padding |
+| `pending_replacement_markers` | 15 | Drawn marker types once the player reaches the placement phase; hidden before then |
 
 The six Emperor's Favour effects are derived from public tile ownership rather
 than copied into separate owner fields.
@@ -255,6 +258,7 @@ The feature groups never contain:
 
 - any Mission Card except the acting player's own card;
 - face-down replacement-marker types or order;
+- drawn replacement-marker types before the player reaches marker placement;
 - random-generator state or future random results;
 - schema versions or fingerprints;
 - Python object IDs/references;
@@ -295,5 +299,6 @@ Tests must prove:
 - capacity overflow fails clearly;
 - GUI and headless AI receive the same observation.
 
-The existing 4,445-value encoder remains unchanged until this design is
-implemented and tested in a separate issue.
+The previous 4,445-value encoder has been replaced by this 4,241-value
+player-visible encoder. Connecting that input to a model architecture remains
+separate work.

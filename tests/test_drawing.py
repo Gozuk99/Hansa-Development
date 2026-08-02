@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 import pygame
+import torch
 
 from ai.observation_encoder import ObservationEncoder
 from drawing.action_ui import action_label, fit_text, phase_prompt
@@ -146,7 +147,7 @@ class DrawingTests(unittest.TestCase):
         self.assertIs(window.acting_player, game.players[1])
         self.assertIs(window.acting_player.control, PlayerControl.EASY)
 
-    def test_gui_ai_observation_conceals_face_down_and_private_information(self):
+    def test_gui_ai_observation_matches_headless_private_view(self):
         game = GameConfiguration(
             map_num=1,
             player_controls=(PlayerControl.HUMAN,) * 3,
@@ -155,29 +156,22 @@ class DrawingTests(unittest.TestCase):
         ).create_game()
         observer = game.players[0]
         opponent = game.players[1]
-        opponent.used_bonus_markers = [BonusMarker("Move3")]
         board_data = ObservationEncoder()
 
         state = public_game_state(board_data, game, observer)
-        player_start = (
-            board_data.game_tensor_size + board_data.city_tensor_size + board_data.route_tensor_size
-        )
+        player_start = board_data.GAME_SIZE
 
-        self.assertEqual(state[24:36].count_nonzero().item(), 0)
         self.assertGreater(
-            state[player_start + 20 : player_start + 23].count_nonzero().item(),
+            state[player_start + 52 : player_start + 55].count_nonzero().item(),
             0,
         )
-        opponent_start = player_start + 55
+        opponent_start = player_start + board_data.PLAYER_SIZE
         self.assertEqual(
-            state[opponent_start + 20 : opponent_start + 23].count_nonzero().item(),
+            state[opponent_start + 52 : opponent_start + 55].count_nonzero().item(),
             0,
         )
-        self.assertEqual(state[opponent_start + 35].item(), 1)
-        self.assertEqual(
-            state[opponent_start + 36 : opponent_start + 47].count_nonzero().item(),
-            0,
-        )
+        game.selected_map.bonus_marker_pool.reverse()
+        self.assertTrue(torch.equal(state, public_game_state(board_data, game, observer)))
 
     def test_contextual_labels_fit_their_button_width(self):
         font = pygame.font.SysFont(None, 20)
