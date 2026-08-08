@@ -58,6 +58,10 @@ def displace_action(game, post, route, displacing_piece_shape):
         )
     if not game.check_brown_blue_priv(route):
         raise InvalidActionError("The player lacks the required regional privilege")
+    if not displacement_can_be_completed(
+        game, route, current_displaced_player, displaced_piece_shape
+    ):
+        raise InvalidActionError("No valid destination exists for the displaced piece")
 
     game.active_player = current_displaced_player.order - 1
     game.consume_region_privilege(route)
@@ -86,15 +90,19 @@ def displace_action(game, post, route, displacing_piece_shape):
     refresh_displacement_targets(game)
 
 
-def _post_accepts_any_shape(post, shapes):
-    return not post.is_owned() and (post.required_shape is None or post.required_shape in shapes)
+def _post_accepts_any_shape(post, shapes, unavailable_posts=()):
+    return (
+        post not in unavailable_posts
+        and not post.is_owned()
+        and (post.required_shape is None or post.required_shape in shapes)
+    )
 
 
-def gather_all_empty_posts(game, required_shapes=("square", "circle")):
+def gather_all_empty_posts(game, required_shapes=("square", "circle"), unavailable_posts=()):
     all_empty_posts = []
     for route in game.selected_map.routes:
         for post in route.posts:
-            if _post_accepts_any_shape(post, required_shapes):
+            if _post_accepts_any_shape(post, required_shapes, unavailable_posts):
                 all_empty_posts.append(post)
     return all_empty_posts
 
@@ -102,6 +110,7 @@ def gather_all_empty_posts(game, required_shapes=("square", "circle")):
 def gather_empty_adjacent_posts(
     start_route,
     required_shapes=("square", "circle"),
+    unavailable_posts=(),
 ):
     """Return compatible empty posts at the nearest reachable route distance."""
     if not start_route:
@@ -127,7 +136,7 @@ def gather_empty_adjacent_posts(
                     next_level_routes.append(route)
 
             for post in current_route.posts:
-                if _post_accepts_any_shape(post, required_shapes):
+                if _post_accepts_any_shape(post, required_shapes, unavailable_posts):
                     empty_posts.append(post)
 
         if empty_posts:
@@ -136,6 +145,54 @@ def gather_empty_adjacent_posts(
         queue.extend(next_level_routes)
 
     return []
+
+
+def displacement_can_be_completed(game, route, displaced_player, displaced_shape):
+    """Whether some legal placement sequence can relocate the mandatory piece."""
+    optional_limit = 1 if displaced_shape == "square" else 2
+
+    def search(unavailable_posts, general_stock, personal_supply, optional_remaining):
+        source = general_stock if sum(general_stock) else personal_supply
+        shapes = [displaced_shape]
+        shapes.extend(
+            shape
+            for shape, count in zip(("square", "circle"), source)
+            if count and shape != displaced_shape
+        )
+        if game.DisplaceAnywhereOwner == displaced_player:
+            targets = gather_all_empty_posts(game, shapes, unavailable_posts)
+        else:
+            targets = gather_empty_adjacent_posts(route, shapes, unavailable_posts)
+
+        if any(post.required_shape in (None, displaced_shape) for post in targets):
+            return True
+        if not optional_remaining:
+            return False
+
+        for post in targets:
+            shape = post.required_shape
+            shape_index = 0 if shape == "square" else 1
+            if not source[shape_index]:
+                continue
+            next_general = list(general_stock)
+            next_personal = list(personal_supply)
+            counts = next_general if sum(general_stock) else next_personal
+            counts[shape_index] -= 1
+            if search(
+                unavailable_posts | {post},
+                tuple(next_general),
+                tuple(next_personal),
+                optional_remaining - 1,
+            ):
+                return True
+        return False
+
+    return search(
+        frozenset(),
+        (displaced_player.general_stock_squares, displaced_player.general_stock_circles),
+        (displaced_player.personal_supply_squares, displaced_player.personal_supply_circles),
+        optional_limit,
+    )
 
 
 def displacement_shapes_to_place(game):

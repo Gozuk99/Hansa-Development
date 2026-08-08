@@ -21,7 +21,7 @@ The repository is organized into five main areas:
 - `game/game_actions.py` contains state-changing rule functions: claiming and displacing posts, moving pieces, completing routes, claiming offices, upgrades and points, assigning bonus markers, and buying tiles.
 - `map_data/map_attributes.py` defines the board objects: `Map`, `City`, `Office`, `Route`, `Post`, and `BonusMarker`. The three concrete map files construct hard-coded boards.
 - `player_info/player_attributes.py` defines `Player`, `DisplacedPlayer`, and `PlayerBoard`.
-- `sample_hansa_game.py` combines the pygame UI, manual input handling, AI action selection, training, model saving, and main loops.
+- `hansa_game.py` is the interactive GUI entry point and delegates game drawing and input to `drawing/game_window.py`.
 
 In plain English, the engine is a mutable object graph. A `Game` points to a map and players; cities point to offices and routes; routes point to cities and posts; offices and posts point back to owning `Player` objects. Actions directly mutate this graph.
 
@@ -154,33 +154,16 @@ The existing `.pth` files should therefore be treated as experimental artifacts,
 
 ## 5. Entry Points That Can Run
 
-There is one documented executable entry point:
+There is one documented executable GUI entry point:
 
 ```powershell
-python sample_hansa_game.py
+python hansa_game.py
 ```
 
-The core modules import successfully, but the documented script is not a clean manual-game entry point.
-
-It immediately:
-
-1. Creates ten random games.
-2. Runs up to 100 AI/training steps per game.
-3. Saves model files repeatedly.
-4. Sleeps between games.
-5. Enters the permanent manual pygame loop only after that work.
-
-There is no `if __name__ == "__main__":` guard.
-
-Therefore:
-
-- Importing `sample_hansa_game` executes training and launches the UI.
-- Running it modifies model checkpoints.
-- It does not safely satisfy "load a state and manually continue."
-- Commented load examples require editing source code.
-- There is no dedicated CLI, simulator, evaluation command, one-turn-AI command, or test suite.
-
-The script was deliberately not executed during inspection because doing so would begin training and overwrite model files.
+`hansa_game.py` has an explicit `main()` boundary and an `if __name__ == "__main__"`
+guard. Importing it does not initialize pygame, start training, or modify model
+checkpoints. Running it opens the New Game menu, which can also load an exact
+saved game before starting the interactive game window.
 
 ## 6. Major Bugs and Incomplete or Conflicting Designs
 

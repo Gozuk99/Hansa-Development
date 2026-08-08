@@ -44,6 +44,18 @@ Every player's reward stream remains separate. If Green acts and Blue receives a
 
 After a game, samples from all seats may be combined because ownership is already correct and every sample trains the same shared model.
 
+## Tiered collection policy
+
+Training assigns policy tiers randomly to seats for each game. The tiers do not
+own separate models: each one samples differently from the legal rankings of the
+same frozen `HansaNN`. Three-player games use tiers 1/3/5, four-player games use
+1/2/4/5, and five-player games use 1/2/3/4/5.
+
+Each decision records its tier, epsilon, top-k setting, selection method, model
+rank, and legal-action count. Training progress aggregates wins, games,
+selection behavior, and rewards by tier so later curriculum changes can be based
+on measured results rather than seat order.
+
 ## Checkpoints
 
 One versioned checkpoint stores:
@@ -52,7 +64,7 @@ One versioned checkpoint stores:
 - optimizer state;
 - training progress and loss statistics;
 - policy RNG state;
-- training configuration, including gamma;
+- training configuration, including gamma and tier definitions;
 - source-state hashes; and
 - exact observation and action schema identities.
 

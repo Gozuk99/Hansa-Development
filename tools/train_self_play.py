@@ -22,7 +22,6 @@ DEFAULT_CHECKPOINT = ROOT / "hansa_nn_model.pth"
 class TrainingRunSummary:
     completed_games: int
     decisions: int
-    acting_player_wins: int
 
 
 def parse_args():
@@ -36,7 +35,6 @@ def parse_args():
     )
     parser.add_argument("--episodes", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--epsilon", type=float)
     parser.add_argument("--learning-rate", type=float)
     parser.add_argument("--max-actions", type=int)
     parser.add_argument("--seed", type=int)
@@ -63,21 +61,15 @@ def train_with_periodic_checkpoints(
         raise ValueError("checkpoint_every must be positive")
     completed_games = 0
     decisions = 0
-    acting_player_wins = 0
     remaining = episodes
     while remaining:
         count = min(remaining, checkpoint_every)
         trajectories = trainer.train(states, count, batch_size=batch_size)
         completed_games += len(trajectories)
         decisions += sum(len(trajectory.decisions) for trajectory in trajectories)
-        acting_player_wins += sum(
-            bool(trajectory.decisions)
-            and trajectory.decisions[0].acting_player_index in trajectory.winner_indices
-            for trajectory in trajectories
-        )
         trainer.save_checkpoint(checkpoint_path, states)
         remaining -= count
-    return TrainingRunSummary(completed_games, decisions, acting_player_wins)
+    return TrainingRunSummary(completed_games, decisions)
 
 
 def main():
@@ -93,7 +85,6 @@ def main():
         if not args.checkpoint.is_file():
             raise SystemExit(f"Checkpoint does not exist: {args.checkpoint}")
         overrides = {
-            "--epsilon": args.epsilon,
             "--learning-rate": args.learning_rate,
             "--max-actions": args.max_actions,
             "--seed": args.seed,
@@ -110,7 +101,6 @@ def main():
     else:
         trainer = SelfPlayTrainer(
             config=TrainingConfig(
-                epsilon=0.20 if args.epsilon is None else args.epsilon,
                 learning_rate=(0.0001 if args.learning_rate is None else args.learning_rate),
                 max_actions=500 if args.max_actions is None else args.max_actions,
                 disable_move_action=not bool(args.allow_move_action),
@@ -131,8 +121,13 @@ def main():
     print(f"Completed games: {summary.completed_games}")
     print(f"Training updates: {trainer.progress.training_updates}")
     print(f"Recorded decisions: {summary.decisions}")
-    print(f"Acting-player wins: {summary.acting_player_wins}/{summary.completed_games}")
     print(f"Latest loss: {trainer.progress.last_loss:.3f}")
+    for tier, metrics in sorted(trainer.tier_metrics().items()):
+        print(
+            f"Tier {tier}: {metrics['wins']}/{metrics['games']} wins "
+            f"({metrics['win_rate']:.1%}), average selected rank "
+            f"{metrics['average_selected_rank']:.2f}"
+        )
     print(f"Saved checkpoint: {args.checkpoint}")
 
 

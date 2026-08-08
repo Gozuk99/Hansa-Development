@@ -1,4 +1,3 @@
-import importlib
 import random
 import subprocess
 import sys
@@ -221,10 +220,6 @@ class GameConfigurationTests(unittest.TestCase):
         }
         self.assertTrue(choices)
         self.assertTrue(choices.issubset({0, 1, 2}))
-
-    def test_compatibility_launcher_has_no_import_time_game_loop(self):
-        launcher = importlib.import_module("sample_hansa_game")
-        self.assertTrue(callable(launcher.main))
 
     def test_primary_launcher_import_does_not_initialize_pygame(self):
         result = subprocess.run(

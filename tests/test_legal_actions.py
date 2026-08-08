@@ -4,6 +4,7 @@ from game.action_codec import DEFAULT_ACTION_CODEC
 from game.game_actions import refresh_displacement_targets
 from game.game_runner import create_headless_game, legal_action_indices
 from game.invariants import validate_game
+from map_data.constants import MAX_POSTS
 from game.structured_actions import (
     BonusMarkerInteraction,
     ControlInteraction,
@@ -84,6 +85,35 @@ class LegalActionTests(unittest.TestCase):
         opponent.holding_pieces.clear()
         actions = game.get_legal_actions()
         self.assertIn(ControlInteraction(0), actions)
+
+    def test_displacement_with_no_valid_destination_is_blocked(self):
+        game = create_headless_game(2, 3, seed=124)
+        actor = game.current_player
+        opponent = game.players[1]
+        route = game.selected_map.routes[0]
+        occupied = route.posts[0]
+        occupied.claim(opponent, "circle")
+        opponent.personal_supply_circles = 0
+        opponent.general_stock_circles = 0
+        opponent.general_stock_squares = 2
+
+        for candidate_route in game.selected_map.routes:
+            for post in candidate_route.posts:
+                if not post.is_owned():
+                    post.required_shape = "square"
+
+        post_slot = next(
+            idx
+            for idx, post in enumerate(
+                post for route in game.selected_map.routes for post in route.posts
+            )
+            if post is occupied
+        )
+
+        ai_mask = game.ai_action_mask()
+        self.assertEqual(ai_mask[post_slot], 0)
+        self.assertEqual(ai_mask[MAX_POSTS + post_slot], 0)
+        self.assert_structured_matches_mask(game)
 
     def test_exchange_bonus_marker_has_both_structured_stages(self):
         game = create_headless_game(1, 3, seed=124)
