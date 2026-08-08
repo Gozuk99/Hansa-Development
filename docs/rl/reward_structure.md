@@ -87,6 +87,21 @@ The following have no fixed reward merely for being performed:
 
 They still receive a reward when their completed interaction changes the acting player's authoritative projected score.
 
+### Income efficiency
+
+Income has no positive reward merely for being performed. During training, a
+normal Income decision receives a configurable penalty when a finite Bank is not
+fully used because General Stock contains too few pieces:
+
+```text
+-income_penalty_scale × (Bank capacity - pieces received) / Bank capacity
+```
+
+The default scale is `100`. A full-capacity Income has no penalty, and Bank
+`C/all` is exempt because it always takes every available piece. The adjustment
+belongs only to that Income decision and does not change Income legality, piece
+movement, or later reward-to-go.
+
 ## Terminal Rewards
 
 After final scoring:

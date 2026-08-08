@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument("--max-actions", type=int)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--gamma", type=float)
+    parser.add_argument("--income-penalty-scale", type=float)
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
     parser.add_argument("--checkpoint-every", type=int, default=100)
     parser.add_argument("--resume", action="store_true")
@@ -89,6 +90,7 @@ def main():
             "--max-actions": args.max_actions,
             "--seed": args.seed,
             "--gamma": args.gamma,
+            "--income-penalty-scale": args.income_penalty_scale,
             "--allow-move-action": args.allow_move_action,
         }
         supplied = [name for name, value in overrides.items() if value is not None]
@@ -106,6 +108,9 @@ def main():
                 disable_move_action=not bool(args.allow_move_action),
                 seed=124 if args.seed is None else args.seed,
                 gamma=0.99 if args.gamma is None else args.gamma,
+                income_penalty_scale=(
+                    100.0 if args.income_penalty_scale is None else args.income_penalty_scale
+                ),
             )
         )
 
