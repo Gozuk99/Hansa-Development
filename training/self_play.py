@@ -23,12 +23,13 @@ from game.action_codec import DEFAULT_ACTION_CODEC
 from game.action_schema import action_schema_metadata, validate_action_schema_metadata
 from game.invariants import validate_game
 from game.persistence import load_game
-from game.structured_actions import PostInteraction
+from game.structured_actions import IncomeInteraction, PostInteraction
 from game.turn_state import TurnPhase
+from map_data.constants import UPGRADE_MAX_VALUES
 
 
 TRAINING_CHECKPOINT_FORMAT = "hansa-shared-q-training"
-TRAINING_CHECKPOINT_VERSION = 3
+TRAINING_CHECKPOINT_VERSION = 4
 PRESTIGE_REWARD_MULTIPLIER = 100
 END_GAME_WINNER_BONUS = 150
 
@@ -44,6 +45,7 @@ class TrainingConfig:
     disable_move_action: bool = True
     seed: int = 124
     gamma: float = 0.99
+    income_penalty_scale: float = 100.0
     tier_top_k: tuple[int | None, ...] = (2, 5, 10, 15, None)
     tier_epsilons: tuple[float, ...] = (0.05, 0.10, 0.20, 0.35, 1.00)
     three_player_tiers: tuple[int, ...] = (1, 3, 5)
@@ -57,6 +59,8 @@ class TrainingConfig:
             raise ValueError("max_actions must be positive")
         if not 0 <= self.gamma <= 1:
             raise ValueError("gamma must be between 0 and 1")
+        if self.income_penalty_scale < 0:
+            raise ValueError("income penalty scale cannot be negative")
         if len(self.tier_top_k) != len(self.tier_epsilons):
             raise ValueError("tier top-k and epsilon settings must have equal lengths")
         if any(top_k is not None and top_k < 1 for top_k in self.tier_top_k):
@@ -200,6 +204,34 @@ def calculate_terminal_rewards(game, winner_indices, game_end_trigger_player):
     return tuple(rewards)
 
 
+def income_efficiency_penalty(bank_capacity, pieces_received, scale):
+    """Return the proportional penalty for unused finite Bank capacity."""
+    if bank_capacity == UPGRADE_MAX_VALUES["bank"]:
+        return 0.0
+    unused_fraction = max(bank_capacity - pieces_received, 0) / bank_capacity
+    return -scale * unused_fraction
+
+
+def apply_income_efficiency_penalty(
+    reward_deltas,
+    *,
+    action,
+    turn_phase,
+    acting_player_index,
+    bank_capacity,
+    pieces_received,
+    scale,
+):
+    """Apply normal-Income inefficiency to only the acting player's reward."""
+    if turn_phase is not TurnPhase.ACTIONS or not isinstance(action, IncomeInteraction):
+        return tuple(reward_deltas)
+    adjusted = list(reward_deltas)
+    adjusted[acting_player_index] += income_efficiency_penalty(
+        bank_capacity, pieces_received, scale
+    )
+    return tuple(adjusted)
+
+
 class SelfPlayTrainer:
     """Collect frozen-policy games and update one shared action-value model afterward."""
 
@@ -280,6 +312,13 @@ class SelfPlayTrainer:
                 tier = seat_tiers[observation.observer_index]
                 selection = self._select_action(scores, legal_indices, tier)
                 action_index = selection.action_index
+                action = DEFAULT_ACTION_CODEC.decode(action_index)
+                action_phase = game.turn_phase
+                acting_player = game.players[observation.observer_index]
+                bank_capacity = acting_player.bank
+                general_stock_before = (
+                    acting_player.general_stock_squares + acting_player.general_stock_circles
+                )
                 projected_before = game.projected_scores()
                 end_was_pending = game.game_end or game.game_end_pending_immediate_resolution
                 action_trace.append(action_index)
@@ -290,9 +329,21 @@ class SelfPlayTrainer:
                     self.progress.invalid_action_attempts += 1
                     raise
                 projected_after = game.projected_scores()
-                player_reward_deltas = tuple(
+                score_reward_deltas = tuple(
                     float(PRESTIGE_REWARD_MULTIPLIER * (after - before))
                     for before, after in zip(projected_before, projected_after)
+                )
+                general_stock_after = (
+                    acting_player.general_stock_squares + acting_player.general_stock_circles
+                )
+                player_reward_deltas = apply_income_efficiency_penalty(
+                    score_reward_deltas,
+                    action=action,
+                    turn_phase=action_phase,
+                    acting_player_index=observation.observer_index,
+                    bank_capacity=bank_capacity,
+                    pieces_received=general_stock_before - general_stock_after,
+                    scale=self.config.income_penalty_scale,
                 )
                 decisions.append(
                     TrainingDecision(

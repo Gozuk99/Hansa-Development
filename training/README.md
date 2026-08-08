@@ -63,6 +63,12 @@ For the supplied example, all 34 post interactions would begin Move. Removing th
 
 Each interaction records `100 ×` the acting player's change in authoritative projected final prestige. After the game, winners receive another `100 ×` their final score, and a player who both triggers game end and wins receives `+150`.
 
+A normal Income action also receives a proportional negative reward when the
+player lacks enough pieces in General Stock to use their full finite Bank
+capacity. Full-capacity Income and Bank `C/all` receive no penalty. The default
+penalty scale is `100` and is stored in `TrainingConfig` and the checkpoint.
+Set a different scale for a new run with `--income-penalty-scale`.
+
 Training calculates discounted reward-to-go separately for each player instead of assigning one whole-game total to every decision. Gamma defaults to `0.99` and can be set for a new run with `--gamma`.
 
 Training progress reports games, wins, selection counts, average selected rank,

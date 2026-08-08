@@ -17,10 +17,13 @@ from training.self_play import (
     SelfPlayTrainer,
     TrainingConfig,
     TrainingDecision,
+    apply_income_efficiency_penalty,
     assign_reward_to_go,
     calculate_terminal_rewards,
+    income_efficiency_penalty,
     training_action_mask,
 )
+from game.structured_actions import IncomeInteraction, PostInteraction
 from tools.train_self_play import train_with_periodic_checkpoints
 
 
@@ -64,6 +67,74 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(mask.numel(), ACTION_SPACE_SIZE)
         self.assertEqual(mask.nonzero(as_tuple=False).flatten().tolist(), [285])
         self.assertEqual(game.ai_action_mask()[285], 1)
+
+    def test_full_income_has_no_efficiency_penalty(self):
+        for capacity in (3, 5, 7):
+            with self.subTest(capacity=capacity):
+                self.assertEqual(income_efficiency_penalty(capacity, capacity, 100), 0)
+
+    def test_partial_income_penalty_is_proportional(self):
+        examples = (
+            (3, 2, -100 / 3),
+            (3, 1, -200 / 3),
+            (5, 4, -20),
+            (5, 2, -60),
+            (7, 6, -100 / 7),
+            (7, 3, -400 / 7),
+        )
+        for capacity, received, expected in examples:
+            with self.subTest(capacity=capacity, received=received):
+                self.assertAlmostEqual(income_efficiency_penalty(capacity, received, 100), expected)
+        self.assertLess(
+            income_efficiency_penalty(3, 1, 100),
+            income_efficiency_penalty(3, 2, 100),
+        )
+
+    def test_bank_all_has_no_efficiency_penalty(self):
+        self.assertEqual(income_efficiency_penalty(50, 1, 100), 0)
+
+    def test_income_penalty_scale_is_configurable(self):
+        self.assertEqual(income_efficiency_penalty(5, 2, 50), -30)
+        self.assertEqual(income_efficiency_penalty(5, 2, 0), 0)
+
+    def test_income_penalty_changes_only_its_acting_players_reward(self):
+        original = (100.0, 200.0, 300.0)
+        adjusted = apply_income_efficiency_penalty(
+            original,
+            action=IncomeInteraction(0),
+            turn_phase=TurnPhase.ACTIONS,
+            acting_player_index=1,
+            bank_capacity=5,
+            pieces_received=2,
+            scale=100,
+        )
+
+        self.assertEqual(adjusted, (100.0, 140.0, 300.0))
+        self.assertEqual(original, (100.0, 200.0, 300.0))
+        self.assertEqual(
+            apply_income_efficiency_penalty(
+                original,
+                action=PostInteraction(0, "square"),
+                turn_phase=TurnPhase.ACTIONS,
+                acting_player_index=1,
+                bank_capacity=5,
+                pieces_received=2,
+                scale=100,
+            ),
+            original,
+        )
+        self.assertEqual(
+            apply_income_efficiency_penalty(
+                original,
+                action=IncomeInteraction(0),
+                turn_phase=TurnPhase.TRIBUTE_INCOME_RESPONSE,
+                acting_player_index=1,
+                bank_capacity=5,
+                pieces_received=2,
+                scale=100,
+            ),
+            original,
+        )
 
     def test_move_filter_allows_moves_when_only_moves_exist(self):
         class Player:
@@ -272,6 +343,7 @@ class SelfPlayTrainingTests(unittest.TestCase):
             self.assertEqual(restored.progress.checkpoint_saves, 1)
             self.assertEqual(restored.progress.checkpoint_loads, 1)
             self.assertEqual(restored.config.gamma, 0.99)
+            self.assertEqual(restored.config.income_penalty_scale, 100)
             self.assertEqual(restored.config.tier_top_k, (2, 5, 10, 15, None))
             self.assertEqual(restored.config.three_player_tiers, (1, 3, 5))
             self.assertEqual(restored.rng.getstate(), trainer.rng.getstate())
