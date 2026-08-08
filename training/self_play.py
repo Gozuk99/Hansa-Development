@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext, redirect_stdout
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 import hashlib
 import io
 from pathlib import Path
@@ -28,7 +28,7 @@ from game.turn_state import TurnPhase
 
 
 TRAINING_CHECKPOINT_FORMAT = "hansa-shared-q-training"
-TRAINING_CHECKPOINT_VERSION = 2
+TRAINING_CHECKPOINT_VERSION = 3
 PRESTIGE_REWARD_MULTIPLIER = 100
 END_GAME_WINNER_BONUS = 150
 
@@ -39,22 +39,57 @@ class TrainingRunError(RuntimeError):
 
 @dataclass(frozen=True)
 class TrainingConfig:
-    epsilon: float = 0.20
     learning_rate: float = 0.0001
     max_actions: int = 500
     disable_move_action: bool = True
     seed: int = 124
     gamma: float = 0.99
+    tier_top_k: tuple[int | None, ...] = (2, 5, 10, 15, None)
+    tier_epsilons: tuple[float, ...] = (0.05, 0.10, 0.20, 0.35, 1.00)
+    three_player_tiers: tuple[int, ...] = (1, 3, 5)
+    four_player_tiers: tuple[int, ...] = (1, 2, 4, 5)
+    five_player_tiers: tuple[int, ...] = (1, 2, 3, 4, 5)
 
     def __post_init__(self):
-        if not 0 <= self.epsilon <= 1:
-            raise ValueError("epsilon must be between 0 and 1")
         if self.learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
         if self.max_actions < 1:
             raise ValueError("max_actions must be positive")
         if not 0 <= self.gamma <= 1:
             raise ValueError("gamma must be between 0 and 1")
+        if len(self.tier_top_k) != len(self.tier_epsilons):
+            raise ValueError("tier top-k and epsilon settings must have equal lengths")
+        if any(top_k is not None and top_k < 1 for top_k in self.tier_top_k):
+            raise ValueError("tier top-k values must be positive")
+        if any(not 0 <= epsilon <= 1 for epsilon in self.tier_epsilons):
+            raise ValueError("tier epsilon values must be between 0 and 1")
+        for player_count, tiers in self.tier_subsets().items():
+            if len(tiers) != player_count or len(set(tiers)) != player_count:
+                raise ValueError(f"{player_count}-player tiers must be unique")
+            if any(tier < 1 or tier > len(self.tier_top_k) for tier in tiers):
+                raise ValueError(f"{player_count}-player tier is undefined")
+
+    def tier_subsets(self):
+        return {
+            3: self.three_player_tiers,
+            4: self.four_player_tiers,
+            5: self.five_player_tiers,
+        }
+
+
+@dataclass(frozen=True)
+class PolicyTier:
+    number: int
+    top_k: int | None
+    epsilon: float
+
+
+@dataclass(frozen=True)
+class ActionSelection:
+    action_index: int
+    used_epsilon: bool
+    model_rank: int
+    legal_action_count: int
 
 
 @dataclass(frozen=True)
@@ -65,6 +100,12 @@ class TrainingDecision:
     acting_player_index: int
     player_reward_deltas: tuple[float, ...]
     immediate_reward: float
+    policy_tier: int
+    epsilon: float
+    top_k: int | None
+    used_epsilon: bool
+    model_rank: int
+    legal_action_count: int
     reward_to_go: float | None = None
 
 
@@ -75,6 +116,7 @@ class CompletedTrajectory:
     final_scores: tuple[int, ...]
     winner_indices: tuple[int, ...]
     action_trace: tuple[int, ...]
+    seat_tiers: tuple[int, ...]
 
 
 @dataclass
@@ -88,6 +130,13 @@ class TrainingProgress:
     checkpoint_loads: int = 0
     last_loss: float | None = None
     mean_loss: float | None = None
+    tier_games: dict[int, int] = field(default_factory=dict)
+    tier_wins: dict[int, int] = field(default_factory=dict)
+    tier_selected_rank_total: dict[int, int] = field(default_factory=dict)
+    tier_epsilon_selections: dict[int, int] = field(default_factory=dict)
+    tier_top_k_selections: dict[int, int] = field(default_factory=dict)
+    tier_immediate_reward_total: dict[int, float] = field(default_factory=dict)
+    tier_reward_to_go_total: dict[int, float] = field(default_factory=dict)
 
 
 def _file_sha256(path: Path) -> str:
@@ -104,19 +153,20 @@ def _post_at(game, slot):
 
 
 def training_action_mask(game, *, disable_move_action: bool) -> torch.Tensor:
-    """Return the engine mask with optional normal Move entry interactions removed."""
+    """Prefer non-Move interactions, restoring Move when it is the only legal choice."""
     mask = torch.tensor(game.ai_action_mask(), dtype=torch.bool)
     if not disable_move_action or game.turn_phase is not TurnPhase.ACTIONS:
         return mask
 
     acting_player = game.players[game.active_player]
+    original_mask = mask.clone()
     for index in mask.nonzero(as_tuple=False).flatten().tolist():
         action = DEFAULT_ACTION_CODEC.decode(index)
         if isinstance(action, PostInteraction):
             post = _post_at(game, action.post_slot)
             if post is not None and post.owner is acting_player:
                 mask[index] = False
-    return mask
+    return mask if mask.any() else original_mask
 
 
 def assign_reward_to_go(decisions, terminal_rewards, gamma):
@@ -163,15 +213,48 @@ class SelfPlayTrainer:
         self.loss_total = 0.0
         self.source_state_sha256 = None
 
-    def _select_action(self, scores, legal_indices):
-        if self.rng.random() < self.config.epsilon:
-            return self.rng.choice(legal_indices)
-        return max(legal_indices, key=lambda index: (float(scores[index]), -index))
+    def _tier(self, number):
+        return PolicyTier(
+            number,
+            self.config.tier_top_k[number - 1],
+            self.config.tier_epsilons[number - 1],
+        )
+
+    def _assign_tiers(self, player_count):
+        try:
+            numbers = list(self.config.tier_subsets()[player_count])
+        except KeyError as error:
+            raise TrainingRunError(
+                f"No tier subset is configured for {player_count} players"
+            ) from error
+        self.rng.shuffle(numbers)
+        return tuple(self._tier(number) for number in numbers)
+
+    def _select_action(self, scores, legal_indices, tier):
+        legal_scores = scores[legal_indices]
+        ranked_positions = torch.argsort(legal_scores, descending=True, stable=True).tolist()
+        ranked = [legal_indices[position] for position in ranked_positions]
+        if len(ranked) == 1:
+            return ActionSelection(ranked[0], False, 1, 1)
+        if self.rng.random() < tier.epsilon:
+            selected = self.rng.choice(legal_indices)
+            used_epsilon = True
+        else:
+            effective_k = min(tier.top_k or len(ranked), len(ranked))
+            selected = self.rng.choice(ranked[:effective_k])
+            used_epsilon = False
+        return ActionSelection(
+            selected,
+            used_epsilon,
+            ranked.index(selected) + 1,
+            len(legal_indices),
+        )
 
     def collect_game(self, starting_state, *, quiet=True) -> CompletedTrajectory:
         """Play one exact starting state without changing model weights."""
         game = load_game(starting_state)
         game.interactive_errors = False
+        seat_tiers = self._assign_tiers(len(game.players))
         decisions = []
         action_trace = []
         game_end_trigger_player = None
@@ -193,8 +276,10 @@ class SelfPlayTrainer:
                         "The training policy removed every legal interaction at "
                         f"turn {game.turn_number}, phase {game.turn_phase.value}"
                     )
-                scores = self.model(observation.features.float().unsqueeze(0))[0]
-                action_index = self._select_action(scores, legal_indices)
+                scores = self.model(observation.features.float().unsqueeze(0).to(device))[0]
+                tier = seat_tiers[observation.observer_index]
+                selection = self._select_action(scores, legal_indices, tier)
+                action_index = selection.action_index
                 projected_before = game.projected_scores()
                 end_was_pending = game.game_end or game.game_end_pending_immediate_resolution
                 action_trace.append(action_index)
@@ -217,6 +302,12 @@ class SelfPlayTrainer:
                         observation.observer_index,
                         player_reward_deltas,
                         player_reward_deltas[observation.observer_index],
+                        tier.number,
+                        tier.epsilon,
+                        tier.top_k,
+                        selection.used_epsilon,
+                        selection.model_rank,
+                        selection.legal_action_count,
                     )
                 )
                 end_is_pending = game.game_end or game.game_end_pending_immediate_resolution
@@ -237,10 +328,60 @@ class SelfPlayTrainer:
             tuple(player.final_score for player in game.players),
             winners,
             tuple(action_trace),
+            tuple(tier.number for tier in seat_tiers),
         )
         self.progress.completed_games += 1
         self.progress.decisions += len(decisions)
+        self._record_tier_metrics(trajectory)
         return trajectory
+
+    @staticmethod
+    def _increment(values, tier, amount=1):
+        values[tier] = values.get(tier, 0) + amount
+
+    def _record_tier_metrics(self, trajectory):
+        for tier in trajectory.seat_tiers:
+            self._increment(self.progress.tier_games, tier)
+        for winner_index in trajectory.winner_indices:
+            self._increment(self.progress.tier_wins, trajectory.seat_tiers[winner_index])
+        for decision in trajectory.decisions:
+            tier = decision.policy_tier
+            self._increment(self.progress.tier_selected_rank_total, tier, decision.model_rank)
+            selections = (
+                self.progress.tier_epsilon_selections
+                if decision.used_epsilon
+                else self.progress.tier_top_k_selections
+            )
+            self._increment(selections, tier)
+            self._increment(
+                self.progress.tier_immediate_reward_total, tier, decision.immediate_reward
+            )
+            self._increment(self.progress.tier_reward_to_go_total, tier, decision.reward_to_go)
+
+    def tier_metrics(self):
+        metrics = {}
+        decision_counts = {
+            tier: self.progress.tier_epsilon_selections.get(tier, 0)
+            + self.progress.tier_top_k_selections.get(tier, 0)
+            for tier in range(1, len(self.config.tier_top_k) + 1)
+        }
+        for tier, games in self.progress.tier_games.items():
+            decisions = decision_counts[tier]
+            divisor = decisions or 1
+            metrics[tier] = {
+                "games": games,
+                "wins": self.progress.tier_wins.get(tier, 0),
+                "win_rate": self.progress.tier_wins.get(tier, 0) / games,
+                "average_selected_rank": self.progress.tier_selected_rank_total.get(tier, 0)
+                / divisor,
+                "epsilon_selections": self.progress.tier_epsilon_selections.get(tier, 0),
+                "top_k_selections": self.progress.tier_top_k_selections.get(tier, 0),
+                "average_immediate_reward": self.progress.tier_immediate_reward_total.get(tier, 0)
+                / divisor,
+                "average_reward_to_go": self.progress.tier_reward_to_go_total.get(tier, 0)
+                / divisor,
+            }
+        return metrics
 
     def update_model(self, trajectories) -> float:
         """Perform one Monte Carlo action-value update between completed games."""
@@ -248,7 +389,7 @@ class SelfPlayTrainer:
         if not samples:
             raise TrainingRunError("Cannot train from an empty trajectory batch")
 
-        observations = torch.stack([sample.observation for sample in samples]).float()
+        observations = torch.stack([sample.observation for sample in samples]).float().to(device)
         actions = torch.tensor([sample.action_index for sample in samples], device=device)
         targets = torch.tensor(
             [sample.reward_to_go for sample in samples], dtype=torch.float32, device=device

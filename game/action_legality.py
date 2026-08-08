@@ -6,6 +6,7 @@ from game.action_schema import (
 from game.game_actions import (
     can_pick_up_displacement_fallback,
     can_place_displacement_piece,
+    displacement_can_be_completed,
     optional_displacement_piece_available,
 )
 from game.turn_state import TurnPhase
@@ -223,6 +224,9 @@ def mask_post_action(game):
                         current_player.personal_supply_squares
                         + current_player.personal_supply_circles
                         >= displacement_cost
+                        and displacement_can_be_completed(
+                            game, route, post.owner, post.owner_piece_shape
+                        )
                     ):
                         if (
                             post.required_shape == "square"

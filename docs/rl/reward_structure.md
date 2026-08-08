@@ -107,7 +107,8 @@ Every `TrainingDecision` records:
 - the selected action index;
 - the acting player;
 - the projected-score reward delta for every player caused by that interaction;
-- the acting player's immediate reward delta; and
+- the acting player's immediate reward delta;
+- the assigned policy tier and selection metadata; and
 - the discounted reward-to-go calculated after the game.
 
 Recording the full reward vector matters when completing a route awards a point to a non-acting city controller. That point remains in the receiving player's reward stream and can reinforce their earlier decisions; it is not reassigned to the player who completed the route.

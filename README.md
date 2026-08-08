@@ -48,9 +48,8 @@ The New Game menu configures the map, player count, controller for each seat,
 Mission Cards, Emperor's Favour tiles, and replacement bonus-marker supply
 before constructing the game. Press Enter to start or Escape to close the menu.
 
-`sample_hansa_game.py` is retained only as a compatibility launcher and forwards
-to the same entry point. Importing either launcher does not open a window, train
-a model, or save a checkpoint.
+Importing `hansa_game` does not open a window, train a model, or save a
+checkpoint.
 
 ### Game Controls
 

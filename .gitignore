@@ -8,4 +8,5 @@ audit_*.json
 saves/
 training_data/generated/
 training_output/
-hansa_nn_model.pth
+*.pth
+*_out.txt

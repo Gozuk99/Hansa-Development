@@ -5,7 +5,7 @@ import unittest
 from tests.action_helpers import legal_action_mask
 
 from game.game_actions import InvalidActionError
-from game.game_actions import refresh_displacement_targets
+from game.game_actions import displacement_can_be_completed, refresh_displacement_targets
 from game.game_runner import create_headless_game
 from game.turn_state import TurnPhase
 
@@ -411,6 +411,7 @@ class CoreActionTests(unittest.TestCase):
 
         opponent.general_stock_circles = 0
         opponent.general_stock_squares = 2
+        self.assertTrue(displacement_can_be_completed(game, original_route, opponent, "circle"))
         game.original_route_of_displacement = original_route
         game.waiting_for_displaced_player = True
         game.displaced_player.populate_displaced_player(game, opponent, "circle")
