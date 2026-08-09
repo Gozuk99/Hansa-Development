@@ -4,7 +4,24 @@
 
 Training uses score-derived rewards after every selected interaction and winner-only rewards after final scoring. The shared model remains frozen while a game is active. Model updates happen only after completed games or batches.
 
-This replaces the legacy collection of hand-written rewards for particular action types. The rules engine remains responsible for scoring; training observes changes in the engine's authoritative projected score instead of trying to duplicate the rules with reward constants.
+Authoritative projected scoring provides the main reward signal. A smaller set of
+explicit training-only rewards and penalties supplements it where score changes
+alone do not describe efficiency or short-term progress. These adjustments do
+not alter game rules or scoring.
+
+## Primary Objective, Placement, and Player Count
+
+The primary objective is to win. A winner's terminal reward scales with final
+prestige, so winning with a stronger score is better than winning with a weaker
+score. Second through fifth place receive no placement reward; they retain only
+their legitimate decision rewards. This avoids teaching the model to settle for
+second place instead of pursuing a possible win.
+
+The engine applies the rulebook tie-breakers before training identifies the
+winner. If those tie-breakers still leave shared winners, every remaining winner
+receives the winner terminal reward. Reward constants are identical in three-,
+four-, and five-player games; player count changes the competitive environment,
+not the value of a prestige point.
 
 ## Previous Reward Mutation Inventory
 
@@ -102,6 +119,28 @@ The default scale is `100`. A full-capacity Income has no penalty, and Bank
 belongs only to that Income decision and does not change Income legality, piece
 movement, or later reward-to-go.
 
+### Current training-only adjustments
+
+The current trainer also applies these deliberately shaped signals:
+
+- `+50` for completing a route, before subtracting prestige awarded to opponents;
+- `+70` for each net claimable route produced by a completed normal Move;
+- `+25` for concentrating at least two moved pieces on one route;
+- `+25` for disrupting an immediately following player's valuable completed route;
+- `+5` for placing on a route where the player already has a piece, or `+3` when
+  doing so through displacement;
+- `+250` for an intermediate Privilege, Book, Actions, or Bank upgrade, except
+  the first Actions upgrade receives `+400`;
+- `-200` for moving only one piece and `-100` for moving only two when the
+  player's Book permits at least three;
+- penalties for repeatedly spending actions on normal Move when the player's
+  movement capacity makes that behavior clearly inefficient; and
+- `-500` for the player responsible for leaving no legal route on which to place
+  a required replacement bonus marker.
+
+These are training signals, not Hansa prestige. They are tested separately from
+the authoritative score projection.
+
 ## Terminal Rewards
 
 After final scoring:
@@ -139,6 +178,33 @@ All interactions within one player turn have the same discount distance to later
 rewards. Gamma is applied only when that player begins another turn. Decisions by
 other players do not discount, receive, erase, or replace that return. The initial
 discount is `gamma = 0.99`, stored in the training configuration and checkpoint.
+
+## Worked Route Example
+
+Red completes a route without taking an office, upgrade, marker, or immediate
+prestige. Blue controls an endpoint city and therefore gains one prestige point.
+The choice also blocks Green's longer-term plan. Red later wins the game.
+
+For that decision, Red receives the `+50` route-completion signal, pays `-100`
+for the point awarded to Blue, and receives no separate reward merely for
+blocking Green. Blue's `+100` projected-score change belongs to Blue's reward
+stream; it is never credited to Red. Red's eventual winner reward flows back to
+Red's earlier decisions through reward-to-go, so this initially negative decision
+can still receive positive long-term credit when it contributes to the win.
+
+## Known Reward Risks
+
+Shaped rewards make early learning easier, but they can also be exploited. A
+model could repeatedly pursue small placement, route, movement, or upgrade
+rewards while reducing its chance of winning. Large penalties can similarly make
+the model avoid a strategically correct sacrifice. Training therefore evaluates
+fixed games by win rate, final score, and game length in addition to loss. A
+falling loss alone is not evidence that the policy is improving.
+
+Reward leakage is controlled by recording a reward vector for every interaction
+and maintaining a separate return for every player. Opponent rewards never enter
+the acting player's return unless an explicit training rule, such as paying for
+prestige awarded during a route completion, intentionally does so.
 
 ## Safety and Testing
 
