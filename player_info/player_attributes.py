@@ -148,7 +148,7 @@ class Player:
     def place_piece(self, post, shape):
         if not self.holding_pieces:
             print("No pieces to place.")
-            return
+            return False
 
         shape_to_place, owner_to_place, origin_region = self.holding_pieces[0]
 
@@ -157,7 +157,7 @@ class Player:
             print(
                 f"Cannot place a {shape} on this post. This post requires a {post.required_shape}."
             )
-            return
+            return False
 
         # Check if the placement is valid based on the regions
         if self.is_valid_region_transition(origin_region, post.region):
@@ -171,6 +171,7 @@ class Player:
                 print(
                     f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board."
                 )
+                return True
         else:
             print("Invalid placement: Cannot move piece between incompatible regions.")
 
@@ -180,6 +181,7 @@ class Player:
             print(
                 f"The next piece to place must be Player {COLOR_NAMES[next_owner.color]}'s {next_shape}."
             )
+        return False
 
     def is_valid_region_transition(self, start_region, target_region):
         # If the piece was picked up from a white/None region, it can only be placed in a white/None region

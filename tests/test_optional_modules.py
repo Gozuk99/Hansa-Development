@@ -241,6 +241,7 @@ class OptionalModuleTests(unittest.TestCase):
                 game = self.game()
                 owner, other = game.players[:2]
                 game.OneIncomeIfOthersIncomeOwner = owner
+                owner.bonus_markers.append(BonusMarker("Move3", owner=owner))
                 owner.personal_supply_circles -= 1
                 owner.general_stock_circles += 1
                 before = {
@@ -253,6 +254,7 @@ class OptionalModuleTests(unittest.TestCase):
                 self.assertEqual(
                     mask[TILE_ACTION_START : TILE_ACTION_START + 3].tolist(), [1, 1, 1]
                 )
+                self.assertEqual(mask[BM_ACTION_START : BM_ACTION_START + 48].count_nonzero(), 0)
                 game.apply_action(TILE_ACTION_START + action_offset)
 
                 for shape in ("square", "circle"):

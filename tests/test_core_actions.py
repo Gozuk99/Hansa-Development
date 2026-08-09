@@ -268,6 +268,26 @@ class CoreActionTests(unittest.TestCase):
         self.assertTrue(actual_routes)
         self.assertTrue(actual_routes.issubset(directly_adjacent))
 
+    def test_displacement_requires_the_selected_piece_shape_in_personal_supply(self):
+        game = create_headless_game(2, 3, seed=124)
+        actor, opponent = game.players[:2]
+        circle_post = next(
+            post
+            for route in game.selected_map.routes
+            for post in route.posts
+            if post.required_shape == "circle"
+        )
+        circle_post.claim(opponent, "circle")
+        actor.personal_supply_squares = 3
+        actor.personal_supply_circles = 0
+
+        mask = legal_action_mask(game)
+
+        self.assertEqual(mask[post_index(game, circle_post, "circle")].item(), 0)
+        actor.personal_supply_squares = 0
+        actor.personal_supply_circles = 3
+        self.assertEqual(legal_action_mask(game)[post_index(game, circle_post, "circle")].item(), 1)
+
     def test_displaced_extra_piece_falls_back_to_piece_already_on_board(self):
         game = create_headless_game(2, 3, seed=124)
         actor, opponent = game.players[:2]
@@ -615,6 +635,43 @@ class CoreActionTests(unittest.TestCase):
             {index for index in mask[MAX_POSTS : MAX_POSTS * 2].nonzero(as_tuple=True)[0].tolist()},
             {post_index(game, post) for post in targets},
         )
+
+    def test_britannia_board_fallback_masks_incompatible_held_piece_regions(self):
+        game = create_headless_game(3, 4, seed=124)
+        opponent = game.players[1]
+        original_route = next(route for route in game.selected_map.routes if route.region is None)
+        scotland_post = next(
+            post
+            for route in game.selected_map.routes
+            if route.region == "Scotland"
+            for post in route.posts
+            if not post.is_owned() and post.required_shape in (None, "circle")
+        )
+        normal_post = next(
+            post
+            for route in game.selected_map.routes
+            if route.region is None
+            for post in route.posts
+            if not post.is_owned() and post.required_shape in (None, "circle")
+        )
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 0
+        opponent.personal_supply_squares = 0
+        opponent.personal_supply_circles = 0
+        opponent.holding_pieces = [("circle", opponent, "Wales")]
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "square")
+        game.displaced_player.played_displaced_shape = True
+        game.DisplaceAnywhereOwner = opponent
+        refresh_displacement_targets(game)
+
+        mask = legal_action_mask(game)
+
+        self.assertEqual(mask[post_index(game, scotland_post, "circle")].item(), 0)
+        self.assertEqual(mask[post_index(game, normal_post, "circle")].item(), 1)
+        self.apply(game, post_index(game, normal_post, "circle"))
+        self.assertFalse(opponent.holding_pieces)
 
     def test_britannia_place_requires_and_consumes_one_regional_permission(self):
         game = create_headless_game(3, 4, seed=124)

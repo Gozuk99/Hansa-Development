@@ -121,6 +121,7 @@ Every `TrainingDecision` records:
 - the training legal-action mask;
 - the selected action index;
 - the acting player;
+- the game turn containing the decision;
 - the projected-score reward delta for every player caused by that interaction;
 - the acting player's immediate reward delta;
 - the assigned policy tier and selection metadata; and
@@ -134,7 +135,10 @@ After terminal rewards are known, training processes the global decision sequenc
 return = immediate reward + gamma × later return for the same player
 ```
 
-Decisions by other players do not receive, erase, or replace that return. The initial discount is `gamma = 0.99`, stored in the training configuration and checkpoint.
+All interactions within one player turn have the same discount distance to later
+rewards. Gamma is applied only when that player begins another turn. Decisions by
+other players do not discount, receive, erase, or replace that return. The initial
+discount is `gamma = 0.99`, stored in the training configuration and checkpoint.
 
 ## Safety and Testing
 
@@ -149,5 +153,6 @@ Tests must verify:
 - the end-game trigger bonus goes only to a triggering winner;
 - losing players retain legitimate immediate rewards;
 - per-player reward-to-go does not leak between seats;
+- interactions within one player turn do not discount each other;
 - gamma is configurable and checkpointed; and
 - model weights do not change during an active game.

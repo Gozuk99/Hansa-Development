@@ -6,7 +6,10 @@ __pycache__/
 venv/
 audit_*.json
 saves/
-training_data/generated/
+training_data/generated/*
+!training_data/generated/evaluation/
+!training_data/generated/evaluation/**
+training_data/failures/
 training_output/
 *.pth
 *_out.txt

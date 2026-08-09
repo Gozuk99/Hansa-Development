@@ -71,7 +71,7 @@ def resolve_post_interaction(game, post_slot, post_type):
         move_action(game, selected_route, selected_post, post_type)
 
     elif game.waiting_for_place2_in_scotland_or_wales:
-        if selected_post in game.all_empty_posts:
+        if not selected_post.is_owned() and selected_post.region in ("Scotland", "Wales"):
             move_action(game, selected_route, selected_post, post_type)
         else:
             _raise_invalid_action(game, selected_route)

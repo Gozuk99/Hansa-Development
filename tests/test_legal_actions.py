@@ -127,9 +127,7 @@ class LegalActionTests(unittest.TestCase):
         self.assertEqual(len(activation), 1)
         game.apply_structured_action(activation[0])
 
-        targets = [
-            action for action in game.get_legal_actions() if isinstance(action, PlayerInteraction)
-        ]
+        targets = game.get_legal_actions()
         self.assertEqual(targets, [PlayerInteraction(1)])
         game.apply_structured_action(targets[0])
 
@@ -138,7 +136,7 @@ class LegalActionTests(unittest.TestCase):
             for action in game.get_legal_actions()
             if isinstance(action, BonusMarkerInteraction)
         ]
-        self.assertEqual(len(used_markers), 1)
+        self.assertEqual(game.get_legal_actions(), [BonusMarkerInteraction(10)])
         self.assertEqual(used_markers[0], BonusMarkerInteraction(10))
         game.apply_structured_action(used_markers[0])
         self.assert_structured_matches_mask(game)

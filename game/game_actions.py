@@ -287,12 +287,20 @@ def can_pick_up_displacement_fallback(game, post):
 
 def can_place_displacement_piece(game, post, shape):
     """Apply nearest-target, shape, and source rules at one boundary."""
+    held_piece_matches = True
+    if game.displaced_player.player.holding_pieces:
+        held_shape, _owner, origin_region = game.displaced_player.player.holding_pieces[0]
+        held_piece_matches = (
+            held_shape == shape
+            and game.displaced_player.player.is_valid_region_transition(origin_region, post.region)
+        )
     return (
         post in game.all_empty_posts
         and not post.is_owned()
         and shape in displacement_shapes_to_place(game)
         and post.required_shape in (None, shape)
         and displacement_piece_available(game, shape)
+        and held_piece_matches
     )
 
 
@@ -360,7 +368,15 @@ def move_action(game, route, post, shape):
     elif player.holding_pieces:
         if not post.is_owned():
             shape_to_place, _owner_to_place, _origin_region = player.holding_pieces[0]
-            player.place_piece(post, shape_to_place)
+            if game.waiting_for_place2_in_scotland_or_wales:
+                if post.region not in ("Scotland", "Wales"):
+                    raise InvalidActionError("The piece must be placed in Scotland or Wales")
+                if post.required_shape not in (None, shape_to_place):
+                    raise InvalidActionError("The held piece cannot be placed on this post")
+                post.claim(player, shape_to_place)
+                player.holding_pieces.pop(0)
+            elif not player.place_piece(post, shape_to_place):
+                raise InvalidActionError("The held piece cannot be placed on this post")
 
             if not player.holding_pieces:
                 player.finish_move()
@@ -400,7 +416,8 @@ def displace_move_action(game, post):
     elif displaced_player.holding_pieces:
         if not post.is_owned() and post in game.all_empty_posts:
             shape_to_place, owner_to_place, origin_region = displaced_player.holding_pieces[0]
-            displaced_player.place_piece(post, shape_to_place)
+            if not displaced_player.place_piece(post, shape_to_place):
+                raise InvalidActionError("The held displacement piece cannot use this post")
             game.displaced_player.total_pieces_to_place -= 1
             game.all_empty_posts.remove(post)
         else:
