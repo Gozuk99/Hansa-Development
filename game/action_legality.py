@@ -54,6 +54,7 @@ def _has_pending_action_choice(game):
     return (
         game.waiting_for_bm_swap_office
         or game.waiting_for_bm_upgrade_ability
+        or game.waiting_for_bm_exchange_bm
         or game.waiting_for_bm_green_city
     )
 
@@ -229,14 +230,12 @@ def mask_post_action(game):
                         )
                     ):
                         if (
-                            post.required_shape == "square"
-                            or post.required_shape is None
+                            post.required_shape in (None, "square")
                             and current_player.personal_supply_squares > 0
                         ):
                             post_tensor[post_idx] = 1
                         if (
-                            post.required_shape == "circle"
-                            or post.required_shape is None
+                            post.required_shape in (None, "circle")
                             and current_player.personal_supply_circles > 0
                         ):
                             post_tensor[MAX_POSTS + post_idx] = 1
@@ -447,7 +446,7 @@ def mask_bm(game):
     if (
         game.waiting_for_displaced_player
         or (_has_pending_post_workflow(game) and not game.waiting_for_bm_exchange_bm)
-        or _has_pending_action_choice(game)
+        or (_has_pending_action_choice(game) and not game.waiting_for_bm_exchange_bm)
     ):
         return bm_tensor
 

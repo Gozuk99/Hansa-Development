@@ -1,0 +1,28 @@
+{
+  "generator_version": 7,
+  "state_id": "state-5da22a652a8e20d3",
+  "scenario": "near_score",
+  "seed": 4,
+  "attempt_seed": 4,
+  "map_num": 2,
+  "player_count": 3,
+  "scores": [
+    18,
+    18,
+    18
+  ],
+  "score_range": [
+    17,
+    18
+  ],
+  "starting_position": "one_round_before",
+  "current_player_index": 0,
+  "bonus_markers_remaining": 12,
+  "completed_cities": 0,
+  "options": {
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_bonus_markers": false
+  },
+  "save_file": "state-5da22a652a8e20d3.hansa"
+}

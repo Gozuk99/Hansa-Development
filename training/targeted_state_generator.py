@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import hashlib
+from itertools import product
 import json
 from pathlib import Path
 import random
@@ -25,8 +26,12 @@ from map_data.constants import (
 from map_data.map_attributes import BonusMarker
 
 
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 7
 DEFAULT_OUTPUT_DIRECTORY = Path("training_data/generated")
+
+
+class StateGenerationError(RuntimeError):
+    """Raised when a seed cannot produce a state satisfying every constraint."""
 
 
 class EndGameScenario(str, Enum):
@@ -44,6 +49,8 @@ class GenerationRequest:
     use_mission_cards: bool | None = None
     use_emperors_favour: bool | None = None
     use_promo_markers: bool | None = None
+    score_range: tuple[int, int] | None = None
+    immediate_finish: bool = False
 
 
 @dataclass(frozen=True)
@@ -52,21 +59,22 @@ class GeneratedState:
     scenario: EndGameScenario
     seed: int
     attempt_seed: int
+    score_range: tuple[int, int] | None = None
+    immediate_finish: bool = False
 
 
 def _choose(value, choices, rng):
     return rng.choice(choices) if value is None else value
 
 
-def _configure_player(player, rng):
-    player.keys_index = rng.randrange(len(CITY_KEYS_MAX_VALUES))
-    player.keys = CITY_KEYS_MAX_VALUES[player.keys_index]
-    player.privilege = rng.choice(PRIVILEGE_COLORS)
-    player.book = rng.choice(BOOK_OF_KNOWLEDGE_MAX_VALUES)
-    player.actions_index = rng.randrange(len(ACTIONS_MAX_VALUES))
-    player.actions = ACTIONS_MAX_VALUES[player.actions_index]
-    player.bank = rng.choice(BANK_MAX_VALUES)
-
+def _configure_player(player):
+    player.keys_index = 0
+    player.keys = CITY_KEYS_MAX_VALUES[0]
+    player.privilege = PRIVILEGE_COLORS[0]
+    player.book = BOOK_OF_KNOWLEDGE_MAX_VALUES[0]
+    player.actions_index = 0
+    player.actions = ACTIONS_MAX_VALUES[0]
+    player.bank = BANK_MAX_VALUES[0]
     player.general_stock_squares = 0
     player.personal_supply_squares = 0
     player.general_stock_circles = 0
@@ -84,7 +92,11 @@ def _can_claim_office(player, office):
 
 def _place_office(office, player, pools):
     shape = office.shape
-    if pools[player][shape] <= 0 or not _can_claim_office(player, office):
+    if (
+        office.controller is not None
+        or pools[player][shape] <= 0
+        or not _can_claim_office(player, office)
+    ):
         return False
     office.controller = player
     office.owner_piece_shape = shape
@@ -93,84 +105,276 @@ def _place_office(office, player, pools):
     return True
 
 
-def _fill_city(city, players, pools, rng):
-    for office in city.offices:
-        candidates = [
-            player
-            for player in players
-            if pools[player][office.shape] and _can_claim_office(player, office)
-        ]
-        if not candidates:
+def _upgrade_choices(player):
+    choices = []
+    if player.keys_index + 1 < len(CITY_KEYS_MAX_VALUES):
+        choices.append(("keys", "square"))
+    if PRIVILEGE_COLORS.index(player.privilege) + 1 < len(PRIVILEGE_COLORS):
+        choices.append(("privilege", "square"))
+    if BOOK_OF_KNOWLEDGE_MAX_VALUES.index(player.book) + 1 < len(BOOK_OF_KNOWLEDGE_MAX_VALUES):
+        choices.append(("book", "circle"))
+    if player.actions_index + 1 < len(ACTIONS_MAX_VALUES):
+        choices.append(("actions", "square"))
+    if BANK_MAX_VALUES.index(player.bank) + 1 < len(BANK_MAX_VALUES):
+        choices.append(("bank", "square"))
+    return choices
+
+
+def _apply_upgrade(player, pools, choice):
+    ability, shape = choice
+    if ability == "keys":
+        player.keys_index += 1
+        player.keys = CITY_KEYS_MAX_VALUES[player.keys_index]
+    elif ability == "privilege":
+        index = PRIVILEGE_COLORS.index(player.privilege) + 1
+        player.privilege = PRIVILEGE_COLORS[index]
+    elif ability == "book":
+        index = BOOK_OF_KNOWLEDGE_MAX_VALUES.index(player.book) + 1
+        player.book = BOOK_OF_KNOWLEDGE_MAX_VALUES[index]
+    elif ability == "actions":
+        player.actions_index += 1
+        player.actions = ACTIONS_MAX_VALUES[player.actions_index]
+    else:
+        index = BANK_MAX_VALUES.index(player.bank) + 1
+        player.bank = BANK_MAX_VALUES[index]
+    pools[player][shape] += 1
+
+
+def _prepare_player_for_office(player, office, pools, rng):
+    required_privilege = office.printed_privilege or "WHITE"
+    while PRIVILEGE_COLORS.index(player.privilege) < PRIVILEGE_COLORS.index(required_privilege):
+        _apply_upgrade(player, pools, ("privilege", "square"))
+    while pools[player][office.shape] <= 0:
+        choices = [choice for choice in _upgrade_choices(player) if choice[1] == office.shape]
+        if not choices:
             return False
-        _place_office(office, rng.choice(candidates), pools)
+        _apply_upgrade(player, pools, rng.choice(choices))
     return True
 
 
-def _prepare_completed_cities(game, pools, rng):
-    target = game.selected_map.max_full_cities - 1
-    candidates = [
-        city for city in game.selected_map.cities if city.color != DARK_GREEN and city.offices
-    ]
-    rng.shuffle(candidates)
-    selected = candidates[:target]
-    if len(selected) != target:
-        return False
-    return all(_fill_city(city, game.players, pools, rng) for city in selected)
-
-
-def _board_candidates(game, player, pools):
-    candidates = []
-    for route in game.selected_map.routes:
-        for post in route.posts:
-            for shape in ("square", "circle"):
-                if pools[player][shape] and post.can_be_claimed_by(shape):
-                    candidates.append(("post", post, shape))
-
+def _office_choices(game, player, pools):
+    choices = []
     for city in game.selected_map.cities:
         if city.color == DARK_GREEN:
             continue
         open_offices = [office for office in city.offices if office.controller is None]
-        # Never accidentally complete another city while constructing random noise.
-        if len(open_offices) > 1:
-            office = open_offices[0]
-            if pools[player][office.shape] and _can_claim_office(player, office):
-                candidates.append(("office", office, office.shape))
-
-    prestige = game.selected_map.specialprestigepoints
-    if prestige is not None and pools[player]["circle"]:
-        for circle in prestige.circle_data:
-            if circle["owner"] is None and prestige.can_claim_prestige(player, circle["value"]):
-                candidates.append(("prestige", circle, "circle"))
-    return candidates
-
-
-def _place_random_board_pieces(game, pools, rng):
-    remaining = sum(sum(shapes.values()) for shapes in pools.values())
-    placements = rng.randint(remaining // 3, max(remaining // 3, remaining * 2 // 3))
-    players = list(game.players)
-    for step in range(placements):
-        player = players[step % len(players)]
-        candidates = _board_candidates(game, player, pools)
-        if not candidates:
-            alternatives = [
-                (other, candidate)
-                for other in players
-                for candidate in _board_candidates(game, other, pools)
-            ]
-            if not alternatives:
-                break
-            player, selected = rng.choice(alternatives)
-            candidates = [selected]
-        kind, target, shape = rng.choice(candidates)
-        if kind == "post":
-            target.claim(player, shape)
-        elif kind == "office":
-            _place_office(target, player, pools)
+        if len(open_offices) <= 1:
             continue
-        else:
-            target["owner"] = player
-            target["color"] = player.color
-        pools[player][shape] -= 1
+        office = open_offices[0]
+        if pools[player][office.shape] and _can_claim_office(player, office):
+            choices.append(office)
+    return choices
+
+
+def _prepare_balanced_development(game, pools, rng):
+    target = rng.randint(7, 9)
+    targets = {player: target for player in game.players}
+    completed = {player: 0 for player in game.players}
+    while any(completed[player] < targets[player] for player in game.players):
+        order = list(game.players)
+        rng.shuffle(order)
+        for player in order:
+            if completed[player] >= targets[player]:
+                continue
+            offices = _office_choices(game, player, pools)
+            upgrades = _upgrade_choices(player)
+            categories = []
+            if offices:
+                categories.append("office")
+            if upgrades:
+                categories.append("upgrade")
+            if not categories:
+                return None
+            if rng.choice(categories) == "office":
+                if not _place_office(rng.choice(offices), player, pools):
+                    return None
+            else:
+                _apply_upgrade(player, pools, rng.choice(upgrades))
+            completed[player] += 1
+    return targets
+
+
+def _fill_city_for_balanced_control(city, players, pools, control_counts, office_counts, rng):
+    for office in city.offices:
+        if office.controller is not None:
+            continue
+        candidates = list(players)
+        rng.shuffle(candidates)
+        candidates.sort(key=lambda player: (control_counts[player], office_counts[player]))
+        owner = next(
+            (
+                player
+                for player in candidates
+                if _prepare_player_for_office(player, office, pools, rng)
+            ),
+            None,
+        )
+        if owner is None or not _place_office(office, owner, pools):
+            return False
+        office_counts[owner] += 1
+    controller = city.determine_controller()
+    if controller is not None:
+        control_counts[controller] += 1
+    return True
+
+
+def _route_shapes(route, pool, required_shape=None):
+    choices = [
+        (post.required_shape,) if post.required_shape else ("square", "circle")
+        for post in route.posts
+    ]
+    for shapes in product(*choices):
+        if required_shape is not None and required_shape not in shapes:
+            continue
+        if all(shapes.count(shape) <= pool[shape] for shape in ("square", "circle")):
+            return shapes
+    return None
+
+
+def _prepare_completed_cities(game, pools, rng):
+    target = game.selected_map.max_full_cities - 1
+    trigger_cities = [
+        city
+        for city in game.selected_map.cities
+        if city.color != DARK_GREEN and city.offices and not city.city_is_full()
+    ]
+    rng.shuffle(trigger_cities)
+    trigger_city = trigger_cities[0]
+    candidates = [city for city in trigger_cities[1:] if city is not trigger_city]
+    selected = candidates[:target]
+    if len(selected) != target:
+        return None
+    control_counts = {
+        player: sum(city.determine_controller() is player for city in game.selected_map.cities)
+        for player in game.players
+    }
+    office_counts = {
+        player: sum(
+            office.controller is player
+            for city in game.selected_map.cities
+            for office in city.offices
+        )
+        for player in game.players
+    }
+    for city in selected:
+        if not _fill_city_for_balanced_control(
+            city, game.players, pools, control_counts, office_counts, rng
+        ):
+            return None
+    open_offices = [office for office in trigger_city.offices if office.controller is None]
+    for office in open_offices[:-1]:
+        candidates = list(game.players)
+        rng.shuffle(candidates)
+        candidates.sort(key=lambda player: (control_counts[player], office_counts[player]))
+        owner = next(
+            (
+                player
+                for player in candidates
+                if _prepare_player_for_office(player, office, pools, rng)
+            ),
+            None,
+        )
+        if owner is None or not _place_office(office, owner, pools):
+            return None
+        office_counts[owner] += 1
+
+    office = open_offices[-1]
+    routes = list(trigger_city.routes)
+    rng.shuffle(routes)
+    players = list(game.players)
+    rng.shuffle(players)
+    for player in players:
+        if not _can_claim_office(player, office):
+            continue
+        for route in routes:
+            shapes = _route_shapes(route, pools[player], office.shape)
+            if shapes is None:
+                continue
+            for post, shape in zip(route.posts, shapes):
+                post.owner = player
+                post.owner_piece_shape = shape
+                pools[player][shape] -= 1
+            return player
+    return None
+
+
+def _prepare_bonus_marker_route(game, pools, rng):
+    routes = [route for route in game.selected_map.routes if route.bonus_marker is not None]
+    rng.shuffle(routes)
+    players = list(game.players)
+    rng.shuffle(players)
+    for player in players:
+        for route in routes:
+            shapes = _route_shapes(route, pools[player])
+            if shapes is None:
+                continue
+            for post, shape in zip(route.posts, shapes):
+                post.owner = player
+                post.owner_piece_shape = shape
+                pools[player][shape] -= 1
+            return player
+    return None
+
+
+def _prepare_score_route(game, pools, rng):
+    routes = [
+        route
+        for route in game.selected_map.routes
+        if route.bonus_marker is None
+        and route.permanent_bonus_marker is None
+        and all(city.color != DARK_GREEN and city.offices for city in route.cities)
+        and all(all(office.controller is None for office in city.offices) for city in route.cities)
+    ]
+    rng.shuffle(routes)
+    players = list(game.players)
+    rng.shuffle(players)
+    projected_scores = dict(zip(game.players, game.projected_scores()))
+    players.sort(key=projected_scores.get)
+    for player in players:
+        for route in routes:
+            endpoint_offices = [city.offices[0] for city in route.cities]
+            if not all(_can_claim_office(player, office) for office in endpoint_offices):
+                continue
+            required = {
+                shape: sum(office.shape == shape for office in endpoint_offices)
+                for shape in ("square", "circle")
+            }
+            remaining = {
+                shape: pools[player][shape] - required[shape] for shape in ("square", "circle")
+            }
+            if min(remaining.values()) < 0:
+                continue
+            shapes = _route_shapes(route, remaining)
+            if shapes is None:
+                continue
+            for office in endpoint_offices:
+                _place_office(office, player, pools)
+            for post, shape in zip(route.posts, shapes):
+                post.owner = player
+                post.owner_piece_shape = shape
+                pools[player][shape] -= 1
+
+            for other in game.players:
+                if other is player or any(
+                    office.controller is other
+                    for city in game.selected_map.cities
+                    for office in city.offices
+                ):
+                    continue
+                offices = [
+                    city.offices[0]
+                    for city in game.selected_map.cities
+                    if city not in route.cities
+                    and city.offices
+                    and city.offices[0].controller is None
+                    and pools[other][city.offices[0].shape]
+                    and _can_claim_office(other, city.offices[0])
+                ]
+                rng.shuffle(offices)
+                if not offices or not _place_office(offices[0], other, pools):
+                    return None
+            return player
+    return None
 
 
 def _divide_remaining_supply(players, pools, rng):
@@ -182,14 +386,23 @@ def _divide_remaining_supply(players, pools, rng):
             setattr(player, f"general_stock_{shape}s", count - personal)
 
 
-def _configure_bonus_marker_scenario(game, rng):
-    keep = rng.choice((1, 2))
-    while len(game.selected_map.bonus_marker_pool) > keep:
+def _give_marker_to_player(game, marker, rng):
+    owner = rng.choice(game.players)
+    marker.owner = owner
+    destination = rng.choice((owner.bonus_markers, owner.used_bonus_markers))
+    destination.append(marker)
+
+
+def _configure_bonus_marker_scenario(game, rng, prepared_player, immediate_finish):
+    while game.selected_map.bonus_marker_pool:
         marker = BonusMarker(game.selected_map.bonus_marker_pool.pop())
-        owner = rng.choice(game.players)
-        marker.owner = owner
-        destination = rng.choice((owner.bonus_markers, owner.used_bonus_markers))
-        destination.append(marker)
+        _give_marker_to_player(game, marker, rng)
+    if not immediate_finish:
+        for route in game.selected_map.routes:
+            if route.bonus_marker is not None and not route.is_controlled_by(prepared_player):
+                marker = route.bonus_marker
+                route.bonus_marker = None
+                _give_marker_to_player(game, marker, rng)
 
 
 def _assign_some_emperor_tiles(game, rng):
@@ -229,26 +442,58 @@ def _build_once(request, attempt_seed):
         seed=attempt_seed,
     )
     game = config.create_game()
-    pools = {player: _configure_player(player, rng) for player in game.players}
+    pools = {player: _configure_player(player) for player in game.players}
+    development_targets = _prepare_balanced_development(game, pools, rng)
+    if development_targets is None:
+        return None
 
-    if scenario is EndGameScenario.NEAR_COMPLETED_CITIES:
-        if not _prepare_completed_cities(game, pools, rng):
+    prepared_current_player = None
+    if scenario is EndGameScenario.NEAR_SCORE:
+        prepared_current_player = _prepare_score_route(game, pools, rng)
+        if prepared_current_player is None:
             return None
-    _place_random_board_pieces(game, pools, rng)
+    elif scenario is EndGameScenario.NEAR_COMPLETED_CITIES:
+        prepared_current_player = _prepare_completed_cities(game, pools, rng)
+        if prepared_current_player is None:
+            return None
+    elif scenario is EndGameScenario.NEAR_BONUS_MARKERS:
+        prepared_current_player = _prepare_bonus_marker_route(game, pools, rng)
+        if prepared_current_player is None:
+            return None
     _divide_remaining_supply(game.players, pools, rng)
 
+    applied_score_range = request.score_range
     if scenario is EndGameScenario.NEAR_SCORE:
+        applied_score_range = (17, 18)
         for player in game.players:
-            player.score = rng.randint(17, 19)
+            player.score = rng.choice(applied_score_range)
+        prepared_current_player.score = 18
+    elif request.score_range is not None:
+        minimum_score, maximum_score = request.score_range
+        if minimum_score < 0 or maximum_score < minimum_score or maximum_score > 19:
+            raise ValueError("score range must be between 0 and 19")
+        base_score = rng.randint(minimum_score, maximum_score)
+        highest_score = min(base_score + 1, maximum_score)
+        for player in game.players:
+            player.score = rng.randint(base_score, highest_score)
     else:
+        base_score = rng.randint(6, 18)
         for player in game.players:
-            player.score = rng.randint(6, 19)
+            player.score = rng.randint(base_score, base_score + 1)
     if scenario is EndGameScenario.NEAR_BONUS_MARKERS:
-        _configure_bonus_marker_scenario(game, rng)
+        _configure_bonus_marker_scenario(
+            game, rng, prepared_current_player, request.immediate_finish
+        )
 
     _assign_some_emperor_tiles(game, rng)
     game.current_full_cities_count = sum(city.city_is_full() for city in game.selected_map.cities)
-    game.current_player_index = rng.randrange(player_count)
+    if prepared_current_player is None:
+        game.current_player_index = rng.randrange(player_count)
+    else:
+        prepared_index = game.players.index(prepared_current_player)
+        game.current_player_index = (
+            prepared_index if request.immediate_finish else (prepared_index + 1) % player_count
+        )
     game.current_player = game.players[game.current_player_index]
     game.active_player = game.current_player_index
     game.round_number = rng.randint(8, 20)
@@ -262,6 +507,9 @@ def _build_once(request, attempt_seed):
     if map_num == 3:
         game.current_player.refresh_map3_priv_actions(game)
 
+    projected_scores = game.projected_scores()
+    if max(projected_scores) - min(projected_scores) > 3:
+        return None
     validate_game(game)
     validate_loaded_game(game)
     if game.game_end or not game.get_legal_actions():
@@ -273,10 +521,17 @@ def _build_once(request, attempt_seed):
         validate_action_state(game, quiet=True)
     except ActionValidationError:
         return None
-    return GeneratedState(game, scenario, request.seed, attempt_seed)
+    return GeneratedState(
+        game,
+        scenario,
+        request.seed,
+        attempt_seed,
+        applied_score_range,
+        request.immediate_finish,
+    )
 
 
-def generate_state(request: GenerationRequest, *, max_attempts: int = 100) -> GeneratedState:
+def generate_state(request: GenerationRequest, *, max_attempts: int = 2_000) -> GeneratedState:
     """Create one deterministic, validated state matching ``request``."""
     if max_attempts < 1:
         raise ValueError("max_attempts must be positive")
@@ -284,7 +539,7 @@ def generate_state(request: GenerationRequest, *, max_attempts: int = 100) -> Ge
         generated = _build_once(request, request.seed + attempt * 1_000_003)
         if generated is not None:
             return generated
-    raise RuntimeError(f"Could not generate a valid state after {max_attempts} attempts")
+    raise StateGenerationError(f"Could not generate a valid state after {max_attempts} attempts")
 
 
 def _state_id(generated):
@@ -298,6 +553,8 @@ def _state_id(generated):
         "mission_cards": generated.game.use_mission_cards,
         "emperors_favour": generated.game.use_emperors_favour,
         "promo_bonus_markers": generated.game.configuration.use_promo_markers,
+        "score_range": generated.score_range,
+        "immediate_finish": generated.immediate_finish,
     }
     digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
     return f"state-{digest}"
@@ -325,6 +582,10 @@ def save_generated_state(generated: GeneratedState, output_directory=DEFAULT_OUT
         "map_num": game.map_num,
         "player_count": len(game.players),
         "scores": [player.score for player in game.players],
+        "score_range": generated.score_range,
+        "starting_position": (
+            "immediate_finish" if generated.immediate_finish else "one_round_before"
+        ),
         "current_player_index": game.current_player_index,
         "bonus_markers_remaining": len(game.selected_map.bonus_marker_pool),
         "completed_cities": game.current_full_cities_count,

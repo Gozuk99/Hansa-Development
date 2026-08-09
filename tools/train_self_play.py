@@ -11,7 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from training.self_play import SelfPlayTrainer, TrainingConfig  # noqa: E402
+from training.self_play import (  # noqa: E402
+    DEFAULT_LEARNING_RATE,
+    SelfPlayTrainer,
+    TrainingConfig,
+)
 
 
 DEFAULT_STATE = ROOT / "training_data/5p-map2_YELLOW_19_points_1_turn_from_winning.hansa"
@@ -103,7 +107,9 @@ def main():
     else:
         trainer = SelfPlayTrainer(
             config=TrainingConfig(
-                learning_rate=(0.0001 if args.learning_rate is None else args.learning_rate),
+                learning_rate=(
+                    DEFAULT_LEARNING_RATE if args.learning_rate is None else args.learning_rate
+                ),
                 max_actions=500 if args.max_actions is None else args.max_actions,
                 disable_move_action=not bool(args.allow_move_action),
                 seed=124 if args.seed is None else args.seed,

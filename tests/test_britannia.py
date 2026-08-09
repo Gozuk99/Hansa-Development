@@ -2,7 +2,7 @@ import contextlib
 import io
 import unittest
 
-from game.action_resolvers import resolve_income_interaction
+from game.action_resolvers import resolve_income_interaction, resolve_post_interaction
 from game.action_legality import (
     mask_income_actions,
     mask_post_action,
@@ -98,6 +98,21 @@ class BritanniaTests(unittest.TestCase):
         self.assertEqual(player.general_stock_squares, 0)
         self.assertEqual(len(player.holding_pieces), 2)
         self.assertTrue(game.waiting_for_place2_in_scotland_or_wales)
+
+        targets = [
+            (route, post)
+            for route in game.selected_map.routes
+            if route.region in ("Scotland", "Wales")
+            for post in route.posts
+            if not post.is_owned() and post.required_shape in (None, "square")
+        ]
+        all_posts = [post for route in game.selected_map.routes for post in route.posts]
+        for route, post in targets[:2]:
+            resolve_post_interaction(game, all_posts.index(post), "square")
+
+        self.assertFalse(game.waiting_for_place2_in_scotland_or_wales)
+        self.assertEqual(player.holding_pieces, [])
+        self.assertTrue(all(post.owner == player for _route, post in targets[:2]))
 
     def test_place_two_cannot_skip_a_higher_priority_source_for_shape(self):
         game = self.game()

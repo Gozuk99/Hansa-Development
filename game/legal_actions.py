@@ -73,6 +73,9 @@ def _route_actions(game):
 
 def _tile_and_marker_actions(game):
     tile_choices = _enabled(mask_buy_tile(game))
+    if game.turn_phase == TurnPhase.INCOME_FAVOUR_RESPONSE:
+        yield from (TileInteraction(local) for local in tile_choices)
+        return
     if game.turn_phase == TurnPhase.BUY_TILE_PAYMENT:
         interaction = BonusMarkerInteraction if game.tile_to_buy is not None else TileInteraction
         yield from (interaction(local) for local in tile_choices)

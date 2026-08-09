@@ -1,0 +1,257 @@
+[
+  {
+    "name": "balanced_map1_3p",
+    "map_num": 1,
+    "player_count": 3,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 1,
+    "save_file": "balanced_map1_3p\\near_score\\map_1\\3_players\\state-281862ac0f97764e.hansa",
+    "metadata_file": "balanced_map1_3p\\near_score\\map_1\\3_players\\state-281862ac0f97764e.json"
+  },
+  {
+    "name": "balanced_map1_4p",
+    "map_num": 1,
+    "player_count": 4,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 2,
+    "save_file": "balanced_map1_4p\\near_score\\map_1\\4_players\\state-fa9375a864d65776.hansa",
+    "metadata_file": "balanced_map1_4p\\near_score\\map_1\\4_players\\state-fa9375a864d65776.json"
+  },
+  {
+    "name": "balanced_map1_5p",
+    "map_num": 1,
+    "player_count": 5,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 3,
+    "save_file": "balanced_map1_5p\\near_score\\map_1\\5_players\\state-66fc500481ac64f8.hansa",
+    "metadata_file": "balanced_map1_5p\\near_score\\map_1\\5_players\\state-66fc500481ac64f8.json"
+  },
+  {
+    "name": "balanced_map2_3p",
+    "map_num": 2,
+    "player_count": 3,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 4,
+    "save_file": "balanced_map2_3p\\near_score\\map_2\\3_players\\state-5da22a652a8e20d3.hansa",
+    "metadata_file": "balanced_map2_3p\\near_score\\map_2\\3_players\\state-5da22a652a8e20d3.json"
+  },
+  {
+    "name": "balanced_map2_4p",
+    "map_num": 2,
+    "player_count": 4,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 5,
+    "save_file": "balanced_map2_4p\\near_score\\map_2\\4_players\\state-e7c12e8c15eeb61c.hansa",
+    "metadata_file": "balanced_map2_4p\\near_score\\map_2\\4_players\\state-e7c12e8c15eeb61c.json"
+  },
+  {
+    "name": "balanced_map2_5p",
+    "map_num": 2,
+    "player_count": 5,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 6,
+    "save_file": "balanced_map2_5p\\near_score\\map_2\\5_players\\state-cc043b981b65ec64.hansa",
+    "metadata_file": "balanced_map2_5p\\near_score\\map_2\\5_players\\state-cc043b981b65ec64.json"
+  },
+  {
+    "name": "balanced_map3_3p",
+    "map_num": 3,
+    "player_count": 3,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 7,
+    "save_file": "balanced_map3_3p\\near_score\\map_3\\3_players\\state-b3b36770e489d297.hansa",
+    "metadata_file": "balanced_map3_3p\\near_score\\map_3\\3_players\\state-b3b36770e489d297.json"
+  },
+  {
+    "name": "balanced_map3_4p",
+    "map_num": 3,
+    "player_count": 4,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 8,
+    "save_file": "balanced_map3_4p\\near_score\\map_3\\4_players\\state-ce5811984dbb2234.hansa",
+    "metadata_file": "balanced_map3_4p\\near_score\\map_3\\4_players\\state-ce5811984dbb2234.json"
+  },
+  {
+    "name": "balanced_map3_5p",
+    "map_num": 3,
+    "player_count": 5,
+    "scenario": "near_score",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 9,
+    "save_file": "balanced_map3_5p\\near_score\\map_3\\5_players\\state-b649cd0e2b9ab14b.hansa",
+    "metadata_file": "balanced_map3_5p\\near_score\\map_3\\5_players\\state-b649cd0e2b9ab14b.json"
+  },
+  {
+    "name": "missions_map1_3p",
+    "map_num": 1,
+    "player_count": 3,
+    "scenario": "near_score",
+    "score_range": [
+      10,
+      17
+    ],
+    "mission_cards": true,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": true,
+    "seed": 10,
+    "save_file": "missions_map1_3p\\near_score\\map_1\\3_players\\state-6db12ff4d818208e.hansa",
+    "metadata_file": "missions_map1_3p\\near_score\\map_1\\3_players\\state-6db12ff4d818208e.json"
+  },
+  {
+    "name": "promo_markers_map2_4p",
+    "map_num": 2,
+    "player_count": 4,
+    "scenario": "near_bonus_markers",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "immediate_finish": true,
+    "seed": 11,
+    "save_file": "promo_markers_map2_4p\\near_bonus_markers\\map_2\\4_players\\state-3b3890c98e4e3ad8.hansa",
+    "metadata_file": "promo_markers_map2_4p\\near_bonus_markers\\map_2\\4_players\\state-3b3890c98e4e3ad8.json"
+  },
+  {
+    "name": "emperors_favour_map3_5p",
+    "map_num": 3,
+    "player_count": 5,
+    "scenario": "near_completed_cities",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "immediate_finish": true,
+    "seed": 12,
+    "save_file": "emperors_favour_map3_5p\\near_completed_cities\\map_3\\5_players\\state-50e382fe0a73f43d.hansa",
+    "metadata_file": "emperors_favour_map3_5p\\near_completed_cities\\map_3\\5_players\\state-50e382fe0a73f43d.json"
+  },
+  {
+    "name": "all_options_map1_5p",
+    "map_num": 1,
+    "player_count": 5,
+    "scenario": "near_score",
+    "score_range": [
+      10,
+      17
+    ],
+    "mission_cards": true,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "immediate_finish": false,
+    "seed": 13,
+    "save_file": "all_options_map1_5p\\near_score\\map_1\\5_players\\state-3eae4d56a13fbd38.hansa",
+    "metadata_file": "all_options_map1_5p\\near_score\\map_1\\5_players\\state-3eae4d56a13fbd38.json"
+  },
+  {
+    "name": "city_limit_map2_5p",
+    "map_num": 2,
+    "player_count": 5,
+    "scenario": "near_completed_cities",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "seed": 14,
+    "save_file": "city_limit_map2_5p\\near_completed_cities\\map_2\\5_players\\state-c8d96a18e0555b92.hansa",
+    "metadata_file": "city_limit_map2_5p\\near_completed_cities\\map_2\\5_players\\state-c8d96a18e0555b92.json"
+  },
+  {
+    "name": "marker_limit_map3_4p",
+    "map_num": 3,
+    "player_count": 4,
+    "scenario": "near_bonus_markers",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "immediate_finish": false,
+    "seed": 15,
+    "save_file": "marker_limit_map3_4p\\near_bonus_markers\\map_3\\4_players\\state-8e99a889669aacdd.hansa",
+    "metadata_file": "marker_limit_map3_4p\\near_bonus_markers\\map_3\\4_players\\state-8e99a889669aacdd.json"
+  }
+]

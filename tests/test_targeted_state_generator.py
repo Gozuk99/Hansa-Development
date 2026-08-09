@@ -7,15 +7,81 @@ from game.action_validation import state_fingerprint, validate_action_state
 from game.invariants import validate_game
 from game.loaded_state_validation import validate_loaded_game
 from game.persistence import load_game
+from game.structured_actions import RouteInteraction
+from map_data.constants import (
+    BANK_MAX_VALUES,
+    BOOK_OF_KNOWLEDGE_MAX_VALUES,
+    PRIVILEGE_COLORS,
+)
 from training.targeted_state_generator import (
     EndGameScenario,
     GenerationRequest,
     generate_state,
     save_generated_state,
 )
+from tools.generate_training_states import EVALUATION_SPECS, parse_args
 
 
 class TargetedStateGeneratorTests(unittest.TestCase):
+    def test_base_development_is_balanced_and_offices_are_legal(self):
+        generated = generate_state(
+            GenerationRequest(
+                seed=97531,
+                scenario=EndGameScenario.NEAR_BONUS_MARKERS,
+                map_num=2,
+                player_count=5,
+            )
+        )
+        game = generated.game
+
+        for player in game.players:
+            upgrades = (
+                player.keys_index
+                + PRIVILEGE_COLORS.index(player.privilege)
+                + BOOK_OF_KNOWLEDGE_MAX_VALUES.index(player.book)
+                + player.actions_index
+                + BANK_MAX_VALUES.index(player.bank)
+            )
+            offices = sum(
+                office.controller is player
+                for city in game.selected_map.cities
+                for office in city.offices
+            )
+            self.assertIn(upgrades + offices, (7, 8, 9))
+
+        for city in game.selected_map.cities:
+            found_open = False
+            for office in city.offices:
+                if office.controller is None:
+                    found_open = True
+                    continue
+                self.assertFalse(found_open)
+                self.assertGreaterEqual(
+                    PRIVILEGE_COLORS.index(office.controller.privilege),
+                    PRIVILEGE_COLORS.index(office.printed_privilege or "WHITE"),
+                )
+
+    def test_evaluation_suite_covers_maps_players_endings_and_optional_rules(self):
+        self.assertEqual(len(EVALUATION_SPECS), 15)
+        balanced = {
+            (spec.map_num, spec.player_count)
+            for spec in EVALUATION_SPECS
+            if spec.name.startswith("balanced_")
+        }
+        self.assertEqual(
+            balanced,
+            {(map_num, players) for map_num in (1, 2, 3) for players in (3, 4, 5)},
+        )
+        self.assertTrue(any(spec.mission_cards for spec in EVALUATION_SPECS))
+        self.assertTrue(any(spec.emperors_favour for spec in EVALUATION_SPECS))
+        self.assertTrue(any(spec.promo_markers for spec in EVALUATION_SPECS))
+        self.assertEqual({spec.scenario for spec in EVALUATION_SPECS}, set(EndGameScenario))
+        self.assertEqual(sum(spec.immediate_finish for spec in EVALUATION_SPECS), 3)
+        self.assertTrue(
+            all(not spec.mission_cards or spec.map_num == 1 for spec in EVALUATION_SPECS)
+        )
+        self.assertTrue(parse_args(["--eval"]).eval)
+
     def test_every_targeted_scenario_generates_a_playable_state(self):
         for scenario_number, scenario in enumerate(EndGameScenario):
             for map_num in (1, 2, 3):
@@ -31,6 +97,7 @@ class TargetedStateGeneratorTests(unittest.TestCase):
                                 scenario=scenario,
                                 map_num=map_num,
                                 player_count=player_count,
+                                immediate_finish=True,
                             )
                         )
                         game = generated.game
@@ -39,6 +106,8 @@ class TargetedStateGeneratorTests(unittest.TestCase):
                         self.assertTrue(validate_loaded_game(game))
                         self.assertFalse(game.game_end)
                         self.assertTrue(game.get_legal_actions())
+                        projected_scores = game.projected_scores()
+                        self.assertLessEqual(max(projected_scores) - min(projected_scores), 3)
                         self.assertGreater(
                             validate_action_state(game, quiet=True).legal_action_count, 0
                         )
@@ -55,14 +124,85 @@ class TargetedStateGeneratorTests(unittest.TestCase):
 
                         if scenario is EndGameScenario.NEAR_SCORE:
                             self.assertTrue(
-                                all(17 <= player.score <= 19 for player in game.players)
+                                all(player.score in (17, 18) for player in game.players)
                             )
+                            self.assertEqual(game.current_player.score, 18)
+                            self.assertTrue(
+                                all(
+                                    any(
+                                        office.controller is player
+                                        for city in game.selected_map.cities
+                                        for office in city.offices
+                                    )
+                                    for player in game.players
+                                )
+                            )
+                            scoring_routes = [
+                                route_index
+                                for route_index, route in enumerate(game.selected_map.routes)
+                                if route.is_controlled_by(game.current_player)
+                                and all(
+                                    city.determine_controller() is game.current_player
+                                    for city in route.cities
+                                )
+                            ]
+                            self.assertTrue(scoring_routes)
+                            claim = RouteInteraction(scoring_routes[0], 0)
+                            self.assertIn(claim, game.get_legal_actions())
+                            game.apply_structured_action(claim)
+                            self.assertTrue(game.game_end)
+                            self.assertGreaterEqual(game.current_player.score, 20)
                         elif scenario is EndGameScenario.NEAR_BONUS_MARKERS:
-                            self.assertIn(len(game.selected_map.bonus_marker_pool), (1, 2))
+                            scores = [player.score for player in game.players]
+                            self.assertLessEqual(max(scores) - min(scores), 1)
+                            self.assertFalse(game.selected_map.bonus_marker_pool)
+                            marker_routes = [
+                                (route_index, route)
+                                for route_index, route in enumerate(game.selected_map.routes)
+                                if route.bonus_marker is not None
+                                and route.is_controlled_by(game.current_player)
+                            ]
+                            self.assertTrue(marker_routes)
+                            route_index, _route = marker_routes[0]
+                            claim = RouteInteraction(route_index, 0)
+                            self.assertIn(claim, game.get_legal_actions())
+                            game.apply_structured_action(claim)
+                            self.assertTrue(game.bonus_pool_exhausted_during_claim)
+                            self.assertTrue(game.game_end)
                         else:
+                            scores = [player.score for player in game.players]
+                            self.assertLessEqual(max(scores) - min(scores), 1)
                             self.assertEqual(
                                 game.current_full_cities_count,
                                 game.selected_map.max_full_cities - 1,
+                            )
+                            controlled_routes = [
+                                route
+                                for route in game.selected_map.routes
+                                if route.is_controlled_by(game.current_player)
+                            ]
+                            self.assertTrue(controlled_routes)
+                            office_actions = [
+                                action
+                                for action in game.get_legal_actions()
+                                if isinstance(action, RouteInteraction)
+                                and action.interaction_slot in (1, 2)
+                                and sum(
+                                    office.controller is None
+                                    for office in game.selected_map.routes[action.route_slot]
+                                    .cities[action.interaction_slot - 1]
+                                    .offices
+                                )
+                                == 1
+                            ]
+                            self.assertTrue(office_actions)
+                            game.apply_structured_action(office_actions[0])
+                            self.assertEqual(
+                                game.current_full_cities_count,
+                                game.selected_map.max_full_cities,
+                            )
+                            self.assertTrue(
+                                game.game_end or game.game_end_pending_immediate_resolution
                             )
 
     def test_generation_is_deterministic(self):
@@ -81,6 +221,50 @@ class TargetedStateGeneratorTests(unittest.TestCase):
 
         self.assertEqual(first.attempt_seed, second.attempt_seed)
         self.assertEqual(state_fingerprint(first.game), state_fingerprint(second.game))
+
+    def test_default_position_gives_every_other_player_a_turn_before_prepared_player(self):
+        generated = generate_state(
+            GenerationRequest(
+                seed=2468,
+                scenario=EndGameScenario.NEAR_SCORE,
+                map_num=2,
+                player_count=5,
+            )
+        )
+        game = generated.game
+        prepared_player = next(
+            player
+            for player in game.players
+            if any(
+                route.is_controlled_by(player)
+                and all(city.determine_controller() is player for city in route.cities)
+                for route in game.selected_map.routes
+            )
+        )
+
+        self.assertFalse(generated.immediate_finish)
+        self.assertEqual(
+            game.current_player_index,
+            (game.players.index(prepared_player) + 1) % len(game.players),
+        )
+
+    def test_one_round_bonus_marker_position_has_only_the_prepared_marker(self):
+        generated = generate_state(
+            GenerationRequest(
+                seed=1357,
+                scenario=EndGameScenario.NEAR_BONUS_MARKERS,
+                map_num=1,
+                player_count=4,
+            )
+        )
+        marker_routes = [
+            route for route in generated.game.selected_map.routes if route.bonus_marker is not None
+        ]
+
+        self.assertEqual(len(marker_routes), 1)
+        owners = {post.owner for post in marker_routes[0].posts}
+        self.assertEqual(len(owners), 1)
+        self.assertNotIn(None, owners)
 
     def test_saved_state_is_organized_and_round_trips(self):
         generated = generate_state(
@@ -143,8 +327,44 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         )
         game = generated.game
 
-        self.assertIs(game.OneActionOwner, game.current_player)
-        self.assertEqual(game.current_player.actions_remaining, game.current_player.actions + 1)
+        expected_extra_action = int(game.OneActionOwner is game.current_player)
+        self.assertEqual(
+            game.current_player.actions_remaining,
+            game.current_player.actions + expected_extra_action,
+        )
+
+    def test_near_score_uses_only_seventeen_or_eighteen_points(self):
+        generated = generate_state(
+            GenerationRequest(
+                seed=81,
+                scenario=EndGameScenario.NEAR_SCORE,
+                score_range=(8, 14),
+                immediate_finish=True,
+            )
+        )
+
+        self.assertTrue(all(player.score in (17, 18) for player in generated.game.players))
+        self.assertEqual(generated.score_range, (17, 18))
+
+    def test_near_score_state_prepares_only_one_completed_route(self):
+        generated = generate_state(
+            GenerationRequest(
+                seed=2468,
+                scenario=EndGameScenario.NEAR_SCORE,
+                map_num=2,
+                player_count=5,
+                score_range=(10, 17),
+                immediate_finish=True,
+            )
+        )
+
+        occupied_routes = [
+            route
+            for route in generated.game.selected_map.routes
+            if any(post.owner is not None for post in route.posts)
+        ]
+        self.assertEqual(len(occupied_routes), 1)
+        self.assertTrue(occupied_routes[0].is_controlled_by(generated.game.current_player))
 
 
 if __name__ == "__main__":

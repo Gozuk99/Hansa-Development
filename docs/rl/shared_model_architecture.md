@@ -30,6 +30,7 @@ The engine owns legality through `Game.get_legal_actions()`. The central codec m
 - the training legal-action mask;
 - the selected 768-schema action;
 - the acting seat;
+- the game turn containing the decision;
 - every player's projected-score delta caused by the interaction;
 - the acting player's immediate reward; and
 - the acting player's discounted reward-to-go.

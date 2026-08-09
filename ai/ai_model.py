@@ -1,6 +1,7 @@
 """Shared inference model for Hansa Teutonica."""
 
 from pathlib import Path
+import tempfile
 
 import torch
 import torch.nn as nn
@@ -60,12 +61,21 @@ class HansaNN(nn.Module):
 
     def save_model(self, model_file=SHARED_MODEL_FILE) -> Path:
         model_path = Path(model_file)
-        torch.save(
-            {
-                "state_dict": self.state_dict(),
-                **action_schema_metadata(),
-                **observation_schema_metadata(),
-            },
-            model_path,
-        )
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=model_path.parent, delete=False) as output:
+                temporary = Path(output.name)
+            torch.save(
+                {
+                    "state_dict": self.state_dict(),
+                    **action_schema_metadata(),
+                    **observation_schema_metadata(),
+                },
+                temporary,
+            )
+            temporary.replace(model_path)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
         return model_path
