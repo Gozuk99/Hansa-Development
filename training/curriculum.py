@@ -308,6 +308,26 @@ class CurriculumRunner:
         rng = random.Random(seed)
         map_num = rng.choice((1, 2, 3)) if map_num is None else map_num
         player_count = rng.choice((3, 4, 5)) if player_count is None else player_count
+        scenario = (
+            None
+            if stage.full_game
+            else tuple(EndGameScenario)[self.game_number % len(EndGameScenario)]
+        )
+        if scenario in (
+            EndGameScenario.BRITANNIA_WALES,
+            EndGameScenario.BRITANNIA_SCOTLAND,
+            EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+        ):
+            map_num = 3
+        if (
+            scenario
+            in (
+                EndGameScenario.BRITANNIA_SCOTLAND,
+                EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+            )
+            and player_count == 3
+        ):
+            player_count = rng.choice((4, 5))
         pending = StateDescriptor(
             directory / f"pending-{seed}.hansa", None, map_num, player_count, seed
         )
@@ -327,7 +347,6 @@ class CurriculumRunner:
             self._latest_descriptor = descriptor
             return descriptor
 
-        scenario = tuple(EndGameScenario)[self.game_number % len(EndGameScenario)]
         immediate_finish = self.game_number % 10 == 0
         generated = generate_state(
             GenerationRequest(

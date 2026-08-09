@@ -1,0 +1,33 @@
+{
+  "generator_version": 8,
+  "state_id": "state-594f35fdcab69e1f",
+  "scenario": "near_score",
+  "seed": 13,
+  "attempt_seed": 45000148,
+  "map_num": 1,
+  "player_count": 5,
+  "scores": [
+    18,
+    18,
+    17,
+    17,
+    17
+  ],
+  "score_range": [
+    17,
+    18
+  ],
+  "starting_position": "one_round_before",
+  "target_variant": null,
+  "prepared_player_index": 1,
+  "prepared_route_full": null,
+  "current_player_index": 2,
+  "bonus_markers_remaining": 12,
+  "completed_cities": 0,
+  "options": {
+    "mission_cards": true,
+    "emperors_favour": true,
+    "promo_bonus_markers": true
+  },
+  "save_file": "state-594f35fdcab69e1f.hansa"
+}

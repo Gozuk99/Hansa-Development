@@ -1,3 +1,4 @@
+import copy
 import json
 from pathlib import Path
 import tempfile
@@ -62,7 +63,7 @@ class TargetedStateGeneratorTests(unittest.TestCase):
                 )
 
     def test_evaluation_suite_covers_maps_players_endings_and_optional_rules(self):
-        self.assertEqual(len(EVALUATION_SPECS), 15)
+        self.assertEqual(len(EVALUATION_SPECS), 21)
         balanced = {
             (spec.map_num, spec.player_count)
             for spec in EVALUATION_SPECS
@@ -76,6 +77,14 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         self.assertTrue(any(spec.emperors_favour for spec in EVALUATION_SPECS))
         self.assertTrue(any(spec.promo_markers for spec in EVALUATION_SPECS))
         self.assertEqual({spec.scenario for spec in EVALUATION_SPECS}, set(EndGameScenario))
+        self.assertEqual(
+            {
+                spec.east_west_path_length
+                for spec in EVALUATION_SPECS
+                if spec.scenario is EndGameScenario.EAST_WEST
+            },
+            {"short", "medium", "long"},
+        )
         self.assertEqual(sum(spec.immediate_finish for spec in EVALUATION_SPECS), 3)
         self.assertTrue(
             all(not spec.mission_cards or spec.map_num == 1 for spec in EVALUATION_SPECS)
@@ -83,127 +92,217 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         self.assertTrue(parse_args(["--eval"]).eval)
 
     def test_every_targeted_scenario_generates_a_playable_state(self):
-        for scenario_number, scenario in enumerate(EndGameScenario):
-            for map_num in (1, 2, 3):
-                for player_count in (3, 4, 5):
-                    with self.subTest(
-                        scenario=scenario.value,
+        cases = (
+            [
+                (scenario, map_num, player_count)
+                for scenario in (
+                    EndGameScenario.NEAR_SCORE,
+                    EndGameScenario.NEAR_BONUS_MARKERS,
+                    EndGameScenario.NEAR_COMPLETED_CITIES,
+                    EndGameScenario.EAST_WEST,
+                )
+                for map_num in (1, 2, 3)
+                for player_count in (3, 4, 5)
+            ]
+            + [(EndGameScenario.BRITANNIA_WALES, 3, player_count) for player_count in (3, 4, 5)]
+            + [
+                (scenario, 3, player_count)
+                for scenario in (
+                    EndGameScenario.BRITANNIA_SCOTLAND,
+                    EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+                )
+                for player_count in (4, 5)
+            ]
+        )
+        for scenario_number, (scenario, map_num, player_count) in enumerate(cases):
+            with self.subTest(
+                scenario=scenario.value,
+                map_num=map_num,
+                player_count=player_count,
+            ):
+                generated = generate_state(
+                    GenerationRequest(
+                        seed=(10_000 + map_num * 100 + player_count * 10 + scenario_number),
+                        scenario=scenario,
                         map_num=map_num,
                         player_count=player_count,
-                    ):
-                        generated = generate_state(
-                            GenerationRequest(
-                                seed=(10_000 + map_num * 100 + player_count * 10 + scenario_number),
-                                scenario=scenario,
-                                map_num=map_num,
-                                player_count=player_count,
-                                immediate_finish=True,
+                        immediate_finish=True,
+                        prepared_route_full=(
+                            True
+                            if scenario
+                            in (
+                                EndGameScenario.EAST_WEST,
+                                EndGameScenario.BRITANNIA_WALES,
+                                EndGameScenario.BRITANNIA_SCOTLAND,
+                                EndGameScenario.BRITANNIA_ISLE_OF_MAN,
                             )
-                        )
-                        game = generated.game
+                            else None
+                        ),
+                    )
+                )
+                game = generated.game
 
-                        self.assertTrue(validate_game(game))
-                        self.assertTrue(validate_loaded_game(game))
-                        self.assertFalse(game.game_end)
-                        self.assertTrue(game.get_legal_actions())
-                        projected_scores = game.projected_scores()
-                        self.assertLessEqual(max(projected_scores) - min(projected_scores), 3)
-                        self.assertGreater(
-                            validate_action_state(game, quiet=True).legal_action_count, 0
-                        )
-                        self.assertEqual(
-                            game.turn_number,
-                            (game.round_number - 1) * player_count + game.current_player_index + 1,
-                        )
-                        self.assertTrue(
-                            all(
-                                player is game.current_player or player.actions_remaining == 0
-                                for player in game.players
-                            )
-                        )
+                self.assertTrue(validate_game(game))
+                self.assertTrue(validate_loaded_game(game))
+                self.assertFalse(game.game_end)
+                self.assertTrue(game.get_legal_actions())
+                projected_scores = game.projected_scores()
+                self.assertLessEqual(max(projected_scores) - min(projected_scores), 3)
+                self.assertGreater(validate_action_state(game, quiet=True).legal_action_count, 0)
+                self.assertEqual(
+                    game.turn_number,
+                    (game.round_number - 1) * player_count + game.current_player_index + 1,
+                )
+                self.assertTrue(
+                    all(
+                        player is game.current_player or player.actions_remaining == 0
+                        for player in game.players
+                    )
+                )
 
-                        if scenario is EndGameScenario.NEAR_SCORE:
-                            self.assertTrue(
-                                all(player.score in (17, 18) for player in game.players)
+                if scenario is EndGameScenario.NEAR_SCORE:
+                    self.assertTrue(all(player.score in (17, 18) for player in game.players))
+                    self.assertEqual(game.current_player.score, 18)
+                    self.assertTrue(
+                        all(
+                            any(
+                                office.controller is player
+                                for city in game.selected_map.cities
+                                for office in city.offices
                             )
-                            self.assertEqual(game.current_player.score, 18)
-                            self.assertTrue(
-                                all(
-                                    any(
-                                        office.controller is player
-                                        for city in game.selected_map.cities
-                                        for office in city.offices
-                                    )
-                                    for player in game.players
-                                )
-                            )
-                            scoring_routes = [
-                                route_index
-                                for route_index, route in enumerate(game.selected_map.routes)
-                                if route.is_controlled_by(game.current_player)
-                                and all(
-                                    city.determine_controller() is game.current_player
-                                    for city in route.cities
-                                )
-                            ]
-                            self.assertTrue(scoring_routes)
-                            claim = RouteInteraction(scoring_routes[0], 0)
-                            self.assertIn(claim, game.get_legal_actions())
-                            game.apply_structured_action(claim)
-                            self.assertTrue(game.game_end)
-                            self.assertGreaterEqual(game.current_player.score, 20)
-                        elif scenario is EndGameScenario.NEAR_BONUS_MARKERS:
-                            scores = [player.score for player in game.players]
-                            self.assertLessEqual(max(scores) - min(scores), 1)
-                            self.assertFalse(game.selected_map.bonus_marker_pool)
-                            marker_routes = [
-                                (route_index, route)
-                                for route_index, route in enumerate(game.selected_map.routes)
-                                if route.bonus_marker is not None
-                                and route.is_controlled_by(game.current_player)
-                            ]
-                            self.assertTrue(marker_routes)
-                            route_index, _route = marker_routes[0]
-                            claim = RouteInteraction(route_index, 0)
-                            self.assertIn(claim, game.get_legal_actions())
-                            game.apply_structured_action(claim)
-                            self.assertTrue(game.bonus_pool_exhausted_during_claim)
-                            self.assertTrue(game.game_end)
-                        else:
-                            scores = [player.score for player in game.players]
-                            self.assertLessEqual(max(scores) - min(scores), 1)
-                            self.assertEqual(
-                                game.current_full_cities_count,
-                                game.selected_map.max_full_cities - 1,
-                            )
-                            controlled_routes = [
-                                route
-                                for route in game.selected_map.routes
-                                if route.is_controlled_by(game.current_player)
-                            ]
-                            self.assertTrue(controlled_routes)
-                            office_actions = [
-                                action
-                                for action in game.get_legal_actions()
-                                if isinstance(action, RouteInteraction)
-                                and action.interaction_slot in (1, 2)
-                                and sum(
-                                    office.controller is None
-                                    for office in game.selected_map.routes[action.route_slot]
-                                    .cities[action.interaction_slot - 1]
-                                    .offices
-                                )
-                                == 1
-                            ]
-                            self.assertTrue(office_actions)
-                            game.apply_structured_action(office_actions[0])
-                            self.assertEqual(
-                                game.current_full_cities_count,
-                                game.selected_map.max_full_cities,
-                            )
-                            self.assertTrue(
-                                game.game_end or game.game_end_pending_immediate_resolution
-                            )
+                            for player in game.players
+                        )
+                    )
+                    scoring_routes = [
+                        route_index
+                        for route_index, route in enumerate(game.selected_map.routes)
+                        if route.is_controlled_by(game.current_player)
+                        and all(
+                            city.determine_controller() is game.current_player
+                            for city in route.cities
+                        )
+                    ]
+                    self.assertTrue(scoring_routes)
+                    claim = RouteInteraction(scoring_routes[0], 0)
+                    self.assertIn(claim, game.get_legal_actions())
+                    game.apply_structured_action(claim)
+                    self.assertTrue(game.game_end)
+                    self.assertGreaterEqual(game.current_player.score, 20)
+                elif scenario is EndGameScenario.NEAR_BONUS_MARKERS:
+                    scores = [player.score for player in game.players]
+                    self.assertLessEqual(max(scores) - min(scores), 1)
+                    self.assertFalse(game.selected_map.bonus_marker_pool)
+                    marker_routes = [
+                        (route_index, route)
+                        for route_index, route in enumerate(game.selected_map.routes)
+                        if route.bonus_marker is not None
+                        and route.is_controlled_by(game.current_player)
+                    ]
+                    self.assertTrue(marker_routes)
+                    route_index, _route = marker_routes[0]
+                    claim = RouteInteraction(route_index, 0)
+                    self.assertIn(claim, game.get_legal_actions())
+                    game.apply_structured_action(claim)
+                    self.assertTrue(game.bonus_pool_exhausted_during_claim)
+                    self.assertTrue(game.game_end)
+                elif scenario is EndGameScenario.NEAR_COMPLETED_CITIES:
+                    scores = [player.score for player in game.players]
+                    self.assertLessEqual(max(scores) - min(scores), 1)
+                    self.assertEqual(
+                        game.current_full_cities_count,
+                        game.selected_map.max_full_cities - 1,
+                    )
+                    controlled_routes = [
+                        route
+                        for route in game.selected_map.routes
+                        if route.is_controlled_by(game.current_player)
+                    ]
+                    self.assertTrue(controlled_routes)
+                    office_actions = [
+                        action
+                        for action in game.get_legal_actions()
+                        if isinstance(action, RouteInteraction)
+                        and action.interaction_slot in (1, 2)
+                        and sum(
+                            office.controller is None
+                            for office in game.selected_map.routes[action.route_slot]
+                            .cities[action.interaction_slot - 1]
+                            .offices
+                        )
+                        == 1
+                    ]
+                    self.assertTrue(office_actions)
+                    game.apply_structured_action(office_actions[0])
+                    self.assertEqual(
+                        game.current_full_cities_count,
+                        game.selected_map.max_full_cities,
+                    )
+                    self.assertTrue(game.game_end or game.game_end_pending_immediate_resolution)
+                elif scenario is EndGameScenario.EAST_WEST:
+                    self.assertFalse(
+                        game.has_east_west_connection(*game.selected_map.east_west_cities)
+                    )
+                    self.assertTrue(self._has_completing_east_west_office(game))
+                else:
+                    self.assertEqual(game.map_num, 3)
+                    before = game.calculate_britannia_region_points()
+                    self.assertTrue(
+                        self._has_improving_britannia_office(
+                            game,
+                            before,
+                            isle_only=(scenario is EndGameScenario.BRITANNIA_ISLE_OF_MAN),
+                        )
+                    )
+
+    @staticmethod
+    def _prepared_turn(game, player_index=None):
+        candidate = copy.deepcopy(game)
+        if player_index is None:
+            return candidate
+        for player in candidate.players:
+            player.actions_remaining = 0
+            player.ending_turn = False
+        candidate.current_player_index = player_index
+        candidate.current_player = candidate.players[player_index]
+        candidate.active_player = player_index
+        candidate.current_player.start_turn(
+            extra_actions=int(candidate.OneActionOwner is candidate.current_player)
+        )
+        if candidate.map_num == 3:
+            candidate.current_player.refresh_map3_priv_actions(candidate)
+        return candidate
+
+    @classmethod
+    def _has_completing_east_west_office(cls, game, player_index=None):
+        game = cls._prepared_turn(game, player_index)
+        player_index = game.current_player_index
+        for action in game.get_legal_actions():
+            if not isinstance(action, RouteInteraction) or action.interaction_slot not in (1, 2):
+                continue
+            candidate = copy.deepcopy(game)
+            candidate.apply_structured_action(action)
+            if candidate.players[player_index] in candidate.players_who_completed_east_west:
+                return True
+        return False
+
+    @classmethod
+    def _has_improving_britannia_office(cls, game, before, isle_only, player_index=None):
+        game = cls._prepared_turn(game, player_index)
+        before = game.calculate_britannia_region_points()
+        player_index = game.current_player_index
+        for action in game.get_legal_actions():
+            if not isinstance(action, RouteInteraction) or action.interaction_slot not in (1, 2):
+                continue
+            route = game.selected_map.routes[action.route_slot]
+            city = route.cities[action.interaction_slot - 1]
+            if isle_only and city.name != "IsleOfMan":
+                continue
+            candidate = copy.deepcopy(game)
+            candidate.apply_structured_action(action)
+            after = candidate.calculate_britannia_region_points()
+            if after[candidate.players[player_index]] > before[game.players[player_index]]:
+                return True
+        return False
 
     def test_generation_is_deterministic(self):
         request = GenerationRequest(

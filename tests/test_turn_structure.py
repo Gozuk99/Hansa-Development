@@ -150,6 +150,21 @@ class TurnStructureTests(unittest.TestCase):
         self.assertEqual(mask[:592].count_nonzero().item(), 0)
         self.assertEqual(mask[601:].count_nonzero().item(), 0)
 
+    def test_bonus_marker_follow_up_does_not_offer_tile_purchase(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        game.use_emperors_favour = True
+        game.tile_pool = ["DisplaceAnywhere"]
+        game.current_player.bonus_markers = [
+            BonusMarker("SwapOffice"),
+            BonusMarker("Move3"),
+        ]
+        game.waiting_for_bm_upgrade_ability = True
+
+        mask = legal_action_mask(game)
+
+        self.assertEqual(mask[601:609].count_nonzero().item(), 0)
+        self.assertEqual(game.turn_phase, TurnPhase.BONUS_MARKER_CHOICE)
+
     def test_marker_replacement_phase_masks_every_other_action_family(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         game.current_player.forfeit_remaining_actions()

@@ -31,8 +31,8 @@ from map_data.constants import ACTIONS_MAX_VALUES, DARK_GREEN, UPGRADE_MAX_VALUE
 
 TRAINING_CHECKPOINT_FORMAT = "hansa-shared-q-training"
 TRAINING_CHECKPOINT_VERSION = 5
-DEFAULT_LEARNING_RATE = 0.00001
-LEGACY_LEARNING_RATE = 0.0001
+DEFAULT_LEARNING_RATE = 0.0001
+LEGACY_LEARNING_RATE = 0.00001
 PRESTIGE_REWARD_MULTIPLIER = 100
 END_GAME_WINNER_BONUS = 150
 NO_REPLACEMENT_ROUTE_PENALTY = -500
@@ -45,8 +45,8 @@ ROUTE_BUILDING_DISPLACEMENT_REWARD = 3
 INTERMEDIATE_ABILITY_UPGRADE_REWARD = 250
 FIRST_ACTIONS_UPGRADE_REWARD = 400
 INTERMEDIATE_REWARDED_ABILITIES = ("privilege", "book", "actions", "bank")
-MASSIVE_MOVE_PENALTY = -500
-CONSECUTIVE_HIGH_CAPACITY_MOVE_PENALTY = -100
+MASSIVE_MOVE_PENALTY = -1000
+CONSECUTIVE_HIGH_CAPACITY_MOVE_PENALTY = -200
 _CURRICULUM_STATE_UNSET = object()
 DEFAULT_TIER_TOP_K = (2, 5, 10, 15, 20)
 DEFAULT_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 0.35)
@@ -418,7 +418,7 @@ def movement_efficiency_penalty(pieces_moved, movement_capacity):
 
 def consecutive_move_penalty(movement_capacity, consecutive_moves):
     """Penalize implausible repeated normal Move actions within one turn."""
-    if movement_capacity == 2 and consecutive_moves == 3:
+    if consecutive_moves == 3:
         return float(MASSIVE_MOVE_PENALTY)
     if movement_capacity >= 4 and consecutive_moves >= 2:
         return float(CONSECUTIVE_HIGH_CAPACITY_MOVE_PENALTY)
@@ -544,14 +544,15 @@ class SelfPlayTrainer:
         return tuple(replace(self._tier(number), epsilon=0.0) for number in numbers)
 
     def _select_action(self, scores, legal_indices, tier):
+        legal_indices = torch.as_tensor(legal_indices, dtype=torch.long, device=scores.device)
         legal_scores = scores[legal_indices]
-        legal_count = len(legal_indices)
+        legal_count = legal_indices.numel()
         if legal_count == 1:
-            return ActionSelection(legal_indices[0], False, 1, 1)
+            return ActionSelection(int(legal_indices[0].item()), False, 1, 1)
         if self.rng.random() < tier.epsilon:
-            selected = self.rng.choice(legal_indices)
+            selected_position = self.rng.randrange(legal_count)
+            selected = int(legal_indices[selected_position].item())
             used_epsilon = True
-            selected_position = legal_indices.index(selected)
             selected_score = legal_scores[selected_position]
             model_rank = (
                 int((legal_scores > selected_score).sum().item())
@@ -562,11 +563,11 @@ class SelfPlayTrainer:
             effective_k = min(tier.top_k or legal_count, legal_count)
             ranked_positions = torch.topk(
                 legal_scores, effective_k, largest=True, sorted=True
-            ).indices.tolist()
-            ranked = [legal_indices[position] for position in ranked_positions]
-            selected = self.rng.choice(ranked)
+            ).indices
+            selected_rank = self.rng.randrange(effective_k)
+            selected = int(legal_indices[ranked_positions[selected_rank]].item())
             used_epsilon = False
-            model_rank = ranked.index(selected) + 1
+            model_rank = selected_rank + 1
         return ActionSelection(
             selected,
             used_epsilon,
@@ -659,6 +660,9 @@ class SelfPlayTrainer:
         move_completed_routes_before = set()
         move_tracking_active = False
         output = redirect_stdout(io.StringIO()) if quiet else nullcontext()
+        scoring_started = perf_counter()
+        projected_before = game.projected_scores()
+        scoring_seconds += perf_counter() - scoring_started
 
         self.model.eval()
         with output, torch.inference_mode():
@@ -687,9 +691,9 @@ class SelfPlayTrainer:
                         move_general_stock_threshold=self.config.move_general_stock_threshold,
                         base_mask=observation.legal_action_mask,
                     )
-                    legal_indices = mask.nonzero(as_tuple=False).flatten().tolist()
+                    legal_indices = mask.nonzero(as_tuple=False).flatten()
                     legality_seconds += perf_counter() - legality_started
-                    if not legal_indices:
+                    if legal_indices.numel() == 0:
                         self.progress.game_completion_failures += 1
                         if (
                             game.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS
@@ -705,13 +709,10 @@ class SelfPlayTrainer:
                             terminal_rewards[observation.observer_index] = (
                                 NO_REPLACEMENT_ROUTE_PENALTY
                             )
-                            scoring_started = perf_counter()
-                            projected_scores = game.projected_scores()
-                            scoring_seconds += perf_counter() - scoring_started
                             return self._complete_trajectory(
                                 decisions,
                                 terminal_rewards,
-                                projected_scores,
+                                projected_before,
                                 (),
                                 action_trace,
                                 seat_tiers,
@@ -814,9 +815,6 @@ class SelfPlayTrainer:
                         for ability in INTERMEDIATE_REWARDED_ABILITIES
                     )
                     context_seconds += perf_counter() - context_started
-                    scoring_started = perf_counter()
-                    projected_before = game.projected_scores()
-                    scoring_seconds += perf_counter() - scoring_started
                     end_was_pending = game.game_end or game.game_end_pending_immediate_resolution
                     turn_before = game.turn_number
                     action_trace.append(action_index)
@@ -848,6 +846,7 @@ class SelfPlayTrainer:
                     float(PRESTIGE_REWARD_MULTIPLIER * (after - before))
                     for before, after in zip(projected_before, projected_after)
                 )
+                projected_before = projected_after
                 general_stock_after = (
                     acting_player.general_stock_squares + acting_player.general_stock_circles
                 )
@@ -916,7 +915,7 @@ class SelfPlayTrainer:
                             adjusted[observation.observer_index] += completed_route_move_reward(
                                 move_completed_routes_before, completed_routes_after
                             )
-                        if movement_capacity == 2 and consecutive_move_actions == 3:
+                        if consecutive_move_actions == 3:
                             massive_move_penalty_applied = True
                         if (
                             turn_action_budget >= 5

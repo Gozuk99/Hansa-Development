@@ -25,6 +25,10 @@ def _optional_bool(value):
     return {"auto": None, "on": True, "off": False}[value]
 
 
+def _route_readiness(value):
+    return {"auto": None, "full": True, "one-short": False}[value]
+
+
 @dataclass(frozen=True)
 class EvaluationSpec:
     name: str
@@ -36,6 +40,8 @@ class EvaluationSpec:
     emperors_favour: bool = False
     promo_markers: bool = False
     immediate_finish: bool = False
+    east_west_path_length: str | None = None
+    prepared_route_full: bool | None = None
 
 
 EVALUATION_SPECS = tuple(
@@ -85,6 +91,51 @@ EVALUATION_SPECS = tuple(
         emperors_favour=True,
         promo_markers=True,
     ),
+    EvaluationSpec(
+        "east_west_short_map1_4p",
+        1,
+        4,
+        scenario=EndGameScenario.EAST_WEST,
+        east_west_path_length="short",
+        prepared_route_full=True,
+    ),
+    EvaluationSpec(
+        "east_west_medium_map2_4p",
+        2,
+        4,
+        scenario=EndGameScenario.EAST_WEST,
+        east_west_path_length="medium",
+        prepared_route_full=True,
+    ),
+    EvaluationSpec(
+        "east_west_long_map3_5p",
+        3,
+        5,
+        scenario=EndGameScenario.EAST_WEST,
+        east_west_path_length="long",
+        prepared_route_full=True,
+    ),
+    EvaluationSpec(
+        "wales_control_map3_3p",
+        3,
+        3,
+        scenario=EndGameScenario.BRITANNIA_WALES,
+        prepared_route_full=True,
+    ),
+    EvaluationSpec(
+        "scotland_control_map3_4p",
+        3,
+        4,
+        scenario=EndGameScenario.BRITANNIA_SCOTLAND,
+        prepared_route_full=True,
+    ),
+    EvaluationSpec(
+        "isle_of_man_dual_control_map3_5p",
+        3,
+        5,
+        scenario=EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+        prepared_route_full=True,
+    ),
 )
 
 
@@ -96,7 +147,7 @@ def parse_args(argv=None):
     parser.add_argument(
         "--eval",
         action="store_true",
-        help="create the permanent 15-state evaluation suite",
+        help=f"create the permanent {len(EVALUATION_SPECS)}-state evaluation suite",
     )
     parser.add_argument(
         "--scenario",
@@ -107,6 +158,17 @@ def parse_args(argv=None):
         "--immediate-finish",
         action="store_true",
         help="make the prepared player act first instead of after the other players",
+    )
+    parser.add_argument(
+        "--east-west-path-length",
+        choices=("short", "medium", "long"),
+        help="choose an East-West path group when --scenario east_west is used",
+    )
+    parser.add_argument(
+        "--prepared-route",
+        choices=("auto", "full", "one-short"),
+        default="auto",
+        help="choose whether a targeted scoring route is full or one post short",
     )
     parser.add_argument(
         "--map", dest="map_num", choices=("random", "1", "2", "3"), default="random"
@@ -137,6 +199,8 @@ def _generate_evaluation_suite(args):
                 use_promo_markers=spec.promo_markers,
                 score_range=spec.score_range,
                 immediate_finish=spec.immediate_finish,
+                east_west_path_length=spec.east_west_path_length,
+                prepared_route_full=spec.prepared_route_full,
             )
         )
         save_path, metadata_path = save_generated_state(generated, evaluation_directory / spec.name)
@@ -149,13 +213,13 @@ def _generate_evaluation_suite(args):
                 "metadata_file": str(metadata_path.relative_to(evaluation_directory)),
             }
         )
-        print(f"{index + 1}/15 {spec.name}: {save_path}")
+        print(f"{index + 1}/{len(EVALUATION_SPECS)} {spec.name}: {save_path}")
 
     evaluation_directory.mkdir(parents=True, exist_ok=True)
     (evaluation_directory / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
-    print(f"Created 15 fixed evaluation states in {evaluation_directory}")
+    print(f"Created {len(EVALUATION_SPECS)} fixed evaluation states in {evaluation_directory}")
 
 
 def main(argv=None):
@@ -175,6 +239,8 @@ def main(argv=None):
             use_emperors_favour=_optional_bool(args.emperors_favour),
             use_promo_markers=_optional_bool(args.promo_markers),
             immediate_finish=args.immediate_finish,
+            east_west_path_length=args.east_west_path_length,
+            prepared_route_full=_route_readiness(args.prepared_route),
         )
         generated = generate_state(request)
         save_path, _metadata_path = save_generated_state(generated, args.output)

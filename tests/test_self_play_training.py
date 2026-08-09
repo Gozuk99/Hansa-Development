@@ -347,11 +347,12 @@ class SelfPlayTrainingTests(unittest.TestCase):
     def test_consecutive_move_penalties_follow_book_capacity(self):
         self.assertEqual(consecutive_move_penalty(2, 1), 0)
         self.assertEqual(consecutive_move_penalty(2, 2), 0)
-        self.assertEqual(consecutive_move_penalty(2, 3), -500)
-        self.assertEqual(consecutive_move_penalty(3, 3), 0)
+        self.assertEqual(consecutive_move_penalty(2, 3), -1000)
+        self.assertEqual(consecutive_move_penalty(3, 3), -1000)
         self.assertEqual(consecutive_move_penalty(4, 1), 0)
-        self.assertEqual(consecutive_move_penalty(4, 2), -100)
-        self.assertEqual(consecutive_move_penalty(5, 3), -100)
+        self.assertEqual(consecutive_move_penalty(4, 2), -200)
+        self.assertEqual(consecutive_move_penalty(4, 3), -1000)
+        self.assertEqual(consecutive_move_penalty(5, 3), -1000)
 
     def test_completed_move_rewards_only_net_new_claimable_routes(self):
         self.assertEqual(completed_route_move_reward({1}, {1, 2}), 70)
@@ -522,21 +523,21 @@ class SelfPlayTrainingTests(unittest.TestCase):
         scores = torch.tensor([0.0, 5.0, 2.0])
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.1
-        trainer.rng.choice.return_value = 2
+        trainer.rng.randrange.return_value = 1
 
         selection = trainer._select_action(scores, [1, 2], PolicyTier(3, 10, 0.2))
 
         self.assertEqual(selection.action_index, 2)
         self.assertTrue(selection.used_epsilon)
         self.assertEqual(selection.model_rank, 2)
-        trainer.rng.choice.assert_called_once_with([1, 2])
+        trainer.rng.randrange.assert_called_once_with(2)
 
     def test_top_k_selects_uniformly_from_effective_legal_pool(self):
         trainer = self.trainer()
         scores = torch.tensor([0.0, 5.0, 2.0, 7.0])
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.9
-        trainer.rng.choice.return_value = 1
+        trainer.rng.randrange.return_value = 1
 
         selection = trainer._select_action(scores, [1, 2, 3], PolicyTier(1, 2, 0.05))
 
@@ -544,21 +545,19 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertFalse(selection.used_epsilon)
         self.assertEqual(selection.model_rank, 2)
         self.assertEqual(selection.legal_action_count, 3)
-        trainer.rng.choice.assert_called_once_with([3, 1])
+        trainer.rng.randrange.assert_called_once_with(2)
 
     def test_top_k_with_tied_scores_stays_within_legal_pool(self):
         trainer = self.trainer()
         scores = torch.tensor([0.0, 5.0, 5.0, 5.0])
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.9
-        trainer.rng.choice.side_effect = lambda choices: choices[0]
+        trainer.rng.randrange.return_value = 0
 
         selection = trainer._select_action(scores, [1, 2, 3], PolicyTier(1, 2, 0.05))
 
-        candidates = trainer.rng.choice.call_args.args[0]
-        self.assertEqual(len(candidates), 2)
-        self.assertTrue(set(candidates).issubset({1, 2, 3}))
-        self.assertIn(selection.action_index, candidates)
+        self.assertIn(selection.action_index, {1, 2, 3})
+        trainer.rng.randrange.assert_called_once_with(2)
 
     def test_effective_k_and_fully_random_tier(self):
         trainer = self.trainer()
@@ -566,19 +565,19 @@ class SelfPlayTrainingTests(unittest.TestCase):
         trainer.rng = mock.Mock()
         trainer.rng.reset_mock()
         trainer.rng.random.return_value = 0.9
-        trainer.rng.choice.return_value = 2
+        trainer.rng.randrange.return_value = 1
 
         selection = trainer._select_action(scores, [1, 2], PolicyTier(3, 10, 0.2))
         self.assertEqual(selection.action_index, 2)
-        trainer.rng.choice.assert_called_once_with([1, 2])
+        trainer.rng.randrange.assert_called_once_with(2)
 
         trainer.rng.reset_mock()
         trainer.rng.random.return_value = 0.2
-        trainer.rng.choice.return_value = 1
+        trainer.rng.randrange.return_value = 0
         selection = trainer._select_action(scores, [1, 2], PolicyTier(5, None, 1.0))
         self.assertEqual(selection.action_index, 1)
         self.assertTrue(selection.used_epsilon)
-        trainer.rng.choice.assert_called_once_with([1, 2])
+        trainer.rng.randrange.assert_called_once_with(2)
 
     def test_single_legal_action_is_always_selected(self):
         trainer = self.trainer()
@@ -687,10 +686,8 @@ class SelfPlayTrainingTests(unittest.TestCase):
             self.assertEqual(restored.progress.checkpoint_saves, 1)
             self.assertEqual(restored.progress.checkpoint_loads, 1)
             self.assertEqual(restored.config.gamma, 0.99)
-            self.assertEqual(restored.config.learning_rate, 0.00001)
-            self.assertTrue(
-                all(group["lr"] == 0.00001 for group in restored.optimizer.param_groups)
-            )
+            self.assertEqual(restored.config.learning_rate, 0.0001)
+            self.assertTrue(all(group["lr"] == 0.0001 for group in restored.optimizer.param_groups))
             self.assertEqual(restored.config.income_penalty_scale, 100)
             self.assertEqual(restored.config.tier_top_k, (2, 5, 10, 15, 20))
             self.assertEqual(restored.config.tier_epsilons, (0.05, 0.10, 0.20, 0.35, 0.35))

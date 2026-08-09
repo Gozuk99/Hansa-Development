@@ -12,9 +12,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 1,
-    "save_file": "balanced_map1_3p\\near_score\\map_1\\3_players\\state-281862ac0f97764e.hansa",
-    "metadata_file": "balanced_map1_3p\\near_score\\map_1\\3_players\\state-281862ac0f97764e.json"
+    "save_file": "balanced_map1_3p\\near_score\\map_1\\3_players\\state-87e6a6ca27811587.hansa",
+    "metadata_file": "balanced_map1_3p\\near_score\\map_1\\3_players\\state-87e6a6ca27811587.json"
   },
   {
     "name": "balanced_map1_4p",
@@ -29,9 +31,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 2,
-    "save_file": "balanced_map1_4p\\near_score\\map_1\\4_players\\state-fa9375a864d65776.hansa",
-    "metadata_file": "balanced_map1_4p\\near_score\\map_1\\4_players\\state-fa9375a864d65776.json"
+    "save_file": "balanced_map1_4p\\near_score\\map_1\\4_players\\state-3b7c80ab242c53cf.hansa",
+    "metadata_file": "balanced_map1_4p\\near_score\\map_1\\4_players\\state-3b7c80ab242c53cf.json"
   },
   {
     "name": "balanced_map1_5p",
@@ -46,9 +50,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 3,
-    "save_file": "balanced_map1_5p\\near_score\\map_1\\5_players\\state-66fc500481ac64f8.hansa",
-    "metadata_file": "balanced_map1_5p\\near_score\\map_1\\5_players\\state-66fc500481ac64f8.json"
+    "save_file": "balanced_map1_5p\\near_score\\map_1\\5_players\\state-5900af0433ca7bef.hansa",
+    "metadata_file": "balanced_map1_5p\\near_score\\map_1\\5_players\\state-5900af0433ca7bef.json"
   },
   {
     "name": "balanced_map2_3p",
@@ -63,9 +69,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 4,
-    "save_file": "balanced_map2_3p\\near_score\\map_2\\3_players\\state-5da22a652a8e20d3.hansa",
-    "metadata_file": "balanced_map2_3p\\near_score\\map_2\\3_players\\state-5da22a652a8e20d3.json"
+    "save_file": "balanced_map2_3p\\near_score\\map_2\\3_players\\state-544483325f11df10.hansa",
+    "metadata_file": "balanced_map2_3p\\near_score\\map_2\\3_players\\state-544483325f11df10.json"
   },
   {
     "name": "balanced_map2_4p",
@@ -80,9 +88,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 5,
-    "save_file": "balanced_map2_4p\\near_score\\map_2\\4_players\\state-e7c12e8c15eeb61c.hansa",
-    "metadata_file": "balanced_map2_4p\\near_score\\map_2\\4_players\\state-e7c12e8c15eeb61c.json"
+    "save_file": "balanced_map2_4p\\near_score\\map_2\\4_players\\state-3a135d7fc726008f.hansa",
+    "metadata_file": "balanced_map2_4p\\near_score\\map_2\\4_players\\state-3a135d7fc726008f.json"
   },
   {
     "name": "balanced_map2_5p",
@@ -97,9 +107,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 6,
-    "save_file": "balanced_map2_5p\\near_score\\map_2\\5_players\\state-cc043b981b65ec64.hansa",
-    "metadata_file": "balanced_map2_5p\\near_score\\map_2\\5_players\\state-cc043b981b65ec64.json"
+    "save_file": "balanced_map2_5p\\near_score\\map_2\\5_players\\state-eb93cb8040fb2d52.hansa",
+    "metadata_file": "balanced_map2_5p\\near_score\\map_2\\5_players\\state-eb93cb8040fb2d52.json"
   },
   {
     "name": "balanced_map3_3p",
@@ -114,9 +126,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 7,
-    "save_file": "balanced_map3_3p\\near_score\\map_3\\3_players\\state-b3b36770e489d297.hansa",
-    "metadata_file": "balanced_map3_3p\\near_score\\map_3\\3_players\\state-b3b36770e489d297.json"
+    "save_file": "balanced_map3_3p\\near_score\\map_3\\3_players\\state-ae1dbfe609906a0b.hansa",
+    "metadata_file": "balanced_map3_3p\\near_score\\map_3\\3_players\\state-ae1dbfe609906a0b.json"
   },
   {
     "name": "balanced_map3_4p",
@@ -131,9 +145,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 8,
-    "save_file": "balanced_map3_4p\\near_score\\map_3\\4_players\\state-ce5811984dbb2234.hansa",
-    "metadata_file": "balanced_map3_4p\\near_score\\map_3\\4_players\\state-ce5811984dbb2234.json"
+    "save_file": "balanced_map3_4p\\near_score\\map_3\\4_players\\state-d4b42c42d896c641.hansa",
+    "metadata_file": "balanced_map3_4p\\near_score\\map_3\\4_players\\state-d4b42c42d896c641.json"
   },
   {
     "name": "balanced_map3_5p",
@@ -148,9 +164,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 9,
-    "save_file": "balanced_map3_5p\\near_score\\map_3\\5_players\\state-b649cd0e2b9ab14b.hansa",
-    "metadata_file": "balanced_map3_5p\\near_score\\map_3\\5_players\\state-b649cd0e2b9ab14b.json"
+    "save_file": "balanced_map3_5p\\near_score\\map_3\\5_players\\state-0714e0a5c210131d.hansa",
+    "metadata_file": "balanced_map3_5p\\near_score\\map_3\\5_players\\state-0714e0a5c210131d.json"
   },
   {
     "name": "missions_map1_3p",
@@ -165,9 +183,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": true,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 10,
-    "save_file": "missions_map1_3p\\near_score\\map_1\\3_players\\state-6db12ff4d818208e.hansa",
-    "metadata_file": "missions_map1_3p\\near_score\\map_1\\3_players\\state-6db12ff4d818208e.json"
+    "save_file": "missions_map1_3p\\near_score\\map_1\\3_players\\state-684f42a2dce68a24.hansa",
+    "metadata_file": "missions_map1_3p\\near_score\\map_1\\3_players\\state-684f42a2dce68a24.json"
   },
   {
     "name": "promo_markers_map2_4p",
@@ -182,9 +202,11 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": true,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 11,
-    "save_file": "promo_markers_map2_4p\\near_bonus_markers\\map_2\\4_players\\state-3b3890c98e4e3ad8.hansa",
-    "metadata_file": "promo_markers_map2_4p\\near_bonus_markers\\map_2\\4_players\\state-3b3890c98e4e3ad8.json"
+    "save_file": "promo_markers_map2_4p\\near_bonus_markers\\map_2\\4_players\\state-bf5f9f0978588e87.hansa",
+    "metadata_file": "promo_markers_map2_4p\\near_bonus_markers\\map_2\\4_players\\state-bf5f9f0978588e87.json"
   },
   {
     "name": "emperors_favour_map3_5p",
@@ -199,9 +221,11 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": true,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 12,
-    "save_file": "emperors_favour_map3_5p\\near_completed_cities\\map_3\\5_players\\state-50e382fe0a73f43d.hansa",
-    "metadata_file": "emperors_favour_map3_5p\\near_completed_cities\\map_3\\5_players\\state-50e382fe0a73f43d.json"
+    "save_file": "emperors_favour_map3_5p\\near_completed_cities\\map_3\\5_players\\state-d42b9d01a8aaef21.hansa",
+    "metadata_file": "emperors_favour_map3_5p\\near_completed_cities\\map_3\\5_players\\state-d42b9d01a8aaef21.json"
   },
   {
     "name": "all_options_map1_5p",
@@ -216,9 +240,11 @@
     "emperors_favour": true,
     "promo_markers": true,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 13,
-    "save_file": "all_options_map1_5p\\near_score\\map_1\\5_players\\state-3eae4d56a13fbd38.hansa",
-    "metadata_file": "all_options_map1_5p\\near_score\\map_1\\5_players\\state-3eae4d56a13fbd38.json"
+    "save_file": "all_options_map1_5p\\near_score\\map_1\\5_players\\state-594f35fdcab69e1f.hansa",
+    "metadata_file": "all_options_map1_5p\\near_score\\map_1\\5_players\\state-594f35fdcab69e1f.json"
   },
   {
     "name": "city_limit_map2_5p",
@@ -233,9 +259,11 @@
     "emperors_favour": false,
     "promo_markers": false,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 14,
-    "save_file": "city_limit_map2_5p\\near_completed_cities\\map_2\\5_players\\state-c8d96a18e0555b92.hansa",
-    "metadata_file": "city_limit_map2_5p\\near_completed_cities\\map_2\\5_players\\state-c8d96a18e0555b92.json"
+    "save_file": "city_limit_map2_5p\\near_completed_cities\\map_2\\5_players\\state-5bea445dc7835b89.hansa",
+    "metadata_file": "city_limit_map2_5p\\near_completed_cities\\map_2\\5_players\\state-5bea445dc7835b89.json"
   },
   {
     "name": "marker_limit_map3_4p",
@@ -250,8 +278,124 @@
     "emperors_favour": true,
     "promo_markers": true,
     "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": null,
     "seed": 15,
-    "save_file": "marker_limit_map3_4p\\near_bonus_markers\\map_3\\4_players\\state-8e99a889669aacdd.hansa",
-    "metadata_file": "marker_limit_map3_4p\\near_bonus_markers\\map_3\\4_players\\state-8e99a889669aacdd.json"
+    "save_file": "marker_limit_map3_4p\\near_bonus_markers\\map_3\\4_players\\state-5ba5e3d0c9ee9d38.hansa",
+    "metadata_file": "marker_limit_map3_4p\\near_bonus_markers\\map_3\\4_players\\state-5ba5e3d0c9ee9d38.json"
+  },
+  {
+    "name": "east_west_short_map1_4p",
+    "map_num": 1,
+    "player_count": 4,
+    "scenario": "east_west",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "east_west_path_length": "short",
+    "prepared_route_full": true,
+    "seed": 16,
+    "save_file": "east_west_short_map1_4p\\east_west\\map_1\\4_players\\state-650524eb51326b98.hansa",
+    "metadata_file": "east_west_short_map1_4p\\east_west\\map_1\\4_players\\state-650524eb51326b98.json"
+  },
+  {
+    "name": "east_west_medium_map2_4p",
+    "map_num": 2,
+    "player_count": 4,
+    "scenario": "east_west",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "east_west_path_length": "medium",
+    "prepared_route_full": true,
+    "seed": 17,
+    "save_file": "east_west_medium_map2_4p\\east_west\\map_2\\4_players\\state-ae776ecc0816ed4b.hansa",
+    "metadata_file": "east_west_medium_map2_4p\\east_west\\map_2\\4_players\\state-ae776ecc0816ed4b.json"
+  },
+  {
+    "name": "east_west_long_map3_5p",
+    "map_num": 3,
+    "player_count": 5,
+    "scenario": "east_west",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "east_west_path_length": "long",
+    "prepared_route_full": true,
+    "seed": 18,
+    "save_file": "east_west_long_map3_5p\\east_west\\map_3\\5_players\\state-921e5fed1b7cff47.hansa",
+    "metadata_file": "east_west_long_map3_5p\\east_west\\map_3\\5_players\\state-921e5fed1b7cff47.json"
+  },
+  {
+    "name": "wales_control_map3_3p",
+    "map_num": 3,
+    "player_count": 3,
+    "scenario": "britannia_wales",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": true,
+    "seed": 19,
+    "save_file": "wales_control_map3_3p\\britannia_wales\\map_3\\3_players\\state-d4e3f4a8246fd9dd.hansa",
+    "metadata_file": "wales_control_map3_3p\\britannia_wales\\map_3\\3_players\\state-d4e3f4a8246fd9dd.json"
+  },
+  {
+    "name": "scotland_control_map3_4p",
+    "map_num": 3,
+    "player_count": 4,
+    "scenario": "britannia_scotland",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": true,
+    "seed": 20,
+    "save_file": "scotland_control_map3_4p\\britannia_scotland\\map_3\\4_players\\state-4b9d9f694059ba48.hansa",
+    "metadata_file": "scotland_control_map3_4p\\britannia_scotland\\map_3\\4_players\\state-4b9d9f694059ba48.json"
+  },
+  {
+    "name": "isle_of_man_dual_control_map3_5p",
+    "map_num": 3,
+    "player_count": 5,
+    "scenario": "britannia_isle_of_man",
+    "score_range": [
+      16,
+      16
+    ],
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "immediate_finish": false,
+    "east_west_path_length": null,
+    "prepared_route_full": true,
+    "seed": 21,
+    "save_file": "isle_of_man_dual_control_map3_5p\\britannia_isle_of_man\\map_3\\5_players\\state-73e8bbde41c549dd.hansa",
+    "metadata_file": "isle_of_man_dual_control_map3_5p\\britannia_isle_of_man\\map_3\\5_players\\state-73e8bbde41c549dd.json"
   }
 ]
