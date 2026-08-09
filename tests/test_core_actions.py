@@ -1136,6 +1136,26 @@ class CoreActionTests(unittest.TestCase):
         self.assertEqual(game.east_west_completed_count, 3)
         self.assertEqual(game.players_who_completed_east_west, set(game.players))
 
+    def test_added_office_counts_for_east_west_and_largest_network(self):
+        game = create_headless_game(1, 3, seed=125)
+        player = game.current_player
+        start_name, end_name = game.selected_map.east_west_cities
+        path = self.city_path(game, start_name, end_name)
+        added_city = path[len(path) // 2]
+
+        for city in path:
+            if city is added_city:
+                added = city.create_new_office(player.color)
+                added.controller = player
+                added.owner_piece_shape = "square"
+                added.place_adjacent_office = True
+            else:
+                city.offices[0].controller = player
+                city.offices[0].owner_piece_shape = city.offices[0].shape
+
+        self.assertTrue(game.has_east_west_connection(start_name, end_name))
+        self.assertEqual(game.calculate_largest_network(player), len(path))
+
 
 if __name__ == "__main__":
     unittest.main()

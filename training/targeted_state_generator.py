@@ -26,7 +26,7 @@ from map_data.constants import (
 from map_data.map_attributes import BonusMarker
 
 
-GENERATOR_VERSION = 7
+GENERATOR_VERSION = 8
 DEFAULT_OUTPUT_DIRECTORY = Path("training_data/generated")
 
 
@@ -38,6 +38,10 @@ class EndGameScenario(str, Enum):
     NEAR_SCORE = "near_score"
     NEAR_BONUS_MARKERS = "near_bonus_markers"
     NEAR_COMPLETED_CITIES = "near_completed_cities"
+    EAST_WEST = "east_west"
+    BRITANNIA_WALES = "britannia_wales"
+    BRITANNIA_SCOTLAND = "britannia_scotland"
+    BRITANNIA_ISLE_OF_MAN = "britannia_isle_of_man"
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,8 @@ class GenerationRequest:
     use_promo_markers: bool | None = None
     score_range: tuple[int, int] | None = None
     immediate_finish: bool = False
+    east_west_path_length: str | None = None
+    prepared_route_full: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +67,9 @@ class GeneratedState:
     attempt_seed: int
     score_range: tuple[int, int] | None = None
     immediate_finish: bool = False
+    target_variant: str | None = None
+    prepared_player_index: int | None = None
+    prepared_route_full: bool | None = None
 
 
 def _choose(value, choices, rng):
@@ -231,6 +240,298 @@ def _route_shapes(route, pool, required_shape=None):
     return None
 
 
+def _fill_prepared_route(route, player, pool, required_shape, leave_one_open, rng):
+    if any(post.is_owned() for post in route.posts):
+        return False, None
+    shapes = _route_shapes(route, pool, required_shape)
+    if shapes is None:
+        return False, None
+    open_index = rng.randrange(len(route.posts)) if leave_one_open else None
+    for index, (post, shape) in enumerate(zip(route.posts, shapes)):
+        if index == open_index:
+            continue
+        post.owner = player
+        post.owner_piece_shape = shape
+        pool[shape] -= 1
+    return True, None if open_index is None else shapes[open_index]
+
+
+def _next_open_office(city):
+    return next((office for office in city.offices if office.controller is None), None)
+
+
+def _place_city_office(city, player, pools, rng):
+    if city.has_office_owned_by(player):
+        return True
+    office = _next_open_office(city)
+    return bool(
+        office
+        and _prepare_player_for_office(player, office, pools, rng)
+        and _place_office(office, player, pools)
+    )
+
+
+def _bounded_east_west_paths(game):
+    cities = {city.name: city for city in game.selected_map.cities}
+    start_name, end_name = game.selected_map.east_west_cities
+    start, end = cities[start_name], cities[end_name]
+    adjacency = {city: [] for city in game.selected_map.cities}
+    for route in game.selected_map.routes:
+        first, second = route.cities
+        adjacency[first].append(second)
+        adjacency[second].append(first)
+
+    frontier = [(start, 0)]
+    visited = {start}
+    shortest = None
+    while frontier:
+        city, distance = frontier.pop(0)
+        if city is end:
+            shortest = distance
+            break
+        for adjacent in adjacency[city]:
+            if adjacent not in visited:
+                visited.add(adjacent)
+                frontier.append((adjacent, distance + 1))
+    if shortest is None:
+        return {}
+
+    paths = []
+
+    def visit(city, path):
+        if len(path) - 1 > shortest + 3:
+            return
+        if city is end:
+            paths.append(tuple(path))
+            return
+        for adjacent in adjacency[city]:
+            if adjacent not in path:
+                visit(adjacent, (*path, adjacent))
+
+    visit(start, (start,))
+    lengths = sorted({len(path) - 1 for path in paths})
+    groups = {"short": {lengths[0]}, "long": {lengths[-1]}}
+    middle = set(lengths[1:-1])
+    if middle:
+        groups["medium"] = middle
+    return {
+        name: [path for path in paths if len(path) - 1 in selected_lengths]
+        for name, selected_lengths in groups.items()
+    }
+
+
+def _route_between(game, first, second):
+    return next(
+        (route for route in game.selected_map.routes if set(route.cities) == {first, second}),
+        None,
+    )
+
+
+def _prepare_east_west(game, pools, rng, requested_length, prepared_route_full):
+    grouped_paths = _bounded_east_west_paths(game)
+    if requested_length is not None and requested_length not in grouped_paths:
+        return None
+    categories = [requested_length] if requested_length else list(grouped_paths)
+    rng.shuffle(categories)
+    players = list(game.players)
+    rng.shuffle(players)
+    for category in categories:
+        paths = list(grouped_paths[category])
+        rng.shuffle(paths)
+        for path in paths:
+            gap_indices = list(range(len(path)))
+            rng.shuffle(gap_indices)
+            for player in players:
+                for gap_index in gap_indices:
+                    gap_city = path[gap_index]
+                    if gap_city.color == DARK_GREEN or gap_city.has_office_owned_by(player):
+                        continue
+                    target_office = _next_open_office(gap_city)
+                    if target_office is None:
+                        continue
+                    neighbor_index = 1 if gap_index == 0 else gap_index - 1
+                    route = _route_between(game, gap_city, path[neighbor_index])
+                    if (
+                        route is None
+                        or route.bonus_marker is not None
+                        or route.permanent_bonus_marker is not None
+                        or any(post.is_owned() for post in route.posts)
+                    ):
+                        continue
+                    if any(
+                        not city.has_office_owned_by(player) and _next_open_office(city) is None
+                        for index, city in enumerate(path)
+                        if index != gap_index
+                    ):
+                        continue
+                    for index, city in enumerate(path):
+                        if index != gap_index and not _place_city_office(city, player, pools, rng):
+                            return None
+                    if not _prepare_player_for_office(player, target_office, pools, rng):
+                        return None
+                    start_name, end_name = game.selected_map.east_west_cities
+                    if game.has_east_west_connection(start_name, end_name):
+                        return None
+                    leave_one_open = (
+                        rng.choice((False, True))
+                        if prepared_route_full is None
+                        else not prepared_route_full
+                    )
+                    route_prepared, missing_shape = _fill_prepared_route(
+                        route,
+                        player,
+                        pools[player],
+                        target_office.shape,
+                        leave_one_open,
+                        rng,
+                    )
+                    if not route_prepared:
+                        return None
+
+                    original = (
+                        target_office.controller,
+                        target_office.owner_piece_shape,
+                        target_office.color,
+                    )
+                    target_office.controller = player
+                    target_office.owner_piece_shape = target_office.shape
+                    target_office.color = player.color
+                    completes_connection = game.has_east_west_connection(start_name, end_name)
+                    (
+                        target_office.controller,
+                        target_office.owner_piece_shape,
+                        target_office.color,
+                    ) = original
+                    if not completes_connection:
+                        return None
+                    return player, missing_shape, category
+    return None
+
+
+def _region_cities(game, region):
+    names = {
+        city.name
+        for route in game.selected_map.routes
+        if route.region == region
+        for city in route.cities
+    } | {"IsleOfMan"}
+    return [city for city in game.selected_map.cities if city.name in names]
+
+
+def _fill_city_for_player(city, player, pools, rng):
+    for office in city.offices:
+        if office.controller is not None:
+            return False
+        if not _prepare_player_for_office(player, office, pools, rng):
+            return False
+        if not _place_office(office, player, pools):
+            return False
+    return True
+
+
+def _prepare_britannia_region(game, pools, rng, scenario, prepared_route_full):
+    if game.map_num != 3:
+        return None
+    dual_region = scenario is EndGameScenario.BRITANNIA_ISLE_OF_MAN
+    regions = (
+        ("Wales", "Scotland")
+        if dual_region
+        else ("Scotland" if scenario is EndGameScenario.BRITANNIA_SCOTLAND else "Wales",)
+    )
+    if "Scotland" in regions and game.num_players == 3:
+        return None
+
+    target_candidates = (
+        [city for city in game.selected_map.cities if city.name == "IsleOfMan"]
+        if dual_region
+        else [
+            city
+            for city in _region_cities(game, regions[0])
+            if city.name != "IsleOfMan" and len(city.offices) >= 2
+        ]
+    )
+    rng.shuffle(target_candidates)
+    player_pairs = [
+        (actor, rival) for actor in game.players for rival in game.players if actor is not rival
+    ]
+    rng.shuffle(player_pairs)
+    for target_city in target_candidates:
+        if any(office.controller is not None for office in target_city.offices):
+            continue
+        routes = [
+            route
+            for route in target_city.routes
+            if route.bonus_marker is None
+            and route.permanent_bonus_marker is None
+            and not any(post.is_owned() for post in route.posts)
+        ]
+        rng.shuffle(routes)
+        for actor, rival in player_pairs:
+            support = {}
+            used = {target_city}
+            possible = True
+            for region in regions:
+                candidates = [
+                    city
+                    for city in _region_cities(game, region)
+                    if city not in used
+                    and city.name != "IsleOfMan"
+                    and city.offices
+                    and all(office.controller is None for office in city.offices)
+                ]
+                rng.shuffle(candidates)
+                if len(candidates) < 2:
+                    possible = False
+                    break
+                support[(region, actor)], support[(region, rival)] = candidates[:2]
+                used.update(candidates[:2])
+            if not possible:
+                continue
+            for route in routes:
+                target_office = target_city.offices[1]
+                if not _prepare_player_for_office(actor, target_office, pools, rng):
+                    return None
+                if not _prepare_player_for_office(rival, target_city.offices[0], pools, rng):
+                    return None
+                for region in regions:
+                    if not _fill_city_for_player(support[(region, actor)], actor, pools, rng):
+                        return None
+                    if not _fill_city_for_player(support[(region, rival)], rival, pools, rng):
+                        return None
+                if not _place_office(target_city.offices[0], rival, pools):
+                    return None
+
+                before = game.calculate_britannia_region_points()
+                original_color = target_office.color
+                target_office.controller = actor
+                target_office.owner_piece_shape = target_office.shape
+                target_office.color = actor.color
+                after = game.calculate_britannia_region_points()
+                target_office.controller = None
+                target_office.owner_piece_shape = None
+                target_office.color = original_color
+                if after[actor] <= before[actor]:
+                    return None
+
+                leave_one_open = (
+                    rng.choice((False, True))
+                    if prepared_route_full is None
+                    else not prepared_route_full
+                )
+                route_prepared, missing_shape = _fill_prepared_route(
+                    route,
+                    actor,
+                    pools[actor],
+                    target_office.shape,
+                    leave_one_open,
+                    rng,
+                )
+                if not route_prepared:
+                    return None
+                return actor, missing_shape, "+".join(regions)
+    return None
+
+
 def _prepare_completed_cities(game, pools, rng):
     target = game.selected_map.max_full_cities - 1
     trigger_cities = [
@@ -386,6 +687,17 @@ def _divide_remaining_supply(players, pools, rng):
             setattr(player, f"general_stock_{shape}s", count - personal)
 
 
+def _ensure_personal_piece(player, shape):
+    if shape is None or getattr(player, f"personal_supply_{shape}s") > 0:
+        return
+    stock_field = f"general_stock_{shape}s"
+    if getattr(player, stock_field) <= 0:
+        raise StateGenerationError(f"Prepared {shape} is unavailable after supply division")
+    setattr(player, stock_field, getattr(player, stock_field) - 1)
+    supply_field = f"personal_supply_{shape}s"
+    setattr(player, supply_field, getattr(player, supply_field) + 1)
+
+
 def _give_marker_to_player(game, marker, rng):
     owner = rng.choice(game.players)
     marker.owner = owner
@@ -424,6 +736,21 @@ def _assign_some_emperor_tiles(game, rng):
         setattr(game, owner_fields[tile], player)
 
 
+def _balance_projected_scores(game, rng, minimum_score=0, maximum_score=19):
+    contributions = game.projected_scores()
+    lowest_target = max(value + minimum_score for value in contributions)
+    highest_target = min(value + maximum_score for value in contributions)
+    if lowest_target > highest_target:
+        return None
+    target = rng.randint(lowest_target, highest_target)
+    for player, contribution in zip(game.players, contributions):
+        player.score = target - contribution
+    return (
+        min(player.score for player in game.players),
+        max(player.score for player in game.players),
+    )
+
+
 def _build_once(request, attempt_seed):
     rng = random.Random(attempt_seed)
     scenario = _choose(request.scenario, tuple(EndGameScenario), rng)
@@ -448,6 +775,14 @@ def _build_once(request, attempt_seed):
         return None
 
     prepared_current_player = None
+    required_personal_shape = None
+    target_variant = None
+    targeted_scoring = scenario in (
+        EndGameScenario.EAST_WEST,
+        EndGameScenario.BRITANNIA_WALES,
+        EndGameScenario.BRITANNIA_SCOTLAND,
+        EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+    )
     if scenario is EndGameScenario.NEAR_SCORE:
         prepared_current_player = _prepare_score_route(game, pools, rng)
         if prepared_current_player is None:
@@ -460,7 +795,30 @@ def _build_once(request, attempt_seed):
         prepared_current_player = _prepare_bonus_marker_route(game, pools, rng)
         if prepared_current_player is None:
             return None
+    elif scenario is EndGameScenario.EAST_WEST:
+        prepared = _prepare_east_west(
+            game,
+            pools,
+            rng,
+            request.east_west_path_length,
+            request.prepared_route_full,
+        )
+        if prepared is None:
+            return None
+        prepared_current_player, required_personal_shape, target_variant = prepared
+    elif scenario in (
+        EndGameScenario.BRITANNIA_WALES,
+        EndGameScenario.BRITANNIA_SCOTLAND,
+        EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+    ):
+        prepared = _prepare_britannia_region(
+            game, pools, rng, scenario, request.prepared_route_full
+        )
+        if prepared is None:
+            return None
+        prepared_current_player, required_personal_shape, target_variant = prepared
     _divide_remaining_supply(game.players, pools, rng)
+    _ensure_personal_piece(prepared_current_player, required_personal_shape)
 
     applied_score_range = request.score_range
     if scenario is EndGameScenario.NEAR_SCORE:
@@ -468,6 +826,10 @@ def _build_once(request, attempt_seed):
         for player in game.players:
             player.score = rng.choice(applied_score_range)
         prepared_current_player.score = 18
+    elif targeted_scoring:
+        applied_score_range = _balance_projected_scores(game, rng)
+        if applied_score_range is None:
+            return None
     elif request.score_range is not None:
         minimum_score, maximum_score = request.score_range
         if minimum_score < 0 or maximum_score < minimum_score or maximum_score > 19:
@@ -528,6 +890,19 @@ def _build_once(request, attempt_seed):
         attempt_seed,
         applied_score_range,
         request.immediate_finish,
+        target_variant,
+        (None if prepared_current_player is None else game.players.index(prepared_current_player)),
+        (
+            None
+            if scenario
+            not in (
+                EndGameScenario.EAST_WEST,
+                EndGameScenario.BRITANNIA_WALES,
+                EndGameScenario.BRITANNIA_SCOTLAND,
+                EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+            )
+            else required_personal_shape is None
+        ),
     )
 
 
@@ -535,6 +910,26 @@ def generate_state(request: GenerationRequest, *, max_attempts: int = 2_000) -> 
     """Create one deterministic, validated state matching ``request``."""
     if max_attempts < 1:
         raise ValueError("max_attempts must be positive")
+    if request.east_west_path_length not in (None, "short", "medium", "long"):
+        raise ValueError("east_west_path_length must be short, medium, or long")
+    if request.east_west_path_length and request.scenario is not EndGameScenario.EAST_WEST:
+        raise ValueError("east_west_path_length requires the east_west scenario")
+    britannia = {
+        EndGameScenario.BRITANNIA_WALES,
+        EndGameScenario.BRITANNIA_SCOTLAND,
+        EndGameScenario.BRITANNIA_ISLE_OF_MAN,
+    }
+    targeted_scoring = britannia | {EndGameScenario.EAST_WEST}
+    if request.prepared_route_full is not None and request.scenario not in targeted_scoring:
+        raise ValueError("prepared_route_full requires a targeted scoring scenario")
+    if request.scenario in britannia and request.map_num not in (None, 3):
+        raise ValueError("Britannia scenarios require Map 3")
+    if (
+        request.scenario
+        in (EndGameScenario.BRITANNIA_SCOTLAND, EndGameScenario.BRITANNIA_ISLE_OF_MAN)
+        and request.player_count == 3
+    ):
+        raise ValueError("Scotland and dual-region scenarios require 4 or 5 players")
     for attempt in range(max_attempts):
         generated = _build_once(request, request.seed + attempt * 1_000_003)
         if generated is not None:
@@ -555,6 +950,12 @@ def _state_id(generated):
         "promo_bonus_markers": generated.game.configuration.use_promo_markers,
         "score_range": generated.score_range,
         "immediate_finish": generated.immediate_finish,
+        "east_west_path_length": (
+            generated.target_variant if generated.scenario is EndGameScenario.EAST_WEST else None
+        ),
+        "target_variant": generated.target_variant,
+        "prepared_player_index": generated.prepared_player_index,
+        "prepared_route_full": generated.prepared_route_full,
     }
     digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
     return f"state-{digest}"
@@ -586,6 +987,9 @@ def save_generated_state(generated: GeneratedState, output_directory=DEFAULT_OUT
         "starting_position": (
             "immediate_finish" if generated.immediate_finish else "one_round_before"
         ),
+        "target_variant": generated.target_variant,
+        "prepared_player_index": generated.prepared_player_index,
+        "prepared_route_full": generated.prepared_route_full,
         "current_player_index": game.current_player_index,
         "bonus_markers_remaining": len(game.selected_map.bonus_marker_pool),
         "completed_cities": game.current_full_cities_count,

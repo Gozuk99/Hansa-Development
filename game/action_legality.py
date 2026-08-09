@@ -509,6 +509,12 @@ def mask_buy_tile(game):
                 buy_tile_tensor[bm_index] = 1
         return buy_tile_tensor
 
+    # Buying an Emperor's Favour tile is a new turn-level interaction. It
+    # cannot begin while another bonus-marker or piece workflow is waiting for
+    # its required follow-up choice.
+    if game.pending_workflows:
+        return buy_tile_tensor
+
     if (
         game.use_emperors_favour
         and current_player.actions_remaining == current_player.actions_at_turn_start

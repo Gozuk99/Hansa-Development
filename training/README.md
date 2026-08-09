@@ -75,12 +75,14 @@ python tools/run_curriculum_training.py --fresh --iterations 100 --batch 5
 Nine out of every ten generated training positions begin approximately one full
 round before the prepared ending player acts. The tenth is an immediate-finish
 lesson. The CSV records these as `one_round_before` and `immediate_finish` so their
-results can be compared separately. The fixed evaluation suite uses twelve
-one-round positions and three immediate-finish positions.
+results can be compared separately. The fixed evaluation suite uses eighteen
+one-round positions and three immediate-finish positions. Its added scoring
+positions cover bounded short, medium, and long East-West paths plus Wales,
+Scotland, and dual-region Isle of Man contests.
 
 For example, `--batch 10 --iterations 100` runs ten batches. Each batch contains
-100 learning games followed by one test-only game, for 1,000 learning games and
-10 test-only games total.
+100 learning games followed by the 21 fixed test-only games, for 1,000 learning
+games and 210 test-only games total.
 
 Stages progress from 18–19 points through late-, mid-, early-, and full-game
 positions. Promotion considers invalid actions, unfinished games, fixed-state

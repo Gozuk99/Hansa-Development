@@ -630,7 +630,7 @@ def _tier_player_count_charts(counts):
         (score for _tier, _players, score, _detail in score_values if score is not None),
         default=1,
     )
-    score_maximum = _chart_ceiling(highest_score, 5, minimum=5)
+    score_maximum = _chart_ceiling(highest_score * 1.15, 5, minimum=5)
     shared = ", ".join(
         f"{player_count}p: {counts['ties_by_player_count'][player_count]}"
         for player_count in player_counts
@@ -677,21 +677,40 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
     for (map_num, players, batch), entry in map_player_batches.items():
         datasets.setdefault((str(map_num), str(players)), {})[batch] = entry
 
-    def line_chart(title, explanation, ordered, series, suffix, maximum=None, baseline=None):
+    def line_chart(
+        title,
+        explanation,
+        ordered,
+        series,
+        suffix,
+        maximum=None,
+        baseline=None,
+        focus_range=False,
+    ):
         available = [value for values in series.values() for value in values if value is not None]
-        maximum = maximum or ((max(available) * 1.1) if available else 1)
+        scale_values = available + ([*baseline] if baseline else [])
+        axis_minimum = 0.0
+        if focus_range and scale_values:
+            low = min(scale_values)
+            high = max(scale_values)
+            padding = max((high - low) * 0.15, high * 0.05, 1.0)
+            axis_minimum = max(0.0, low - padding)
+            maximum = min(maximum, high + padding) if maximum is not None else high + padding
+        maximum = maximum or ((max(scale_values) * 1.1) if scale_values else 1)
         maximum = max(maximum, 1)
+        if maximum <= axis_minimum:
+            maximum = axis_minimum + 1
         x_span = max(len(ordered) - 1, 1)
 
         def point(index, value):
             return (
                 left + index / x_span * (width - left - right),
-                top + (maximum - value) / maximum * (height - top - bottom),
+                top + (maximum - value) / (maximum - axis_minimum) * (height - top - bottom),
             )
 
         grid = []
         for tick in range(6):
-            value = maximum * tick / 5
+            value = axis_minimum + (maximum - axis_minimum) * tick / 5
             _x, y = point(0, value)
             grid.append(
                 f'<line x1="{left}" y1="{y:.1f}" x2="{width - right}" y2="{y:.1f}" '
@@ -810,6 +829,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
                 "%",
                 maximum=100,
                 baseline=baseline,
+                focus_range=True,
             )
             + line_chart(
                 "Average final score by tier",
@@ -817,6 +837,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
                 ordered,
                 score_series,
                 " points",
+                focus_range=True,
             )
             + line_chart(
                 "Average completed-game length",
