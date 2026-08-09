@@ -26,8 +26,9 @@ from map_data.constants import (
 from map_data.map_attributes import BonusMarker
 
 
-GENERATOR_VERSION = 8
+GENERATOR_VERSION = 9
 DEFAULT_OUTPUT_DIRECTORY = Path("training_data/generated")
+DEVELOPMENT_RANGES = ((7, 9), (9, 11), (11, 13))
 
 
 class StateGenerationError(RuntimeError):
@@ -70,6 +71,7 @@ class GeneratedState:
     target_variant: str | None = None
     prepared_player_index: int | None = None
     prepared_route_full: bool | None = None
+    development_range: tuple[int, int] | None = None
 
 
 def _choose(value, choices, rng):
@@ -175,17 +177,35 @@ def _office_choices(game, player, pools):
     return choices
 
 
-def _prepare_balanced_development(game, pools, rng):
-    target = rng.randint(7, 9)
-    targets = {player: target for player in game.players}
-    completed = {player: 0 for player in game.players}
+def _development_total(game, player):
+    upgrades = (
+        player.keys_index
+        + PRIVILEGE_COLORS.index(player.privilege)
+        + BOOK_OF_KNOWLEDGE_MAX_VALUES.index(player.book)
+        + player.actions_index
+        + BANK_MAX_VALUES.index(player.bank)
+    )
+    offices = sum(
+        office.controller is player for city in game.selected_map.cities for office in city.offices
+    )
+    return upgrades + offices
+
+
+def _complete_balanced_development(game, pools, rng, development_range, *, allow_offices=False):
+    minimum, maximum = development_range
+    completed = {player: _development_total(game, player) for player in game.players}
+    if any(total > maximum for total in completed.values()):
+        return None
+    targets = {
+        player: rng.randint(max(minimum, completed[player]), maximum) for player in game.players
+    }
     while any(completed[player] < targets[player] for player in game.players):
         order = list(game.players)
         rng.shuffle(order)
         for player in order:
             if completed[player] >= targets[player]:
                 continue
-            offices = _office_choices(game, player, pools)
+            offices = _office_choices(game, player, pools) if allow_offices else []
             upgrades = _upgrade_choices(player)
             categories = []
             if offices:
@@ -770,8 +790,8 @@ def _build_once(request, attempt_seed):
     )
     game = config.create_game()
     pools = {player: _configure_player(player) for player in game.players}
-    development_targets = _prepare_balanced_development(game, pools, rng)
-    if development_targets is None:
+    development_range = rng.choice(DEVELOPMENT_RANGES)
+    if _complete_balanced_development(game, pools, rng, (3, 5), allow_offices=True) is None:
         return None
 
     prepared_current_player = None
@@ -817,6 +837,8 @@ def _build_once(request, attempt_seed):
         if prepared is None:
             return None
         prepared_current_player, required_personal_shape, target_variant = prepared
+    if _complete_balanced_development(game, pools, rng, development_range) is None:
+        return None
     _divide_remaining_supply(game.players, pools, rng)
     _ensure_personal_piece(prepared_current_player, required_personal_shape)
 
@@ -903,6 +925,7 @@ def _build_once(request, attempt_seed):
             )
             else required_personal_shape is None
         ),
+        development_range,
     )
 
 
@@ -956,6 +979,7 @@ def _state_id(generated):
         "target_variant": generated.target_variant,
         "prepared_player_index": generated.prepared_player_index,
         "prepared_route_full": generated.prepared_route_full,
+        "development_range": generated.development_range,
     }
     digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
     return f"state-{digest}"
@@ -990,6 +1014,7 @@ def save_generated_state(generated: GeneratedState, output_directory=DEFAULT_OUT
         "target_variant": generated.target_variant,
         "prepared_player_index": generated.prepared_player_index,
         "prepared_route_full": generated.prepared_route_full,
+        "development_range": generated.development_range,
         "current_player_index": game.current_player_index,
         "bonus_markers_remaining": len(game.selected_map.bonus_marker_pool),
         "completed_cities": game.current_full_cities_count,

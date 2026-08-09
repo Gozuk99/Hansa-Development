@@ -24,7 +24,7 @@ from tools.generate_training_states import EVALUATION_SPECS, parse_args
 
 
 class TargetedStateGeneratorTests(unittest.TestCase):
-    def test_base_development_is_balanced_and_offices_are_legal(self):
+    def test_final_development_uses_one_shared_range_and_offices_are_legal(self):
         generated = generate_state(
             GenerationRequest(
                 seed=97531,
@@ -35,6 +35,8 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         )
         game = generated.game
 
+        self.assertIn(generated.development_range, ((7, 9), (9, 11), (11, 13)))
+        minimum, maximum = generated.development_range
         for player in game.players:
             upgrades = (
                 player.keys_index
@@ -48,7 +50,8 @@ class TargetedStateGeneratorTests(unittest.TestCase):
                 for city in game.selected_map.cities
                 for office in city.offices
             )
-            self.assertIn(upgrades + offices, (7, 8, 9))
+            self.assertGreaterEqual(upgrades + offices, minimum)
+            self.assertLessEqual(upgrades + offices, maximum)
 
         for city in game.selected_map.cities:
             found_open = False
