@@ -50,6 +50,7 @@ CSV_FIELDS = (
     "retry_count",
     "latest_loss",
     "rolling_mean_loss",
+    "evaluation_suite_size",
     "generation_seconds",
     "play_seconds",
     "inference_seconds",
@@ -450,6 +451,7 @@ class CurriculumRunner:
         generation_seconds=0.0,
         learning_seconds=0.0,
         action_seed=None,
+        evaluation_suite_size=None,
     ):
         winner_players = [index + 1 for index in trajectory.winner_indices]
         winner_tiers = [trajectory.seat_tiers[index] for index in trajectory.winner_indices]
@@ -472,6 +474,7 @@ class CurriculumRunner:
             "retry_count": retry_count,
             "latest_loss": latest_loss,
             "rolling_mean_loss": rolling_mean_loss,
+            "evaluation_suite_size": evaluation_suite_size,
             "generation_seconds": _rounded_seconds(generation_seconds),
             "play_seconds": _rounded_seconds(trajectory.play_seconds),
             "inference_seconds": _rounded_seconds(trajectory.inference_seconds),
@@ -737,6 +740,7 @@ class CurriculumRunner:
                     )
                     continue
                 trajectories.append(trajectory)
+                evaluation_loss = self.trainer.trajectory_loss(trajectory)
                 result = getattr(trajectory, "completion_reason", "normal")
                 self._report(f"Evaluation game {index + 1}/{total_games}: {result}")
                 self._report(
@@ -753,10 +757,11 @@ class CurriculumRunner:
                         stage,
                         "evaluation",
                         retry_count,
-                        None,
+                        evaluation_loss,
                         None,
                         self.report_game_number,
                         action_seed=action_seed,
+                        evaluation_suite_size=total_games,
                     )
                 )
         finally:

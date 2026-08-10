@@ -35,6 +35,7 @@ document.querySelectorAll('.chart').forEach(section => {
   const tooltip = section.querySelector('.tooltip');
   const data = JSON.parse(section.dataset.series);
   const state = {log: true, focus: true, left: 0, right: 1, plotted: []};
+  const MAX_VISIBLE_GROUPS = 750;
 
   const percentile = (values, fraction) => {
     const sorted = [...values].sort((a, b) => a - b);
@@ -43,6 +44,27 @@ document.querySelectorAll('.chart').forEach(section => {
     return sorted[lower] * (upper - position) + sorted[upper] * (position - lower);
   };
   const format = value => value.toLocaleString(undefined, {maximumFractionDigits: 2});
+  const aggregate = points => {
+    if (points.length <= MAX_VISIBLE_GROUPS) {
+      return points.map(point => ({
+        game: point[0], value: point[1], minimum: point[1], maximum: point[1],
+        firstGame: point[0], lastGame: point[0], count: 1,
+      }));
+    }
+    const groupSize = Math.ceil(points.length / MAX_VISIBLE_GROUPS);
+    const groups = [];
+    for (let start = 0; start < points.length; start += groupSize) {
+      const chunk = points.slice(start, start + groupSize);
+      const values = chunk.map(point => point[1]);
+      groups.push({
+        game: (chunk[0][0] + chunk[chunk.length - 1][0]) / 2,
+        value: values.reduce((total, value) => total + value, 0) / values.length,
+        minimum: Math.min(...values), maximum: Math.max(...values),
+        firstGame: chunk[0][0], lastGame: chunk[chunk.length - 1][0], count: chunk.length,
+      });
+    }
+    return groups;
+  };
 
   function draw() {
     const ratio = window.devicePixelRatio || 1;
@@ -69,7 +91,7 @@ document.querySelectorAll('.chart').forEach(section => {
     const py = y => pyTransformed(transform(Math.min(y, cap)));
 
     context.clearRect(0, 0, width, height);
-    context.strokeStyle = '#e2e8f0'; context.fillStyle = '#475569'; context.font = '12px system-ui';
+    context.strokeStyle = '#334155'; context.fillStyle = '#cbd5e1'; context.font = '12px system-ui';
     for (let tick = 0; tick <= 5; tick++) {
       const y = margin.top + plotHeight * tick / 5;
       const transformed = maxY - (maxY - minY) * tick / 5;
@@ -82,24 +104,34 @@ document.querySelectorAll('.chart').forEach(section => {
     state.plotted = [];
 
     const drawSeries = (name, points, color) => {
-      const shown = points.filter(point => point[0] >= minX && point[0] <= maxX);
+      const rawShown = points.filter(point => point[0] >= minX && point[0] <= maxX);
+      const shown = aggregate(rawShown);
+      if (shown.some(point => point.count > 1)) {
+        context.fillStyle = color + '18'; context.beginPath();
+        shown.forEach((point, index) => {
+          const x = px(point.game), y = py(point.maximum);
+          index ? context.lineTo(x, y) : context.moveTo(x, y);
+        });
+        [...shown].reverse().forEach(point => context.lineTo(px(point.game), py(point.minimum)));
+        context.closePath(); context.fill();
+      }
       context.strokeStyle = color; context.lineWidth = 1.5; context.beginPath();
       shown.forEach((point, index) => {
-        const x = px(point[0]), y = py(point[1]);
+        const x = px(point.game), y = py(point.value);
         index ? context.lineTo(x, y) : context.moveTo(x, y);
       });
       context.stroke();
       shown.forEach(point => {
-        const x = px(point[0]), y = py(point[1]), outlier = point[1] > cap;
+        const x = px(point.game), y = py(point.value), outlier = point.maximum > cap;
         context.fillStyle = outlier ? '#dc2626' : color;
         context.beginPath(); context.arc(x, y, outlier ? 4 : 2.5, 0, Math.PI * 2); context.fill();
-        state.plotted.push({x, y, game: point[0], value: point[1], name, outlier});
+        state.plotted.push({...point, x, y, name, outlier});
       });
-      if (name === 'training' && shown.length > 2) {
+      if (name === 'training' && rawShown.length > 2) {
         context.strokeStyle = '#16a34a'; context.lineWidth = 2; context.beginPath();
-        data.median.filter(point => point[0] >= minX && point[0] <= maxX)
+        aggregate(data.median.filter(point => point[0] >= minX && point[0] <= maxX))
           .forEach((point, index) => {
-          const x = px(point[0]), y = py(point[1]);
+          const x = px(point.game), y = py(point.value);
           index ? context.lineTo(x, y) : context.moveTo(x, y);
         });
         context.stroke();
@@ -155,8 +187,12 @@ document.querySelectorAll('.chart').forEach(section => {
     if (!nearest) { tooltip.hidden = true; return; }
     tooltip.hidden = false; tooltip.style.left = `${event.offsetX + 14}px`;
     tooltip.style.top = `${event.offsetY + 14}px`;
-    tooltip.textContent = `Game ${format(nearest.game)}: ${format(nearest.value)}`
-      + (nearest.outlier ? ' (above 99th percentile)' : '');
+    const games = nearest.count === 1 ? `Game ${format(nearest.firstGame)}`
+      : `Games ${format(nearest.firstGame)}–${format(nearest.lastGame)}`;
+    tooltip.textContent = nearest.count === 1
+      ? `${games}: ${format(nearest.value)}${nearest.outlier ? ' (above 99th percentile)' : ''}`
+      : `${games}: average ${format(nearest.value)}, minimum ${format(nearest.minimum)}, `
+        + `maximum ${format(nearest.maximum)} (${format(nearest.count)} games)`;
   });
   canvas.addEventListener('mouseleave', () => { tooltip.hidden = true; });
   new ResizeObserver(draw).observe(canvas); draw();
@@ -176,21 +212,13 @@ document.querySelectorAll('.evaluation-performance').forEach(container => {
 
 @dataclass
 class Series:
-    """Bounded, ordered plot data that compacts itself as the CSV grows."""
+    """Complete ordered plot data; the browser groups only the visible window."""
 
     max_points: int
     points: list[tuple[float, float]] = field(default_factory=list)
 
     def add(self, x_value: float, y_value: float) -> None:
         self.points.append((x_value, y_value))
-        if len(self.points) >= self.max_points * 2:
-            self.points = [
-                (
-                    (self.points[index][0] + self.points[index + 1][0]) / 2,
-                    (self.points[index][1] + self.points[index + 1][1]) / 2,
-                )
-                for index in range(0, len(self.points) - 1, 2)
-            ]
 
 
 def _number(value: str | None) -> float | None:
@@ -298,6 +326,9 @@ def read_results(path: Path, max_points: int):
                             "tier_score": Counter(),
                             "tier_score_games": Counter(),
                             "actions": 0,
+                            "loss_total": 0.0,
+                            "loss_games": 0,
+                            "expected": 0,
                         },
                     )
                     evaluation["games"] += 1
@@ -310,6 +341,14 @@ def read_results(path: Path, max_points: int):
                         evaluation["actions"] += int(_number(row.get("action_count")) or 0)
                     else:
                         evaluation["failure_reasons"][completion_reason] += 1
+                    evaluation_loss = _row_value(row, "latest_loss")
+                    if evaluation_loss is not None:
+                        evaluation["loss_total"] += evaluation_loss
+                        evaluation["loss_games"] += 1
+                    evaluation["expected"] = max(
+                        evaluation["expected"],
+                        int(_number(row.get("evaluation_suite_size")) or 0),
+                    )
                     for tier, score in zip(assigned_tiers, final_scores):
                         evaluation["tier_games"][tier] += 1
                         if isinstance(score, (int, float)):
@@ -360,18 +399,14 @@ def _percentile(values, fraction):
 def _statistics(points):
     values = [value for _game, value in points]
     p95 = _percentile(values, 0.95)
-    p99 = _percentile(values, 0.99)
     comparison_size = max(1, len(values) // 10)
     starting_median = statistics.median(values[:comparison_size])
     latest_median = statistics.median(values[-comparison_size:])
     change = (latest_median - starting_median) / starting_median * 100 if starting_median else 0.0
     entries = (
-        ("Minimum", min(values)),
         ("Median", statistics.median(values)),
         ("Average", statistics.fmean(values)),
         ("95% of losses below", p95),
-        ("Maximum", max(values)),
-        ("Above 99th percentile", sum(value > p99 for value in values)),
         ("Starting 10% median", starting_median),
         ("Latest 10% median", latest_median),
         ("Beginning-to-latest change (%)", change),
@@ -405,10 +440,12 @@ def _chart(chart_id, title, training, evaluation, median=()):
       <div class="statistics">{_statistics(training or evaluation)}</div>
       <canvas id="{html.escape(chart_id)}" aria-label="{html.escape(title)}"></canvas>
       <p class="chart-legend"><span class="loss-key">Loss line and points</span>
+        <span class="range-key">Grouped minimum-to-maximum range</span>
         {median_legend}
         <span class="trend-key">Overall trend line</span></p>
       <div class="tooltip" hidden></div>
-      <p class="hint">Hover for exact values. Use the mouse wheel to zoom horizontally.</p>
+      <p class="hint">At most 750 groups are drawn. Hover for each group's average and range;
+        zoom in to reveal finer detail down to individual games.</p>
     </section>"""
 
 
@@ -686,6 +723,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
         maximum=None,
         baseline=None,
         focus_range=False,
+        point_details=None,
     ):
         available = [value for values in series.values() for value in values if value is not None]
         scale_values = available + ([*baseline] if baseline else [])
@@ -726,8 +764,9 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
             )
         lines = []
         legend = []
-        for tier, values in series.items():
-            color = tier_colors.get(tier, "#2563eb")
+        named_colors = ("#2563eb", "#dc2626", "#16a34a", "#7c3aed")
+        for series_index, (tier, values) in enumerate(series.items()):
+            color = tier_colors.get(tier, named_colors[series_index % len(named_colors)])
             series_label = f"Tier {tier}" if isinstance(tier, int) else str(tier)
             coordinates = [
                 (index, *point(index, value), value)
@@ -743,7 +782,8 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
             circles = "".join(
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="{color}">'
                 f"<title>{series_label}, batch {ordered[index][0]}: "
-                f"{value:.1f}{suffix}</title></circle>"
+                f"{value:.1f}{suffix}"
+                f"{html.escape(point_details[index]) if point_details else ''}</title></circle>"
                 for index, x, y, value in coordinates
             )
             lines.append(
@@ -769,6 +809,37 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
             f"{''.join(lines)}{baseline_path}"
             "</svg></div>"
         )
+
+    loss_ordered = sorted(batches.items())
+    loss_values = [
+        entry["loss_total"] / entry["loss_games"] if entry["loss_games"] else None
+        for _batch, entry in loss_ordered
+    ]
+    rolling_loss_values = []
+    for index, value in enumerate(loss_values):
+        window = [
+            candidate
+            for candidate in loss_values[max(0, index - 4) : index + 1]
+            if candidate is not None
+        ]
+        rolling_loss_values.append(sum(window) / len(window) if value is not None else None)
+    loss_details = [
+        f"; {entry['completed']}/{entry['expected'] or entry['games']} boards completed"
+        for _batch, entry in loss_ordered
+    ]
+    evaluation_loss_chart = line_chart(
+        "Evaluation loss by batch",
+        "Lower is better. Each point averages the completed fixed evaluation boards; "
+        "hover to see how many boards completed.",
+        loss_ordered,
+        {
+            "Evaluation loss": loss_values,
+            "Five-batch average": rolling_loss_values,
+        },
+        "",
+        focus_range=True,
+        point_details=loss_details,
+    )
 
     panels = []
     for (map_value, player_value), current_batches in datasets.items():
@@ -857,6 +928,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
       <label>Players: <select data-evaluation-players><option value="all">All players</option>
       <option value="3">3 players</option><option value="4">4 players</option>
       <option value="5">5 players</option></select></label></div>
+      {evaluation_loss_chart}
       {"".join(panels)}
       <p class="hint">Each point summarizes one batch of fixed evaluation positions.
         Use the filters to compare matching boards and player counts.</p>
@@ -884,37 +956,41 @@ def build_dashboard(row_count, series, counts, source_path):
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Hansa training results</title><style>
-body {{ margin: 0 auto; max-width: 1100px; padding: 24px; color: #172033;
-font-family: system-ui, sans-serif; background: #f5f7fb; }}
-.card,.summary {{ background: white; margin: 16px 0; padding: 16px; border-radius: 10px;
-box-shadow: 0 1px 5px #ccd3df; }} .summaries {{ display:grid;
+body {{ margin: 0 auto; max-width: 1100px; padding: 24px; color: #e2e8f0;
+font-family: system-ui, sans-serif; background: #0f172a; color-scheme:dark; }}
+.card,.summary {{ background:#1e293b; margin:16px 0; padding:16px; border-radius:10px;
+border:1px solid #334155; box-shadow:0 4px 14px #02061780; }} .summaries {{ display:grid;
 grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }}
 .summaries .summary {{ margin:0; }} h1,h2 {{ margin:0 0 12px; }} h2 {{ font-size:17px; }}
 canvas {{ width:100%; display:block; }} .chart {{ position:relative; }}
 .chart-heading {{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }}
-button {{ padding:6px 10px; margin-left:5px; border:1px solid #cbd5e1; border-radius:6px;
-background:#f8fafc; cursor:pointer; }}
-select {{ padding:6px 28px 6px 8px; border:1px solid #cbd5e1; border-radius:6px;
-background:white; }}
-.statistics {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px;
-margin-bottom:8px; }} .statistics div {{ background:#f8fafc; padding:7px; border-radius:5px; }}
+button {{ padding:6px 10px; margin-left:5px; color:#e2e8f0; border:1px solid #475569;
+border-radius:6px; background:#334155; cursor:pointer; }}
+button:hover {{ background:#475569; }}
+select {{ padding:6px 28px 6px 8px; color:#e2e8f0; border:1px solid #475569;
+border-radius:6px; background:#334155; }}
+.statistics {{ display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin-bottom:8px; }}
+.statistics div {{ flex:0 1 max-content; min-width:88px; max-width:210px; background:#0f172a;
+padding:7px 10px; border-radius:5px; }}
 .statistics strong,.statistics span {{ display:block; }} .statistics strong {{ font-size:11px;
-color:#64748b; }} .tooltip {{ position:absolute; pointer-events:none; background:#172033;
-color:white; padding:7px 9px; border-radius:5px; font-size:12px; z-index:2; }}
-.hint {{ margin:4px 0 0; color:#64748b; font-size:12px; }}
+color:#94a3b8; }} .tooltip {{ position:absolute; pointer-events:none; background:#020617;
+color:#f8fafc; border:1px solid #475569; padding:7px 9px; border-radius:5px;
+font-size:12px; z-index:2; }}
+.hint {{ margin:4px 0 0; color:#94a3b8; font-size:12px; }}
 .chart-legend {{ margin:4px 0; font-size:12px; }} .chart-legend span {{ margin-right:16px; }}
-.loss-key {{ color:#2563eb; }} .median-key {{ color:#16a34a; }} .trend-key {{ color:#7c3aed; }}
-table {{ width:100%; border-collapse:collapse; }} td {{ padding:4px; border-bottom:1px solid #e5e7eb; }}
+.loss-key {{ color:#60a5fa; }} .range-key {{ color:#94a3b8; }}
+.median-key {{ color:#4ade80; }} .trend-key {{ color:#c084fc; }}
+table {{ width:100%; border-collapse:collapse; }} td {{ padding:4px; border-bottom:1px solid #334155; }}
 td:last-child {{ text-align:right; }} .legend span {{ margin-right:18px; }}
 .bar {{ height:14px; background:#22c55e; min-width:2px; }} th {{ text-align:left; }}
 .performance-grid {{ display:grid; grid-template-columns:1fr; gap:24px; }}
 .performance-grid h3 {{ margin:0 0 8px; font-size:14px; }}
-.tier-svg {{ width:100%; height:auto; }} .tier-svg text {{ font:11px system-ui; fill:#475569; }}
-.tier-svg .tier-label {{ font-weight:600; }} .svg-grid {{ stroke:#e2e8f0; stroke-width:1; }}
-.svg-x-grid {{ stroke:#eef2f7; stroke-width:1; }}
+.tier-svg {{ width:100%; height:auto; }} .tier-svg text {{ font:11px system-ui; fill:#cbd5e1; }}
+.tier-svg .tier-label {{ font-weight:600; }} .svg-grid {{ stroke:#475569; stroke-width:1; }}
+.svg-x-grid {{ stroke:#334155; stroke-width:1; }}
 .svg-baseline {{ stroke:#f97316; stroke-width:2; stroke-dasharray:8 5; }}
 .tier-legend {{ margin:2px 0 0; font-size:12px; }} .tier-legend span {{ margin-right:18px; }}
-.win-rate-key {{ color:#2563eb; }} .random-key {{ color:#c2410c; }}
+.win-rate-key {{ color:#60a5fa; }} .random-key {{ color:#fb923c; }}
 .score-summary {{ overflow-x:auto; margin-top:18px; }} .score-summary th,
 .score-summary td {{ text-align:center; white-space:nowrap; }}
 .score-results {{ margin-top:24px; }} .score-results > h3 {{ margin-bottom:4px; }}
@@ -923,10 +999,10 @@ grid-template-columns:1fr; gap:20px; margin-top:18px; }}
 .score-summary-grid > div > h3 {{ margin:0 0 8px; }}
 .score-summary-grid .score-summary {{ margin-top:0; overflow-x:auto; }}
 .tier-svg .no-data {{ fill:#94a3b8; font-size:9px; }}
-.evaluation-chart {{ margin-top:24px; padding-top:18px; border-top:1px solid #e2e8f0; }}
+.evaluation-chart {{ margin-top:24px; padding-top:18px; border-top:1px solid #334155; }}
 .evaluation-chart h3 {{ margin:0 0 4px; }}
-.evaluation-warning {{ color:#991b1b; background:#fef2f2; padding:10px; border-radius:6px; }}
-.evaluation-success {{ color:#166534; background:#f0fdf4; padding:10px; border-radius:6px; }}
+.evaluation-warning {{ color:#fecaca; background:#450a0a; padding:10px; border-radius:6px; }}
+.evaluation-success {{ color:#bbf7d0; background:#052e16; padding:10px; border-radius:6px; }}
 </style></head><body>
 <h1>Hansa training results</h1>
 <p>{row_count:,} rows read from {html.escape(str(source_path))}</p>
@@ -951,7 +1027,10 @@ def parse_args():
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="results CSV path")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="HTML output path")
     parser.add_argument(
-        "--max-points", type=int, default=2_000, help="maximum approximate points per line"
+        "--max-points",
+        type=int,
+        default=750,
+        help="deprecated compatibility option; charts display at most 750 visible groups",
     )
     parser.add_argument("--open", action="store_true", help="open the finished chart in a browser")
     return parser.parse_args()
