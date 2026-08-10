@@ -4,6 +4,8 @@ import tempfile
 import unittest
 
 from tools.chart_training_results import (
+    DASHBOARD_SCRIPT,
+    Series,
     _chart_ceiling,
     _evaluation_chart,
     _tier_player_count_charts,
@@ -12,6 +14,20 @@ from tools.chart_training_results import (
 
 
 class TrainingResultsChartTests(unittest.TestCase):
+    def test_loss_charts_keep_history_and_group_only_the_visible_window(self):
+        series = Series(max_points=10)
+        for game_number in range(1, 26):
+            series.add(game_number, game_number * 2)
+
+        self.assertEqual(len(series.points), 25)
+        self.assertIn("const MAX_VISIBLE_GROUPS = 750", DASHBOARD_SCRIPT)
+        self.assertIn(
+            "const groupSize = Math.ceil(points.length / MAX_VISIBLE_GROUPS)", DASHBOARD_SCRIPT
+        )
+        self.assertIn("minimum: Math.min(...values)", DASHBOARD_SCRIPT)
+        self.assertIn("maximum: Math.max(...values)", DASHBOARD_SCRIPT)
+        self.assertIn("data.median.filter", DASHBOARD_SCRIPT)
+
     def test_chart_ceiling_adds_rounded_headroom(self):
         self.assertEqual(_chart_ceiling(31, 10, minimum=40, maximum=100), 40)
         self.assertEqual(_chart_ceiling(54, 10, minimum=40, maximum=100), 60)
@@ -32,6 +48,8 @@ class TrainingResultsChartTests(unittest.TestCase):
                         "winner_tier",
                         "tier_to_seat_assignments",
                         "final_player_scores",
+                        "latest_loss",
+                        "evaluation_suite_size",
                     ),
                 )
                 writer.writeheader()
@@ -45,6 +63,8 @@ class TrainingResultsChartTests(unittest.TestCase):
                             "winner_tier": "[1]",
                             "tier_to_seat_assignments": "[1, 3, 5]",
                             "final_player_scores": "[40, 30, 20]",
+                            "latest_loss": "800",
+                            "evaluation_suite_size": "2",
                         },
                         {
                             "game#": 2,
@@ -54,6 +74,8 @@ class TrainingResultsChartTests(unittest.TestCase):
                             "winner_tier": "[3]",
                             "tier_to_seat_assignments": "[1, 2, 3, 4, 5]",
                             "final_player_scores": "[30, 31, 40, 29, 28]",
+                            "latest_loss": "1000",
+                            "evaluation_suite_size": "2",
                         },
                     )
                 )
@@ -67,6 +89,9 @@ class TrainingResultsChartTests(unittest.TestCase):
             )
 
             self.assertIn("Evaluation results", chart)
+            self.assertIn("Evaluation loss by batch", chart)
+            self.assertIn("Five-batch average", chart)
+            self.assertIn("2/2 boards completed", chart)
             self.assertIn("Win rate by tier", chart)
             self.assertIn("Average final score by tier", chart)
             self.assertIn("Average completed-game length", chart)
