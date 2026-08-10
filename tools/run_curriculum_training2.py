@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import shutil
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +43,9 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    stale_states = DEFAULT_DIRECTORY / "states"
+    if stale_states.is_dir():
+        shutil.rmtree(stale_states)
     if args.fresh:
         args.checkpoint.unlink(missing_ok=True)
         args.csv.unlink(missing_ok=True)
@@ -68,6 +72,8 @@ def main(argv=None):
         checkpoint_path=args.checkpoint,
         playable_model_path=args.playable_model,
         csv_path=args.csv,
+        temporary_directory=DEFAULT_DIRECTORY / "states",
+        failure_directory=DEFAULT_DIRECTORY / "failures",
         evaluation_suite_directory=args.evaluation_suite,
         progress_callback=print,
     )
