@@ -1,19 +1,27 @@
-# Generated Training States
+# Training States
 
-`tools/generate_training_states.py` creates deterministic, playable positions near one of Hansa Teutonica's three end conditions. These are deliberately varied board positions, not reconstructed game histories.
+Curriculum training generates deterministic, playable positions covering all three maps, supported player counts, end conditions, strategic focuses, and optional modules. These are deliberately varied board positions, not reconstructed game histories.
 
-Generated files are organized as:
+Temporary learning positions are written beneath `training_output/curriculum/states/`. The runner removes old batches automatically so these files do not accumulate indefinitely.
+
+The permanent evaluation suite is organized as:
 
 ```text
-generated/<scenario>/map_<number>/<player-count>_players/
+generated/evaluation/<map-player-scenario>/<scenario>/map_<number>/<player-count>_players/
 ```
 
-Each position has an exact `.hansa` save and a searchable `.json` summary. Generated files are ignored by Git because datasets can become large; this README remains tracked.
+Each position has an exact `.hansa` save and a searchable `.json` summary. The evaluation manifest records the fixed suite used to compare model versions consistently.
 
-Example:
+Generate the fixed evaluation suite in an empty evaluation directory with:
 
 ```powershell
-python tools/generate_training_states.py --count 30 --seed 1000
+python tools/generate_training_states.py --eval --seed 1
 ```
 
-The same request and seed produce the same state identity. Every state is checked with the normal engine and save-file validators, saved, loaded again, and revalidated before the command reports success.
+Run training with:
+
+```powershell
+python tools/run_curriculum_training.py --iterations 100 --batch 5
+```
+
+The same generation request and seed produce the same state identity. Every saved state is checked with the engine and save-file validators, loaded again, and revalidated before use.

@@ -20,6 +20,7 @@ from map_data.constants import (
     BANK_MAX_VALUES,
     BOOK_OF_KNOWLEDGE_MAX_VALUES,
     CITY_KEYS_MAX_VALUES,
+    COLOR_NAMES,
     DARK_GREEN,
     PRIVILEGE_COLORS,
 )
@@ -247,23 +248,26 @@ def _fill_city_for_balanced_control(city, players, pools, control_counts, office
     return True
 
 
-def _route_shapes(route, pool, required_shape=None):
+def _route_shapes(route, pool, required_shape=None, rng=None):
     choices = [
         (post.required_shape,) if post.required_shape else ("square", "circle")
         for post in route.posts
     ]
+    legal_shapes = []
     for shapes in product(*choices):
         if required_shape is not None and required_shape not in shapes:
             continue
         if all(shapes.count(shape) <= pool[shape] for shape in ("square", "circle")):
-            return shapes
-    return None
+            legal_shapes.append(shapes)
+    if not legal_shapes:
+        return None
+    return rng.choice(legal_shapes) if rng is not None else legal_shapes[0]
 
 
 def _fill_prepared_route(route, player, pool, required_shape, leave_one_open, rng):
     if any(post.is_owned() for post in route.posts):
         return False, None
-    shapes = _route_shapes(route, pool, required_shape)
+    shapes = _route_shapes(route, pool, required_shape, rng)
     if shapes is None:
         return False, None
     open_index = rng.randrange(len(route.posts)) if leave_one_open else None
@@ -274,6 +278,16 @@ def _fill_prepared_route(route, player, pool, required_shape, leave_one_open, rn
         post.owner_piece_shape = shape
         pool[shape] -= 1
     return True, None if open_index is None else shapes[open_index]
+
+
+def _can_prepare_route(route):
+    return bool(
+        route
+        and len(route.posts) >= 3
+        and route.bonus_marker is None
+        and route.permanent_bonus_marker is None
+        and not any(post.is_owned() for post in route.posts)
+    )
 
 
 def _next_open_office(city):
@@ -371,12 +385,7 @@ def _prepare_east_west(game, pools, rng, requested_length, prepared_route_full):
                         continue
                     neighbor_index = 1 if gap_index == 0 else gap_index - 1
                     route = _route_between(game, gap_city, path[neighbor_index])
-                    if (
-                        route is None
-                        or route.bonus_marker is not None
-                        or route.permanent_bonus_marker is not None
-                        or any(post.is_owned() for post in route.posts)
-                    ):
+                    if not _can_prepare_route(route):
                         continue
                     if any(
                         not city.has_office_owned_by(player) and _next_open_office(city) is None
@@ -425,6 +434,199 @@ def _prepare_east_west(game, pools, rng, requested_length, prepared_route_full):
                     if not completes_connection:
                         return None
                     return player, missing_shape, category
+    return None
+
+
+def _prepare_dual_east_west(game, pools, rng):
+    paths = [path for group in _bounded_east_west_paths(game).values() for path in group]
+    pairs = [
+        (first, second)
+        for first in paths
+        for second in paths
+        if first is not second
+        and all(len(city.offices) >= 2 for city in set(first).intersection(second))
+    ]
+    rng.shuffle(pairs)
+    players = list(game.players)
+    rng.shuffle(players)
+    for first_path, second_path in pairs:
+        first_player, second_player = players[:2]
+        first_gaps = list(range(len(first_path)))
+        second_gaps = list(range(len(second_path)))
+        rng.shuffle(first_gaps)
+        rng.shuffle(second_gaps)
+        for first_gap in first_gaps:
+            for second_gap in second_gaps:
+                gap_specs = []
+                for path, gap_index in ((first_path, first_gap), (second_path, second_gap)):
+                    gap_city = path[gap_index]
+                    neighbor = path[1 if gap_index == 0 else gap_index - 1]
+                    route = _route_between(game, gap_city, neighbor)
+                    if gap_city.color == DARK_GREEN or not _can_prepare_route(route):
+                        break
+                    gap_specs.append((gap_city, route))
+                if len(gap_specs) != 2 or gap_specs[0][1] is gap_specs[1][1]:
+                    continue
+                required_offices = {}
+                for player, path, gap_index in (
+                    (first_player, first_path, first_gap),
+                    (second_player, second_path, second_gap),
+                ):
+                    for index, city in enumerate(path):
+                        if index != gap_index:
+                            required_offices.setdefault(city, []).append(player)
+                if any(
+                    len([office for office in city.offices if office.controller is None])
+                    < len(owners)
+                    for city, owners in required_offices.items()
+                ):
+                    continue
+                for city, owners in required_offices.items():
+                    for player in owners:
+                        if not _place_city_office(city, player, pools, rng):
+                            return None
+                prepared = []
+                for player, (gap_city, route) in zip((first_player, second_player), gap_specs):
+                    target_office = _next_open_office(gap_city)
+                    if target_office is None or not _prepare_player_for_office(
+                        player, target_office, pools, rng
+                    ):
+                        return None
+                    route_prepared, missing_shape = _fill_prepared_route(
+                        route, player, pools[player], target_office.shape, False, rng
+                    )
+                    if not route_prepared:
+                        return None
+                    prepared.append((player, missing_shape))
+                return tuple(prepared)
+    return None
+
+
+def _prepare_special_prestige(game, pools, rng, leave_one_open=False):
+    prestige = game.selected_map.specialprestigepoints
+    special_city = next(
+        city
+        for city in game.selected_map.cities
+        if "SpecialPrestigePoints" in city.upgrade_city_type
+    )
+    players = list(game.players)
+    rng.shuffle(players)
+    for player in players:
+        while pools[player]["circle"] <= 0 and player.book != BOOK_OF_KNOWLEDGE_MAX_VALUES[-1]:
+            _apply_upgrade(player, pools, ("book", "circle"))
+        if pools[player]["circle"] <= 0:
+            continue
+        target_privilege = rng.randrange(len(PRIVILEGE_COLORS))
+        while PRIVILEGE_COLORS.index(player.privilege) < target_privilege:
+            _apply_upgrade(player, pools, ("privilege", "square"))
+
+        available_values = [
+            circle["value"]
+            for circle in prestige.circle_data
+            if PRIVILEGE_COLORS.index(COLOR_NAMES[circle["color"]]) <= target_privilege
+        ]
+        claimed_values = rng.sample(available_values, rng.randrange(len(available_values)))
+        other_players = [other for other in game.players if other is not player]
+        for value in claimed_values:
+            owner = rng.choice(other_players)
+            circle = next(item for item in prestige.circle_data if item["value"] == value)
+            required_privilege = COLOR_NAMES[circle["color"]]
+            while PRIVILEGE_COLORS.index(owner.privilege) < PRIVILEGE_COLORS.index(
+                required_privilege
+            ):
+                _apply_upgrade(owner, pools, ("privilege", "square"))
+            while pools[owner]["circle"] <= 0 and owner.book != BOOK_OF_KNOWLEDGE_MAX_VALUES[-1]:
+                _apply_upgrade(owner, pools, ("book", "circle"))
+            if pools[owner]["circle"] <= 0:
+                return None
+            circle["owner"] = owner
+            circle["color"] = owner.color
+            pools[owner]["circle"] -= 1
+
+        routes = list(special_city.routes)
+        rng.shuffle(routes)
+        for route in routes:
+            if len(route.posts) < 3 or any(post.is_owned() for post in route.posts):
+                continue
+            if not prestige.can_claim_prestige(player):
+                continue
+            prepared, missing_shape = _fill_prepared_route(
+                route, player, pools[player], "circle", leave_one_open, rng
+            )
+            if prepared:
+                return player, missing_shape, "special_prestige"
+    return None
+
+
+def _prepare_network_keys(game, pools, rng):
+    players = list(game.players)
+    rng.shuffle(players)
+    cities = [
+        city for city in game.selected_map.cities if city.color != DARK_GREEN and city.offices
+    ]
+    rng.shuffle(cities)
+    for player in players:
+        if any(
+            office.controller is player
+            for city in game.selected_map.cities
+            for office in city.offices
+        ):
+            continue
+        target_keys = rng.choice(tuple(value for value in (2, 3, 4) if value >= player.keys))
+        while player.keys < target_keys:
+            _apply_upgrade(player, pools, ("keys", "square"))
+        target_offices = rng.randint(3, 7)
+        network_cities = set()
+        offices_placed = 0
+        while offices_placed < target_offices:
+            candidates = [
+                city
+                for city in cities
+                if _next_open_office(city) is not None
+                and (
+                    not network_cities
+                    or city in network_cities
+                    or any(
+                        adjacent in network_cities
+                        for route in city.routes
+                        for adjacent in route.cities
+                        if adjacent is not city
+                    )
+                )
+            ]
+            rng.shuffle(candidates)
+            placed = False
+            for city in candidates:
+                office = _next_open_office(city)
+                if office is None or not _prepare_player_for_office(player, office, pools, rng):
+                    continue
+                if _place_office(office, player, pools):
+                    network_cities.add(city)
+                    offices_placed += 1
+                    placed = True
+                    break
+            if not placed:
+                return None
+
+        extension_routes = [
+            (route, city)
+            for route in game.selected_map.routes
+            if _can_prepare_route(route)
+            for city in route.cities
+            if city.color != DARK_GREEN
+            and _next_open_office(city) is not None
+            and any(endpoint in network_cities for endpoint in route.cities)
+        ]
+        rng.shuffle(extension_routes)
+        for route, city in extension_routes:
+            office = _next_open_office(city)
+            if office is None or not _prepare_player_for_office(player, office, pools, rng):
+                continue
+            prepared, missing_shape = _fill_prepared_route(
+                route, player, pools[player], office.shape, True, rng
+            )
+            if prepared:
+                return player, missing_shape, f"network_{target_offices}_keys_{target_keys}"
     return None
 
 
@@ -478,13 +680,7 @@ def _prepare_britannia_region(game, pools, rng, scenario, prepared_route_full):
     for target_city in target_candidates:
         if any(office.controller is not None for office in target_city.offices):
             continue
-        routes = [
-            route
-            for route in target_city.routes
-            if route.bonus_marker is None
-            and route.permanent_bonus_marker is None
-            and not any(post.is_owned() for post in route.posts)
-        ]
+        routes = [route for route in target_city.routes if _can_prepare_route(route)]
         rng.shuffle(routes)
         for actor, rival in player_pairs:
             support = {}
@@ -600,7 +796,7 @@ def _prepare_completed_cities(game, pools, rng):
         office_counts[owner] += 1
 
     office = open_offices[-1]
-    routes = list(trigger_city.routes)
+    routes = [route for route in trigger_city.routes if len(route.posts) >= 3]
     rng.shuffle(routes)
     players = list(game.players)
     rng.shuffle(players)
@@ -608,7 +804,7 @@ def _prepare_completed_cities(game, pools, rng):
         if not _can_claim_office(player, office):
             continue
         for route in routes:
-            shapes = _route_shapes(route, pools[player], office.shape)
+            shapes = _route_shapes(route, pools[player], office.shape, rng)
             if shapes is None:
                 continue
             for post, shape in zip(route.posts, shapes):
@@ -620,13 +816,17 @@ def _prepare_completed_cities(game, pools, rng):
 
 
 def _prepare_bonus_marker_route(game, pools, rng):
-    routes = [route for route in game.selected_map.routes if route.bonus_marker is not None]
+    routes = [
+        route
+        for route in game.selected_map.routes
+        if route.bonus_marker is not None and len(route.posts) >= 3
+    ]
     rng.shuffle(routes)
     players = list(game.players)
     rng.shuffle(players)
     for player in players:
         for route in routes:
-            shapes = _route_shapes(route, pools[player])
+            shapes = _route_shapes(route, pools[player], rng=rng)
             if shapes is None:
                 continue
             for post, shape in zip(route.posts, shapes):
@@ -641,7 +841,8 @@ def _prepare_score_route(game, pools, rng):
     routes = [
         route
         for route in game.selected_map.routes
-        if route.bonus_marker is None
+        if len(route.posts) >= 3
+        and route.bonus_marker is None
         and route.permanent_bonus_marker is None
         and all(city.color != DARK_GREEN and city.offices for city in route.cities)
         and all(all(office.controller is None for office in city.offices) for city in route.cities)
@@ -665,7 +866,7 @@ def _prepare_score_route(game, pools, rng):
             }
             if min(remaining.values()) < 0:
                 continue
-            shapes = _route_shapes(route, remaining)
+            shapes = _route_shapes(route, remaining, rng=rng)
             if shapes is None:
                 continue
             for office in endpoint_offices:
@@ -725,13 +926,22 @@ def _give_marker_to_player(game, marker, rng):
     destination.append(marker)
 
 
-def _configure_bonus_marker_scenario(game, rng, prepared_player, immediate_finish):
-    while game.selected_map.bonus_marker_pool:
+def _configure_bonus_marker_scenario(
+    game, rng, prepared_player, immediate_finish, markers_remaining=0
+):
+    while len(game.selected_map.bonus_marker_pool) > markers_remaining:
         marker = BonusMarker(game.selected_map.bonus_marker_pool.pop())
         _give_marker_to_player(game, marker, rng)
     if not immediate_finish:
         for route in game.selected_map.routes:
-            if route.bonus_marker is not None and not route.is_controlled_by(prepared_player):
+            prepared_route = any(post.owner is prepared_player for post in route.posts) and all(
+                post.owner in (None, prepared_player) for post in route.posts
+            )
+            if (
+                route.bonus_marker is not None
+                and not route.is_controlled_by(prepared_player)
+                and not prepared_route
+            ):
                 marker = route.bonus_marker
                 route.bonus_marker = None
                 _give_marker_to_player(game, marker, rng)

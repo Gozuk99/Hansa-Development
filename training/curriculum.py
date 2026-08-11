@@ -9,26 +9,18 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
-import random
 import shutil
 import tempfile
 from time import perf_counter
 import traceback
 
-from game.game_config import GameConfiguration, human_players
 from game.persistence import save_game
 from training.self_play import (
     ActionLimitExceeded,
     IncompleteGameError,
     SelfPlayTrainer,
 )
-from training.targeted_state_generator import (
-    EndGameScenario,
-    GenerationRequest,
-    StateGenerationError,
-    generate_state,
-    save_generated_state,
-)
+from training.targeted_state_generator import StateGenerationError
 
 
 CSV_FIELDS = (
@@ -51,6 +43,7 @@ CSV_FIELDS = (
     "latest_loss",
     "rolling_mean_loss",
     "evaluation_suite_size",
+    "evaluation_suite_version",
     "generation_seconds",
     "play_seconds",
     "inference_seconds",
@@ -170,18 +163,19 @@ def _play_timing_breakdown(trajectory):
         )
     )
     loop_seconds = max(trajectory.play_seconds - measured, 0.0)
-    return (
-        f"observation {trajectory.observation_seconds:.2f}s, "
-        f"legality {trajectory.legality_seconds:.2f}s, "
-        f"inference {trajectory.inference_seconds:.2f}s, "
-        f"selection {trajectory.selection_seconds:.2f}s, "
-        f"context/threats {trajectory.context_seconds:.2f}s, "
-        f"scoring {trajectory.scoring_seconds:.2f}s, "
-        f"execution {trajectory.execution_seconds:.2f}s, "
-        f"validation {trajectory.validation_seconds:.2f}s, "
-        f"rewards {trajectory.reward_seconds:.2f}s, "
-        f"loop/control {loop_seconds:.2f}s"
+    timings = (
+        ("observation", trajectory.observation_seconds),
+        ("legality", trajectory.legality_seconds),
+        ("inference", trajectory.inference_seconds),
+        ("selection", trajectory.selection_seconds),
+        ("context/threats", trajectory.context_seconds),
+        ("scoring", trajectory.scoring_seconds),
+        ("execution", trajectory.execution_seconds),
+        ("validation", trajectory.validation_seconds),
+        ("rewards", trajectory.reward_seconds),
+        ("loop/control", loop_seconds),
     )
+    return ", ".join(f"{name} {seconds:.2f}s" for name, seconds in timings if seconds >= 1)
 
 
 def _rounded_seconds(value):
@@ -306,75 +300,11 @@ class CurriculumRunner:
         }
 
     def _generate_state(self, stage, seed, directory, *, map_num=None, player_count=None):
-        rng = random.Random(seed)
-        map_num = rng.choice((1, 2, 3)) if map_num is None else map_num
-        player_count = rng.choice((3, 4, 5)) if player_count is None else player_count
-        scenario = (
-            None
-            if stage.full_game
-            else tuple(EndGameScenario)[self.game_number % len(EndGameScenario)]
-        )
-        if scenario in (
-            EndGameScenario.BRITANNIA_WALES,
-            EndGameScenario.BRITANNIA_SCOTLAND,
-            EndGameScenario.BRITANNIA_ISLE_OF_MAN,
-        ):
-            map_num = 3
-        if (
-            scenario
-            in (
-                EndGameScenario.BRITANNIA_SCOTLAND,
-                EndGameScenario.BRITANNIA_ISLE_OF_MAN,
-            )
-            and player_count == 3
-        ):
-            player_count = rng.choice((4, 5))
-        pending = StateDescriptor(
-            directory / f"pending-{seed}.hansa", None, map_num, player_count, seed
-        )
-        self._latest_descriptor = pending
-        if stage.full_game:
-            configuration = GameConfiguration(
-                map_num=map_num,
-                player_count=player_count,
-                player_controls=human_players(player_count),
-                use_mission_cards=map_num == 1 and rng.choice((False, True)),
-                use_emperors_favour=rng.choice((False, True)),
-                use_promo_markers=rng.choice((False, True)),
-                seed=seed,
-            )
-            path = save_game(configuration.create_game(), directory / f"full-{seed}.hansa")
-            descriptor = StateDescriptor(path, None, map_num, player_count, seed, "full_game")
-            self._latest_descriptor = descriptor
-            return descriptor
-
-        immediate_finish = self.game_number % 10 == 0
-        generated = generate_state(
-            GenerationRequest(
-                seed=seed,
-                scenario=scenario,
-                map_num=map_num,
-                player_count=player_count,
-                score_range=((17, 18) if scenario is EndGameScenario.NEAR_SCORE else (6, 16)),
-                immediate_finish=immediate_finish,
-            )
-        )
-        path, metadata_path = save_generated_state(generated, directory)
-        descriptor = StateDescriptor(
-            path,
-            metadata_path,
-            generated.game.map_num,
-            len(generated.game.players),
-            seed,
-            generated.scenario.value,
-            "immediate_finish" if immediate_finish else "one_round_before",
-        )
-        self._latest_descriptor = descriptor
-        return descriptor
+        raise NotImplementedError
 
     def _failure_callback(self, stage, descriptor, retry_count, run_type):
         def capture(game, action_trace, seat_tiers, error):
-            self._save_failure(
+            directory = self._save_failure(
                 stage,
                 descriptor,
                 retry_count,
@@ -385,6 +315,10 @@ class CurriculumRunner:
                 seat_tiers=seat_tiers,
             )
             self._captured_errors.add(id(error))
+            if isinstance(error, IncompleteGameError) and not isinstance(
+                error, ActionLimitExceeded
+            ):
+                self._report(f"Saved no-legal-interaction state: {directory}")
 
         return capture
 
@@ -452,6 +386,7 @@ class CurriculumRunner:
         learning_seconds=0.0,
         action_seed=None,
         evaluation_suite_size=None,
+        evaluation_suite_version=None,
     ):
         winner_players = [index + 1 for index in trajectory.winner_indices]
         winner_tiers = [trajectory.seat_tiers[index] for index in trajectory.winner_indices]
@@ -475,6 +410,7 @@ class CurriculumRunner:
             "latest_loss": latest_loss,
             "rolling_mean_loss": rolling_mean_loss,
             "evaluation_suite_size": evaluation_suite_size,
+            "evaluation_suite_version": evaluation_suite_version,
             "generation_seconds": _rounded_seconds(generation_seconds),
             "play_seconds": _rounded_seconds(trajectory.play_seconds),
             "inference_seconds": _rounded_seconds(trajectory.inference_seconds),
@@ -548,14 +484,19 @@ class CurriculumRunner:
         game_index = 0
         while game_index < total_games:
             completed_game = False
+            retry_reason = None
             for retry_count in range(self.config.retry_limit + 1):
-                retry = "" if retry_count == 0 else f" (retry {retry_count})"
+                retry = (
+                    ""
+                    if retry_count == 0
+                    else f" (retry {retry_count}: {retry_reason or 'unknown'})"
+                )
                 self._report(f"Training game {game_index + 1}/{total_games}{retry}...")
                 seed = self.config.seed + self.game_number * 10_007 + retry_count
                 generation_started = perf_counter()
                 try:
                     descriptor = self._generate_state(stage, seed, directory)
-                except StateGenerationError:
+                except StateGenerationError as error:
                     unfinished += 1
                     if retry_count == self.config.retry_limit:
                         self.game_number += 1
@@ -564,7 +505,7 @@ class CurriculumRunner:
                             f"continuing training game {game_index + 1}/{total_games}"
                         )
                         break
-                    self._report("Generated position failed constraints; retrying")
+                    retry_reason = f"generation constraints: {error}"
                     continue
                 generation_seconds = perf_counter() - generation_started
                 self.trainer.rng.seed(descriptor.action_seed)
@@ -575,29 +516,42 @@ class CurriculumRunner:
                             stage, descriptor, retry_count, "training"
                         ),
                     )
-                except IncompleteGameError:
+                except IncompleteGameError as error:
                     unfinished += 1
+                    reason = (
+                        "action_limit"
+                        if isinstance(error, ActionLimitExceeded)
+                        else "no_legal_interaction"
+                    )
                     if retry_count == self.config.retry_limit:
                         self.game_number += 1
                         self._report(
-                            f"Discarded starting position after {retry_count} retries; "
+                            f"Discarded starting position after {retry_count} retries "
+                            f"({reason}); "
                             f"continuing training game {game_index + 1}/{total_games}"
                         )
                         break
+                    retry_reason = (
+                        f"{reason}: {error}" if reason == "no_legal_interaction" else reason
+                    )
                     continue
                 game_loss = self.trainer.trajectory_loss(trajectory)
                 result = getattr(trajectory, "completion_reason", "normal")
-                self._report(f"Training game {game_index + 1}/{total_games}: {result}")
                 descriptors.append(descriptor)
                 learning_started = perf_counter()
                 self.trainer.update_model((trajectory,))
                 learning_seconds = perf_counter() - learning_started
+                loss = f"; loss {game_loss:.2f}" if game_loss is not None else ""
+                slow_timings = _play_timing_breakdown(trajectory)
+                timing = f" ({slow_timings})" if slow_timings else ""
+                generation = (
+                    f"; generate {generation_seconds:.2f}s" if generation_seconds >= 1 else ""
+                )
+                learning = f"; learn {learning_seconds:.2f}s" if learning_seconds >= 1 else ""
                 self._report(
-                    "Timing: "
-                    f"{len(trajectory.action_trace)} actions, "
-                    f"generate {generation_seconds:.2f}s, play {trajectory.play_seconds:.2f}s "
-                    f"({_play_timing_breakdown(trajectory)}), "
-                    f"learn {learning_seconds:.2f}s"
+                    f"Training game {game_index + 1}/{total_games}: {result}; "
+                    f"{len(trajectory.action_trace)} actions; "
+                    f"play {trajectory.play_seconds:.2f}s{loss}{timing}{generation}{learning}"
                 )
                 pending_update.append(trajectory)
                 completed = result != "no_replacement_route"
@@ -606,6 +560,7 @@ class CurriculumRunner:
                     if len(pending_update) == self.config.update_batch_size:
                         save_completed_group()
                     if retry_count < self.config.retry_limit:
+                        retry_reason = "no_replacement_route"
                         continue
                     save_completed_group()
                     self.game_number += 1
@@ -655,6 +610,9 @@ class CurriculumRunner:
             manifest_path = self.evaluation_suite_directory / "manifest.json"
             if manifest_path.is_file():
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                evaluation_suite_version = max(
+                    (int(item.get("suite_version", 1)) for item in manifest), default=1
+                )
                 evaluation_states = [
                     StateDescriptor(
                         self.evaluation_suite_directory / item["save_file"],
@@ -673,6 +631,7 @@ class CurriculumRunner:
                 ]
             else:
                 evaluation_states = []
+                evaluation_suite_version = 0
                 total_games = self.config.evaluation_games_per_batch
                 for index in range(total_games):
                     evaluation_index = (self.batch_number - 1) * total_games + index
@@ -742,11 +701,12 @@ class CurriculumRunner:
                 trajectories.append(trajectory)
                 evaluation_loss = self.trainer.trajectory_loss(trajectory)
                 result = getattr(trajectory, "completion_reason", "normal")
-                self._report(f"Evaluation game {index + 1}/{total_games}: {result}")
+                slow_timings = _play_timing_breakdown(trajectory)
+                timing = f" ({slow_timings})" if slow_timings else ""
                 self._report(
-                    f"Evaluation timing: {len(trajectory.action_trace)} actions, "
-                    f"play {trajectory.play_seconds:.2f}s "
-                    f"({_play_timing_breakdown(trajectory)})"
+                    f"Evaluation game {index + 1}/{total_games}: {result}; "
+                    f"{len(trajectory.action_trace)} actions; "
+                    f"play {trajectory.play_seconds:.2f}s{timing}"
                 )
                 self.game_number += 1
                 self.report_game_number += 1
@@ -762,6 +722,7 @@ class CurriculumRunner:
                         self.report_game_number,
                         action_seed=action_seed,
                         evaluation_suite_size=total_games,
+                        evaluation_suite_version=evaluation_suite_version,
                     )
                 )
         finally:

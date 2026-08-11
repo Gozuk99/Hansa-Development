@@ -8,7 +8,7 @@ Use one shared Hansa model for every AI-controlled seat. Each decision and rewar
 
 `HansaNN` accepts the fixed player-visible observation and produces one value for each entry in the 768-action schema. `GameConfiguration` loads at most one shared inference model. Human-only games do not load PyTorch models.
 
-Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. Updates happen only between completed games or batches.
+Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. One update is performed after each collected learning trajectory, including penalized no-replacement-route failures, before the next game begins; evaluation games never update the model.
 
 ## Player-Visible Decisions
 

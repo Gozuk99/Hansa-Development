@@ -1,4 +1,5 @@
 import copy
+from collections import Counter
 import json
 from pathlib import Path
 import tempfile
@@ -14,6 +15,7 @@ from map_data.constants import (
     BOOK_OF_KNOWLEDGE_MAX_VALUES,
     PRIVILEGE_COLORS,
 )
+from training.balanced_state_generator import EndingCondition
 from training.targeted_state_generator import (
     EndGameScenario,
     GenerationRequest,
@@ -66,31 +68,35 @@ class TargetedStateGeneratorTests(unittest.TestCase):
                 )
 
     def test_evaluation_suite_covers_maps_players_endings_and_optional_rules(self):
-        self.assertEqual(len(EVALUATION_SPECS), 21)
-        balanced = {
-            (spec.map_num, spec.player_count)
-            for spec in EVALUATION_SPECS
-            if spec.name.startswith("balanced_")
-        }
+        self.assertEqual(len(EVALUATION_SPECS), 27)
+        configurations = Counter((spec.map_num, spec.player_count) for spec in EVALUATION_SPECS)
+        self.assertEqual(set(configurations.values()), {3})
+        self.assertEqual(Counter(spec.map_num for spec in EVALUATION_SPECS), {1: 9, 2: 9, 3: 9})
         self.assertEqual(
-            balanced,
-            {(map_num, players) for map_num in (1, 2, 3) for players in (3, 4, 5)},
+            Counter(spec.player_count for spec in EVALUATION_SPECS), {3: 9, 4: 9, 5: 9}
         )
         self.assertTrue(any(spec.mission_cards for spec in EVALUATION_SPECS))
         self.assertTrue(any(spec.emperors_favour for spec in EVALUATION_SPECS))
         self.assertTrue(any(spec.promo_markers for spec in EVALUATION_SPECS))
-        self.assertEqual({spec.scenario for spec in EVALUATION_SPECS}, set(EndGameScenario))
         self.assertEqual(
-            {
-                spec.east_west_path_length
-                for spec in EVALUATION_SPECS
-                if spec.scenario is EndGameScenario.EAST_WEST
-            },
-            {"short", "medium", "long"},
+            Counter(spec.ending_condition for spec in EVALUATION_SPECS),
+            {ending: 9 for ending in EndingCondition},
         )
-        self.assertEqual(sum(spec.immediate_finish for spec in EVALUATION_SPECS), 3)
+        self.assertEqual(sum(spec.east_west for spec in EVALUATION_SPECS), 9)
+        self.assertTrue(any(spec.east_west and spec.regional_focus for spec in EVALUATION_SPECS))
+        self.assertEqual(sum(spec.immediate_finish for spec in EVALUATION_SPECS), 1)
         self.assertTrue(
             all(not spec.mission_cards or spec.map_num == 1 for spec in EVALUATION_SPECS)
+        )
+        manifest = json.loads(
+            Path("training_data/generated/evaluation/manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(
+            all(
+                "\\" not in entry[field]
+                for entry in manifest
+                for field in ("save_file", "metadata_file")
+            )
         )
         self.assertTrue(parse_args(["--eval"]).eval)
 

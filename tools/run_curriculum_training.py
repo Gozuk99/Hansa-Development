@@ -12,9 +12,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai.ai_model import HansaNN  # noqa: E402
+from training.balanced_curriculum import BalancedCurriculumRunner  # noqa: E402
 from training.curriculum import (  # noqa: E402
     CurriculumConfig,
-    CurriculumRunner,
     PromotionCriteria,
 )
 from training.self_play import SelfPlayTrainer, TrainingConfig  # noqa: E402
@@ -33,7 +33,7 @@ def parse_args(argv=None):
         "--iterations",
         type=int,
         default=5,
-        help="Number of learning games to run before one test-only game",
+        help="Learning games per batch before the complete evaluation suite",
     )
     parser.add_argument(
         "--batch",
@@ -101,7 +101,7 @@ def main(argv=None):
             rolling_loss_window=args.rolling_loss_window,
         ),
     )
-    runner = CurriculumRunner(
+    runner = BalancedCurriculumRunner(
         trainer,
         config,
         checkpoint_path=args.checkpoint,

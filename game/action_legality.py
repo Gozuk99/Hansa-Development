@@ -89,7 +89,6 @@ def mask_post_action(game):
             is_post_empty = not is_post_owned
 
             if game.waiting_for_displaced_player:
-                displaced_player = game.displaced_player
                 if can_pick_up_displacement_fallback(game, post):
                     # Any owned route piece may be selected; after pickup its
                     # actual shape becomes the placement requirement.

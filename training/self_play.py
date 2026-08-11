@@ -720,10 +720,13 @@ class SelfPlayTrainer:
                                 completed=False,
                                 timings=timings(),
                             )
-                        raise IncompleteGameError(
+                        error = IncompleteGameError(
                             "The game has no legal interaction at "
                             f"turn {game.turn_number}, phase {game.turn_phase.value}"
                         )
+                        if failure_callback is not None:
+                            failure_callback(game, tuple(action_trace), seat_tiers, error)
+                        raise error
                     inference_started = perf_counter()
                     scores = self.model(observation.features.float().unsqueeze(0).to(device))[0]
                     inference_seconds += perf_counter() - inference_started
