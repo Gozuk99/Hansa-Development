@@ -20,10 +20,11 @@ from training.self_play import (
     TrainingProgress,
 )
 from training.targeted_state_generator import StateGenerationError
+from tests.action_helpers import evaluation_state
 from tools.run_curriculum_training import parse_args as parse_curriculum_args
 
 
-VALIDATION_STATE = Path("training_data/5p-map2_YELLOW_19_points_1_turn_from_winning.hansa")
+VALIDATION_STATE = evaluation_state("map1_3p_near_score")
 
 
 def completed_trajectory():
@@ -262,7 +263,12 @@ class CurriculumTrainingTests(unittest.TestCase):
                 f"{prefix}Starting stage 'mixed_end_game': 1 training games and 1 evaluation game(s)",
                 messages,
             )
-            self.assertIn(f"{prefix}Evaluation game 1/1: normal", messages)
+            self.assertTrue(
+                any(
+                    message.startswith(f"{prefix}Evaluation game 1/1: normal;")
+                    for message in messages
+                )
+            )
             self.assertIn(f"{prefix}Saved learning games 1-1", messages)
 
     def test_evaluation_retries_replacement_route_deadlock(self):
@@ -547,7 +553,7 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(runner.generated_seeds, [125, 10000])
             self.assertTrue(
                 any(
-                    message.endswith("Generated position failed constraints; retrying")
+                    "Training game 1/1 (retry 1: generation constraints:" in message
                     for message in messages
                 )
             )

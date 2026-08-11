@@ -15,7 +15,6 @@ import tempfile
 
 from game.action_schema import action_schema_metadata, validate_action_schema_metadata
 from game.game_info import Game
-from game.invariants import validate_game
 from game.loaded_state_validation import validate_loaded_game
 
 

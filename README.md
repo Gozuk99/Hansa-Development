@@ -93,6 +93,20 @@ times. The three fixed starting markers remain separate.
 The same configuration and seed should produce the same action trace and final
 scores. See `run_headless_game.py --help` for all available options.
 
+## Project Tools
+
+- `tools/run_curriculum_training.py` runs the current self-play training and
+  fixed evaluation workflow.
+- `tools/chart_training_results.py` turns the training CSV into the interactive
+  HTML dashboard.
+- `tools/generate_training_states.py` creates the fixed evaluation suite or
+  individual deterministic debugging states.
+- `tools/check_schema_compat.py` checks whether a saved game or model matches
+  the current action and observation schemas.
+- `tools/audit_headless_games.py` checks legal-action agreement and deterministic
+  completion across maps, player counts, and seeds.
+- `tools/validate_pr.py` runs the repository validation suite.
+
 ## Validation
 
 Run the same deterministic validation used by pull requests:
@@ -118,8 +132,11 @@ creates no OpenAI API billing, and never auto-merges.
 
 ## Architecture and Rules
 
-- [Repository assessment](docs/REPOSITORY_ASSESSMENT.md)
-- [First milestone plan](docs/FIRST_MILESTONE_PLAN.md)
+- [Action schema](docs/action-schema-v2.md)
+- [AI observation design](docs/observation-schema-design.md)
+- [Reward structure](docs/rl/reward_structure.md)
+- [Shared-model architecture](docs/rl/shared_model_architecture.md)
+- [Training guide](training/README.md)
 - [New Game configuration](docs/NEW_GAME_CONFIGURATION.md)
 - [Drawing architecture](docs/DRAWING_ARCHITECTURE.md)
 - [Rules compliance matrix](docs/RULES_COMPLIANCE_MATRIX.md)

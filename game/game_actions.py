@@ -1,6 +1,6 @@
 from collections import deque
 
-from map_data.constants import ACTIONS_MAX_VALUES, DARK_GREEN
+from map_data.constants import DARK_GREEN
 
 
 class InvalidActionError(RuntimeError):

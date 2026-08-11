@@ -12,6 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from training.balanced_state_generator import (  # noqa: E402
+    BalancedGenerationRequest,
+    EndingCondition,
+    RegionalFocus,
+    StartingPosition,
+    StrategicFocus,
+    generate_balanced_state,
+    save_balanced_state,
+)
 from training.targeted_state_generator import (  # noqa: E402
     DEFAULT_OUTPUT_DIRECTORY,
     EndGameScenario,
@@ -34,109 +43,61 @@ class EvaluationSpec:
     name: str
     map_num: int
     player_count: int
-    scenario: EndGameScenario = EndGameScenario.NEAR_SCORE
-    score_range: tuple[int, int] = (16, 16)
+    ending_condition: EndingCondition
+    score_range: tuple[int, int] = (16, 17)
+    east_west: bool = False
+    regional_focus: RegionalFocus | None = None
     mission_cards: bool = False
     emperors_favour: bool = False
     promo_markers: bool = False
     immediate_finish: bool = False
-    east_west_path_length: str | None = None
-    prepared_route_full: bool | None = None
 
 
-EVALUATION_SPECS = tuple(
-    EvaluationSpec(f"balanced_map{map_num}_{players}p", map_num, players)
-    for map_num in (1, 2, 3)
-    for players in (3, 4, 5)
-) + (
-    EvaluationSpec(
-        "missions_map1_3p",
-        1,
-        3,
-        score_range=(10, 17),
-        mission_cards=True,
-        immediate_finish=True,
-    ),
-    EvaluationSpec(
-        "promo_markers_map2_4p",
-        2,
-        4,
-        scenario=EndGameScenario.NEAR_BONUS_MARKERS,
-        promo_markers=True,
-        immediate_finish=True,
-    ),
-    EvaluationSpec(
-        "emperors_favour_map3_5p",
-        3,
-        5,
-        scenario=EndGameScenario.NEAR_COMPLETED_CITIES,
-        emperors_favour=True,
-        immediate_finish=True,
-    ),
-    EvaluationSpec(
-        "all_options_map1_5p",
-        1,
-        5,
-        score_range=(10, 17),
-        mission_cards=True,
-        emperors_favour=True,
-        promo_markers=True,
-    ),
-    EvaluationSpec("city_limit_map2_5p", 2, 5, scenario=EndGameScenario.NEAR_COMPLETED_CITIES),
-    EvaluationSpec(
-        "marker_limit_map3_4p",
-        3,
-        4,
-        scenario=EndGameScenario.NEAR_BONUS_MARKERS,
-        emperors_favour=True,
-        promo_markers=True,
-    ),
-    EvaluationSpec(
-        "east_west_short_map1_4p",
-        1,
-        4,
-        scenario=EndGameScenario.EAST_WEST,
-        east_west_path_length="short",
-        prepared_route_full=True,
-    ),
-    EvaluationSpec(
-        "east_west_medium_map2_4p",
-        2,
-        4,
-        scenario=EndGameScenario.EAST_WEST,
-        east_west_path_length="medium",
-        prepared_route_full=True,
-    ),
-    EvaluationSpec(
-        "east_west_long_map3_5p",
-        3,
-        5,
-        scenario=EndGameScenario.EAST_WEST,
-        east_west_path_length="long",
-        prepared_route_full=True,
-    ),
-    EvaluationSpec(
-        "wales_control_map3_3p",
-        3,
-        3,
-        scenario=EndGameScenario.BRITANNIA_WALES,
-        prepared_route_full=True,
-    ),
-    EvaluationSpec(
-        "scotland_control_map3_4p",
-        3,
-        4,
-        scenario=EndGameScenario.BRITANNIA_SCOTLAND,
-        prepared_route_full=True,
-    ),
-    EvaluationSpec(
-        "isle_of_man_dual_control_map3_5p",
-        3,
-        5,
-        scenario=EndGameScenario.BRITANNIA_ISLE_OF_MAN,
-        prepared_route_full=True,
-    ),
-)
+EVALUATION_SUITE_VERSION = 2
+
+
+def _regional_focus(player_count, ending_index):
+    if player_count == 3:
+        return RegionalFocus.WALES if ending_index == 1 else None
+    focuses = (
+        (RegionalFocus.WALES, RegionalFocus.ISLE_OF_MAN, RegionalFocus.SCOTLAND)
+        if player_count == 4
+        else (RegionalFocus.WALES, RegionalFocus.SCOTLAND, RegionalFocus.ISLE_OF_MAN)
+    )
+    return focuses[ending_index]
+
+
+def _evaluation_specs():
+    specs = []
+    for map_num in (1, 2, 3):
+        for players in (3, 4, 5):
+            for ending_index, ending in enumerate(EndingCondition):
+                if (map_num, players) == (3, 4):
+                    east_west_index = 0
+                elif (map_num, players) == (3, 5):
+                    east_west_index = 1
+                else:
+                    east_west_index = (map_num + players) % 3
+                east_west = ending_index == east_west_index
+                region = _regional_focus(players, ending_index) if map_num == 3 else None
+                specs.append(
+                    EvaluationSpec(
+                        f"map{map_num}_{players}p_{ending.value}",
+                        map_num,
+                        players,
+                        ending,
+                        east_west=east_west,
+                        regional_focus=region,
+                        mission_cards=map_num == 1 and (players + ending_index) % 2 == 0,
+                        emperors_favour=(map_num + players + ending_index) % 2 == 0,
+                        promo_markers=(map_num + players + ending_index) % 2 == 1,
+                        immediate_finish=(map_num, players, ending_index) == (1, 3, 0),
+                    )
+                )
+    return tuple(specs)
+
+
+EVALUATION_SPECS = _evaluation_specs()
 
 
 def parse_args(argv=None):
@@ -188,29 +149,43 @@ def _generate_evaluation_suite(args):
 
     manifest = []
     for index, spec in enumerate(EVALUATION_SPECS):
-        generated = generate_state(
-            GenerationRequest(
+        generated = generate_balanced_state(
+            BalancedGenerationRequest(
                 seed=args.seed + index,
-                scenario=spec.scenario,
                 map_num=spec.map_num,
                 player_count=spec.player_count,
+                ending_condition=spec.ending_condition,
+                score_range=spec.score_range,
+                strategic_focus=(
+                    StrategicFocus.EAST_WEST if spec.east_west else StrategicFocus.NONE
+                ),
+                regional_focus=spec.regional_focus,
                 use_mission_cards=spec.mission_cards,
                 use_emperors_favour=spec.emperors_favour,
                 use_promo_markers=spec.promo_markers,
-                score_range=spec.score_range,
-                immediate_finish=spec.immediate_finish,
-                east_west_path_length=spec.east_west_path_length,
-                prepared_route_full=spec.prepared_route_full,
+                starting_position=(
+                    StartingPosition.IMMEDIATE_FINISH
+                    if spec.immediate_finish
+                    else StartingPosition.ONE_ROUND_BEFORE
+                ),
             )
         )
-        save_path, metadata_path = save_generated_state(generated, evaluation_directory / spec.name)
+        save_path, metadata_path = save_balanced_state(generated, evaluation_directory / spec.name)
+        focuses = ["east_west"] if spec.east_west else []
+        if spec.regional_focus is not None:
+            focuses.append(spec.regional_focus.value)
         manifest.append(
             {
                 **asdict(spec),
-                "scenario": spec.scenario.value,
+                "suite_version": EVALUATION_SUITE_VERSION,
+                "scenario": "+".join((spec.ending_condition.value, *focuses)),
+                "ending_condition": spec.ending_condition.value,
+                "regional_focus": (
+                    None if spec.regional_focus is None else spec.regional_focus.value
+                ),
                 "seed": args.seed + index,
-                "save_file": str(save_path.relative_to(evaluation_directory)),
-                "metadata_file": str(metadata_path.relative_to(evaluation_directory)),
+                "save_file": save_path.relative_to(evaluation_directory).as_posix(),
+                "metadata_file": metadata_path.relative_to(evaluation_directory).as_posix(),
             }
         )
         print(f"{index + 1}/{len(EVALUATION_SPECS)} {spec.name}: {save_path}")

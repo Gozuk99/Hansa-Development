@@ -79,8 +79,11 @@ document.querySelectorAll('.chart').forEach(section => {
     const minX = fullMinX + span * state.left, maxX = fullMinX + span * state.right;
     const visible = all.filter(point => point[0] >= minX && point[0] <= maxX);
     const rawValues = visible.map(point => point[1]);
-    const cap = state.focus ? percentile(rawValues, .99) : Math.max(...rawValues);
-    const floor = Math.max(Math.min(...rawValues.filter(value => value > 0)), 1e-9);
+    const positiveValues = rawValues.filter(value => value > 0);
+    const cap = state.focus ? percentile(rawValues, .95) : Math.max(...rawValues);
+    const floor = Math.max(
+      state.focus ? percentile(positiveValues, .05) : Math.min(...positiveValues), 1e-9
+    );
     const transform = value => state.log ? Math.log10(Math.max(value, floor)) : value;
     const minY = state.log ? transform(floor) : Math.min(0, ...rawValues);
     const maxY = transform(cap) === minY ? minY + 1 : transform(cap);
@@ -88,7 +91,7 @@ document.querySelectorAll('.chart').forEach(section => {
     const plotHeight = height - margin.top - margin.bottom;
     const px = x => margin.left + (x - minX) / (maxX - minX || 1) * plotWidth;
     const pyTransformed = y => margin.top + (maxY - y) / (maxY - minY) * plotHeight;
-    const py = y => pyTransformed(transform(Math.min(y, cap)));
+    const py = y => pyTransformed(transform(Math.max(floor, Math.min(y, cap))));
 
     context.clearRect(0, 0, width, height);
     context.strokeStyle = '#334155'; context.fillStyle = '#cbd5e1'; context.font = '12px system-ui';
@@ -122,7 +125,8 @@ document.querySelectorAll('.chart').forEach(section => {
       });
       context.stroke();
       shown.forEach(point => {
-        const x = px(point.game), y = py(point.value), outlier = point.maximum > cap;
+        const x = px(point.game), y = py(point.value);
+        const outlier = point.maximum > cap || point.minimum < floor;
         context.fillStyle = outlier ? '#dc2626' : color;
         context.beginPath(); context.arc(x, y, outlier ? 4 : 2.5, 0, Math.PI * 2); context.fill();
         state.plotted.push({...point, x, y, name, outlier});
@@ -164,7 +168,7 @@ document.querySelectorAll('.chart').forEach(section => {
   };
   section.querySelector('[data-action="focus"]').onclick = event => {
     state.focus = !state.focus;
-    event.target.textContent = `Range: ${state.focus ? 'focus 99%' : 'all values'}`; draw();
+    event.target.textContent = `Range: ${state.focus ? 'focus 95%' : 'all values'}`; draw();
   };
   section.querySelector('[data-action="reset"]').onclick = () => {
     state.left = 0; state.right = 1; draw();
@@ -190,7 +194,7 @@ document.querySelectorAll('.chart').forEach(section => {
     const games = nearest.count === 1 ? `Game ${format(nearest.firstGame)}`
       : `Games ${format(nearest.firstGame)}–${format(nearest.lastGame)}`;
     tooltip.textContent = nearest.count === 1
-      ? `${games}: ${format(nearest.value)}${nearest.outlier ? ' (above 99th percentile)' : ''}`
+      ? `${games}: ${format(nearest.value)}${nearest.outlier ? ' (outside focused range)' : ''}`
       : `${games}: average ${format(nearest.value)}, minimum ${format(nearest.minimum)}, `
         + `maximum ${format(nearest.maximum)} (${format(nearest.count)} games)`;
   });
@@ -273,6 +277,8 @@ def read_results(path: Path, max_points: int):
         "evaluation_map_batches": {},
         "evaluation_player_batches": {},
         "evaluation_map_player_batches": {},
+        "evaluation_versions": {},
+        "current_evaluation_suite_version": 0,
     }
     row_count = 0
     with path.open(newline="", encoding="utf-8-sig") as source:
@@ -303,12 +309,22 @@ def read_results(path: Path, max_points: int):
             if run_type == "evaluation":
                 batch = int(_number(row.get("batch#")) or 0)
                 map_num = row.get("map", "unknown") or "unknown"
+                suite_version = int(_number(row.get("evaluation_suite_version")) or 1)
+                version = counts["evaluation_versions"].setdefault(
+                    suite_version,
+                    {
+                        "batches": {},
+                        "map_batches": {},
+                        "player_batches": {},
+                        "map_player_batches": {},
+                    },
+                )
                 targets = (
-                    (counts["evaluation_batches"], batch),
-                    (counts["evaluation_map_batches"], (map_num, batch)),
-                    (counts["evaluation_player_batches"], (player_count, batch)),
+                    (version["batches"], batch),
+                    (version["map_batches"], (map_num, batch)),
+                    (version["player_batches"], (player_count, batch)),
                     (
-                        counts["evaluation_map_player_batches"],
+                        version["map_player_batches"],
                         (map_num, player_count, batch),
                     ),
                 )
@@ -384,6 +400,14 @@ def read_results(path: Path, max_points: int):
                 value = _row_value(row, column)
                 if value is not None:
                     series[column, run_type].add(game_number, value)
+    if counts["evaluation_versions"]:
+        latest_version = max(counts["evaluation_versions"])
+        latest = counts["evaluation_versions"][latest_version]
+        counts["current_evaluation_suite_version"] = latest_version
+        counts["evaluation_batches"] = latest["batches"]
+        counts["evaluation_map_batches"] = latest["map_batches"]
+        counts["evaluation_player_batches"] = latest["player_batches"]
+        counts["evaluation_map_player_batches"] = latest["map_player_batches"]
     return row_count, series, counts
 
 
@@ -434,7 +458,7 @@ def _chart(chart_id, title, training, evaluation, median=()):
     <section class="card chart" data-series="{payload}">
       <div class="chart-heading"><h2>{html.escape(title)}</h2><div>
         <button type="button" data-action="scale">Scale: log</button>
-        <button type="button" data-action="focus">Range: focus 99%</button>
+        <button type="button" data-action="focus">Range: focus 95%</button>
         <button type="button" data-action="reset">Reset zoom</button>
       </div></div>
       <div class="statistics">{_statistics(training or evaluation)}</div>
@@ -694,7 +718,7 @@ def _tier_player_count_charts(counts):
     )
 
 
-def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
+def _evaluation_chart(batches, map_batches, player_batches, map_player_batches, suite_version=1):
     if not batches:
         return ""
     width, height = 920, 300
@@ -724,6 +748,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
         baseline=None,
         focus_range=False,
         point_details=None,
+        tick_step=None,
     ):
         available = [value for values in series.values() for value in values if value is not None]
         scale_values = available + ([*baseline] if baseline else [])
@@ -738,6 +763,16 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
         maximum = max(maximum, 1)
         if maximum <= axis_minimum:
             maximum = axis_minimum + 1
+        if tick_step is None:
+            rough_step = (maximum - axis_minimum) / 5
+            magnitude = 10 ** math.floor(math.log10(max(rough_step, 1e-9)))
+            normalized = rough_step / magnitude
+            factor = (
+                1 if normalized <= 1 else 2 if normalized <= 2 else 5 if normalized <= 5 else 10
+            )
+            tick_step = factor * magnitude
+        axis_minimum = math.floor(axis_minimum / tick_step) * tick_step
+        maximum = math.ceil(maximum / tick_step) * tick_step
         x_span = max(len(ordered) - 1, 1)
 
         def point(index, value):
@@ -747,8 +782,12 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
             )
 
         grid = []
-        for tick in range(6):
-            value = axis_minimum + (maximum - axis_minimum) * tick / 5
+        tick_values = []
+        value = axis_minimum
+        while value <= maximum + tick_step / 2:
+            tick_values.append(value)
+            value += tick_step
+        for value in tick_values:
             _x, y = point(0, value)
             grid.append(
                 f'<line x1="{left}" y1="{y:.1f}" x2="{width - right}" y2="{y:.1f}" '
@@ -845,22 +884,38 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
     for (map_value, player_value), current_batches in datasets.items():
         ordered = sorted(current_batches.items())
         tiers = sorted({tier for _batch, entry in ordered for tier in entry["tier_games"]})
+
+        def rolling(values, window=10):
+            result = []
+            for index in range(len(values)):
+                current = [
+                    value
+                    for value in values[max(0, index - window + 1) : index + 1]
+                    if value is not None
+                ]
+                result.append(statistics.fmean(current) if current else None)
+            return result
+
         win_series = {
-            tier: [
-                entry["tier_wins"][tier] / entry["tier_games"][tier] * 100
-                if entry["tier_games"][tier]
-                else None
-                for _batch, entry in ordered
-            ]
+            tier: rolling(
+                [
+                    entry["tier_wins"][tier] / entry["tier_games"][tier] * 100
+                    if entry["tier_games"][tier]
+                    else None
+                    for _batch, entry in ordered
+                ]
+            )
             for tier in tiers
         }
         score_series = {
-            tier: [
-                entry["tier_score"][tier] / entry["tier_score_games"][tier]
-                if entry["tier_score_games"][tier]
-                else None
-                for _batch, entry in ordered
-            ]
+            tier: rolling(
+                [
+                    entry["tier_score"][tier] / entry["tier_score_games"][tier]
+                    if entry["tier_score_games"][tier]
+                    else None
+                    for _batch, entry in ordered
+                ]
+            )
             for tier in tiers
         }
         action_series = {
@@ -869,7 +924,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
                 for _batch, entry in ordered
             ]
         }
-        baseline = [entry["random"] / entry["games"] * 100 for _batch, entry in ordered]
+        baseline = rolling([entry["random"] / entry["games"] * 100 for _batch, entry in ordered])
         latest = ordered[-1][1]
         tier_one_games = latest["tier_games"][1]
         tier_one_scores = latest["tier_score_games"][1]
@@ -894,21 +949,22 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
             f"</div>{warning}"
             + line_chart(
                 "Win rate by tier",
-                "Higher is better. Each colored line is one policy tier.",
+                "Higher is better. Each colored line is a rolling 10-batch policy-tier rate.",
                 ordered,
                 win_series,
                 "%",
                 maximum=100,
                 baseline=baseline,
-                focus_range=True,
             )
             + line_chart(
                 "Average final score by tier",
-                "Higher is generally better. Compare tiers across the same fixed positions.",
+                "Higher is generally better. Lines show rolling 10-batch averages across "
+                "the same fixed positions.",
                 ordered,
                 score_series,
                 " points",
                 focus_range=True,
+                tick_step=5,
             )
             + line_chart(
                 "Average completed-game length",
@@ -921,7 +977,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches):
         )
     return f"""
     <section class="card evaluation-performance"><div class="chart-heading">
-      <h2>Evaluation results</h2>
+      <h2>Evaluation results — suite version {suite_version}</h2>
       <label>Board: <select data-evaluation-map><option value="all">All maps</option>
       <option value="1">Map 1</option><option value="2">Map 2</option>
       <option value="3">Map 3</option></select></label>
@@ -941,7 +997,7 @@ def build_dashboard(row_count, series, counts, source_path):
             f"chart-{index}",
             title,
             series[column, "training"].points,
-            series[column, "evaluation"].points,
+            (),
             series["rolling_median_50", "training"].points if column == "latest_loss" else (),
         )
         for index, (column, title) in enumerate(CHART_COLUMNS)
@@ -1016,6 +1072,7 @@ grid-template-columns:1fr; gap:20px; margin-top:18px; }}
             counts["evaluation_map_batches"],
             counts["evaluation_player_batches"],
             counts["evaluation_map_player_batches"],
+            counts["current_evaluation_suite_version"],
         )
     }
 {charts}<div class="summaries">{summaries}</div>
@@ -1030,7 +1087,7 @@ def parse_args():
         "--max-points",
         type=int,
         default=750,
-        help="deprecated compatibility option; charts display at most 750 visible groups",
+        help="maximum visible groups per line chart (default: 750)",
     )
     parser.add_argument("--open", action="store_true", help="open the finished chart in a browser")
     return parser.parse_args()

@@ -2,7 +2,7 @@
 
 ## Decision
 
-Training uses score-derived rewards after every selected interaction and winner-only rewards after final scoring. The shared model remains frozen while a game is active. Model updates happen only after completed games or batches.
+Training uses score-derived rewards after every selected interaction and winner-only rewards after final scoring. The shared model remains frozen while a game is active. One model update is performed after each collected learning trajectory, including penalized no-replacement-route failures; evaluation games never update the model.
 
 Authoritative projected scoring provides the main reward signal. A smaller set of
 explicit training-only rewards and penalties supplements it where score changes

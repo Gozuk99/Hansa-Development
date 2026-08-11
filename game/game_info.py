@@ -10,7 +10,7 @@ from game.turn_state import TurnPhase, TurnStateError
 from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
-from map_data.constants import COLOR_NAMES, WHITE, GREEN, BLUE, PURPLE, RED, YELLOW
+from map_data.constants import COLOR_NAMES, GREEN, BLUE, PURPLE, RED, YELLOW
 from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
 
 
