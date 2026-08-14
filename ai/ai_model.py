@@ -9,7 +9,7 @@ import torch.nn as nn
 from ai.observation_schema import (
     OBSERVATION_SIZE,
     observation_schema_metadata,
-    validate_observation_schema_metadata,
+    validate_model_observation_schema_metadata,
 )
 from game.action_schema import (
     ACTION_SPACE_SIZE,
@@ -35,6 +35,7 @@ class HansaNN(nn.Module):
             self.layer2 = nn.Linear(2048, 1024).to(device)
             self.layer3 = nn.Linear(1024, ACTION_SPACE_SIZE).to(device)
         self.relu = nn.ReLU()
+        self.migrated_observation_schema = False
 
         if model_file and Path(model_file).is_file():
             self.load_model(model_file)
@@ -56,7 +57,9 @@ class HansaNN(nn.Module):
         if not isinstance(checkpoint, dict) or "state_dict" not in checkpoint:
             raise ValueError(f"Model checkpoint {model_file} is missing its state_dict")
         validate_action_schema_metadata(checkpoint, f"Model checkpoint {model_file}")
-        validate_observation_schema_metadata(checkpoint, f"Model checkpoint {model_file}")
+        self.migrated_observation_schema = validate_model_observation_schema_metadata(
+            checkpoint, f"Model checkpoint {model_file}"
+        )
         self.load_state_dict(checkpoint["state_dict"])
 
     def save_model(self, model_file=SHARED_MODEL_FILE) -> Path:

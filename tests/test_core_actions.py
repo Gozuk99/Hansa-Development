@@ -5,7 +5,12 @@ import unittest
 from tests.action_helpers import legal_action_mask
 
 from game.game_actions import InvalidActionError
-from game.game_actions import displacement_can_be_completed, refresh_displacement_targets
+from game.game_actions import (
+    can_place_displacement_piece,
+    displacement_can_be_completed,
+    get_adjacent_routes,
+    refresh_displacement_targets,
+)
 from game.game_runner import create_headless_game
 from game.turn_state import TurnPhase
 
@@ -458,6 +463,52 @@ class CoreActionTests(unittest.TestCase):
         self.apply(game, MAX_POSTS + outward_circle)
         self.assertTrue(game.displaced_player.played_displaced_shape)
         self.assertEqual(legal_action_mask(game)[736].item(), 1)
+
+    def test_optional_piece_cannot_strand_the_mandatory_displaced_piece(self):
+        game = create_headless_game(2, 3, seed=124)
+        actor, opponent = game.players[:2]
+        original_route = next(
+            route
+            for route in game.selected_map.routes
+            if {city.name for city in route.cities} == {"Malmo", "Visby"}
+        )
+        adjacent_routes = get_adjacent_routes(original_route, original_route.region)
+        target_route = next(route for route in adjacent_routes if len(route.posts) >= 2)
+        flexible_post, merchant_post = target_route.posts[:2]
+        flexible_post.required_shape = None
+        merchant_post.required_shape = "circle"
+
+        for route in game.selected_map.routes:
+            for post in route.posts:
+                if post not in (flexible_post, merchant_post):
+                    post.claim(actor, post.required_shape or "square")
+
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 1
+        opponent.personal_supply_squares = 0
+        opponent.personal_supply_circles = 0
+        game.original_route_of_displacement = original_route
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "square")
+        refresh_displacement_targets(game)
+
+        self.assertFalse(can_place_displacement_piece(game, flexible_post, "circle"))
+        self.assertTrue(can_place_displacement_piece(game, merchant_post, "circle"))
+        self.assertTrue(can_place_displacement_piece(game, flexible_post, "square"))
+
+        mask = legal_action_mask(game)
+        self.assertEqual(mask[728].item(), 0)
+        self.assertEqual(mask[post_index(game, flexible_post, "circle")].item(), 0)
+        self.assertEqual(mask[post_index(game, merchant_post, "circle")].item(), 1)
+        self.assertEqual(mask[post_index(game, flexible_post, "square")].item(), 1)
+
+        game.displaced_player.use_optional_displaced_shape = True
+        refresh_displacement_targets(game)
+        self.assertFalse(can_place_displacement_piece(game, flexible_post, "square"))
+        self.assertEqual(
+            legal_action_mask(game)[post_index(game, flexible_post, "square")].item(),
+            0,
+        )
 
     def test_same_shape_stock_piece_can_precede_mandatory_piece_and_unlock_supply(self):
         game = create_headless_game(2, 3, seed=124)

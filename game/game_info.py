@@ -10,8 +10,16 @@ from game.turn_state import TurnPhase, TurnStateError
 from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
-from map_data.constants import COLOR_NAMES, GREEN, BLUE, PURPLE, RED, YELLOW
-from player_info.player_attributes import Player, DisplacedPlayer, PlayerBoard, UPGRADE_MAX_VALUES
+from map_data.constants import (
+    COLOR_NAMES,
+    GREEN,
+    BLUE,
+    PURPLE,
+    RED,
+    YELLOW,
+    UPGRADE_MAX_VALUES,
+)
+from player_info.player_attributes import Player, DisplacedPlayer
 
 
 class Game:
@@ -37,11 +45,15 @@ class Game:
         self.use_mission_cards = use_mission_cards
         self.use_emperors_favour = use_emperors_favour
         self.selected_map = self.assign_map(map_num, num_players)
+        self._post_catalogue = tuple(
+            (route, post) for route in self.selected_map.routes for post in route.posts
+        )
         if bonus_marker_supply is not None:
             self.selected_map.configure_bonus_marker_supply(bonus_marker_supply)
         self.num_players = num_players
 
         self.players = self.create_players(num_players)
+        self.set_interactive_errors(interactive_errors)
         self.current_player_index = 0
         self.current_player = self.players[self.current_player_index]
         self.active_player = self.current_player_index
@@ -111,10 +123,7 @@ class Game:
         players = []
 
         for i, color in enumerate(colors[:num_players]):
-            new_player = Player(color, i + 1)
-            new_player.board = PlayerBoard(
-                self.selected_map.map_width, i * 220, new_player
-            )  # Create and assign the board directly here
+            new_player = Player(color, i + 1, messages_enabled=self.interactive_errors)
             new_player.start_turn()
 
             if self.use_mission_cards:
@@ -125,6 +134,13 @@ class Game:
             players.append(new_player)
 
         return players
+
+    def set_interactive_errors(self, enabled):
+        """Configure interactive console messages for this game and its pieces."""
+        self.interactive_errors = bool(enabled)
+        self.selected_map.set_messages_enabled(self.interactive_errors)
+        for player in self.players:
+            player.messages_enabled = self.interactive_errors
 
     def initialize_tile_pool(self):
         tiles = list(TILE_TYPES)
@@ -143,19 +159,20 @@ class Game:
     @property
     def pending_workflows(self):
         workflows = []
+        tribute_response_pending = bool(self.pending_tribute_income_owners)
         if self.waiting_for_displaced_player:
             workflows.append(TurnPhase.DISPLACEMENT)
         if self.waiting_for_buy_tile_with_bm:
             workflows.append(TurnPhase.BUY_TILE_PAYMENT)
         if self.pending_income_favour_owner is not None:
             workflows.append(TurnPhase.INCOME_FAVOUR_RESPONSE)
-        if self.pending_tribute_income_owners:
+        if tribute_response_pending:
             workflows.append(TurnPhase.TRIBUTE_INCOME_RESPONSE)
         if self.waiting_for_bm_place_adjacent:
             workflows.append(TurnPhase.PLACE_ADJACENT_ROUTE)
-        if self.pending_route_piece_choices:
+        if self.pending_route_piece_choices and not tribute_response_pending:
             workflows.append(TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION)
-        if self.pending_britannia_place2:
+        if self.pending_britannia_place2 and not tribute_response_pending:
             workflows.append(TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION)
         if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
             workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
@@ -174,9 +191,12 @@ class Game:
                 self.waiting_for_place2_in_scotland_or_wales,
             )
         )
-        if bonus_pending:
+        # Tribute Income resolves immediately when a route is completed. Any
+        # permanent-marker follow-up earned from that same route waits until all
+        # Tribute owners have responded, then resumes for the route claimant.
+        if bonus_pending and not tribute_response_pending:
             workflows.append(TurnPhase.BONUS_MARKER_CHOICE)
-        elif self.current_player.holding_pieces:
+        elif self.current_player.holding_pieces and not tribute_response_pending:
             workflows.append(TurnPhase.MOVE_PIECES)
 
         return tuple(workflows)
@@ -250,6 +270,19 @@ class Game:
     def apply_action(self, action_index):
         """Apply one codec-backed action for GUI and manual callers."""
         self.apply_ai_action(action_index)
+
+    def post_context(self, post_slot):
+        """Return the permanent route/post pair assigned to one post slot."""
+        catalogue = getattr(self, "_post_catalogue", None)
+        if catalogue is None:
+            # Save files created before the lookup was introduced rebuild it lazily.
+            catalogue = tuple(
+                (route, post) for route in self.selected_map.routes for post in route.posts
+            )
+            self._post_catalogue = catalogue
+        if not 0 <= post_slot < len(catalogue):
+            return None
+        return catalogue[post_slot]
 
     def reset_valid_posts(self):
         for post in self.all_empty_posts:
@@ -381,9 +414,9 @@ class Game:
         if not start_city or not end_city:
             return False
 
-        return start_city.has_office_controlled_by(
+        return start_city.has_office_owned_by(self.current_player) and end_city.has_office_owned_by(
             self.current_player
-        ) and end_city.has_office_controlled_by(self.current_player)
+        )
 
     def has_east_west_connection(self, start_city_name, end_city_name, visited=None):
         # This is a recursive depth-first search (DFS) algorithm.
@@ -400,9 +433,9 @@ class Game:
         # Check if both cities exist in the game.
         if start_city is None or end_city is None:
             return False
-        if not start_city.has_office_controlled_by(self.current_player):
+        if not start_city.has_office_owned_by(self.current_player):
             return False
-        if not end_city.has_office_controlled_by(self.current_player):
+        if not end_city.has_office_owned_by(self.current_player):
             return False
 
         # If we've reached the end city, return True
@@ -417,7 +450,7 @@ class Game:
             # Check all cities connected to this route
             for connected_city in route.cities:
                 # Skip if we've already visited this city or if the connected city doesn't have the player's office
-                if connected_city in visited or not connected_city.has_office_controlled_by(
+                if connected_city in visited or not connected_city.has_office_owned_by(
                     self.current_player
                 ):
                     continue

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from weakref import WeakKeyDictionary
 
 import torch
 
@@ -80,6 +81,7 @@ class ObservationEncoder:
         "Tribute4EstablishingTP": 8,
         "BlockTradeRoute": 9,
     }
+    HIDDEN_USED_BONUS_MARKER_ID = 10
     TILE_TYPE_TO_ID = {
         "DisplaceAnywhere": 1,
         "+1Action": 2,
@@ -131,6 +133,7 @@ class ObservationEncoder:
         self.route_tensor_size = self.MAX_ROUTES * self.ROUTE_SIZE
         self.player_tensor_size = self.MAX_PLAYERS * self.PLAYER_SIZE
         self.all_game_state_size = self.FEATURE_SIZE
+        self._structural_templates = WeakKeyDictionary()
 
     def build(self, game) -> AIObservation:
         observer_index = self._observer_index(game)
@@ -146,20 +149,179 @@ class ObservationEncoder:
 
         relative_players = self._relative_players(game, observer_index)
         owner_ids = {player: index + 1 for index, player in enumerate(relative_players)}
-        groups = (
-            self._game_features(game, owner_ids),
-            self._player_features(game, relative_players),
-            self._city_features(game, owner_ids),
-            self._route_features(game, owner_ids),
-            self._optional_features(game, owner_ids),
-            self._workflow_features(game, relative_players[0], owner_ids),
-        )
-        features = torch.tensor([value for group in groups for value in group], dtype=torch.int16)
+        features = list(self._structural_template(game))
+        features[: self.GAME_SIZE] = self._game_features(game, owner_ids)
+        player_start = self.GAME_SIZE
+        city_start = player_start + self.MAX_PLAYERS * self.PLAYER_SIZE
+        route_start = city_start + self.MAX_CITIES * self.CITY_SIZE
+        optional_start = route_start + self.MAX_ROUTES * self.ROUTE_SIZE
+        workflow_start = optional_start + self.OPTIONAL_COMPONENTS_SIZE
+        features[player_start:city_start] = self._player_features(game, relative_players)
+        self._write_dynamic_city_features(features, city_start, game, owner_ids)
+        self._write_dynamic_route_features(features, route_start, game, owner_ids)
+        self._write_dynamic_optional_features(features, optional_start, game, owner_ids)
+        features[workflow_start:] = self._workflow_features(game, relative_players[0], owner_ids)
+        features = torch.tensor(features, dtype=torch.int16)
         if features.numel() != self.FEATURE_SIZE:
             raise RuntimeError(
                 f"Observation has {features.numel()} values; expected {self.FEATURE_SIZE}"
             )
         return features
+
+    def _structural_template(self, game):
+        signature = self._structural_signature(game)
+        cached = self._structural_templates.get(game)
+        if cached is not None and cached[0] == signature:
+            return cached[1]
+
+        template = [0] * self.FEATURE_SIZE
+        template[0] = game.map_num
+        template[1] = game.num_players
+        template[6] = int(game.use_mission_cards)
+        template[7] = int(game.use_emperors_favour)
+        template[8] = 20
+        template[10] = game.selected_map.max_full_cities
+
+        city_start = self.GAME_SIZE + self.MAX_PLAYERS * self.PLAYER_SIZE
+        for city_index, city in enumerate(game.selected_map.cities):
+            base = city_start + city_index * self.CITY_SIZE
+            template[base] = 1
+            template[base + 1] = self.CITY_TYPE_TO_ID[tuple(city.color)]
+            upgrades = self._pad(
+                (self.UPGRADE_TYPE_TO_ID[value] for value in city.upgrade_city_type),
+                2,
+                f"{city.name} upgrades",
+            )
+            template[base + 2 : base + 4] = upgrades
+
+        route_start = city_start + self.MAX_CITIES * self.CITY_SIZE
+        city_ids = {city: index + 1 for index, city in enumerate(game.selected_map.cities)}
+        for route_index, route in enumerate(game.selected_map.routes):
+            base = route_start + route_index * self.ROUTE_SIZE
+            template[base : base + 6] = (
+                1,
+                city_ids[route.cities[0]],
+                city_ids[route.cities[1]],
+                self.REGION_TO_ID[route.region],
+                self.ROUTE_TYPE_TO_ID.get(tuple(route.color), 0),
+                route.required_circles,
+            )
+            template[base + 7] = self.PERMANENT_MARKER_TYPE_TO_ID.get(
+                route.has_permanent_bm_type, 0
+            )
+            for post_index, post in enumerate(route.posts):
+                post_base = base + 18 + post_index * 4
+                template[post_base] = 1
+                template[post_base + 1] = self.REQUIRED_SHAPE_TO_ID[post.required_shape]
+
+        optional_start = route_start + self.MAX_ROUTES * self.ROUTE_SIZE
+        special = getattr(game.selected_map, "specialprestigepoints", None)
+        circles = special.circle_data if special is not None else []
+        for index, circle in enumerate(circles[:4]):
+            base = optional_start + 6 + index * 3
+            template[base] = circle["value"]
+            template[base + 1] = self.PRIVILEGE_TO_ID.get(self._color_name(circle["color"]), 0)
+
+        template = tuple(template)
+        self._structural_templates[game] = (signature, template)
+        return template
+
+    @staticmethod
+    def _structural_signature(game):
+        special = getattr(game.selected_map, "specialprestigepoints", None)
+        circles = special.circle_data if special is not None else []
+        return (
+            game.map_num,
+            game.num_players,
+            game.use_mission_cards,
+            game.use_emperors_favour,
+            game.selected_map.max_full_cities,
+            tuple(
+                (tuple(city.color), tuple(city.upgrade_city_type))
+                for city in game.selected_map.cities
+            ),
+            tuple(
+                (
+                    tuple(route.color),
+                    route.region,
+                    route.required_circles,
+                    route.has_permanent_bm_type,
+                    tuple(post.required_shape for post in route.posts),
+                )
+                for route in game.selected_map.routes
+            ),
+            tuple((circle["value"], tuple(circle["color"])) for circle in circles[:4]),
+        )
+
+    def _write_dynamic_city_features(self, features, start, game, owner_ids):
+        for city_index, city in enumerate(game.selected_map.cities):
+            if len(city.offices) > self.MAX_OFFICES:
+                raise ValueError(
+                    f"City {city.name} has {len(city.offices)} offices; "
+                    f"capacity is {self.MAX_OFFICES}"
+                )
+            base = start + city_index * self.CITY_SIZE
+            tributes = self._pad(
+                (owner_ids.get(player, 0) for player in city.tributed_players),
+                4,
+                f"{city.name} tribute owners",
+            )
+            features[base + 4 : base + 8] = tributes
+            for office_index, office in enumerate(city.offices):
+                office_base = base + 8 + office_index * 7
+                features[office_base : office_base + 7] = (
+                    1,
+                    int(office.place_adjacent_office),
+                    self.PIECE_TYPE_TO_ID[office.shape],
+                    self.PRIVILEGE_TO_ID.get(
+                        getattr(office, "printed_privilege", self._color_name(office.color)),
+                        0,
+                    ),
+                    office.awards_points,
+                    owner_ids.get(office.controller, 0),
+                    self.PIECE_TYPE_TO_ID[office.owner_piece_shape],
+                )
+
+    def _write_dynamic_route_features(self, features, start, game, owner_ids):
+        for route_index, route in enumerate(game.selected_map.routes):
+            if len(route.posts) > self.MAX_POSTS_PER_ROUTE:
+                raise ValueError(
+                    f"Route {route_index} has {len(route.posts)} posts; "
+                    f"capacity is {self.MAX_POSTS_PER_ROUTE}"
+                )
+            base = start + route_index * self.ROUTE_SIZE
+            features[base + 6] = self.BONUS_MARKER_TYPE_TO_ID.get(
+                route.bonus_marker.type if route.bonus_marker else None, 0
+            )
+            features[base + 8 : base + 13] = self._pad(
+                (owner_ids.get(owner, 0) for owner in route.tribute_owners),
+                5,
+                f"route {route_index} tribute owners",
+            )
+            features[base + 13 : base + 18] = self._pad(
+                (owner_ids.get(owner, 0) for owner in route.block_marker_owners),
+                5,
+                f"route {route_index} block owners",
+            )
+            for post_index, post in enumerate(route.posts):
+                post_base = base + 18 + post_index * 4
+                features[post_base + 2] = owner_ids.get(post.owner, 0)
+                features[post_base + 3] = self.PIECE_TYPE_TO_ID[post.owner_piece_shape]
+
+    def _write_dynamic_optional_features(self, features, start, game, owner_ids):
+        features[start : start + 6] = [int(tile in game.tile_pool) for tile in self.TILE_TYPE_TO_ID]
+        special = getattr(game.selected_map, "specialprestigepoints", None)
+        circles = special.circle_data if special is not None else []
+        for index, circle in enumerate(circles[:4]):
+            features[start + 8 + index * 3] = owner_ids.get(circle["owner"], 0)
+        visible_pending_markers = (
+            game.pending_bonus_markers if game.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS else ()
+        )
+        features[start + 18 : start + 33] = self._pad(
+            (self.BONUS_MARKER_TYPE_TO_ID[value] for value in visible_pending_markers),
+            15,
+            "pending replacement markers",
+        )
 
     @staticmethod
     def _observer_index(game):
@@ -232,9 +394,7 @@ class ObservationEncoder:
             unused = self._marker_ids(
                 player.bonus_markers, self.MAX_MARKERS_PER_COLLECTION, "unused bonus markers"
             )
-            used = self._marker_ids(
-                player.used_bonus_markers, self.MAX_MARKERS_PER_COLLECTION, "used bonus markers"
-            )
+            used = self._used_marker_ids(game, player, relative_players[0])
             owned_tiles = [int(tile in player.tiles) for tile in self.TILE_TYPE_TO_ID]
             mission = self.assign_mission_card_mapping(game, player, observer=relative_players[0])
             features.extend(
@@ -272,128 +432,27 @@ class ObservationEncoder:
         ids = [self.BONUS_MARKER_TYPE_TO_ID[marker.type] for marker in markers]
         return self._pad(ids, capacity, label)
 
-    def _city_features(self, game, owner_ids):
-        features = []
-        for city_index in range(self.MAX_CITIES):
-            if city_index >= len(game.selected_map.cities):
-                features.extend([0] * self.CITY_SIZE)
-                continue
-            city = game.selected_map.cities[city_index]
-            if len(city.offices) > self.MAX_OFFICES:
-                raise ValueError(
-                    f"City {city.name} has {len(city.offices)} offices; capacity is {self.MAX_OFFICES}"
-                )
-            upgrades = self._pad(
-                (self.UPGRADE_TYPE_TO_ID[value] for value in city.upgrade_city_type),
-                2,
-                f"{city.name} upgrades",
+    def _used_marker_ids(self, game, player, observer):
+        marker_count = len(player.used_bonus_markers)
+        if marker_count > self.MAX_MARKERS_PER_COLLECTION:
+            raise ValueError(
+                "used bonus markers exceed observation capacity "
+                f"{self.MAX_MARKERS_PER_COLLECTION}: {marker_count}"
             )
-            tributes = self._pad(
-                (owner_ids.get(player, 0) for player in city.tributed_players),
-                4,
-                f"{city.name} tribute owners",
-            )
-            features.extend([1, self.CITY_TYPE_TO_ID[tuple(city.color)], *upgrades, *tributes])
-            for office_index in range(self.MAX_OFFICES):
-                if office_index >= len(city.offices):
-                    features.extend([0] * 7)
-                    continue
-                office = city.offices[office_index]
-                features.extend(
-                    [
-                        1,
-                        int(office.place_adjacent_office),
-                        self.PIECE_TYPE_TO_ID[office.shape],
-                        self.PRIVILEGE_TO_ID.get(
-                            getattr(office, "printed_privilege", self._color_name(office.color)),
-                            0,
-                        ),
-                        office.awards_points,
-                        owner_ids.get(office.controller, 0),
-                        self.PIECE_TYPE_TO_ID[office.owner_piece_shape],
-                    ]
-                )
-        return features
-
-    def _route_features(self, game, owner_ids):
-        city_ids = {city: index + 1 for index, city in enumerate(game.selected_map.cities)}
-        features = []
-        for route_index in range(self.MAX_ROUTES):
-            if route_index >= len(game.selected_map.routes):
-                features.extend([0] * self.ROUTE_SIZE)
-                continue
-            route = game.selected_map.routes[route_index]
-            if len(route.posts) > self.MAX_POSTS_PER_ROUTE:
-                raise ValueError(
-                    f"Route {route_index} has {len(route.posts)} posts; capacity is {self.MAX_POSTS_PER_ROUTE}"
-                )
-            tribute_ids = self._pad(
-                (owner_ids.get(owner, 0) for owner in route.tribute_owners),
-                5,
-                f"route {route_index} tribute owners",
-            )
-            block_ids = self._pad(
-                (owner_ids.get(owner, 0) for owner in route.block_marker_owners),
-                5,
-                f"route {route_index} block owners",
-            )
-            features.extend(
-                [
-                    1,
-                    city_ids[route.cities[0]],
-                    city_ids[route.cities[1]],
-                    self.REGION_TO_ID[route.region],
-                    self.ROUTE_TYPE_TO_ID.get(tuple(route.color), 0),
-                    route.required_circles,
-                    self.BONUS_MARKER_TYPE_TO_ID.get(
-                        route.bonus_marker.type if route.bonus_marker else None, 0
-                    ),
-                    self.PERMANENT_MARKER_TYPE_TO_ID.get(route.has_permanent_bm_type, 0),
-                    *tribute_ids,
-                    *block_ids,
-                ]
-            )
-            for post_index in range(self.MAX_POSTS_PER_ROUTE):
-                if post_index >= len(route.posts):
-                    features.extend([0] * 4)
-                    continue
-                post = route.posts[post_index]
-                features.extend(
-                    [
-                        1,
-                        self.REQUIRED_SHAPE_TO_ID[post.required_shape],
-                        owner_ids.get(post.owner, 0),
-                        self.PIECE_TYPE_TO_ID[post.owner_piece_shape],
-                    ]
-                )
-        return features
-
-    def _optional_features(self, game, owner_ids):
-        available_tiles = [int(tile in game.tile_pool) for tile in self.TILE_TYPE_TO_ID]
-        prestige = []
-        special = getattr(game.selected_map, "specialprestigepoints", None)
-        circles = special.circle_data if special is not None else []
-        for index in range(4):
-            if index >= len(circles):
-                prestige.extend([0, 0, 0])
-                continue
-            circle = circles[index]
-            prestige.extend(
-                [
-                    circle["value"],
-                    self.PRIVILEGE_TO_ID.get(self._color_name(circle["color"]), 0),
-                    owner_ids.get(circle["owner"], 0),
-                ]
-            )
-        visible_pending_markers = (
-            game.pending_bonus_markers if game.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS else ()
+        types_are_visible = player is observer or (
+            game.waiting_for_bm_exchange_bm and game.exchange_target_player is player
         )
-        pending = self._pad(
-            (self.BONUS_MARKER_TYPE_TO_ID[value] for value in visible_pending_markers),
-            15,
-            "pending replacement markers",
+        if types_are_visible:
+            return self._marker_ids(
+                player.used_bonus_markers,
+                self.MAX_MARKERS_PER_COLLECTION,
+                "used bonus markers",
+            )
+        return self._pad(
+            [self.HIDDEN_USED_BONUS_MARKER_ID] * marker_count,
+            self.MAX_MARKERS_PER_COLLECTION,
+            "hidden used bonus markers",
         )
-        return [*available_tiles, *prestige, *pending]
 
     def _workflow_features(self, game, observer, owner_ids):
         held = []

@@ -7,7 +7,6 @@ from game.action_schema import (
     ACTION_SPACE_SIZE,
     validate_action_schema,
 )
-from map_data.constants import OUTPUT_SIZE
 
 
 class ActionSchemaTests(unittest.TestCase):
@@ -28,7 +27,6 @@ class ActionSchemaTests(unittest.TestCase):
     def test_version_size_and_registry(self):
         self.assertEqual(ACTION_SCHEMA_VERSION, 2)
         self.assertEqual(ACTION_SPACE_SIZE, 768)
-        self.assertEqual(OUTPUT_SIZE, ACTION_SPACE_SIZE)
         self.assertEqual(
             tuple(
                 (

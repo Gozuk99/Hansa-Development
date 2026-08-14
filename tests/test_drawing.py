@@ -1,3 +1,4 @@
+import random
 import unittest
 
 from tests.action_helpers import legal_action_mask
@@ -9,7 +10,13 @@ import torch
 from ai.observation_encoder import ObservationEncoder
 from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
-from drawing.drawing_utils import draw_upgrades, draw_used_bm_section, redraw_window
+from drawing.drawing_utils import (
+    draw_completed_cities_indicator,
+    draw_upgrades,
+    draw_used_bm_section,
+    player_board_layout,
+    redraw_window,
+)
 from drawing.game_window import GameWindow
 from game.game_config import GameConfiguration, PlayerControl
 from map_data.map_attributes import BonusMarker
@@ -24,23 +31,19 @@ class DrawingTests(unittest.TestCase):
         game = GameConfiguration(map_num=1, seed=124).create_game()
         player = game.current_player
         surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
+        board = player_board_layout(game.selected_map.map_width, player)
 
         with patch("drawing.drawing_utils.draw_text") as draw_text:
-            draw_used_bm_section(surface, player.board, player)
+            draw_used_bm_section(surface, board, player)
 
         draw_text.assert_not_called()
 
     def test_render_pass_does_not_store_layout_on_engine_objects(self):
         game = GameConfiguration(map_num=1, seed=124).create_game()
-        board = game.current_player.board
         marker_positions = [marker.position for marker in game.current_player.bonus_markers]
         before = (
             game.tile_rects,
             getattr(game, "opponents_used_bms_rects", None),
-            board.start_x,
-            board.actions_y,
-            list(board.circle_buttons),
-            list(board.button_labels),
             marker_positions,
         )
         surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
@@ -51,13 +54,10 @@ class DrawingTests(unittest.TestCase):
         after = (
             game.tile_rects,
             getattr(game, "opponents_used_bms_rects", None),
-            board.start_x,
-            board.actions_y,
-            list(board.circle_buttons),
-            list(board.button_labels),
             [marker.position for marker in game.current_player.bonus_markers],
         )
         self.assertEqual(before, after)
+        self.assertTrue(all(not hasattr(player, "board") for player in game.players))
         self.assertEqual(
             set(layout.action_rects),
             {action for action in legal_actions if 576 <= action < 581 or action in (736, 737)},
@@ -85,6 +85,47 @@ class DrawingTests(unittest.TestCase):
 
         self.assertEqual(first.action_rects, second.action_rects)
         self.assertEqual(first.tile_rects, second.tile_rects)
+
+    def test_ai_private_information_is_not_rendered(self):
+        game = GameConfiguration(
+            map_num=1,
+            player_controls=(PlayerControl.EASY, PlayerControl.HUMAN, PlayerControl.HUMAN),
+            use_mission_cards=True,
+            seed=124,
+        ).create_game()
+        surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
+
+        with patch("drawing.drawing_utils.draw_player_card") as draw_player_card:
+            redraw_window(surface, game)
+
+        draw_player_card.assert_not_called()
+
+    def test_human_private_information_is_rendered_only_for_active_player(self):
+        game = GameConfiguration(
+            map_num=1,
+            player_controls=(PlayerControl.HUMAN,) * 3,
+            use_mission_cards=True,
+            seed=124,
+        ).create_game()
+        surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
+
+        with patch("drawing.drawing_utils.draw_player_card") as draw_player_card:
+            redraw_window(surface, game)
+
+        draw_player_card.assert_called_once()
+        self.assertIs(draw_player_card.call_args.args[1].player, game.current_player)
+
+    def test_completed_city_count_uses_contrasting_text(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        game.current_full_cities_count = 1
+        surface = pygame.Surface((game.selected_map.map_width + 1100, game.selected_map.map_height))
+
+        with patch("drawing.drawing_utils.draw_text") as draw_text:
+            draw_completed_cities_indicator(surface, game)
+
+        first_count = draw_text.call_args_list[1]
+        self.assertEqual(first_count.args[1], "1")
+        self.assertEqual(first_count.args[5], (255, 255, 255))
 
     def test_special_prestige_track_is_rendered_on_every_map(self):
         surface = pygame.Surface((3000, 1500))
@@ -149,6 +190,26 @@ class DrawingTests(unittest.TestCase):
         self.assertIs(window.acting_player, game.players[1])
         self.assertIs(window.acting_player.control, PlayerControl.EASY)
 
+    def test_gui_ai_uses_the_legal_actions_already_generated_for_the_frame(self):
+        game = GameConfiguration(
+            player_controls=(PlayerControl.EASY, PlayerControl.HUMAN, PlayerControl.HUMAN),
+            seed=124,
+        ).create_game()
+        window = GameWindow.__new__(GameWindow)
+        window.game = game
+        window.observation_encoder = ObservationEncoder()
+        window.rng = random.Random(124)
+
+        class PredictableModel:
+            def __call__(self, state):
+                return torch.arange(768, dtype=torch.float32).repeat(state.shape[0], 1)
+
+        game.ai_model = PredictableModel()
+        with patch.object(game, "ai_action_mask", side_effect=AssertionError("mask rebuilt")):
+            selected = window.choose_ai_action([4, 9])
+
+        self.assertIn(selected, (4, 9))
+
     def test_gui_ai_observation_matches_headless_private_view(self):
         game = GameConfiguration(
             map_num=1,
@@ -180,6 +241,16 @@ class DrawingTests(unittest.TestCase):
         label = fit_text(font, "Income: 3 Traders + 2 Merchants", 160)
 
         self.assertLessEqual(font.size(label)[0], 160)
+
+    def test_bonus_marker_labels_follow_payment_and_exchange_context(self):
+        game = GameConfiguration(map_num=1, seed=124).create_game()
+        game.waiting_for_buy_tile_with_bm = True
+        self.assertEqual(action_label(592, game), "Pay Swap Office")
+        self.assertEqual(action_label(600, game), "Pay Additional Trading Post")
+
+        game.waiting_for_buy_tile_with_bm = False
+        game.exchange_target_player = game.players[1]
+        self.assertEqual(action_label(600, game), "Take used Additional Trading Post")
 
 
 if __name__ == "__main__":

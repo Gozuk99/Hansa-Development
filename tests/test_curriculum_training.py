@@ -12,6 +12,7 @@ from training.curriculum import (
     CurriculumStage,
     PromotionCriteria,
     StateDescriptor,
+    _format_game_numbers,
 )
 from training.self_play import (
     ActionLimitExceeded,
@@ -51,6 +52,13 @@ def completed_trajectory():
 def deadlocked_trajectory():
     trajectory = completed_trajectory()
     trajectory.completion_reason = "no_replacement_route"
+    trajectory.winner_indices = ()
+    return trajectory
+
+
+def action_limited_trajectory():
+    trajectory = completed_trajectory()
+    trajectory.completion_reason = "action_limit"
     trajectory.winner_indices = ()
     return trajectory
 
@@ -134,6 +142,10 @@ class TestRunner(CurriculumRunner):
 
 
 class CurriculumTrainingTests(unittest.TestCase):
+    def test_saved_game_numbers_are_compact_but_preserve_gaps(self):
+        self.assertEqual(_format_game_numbers([16, 17, 18, 19, 20]), "16-20")
+        self.assertEqual(_format_game_numbers([2, 3, 5]), "2, 3, and 5")
+
     def test_evaluation_tier_rotation_advances_each_batch(self):
         with tempfile.TemporaryDirectory() as directory:
             trainer = FakeTrainer()
@@ -156,11 +168,13 @@ class CurriculumTrainingTests(unittest.TestCase):
 
     def test_default_near_end_action_limit_is_ten_thousand(self):
         self.assertEqual(CurriculumConfig().stages[0].action_limit, 10_000)
+        self.assertEqual(CurriculumConfig().stages[1].action_limit, 10_000)
         self.assertEqual(CurriculumConfig().stages[0].score_range, (10, 17))
 
-    def test_fresh_training_is_explicit(self):
-        self.assertFalse(parse_curriculum_args([]).fresh)
-        self.assertTrue(parse_curriculum_args(["--fresh"]).fresh)
+    def test_fresh_training_option_is_not_available(self):
+        self.assertFalse(hasattr(parse_curriculum_args([]), "fresh"))
+        with self.assertRaises(SystemExit):
+            parse_curriculum_args(["--fresh"])
 
     def test_existing_csv_is_closed_before_timing_columns_are_added(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -269,7 +283,7 @@ class CurriculumTrainingTests(unittest.TestCase):
                     for message in messages
                 )
             )
-            self.assertIn(f"{prefix}Saved learning games 1-1", messages)
+            self.assertIn(f"{prefix}Saved training games 1", messages)
 
     def test_evaluation_retries_replacement_route_deadlock(self):
         class RetryEvaluationTrainer(FakeTrainer):
@@ -421,32 +435,32 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual([row["game#"] for row in rows], ["1", "2"])
             self.assertEqual([row["batch#"] for row in rows], ["1", "1"])
 
-    def test_action_limit_saves_failure_and_retries_with_new_seed(self):
-        class RetryTrainer(FakeTrainer):
+    def test_action_limit_trains_without_retry_or_completed_csv_row(self):
+        class LimitedTrainer(FakeTrainer):
             def collect_game(self, path, *, failure_callback=None, evaluation=False, **_kwargs):
-                if self.collect_calls == 0:
+                if not evaluation:
                     self.collect_calls += 1
-                    error = ActionLimitExceeded("limit")
-                    failure_callback(None, (7, 8), (), error)
-                    raise error
+                    return action_limited_trajectory()
                 return super().collect_game(
                     path, failure_callback=failure_callback, evaluation=evaluation
                 )
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            runner = self.runner(root, RetryTrainer())
+            trainer = LimitedTrainer()
+            runner = self.runner(root, trainer)
 
             runner.run()
 
-            self.assertEqual(len(set(runner.generated_seeds)), 3)
-            failures = list((root / "failures").iterdir())
-            self.assertEqual(len(failures), 1)
-            details = json.loads((failures[0] / "diagnostics.json").read_text(encoding="utf-8"))
-            self.assertEqual(details["exception"], "ActionLimitExceeded('limit')")
+            self.assertEqual(trainer.update_calls, 1)
+            self.assertEqual(trainer.collect_calls, 2)
+            self.assertEqual(runner.generated_seeds, [124, 10000])
+            with (root / "results.csv").open(newline="", encoding="utf-8") as source:
+                rows = list(csv.DictReader(source))
+            self.assertEqual(len(rows), 2)
             self.assertEqual(
-                json.loads((failures[0] / "action_trace.json").read_text(encoding="utf-8")),
-                [7, 8],
+                [row["run_type"] for row in rows],
+                ["training_timeout", "evaluation"],
             )
 
     def test_dead_end_saves_failure_and_retries_with_new_seed(self):

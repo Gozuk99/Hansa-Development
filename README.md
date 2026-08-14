@@ -22,9 +22,9 @@ reliable.
 - Standard bonus markers by default, with optional seeded or manually selected
   standard/promo replacement supplies.
 - A legal-action-driven game window and a deterministic headless runner.
+- Exact saved-game restoration from the New Game menu and compact,
+  schema-validated action replay for deterministic headless games.
 - Automated engine, configuration, rendering, and complete-game tests.
-
-Exact save/load and replayable game-history support remain future milestones.
 
 ## Requirements
 
@@ -46,7 +46,8 @@ python hansa_game.py
 
 The New Game menu configures the map, player count, controller for each seat,
 Mission Cards, Emperor's Favour tiles, and replacement bonus-marker supply
-before constructing the game. Press Enter to start or Escape to close the menu.
+before constructing the game. It can also load an exact `.hansa` saved game.
+Press Enter to start or Escape to close the menu.
 
 Importing `hansa_game` does not open a window, train a model, or save a
 checkpoint.
@@ -153,8 +154,8 @@ rules legality.
 
 1. Complete and verify game rules and turn structure.
 2. Keep deterministic setup, action application, and complete-game tests green.
-3. Implement exact state save/load and reproducible action history.
-4. Add manual continuation, single-AI turns, and batch alternate-outcome
+3. Expand save/replay coverage for unusual in-progress workflows.
+4. Add batch alternate-outcome
    simulation from saved positions.
 5. Improve reinforcement-learning observations, rewards, models, evaluation,
    and suggested moves.

@@ -68,7 +68,6 @@ def validate_loaded_game(game):
             "Actions value/index disagree",
         )
         _require(player.bank in BANK_MAX_VALUES, "invalid Bank level")
-        _require(player.board is not None and player.board.player is player, "invalid player board")
         _require(player.score >= 0 and player.final_score >= 0, "player score is negative")
         legal_turn_starts = set(ACTIONS_MAX_VALUES)
         if game.OneActionOwner is player:

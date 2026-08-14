@@ -51,9 +51,12 @@ class EvaluationSpec:
     emperors_favour: bool = False
     promo_markers: bool = False
     immediate_finish: bool = False
+    bonus_markers_remaining: int = 2
+    completed_cities_below_limit: int = 2
+    prepared_routes_one_short: bool = True
 
 
-EVALUATION_SUITE_VERSION = 2
+EVALUATION_SUITE_VERSION = 3
 
 
 def _regional_focus(player_count, ending_index):
@@ -72,6 +75,11 @@ def _evaluation_specs():
     for map_num in (1, 2, 3):
         for players in (3, 4, 5):
             for ending_index, ending in enumerate(EndingCondition):
+                immediate_finish = (map_num, players, ending) in {
+                    (1, 3, EndingCondition.NEAR_SCORE),
+                    (2, 4, EndingCondition.NEAR_BONUS_MARKERS),
+                    (3, 5, EndingCondition.NEAR_COMPLETED_CITIES),
+                }
                 if (map_num, players) == (3, 4):
                     east_west_index = 0
                 elif (map_num, players) == (3, 5):
@@ -91,7 +99,11 @@ def _evaluation_specs():
                         mission_cards=map_num == 1 and (players + ending_index) % 2 == 0,
                         emperors_favour=(map_num + players + ending_index) % 2 == 0,
                         promo_markers=(map_num + players + ending_index) % 2 == 1,
-                        immediate_finish=(map_num, players, ending_index) == (1, 3, 0),
+                        immediate_finish=immediate_finish,
+                        score_range=(17, 18) if immediate_finish else (15, 16),
+                        bonus_markers_remaining=0 if immediate_finish else 2,
+                        completed_cities_below_limit=1 if immediate_finish else 2,
+                        prepared_routes_one_short=not immediate_finish,
                     )
                 )
     return tuple(specs)
@@ -163,6 +175,9 @@ def _generate_evaluation_suite(args):
                 use_mission_cards=spec.mission_cards,
                 use_emperors_favour=spec.emperors_favour,
                 use_promo_markers=spec.promo_markers,
+                bonus_markers_remaining=spec.bonus_markers_remaining,
+                completed_cities_below_limit=spec.completed_cities_below_limit,
+                prepared_routes_one_short=spec.prepared_routes_one_short,
                 starting_position=(
                     StartingPosition.IMMEDIATE_FINISH
                     if spec.immediate_finish

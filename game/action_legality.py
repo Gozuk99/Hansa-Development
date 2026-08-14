@@ -4,10 +4,10 @@ from game.action_schema import (
     TILE_SLOT_BY_TYPE,
 )
 from game.game_actions import (
+    can_select_optional_displaced_shape,
     can_pick_up_displacement_fallback,
     can_place_displacement_piece,
     displacement_can_be_completed,
-    optional_displacement_piece_available,
 )
 from game.turn_state import TurnPhase
 from map_data.constants import DARK_GREEN, MAX_CITIES, MAX_POSTS, MAX_ROUTES, UPGRADE_MAX_VALUES
@@ -17,16 +17,45 @@ def _empty_mask(size):
     return [False] * size
 
 
+def _move_piece_fits(player, piece, post):
+    shape, _owner, origin_region = piece
+    return (
+        not post.is_owned()
+        and player.is_valid_region_transition(origin_region, post.region)
+        and post.required_shape in (None, shape)
+    )
+
+
+def _can_finish_move_after_placement(game, selected_post):
+    """Return whether every later held piece still has a distinct legal post."""
+    player = game.current_player
+    remaining_pieces = player.holding_pieces[1:]
+    if not remaining_pieces:
+        return True
+    available_posts = [
+        post
+        for route in game.selected_map.routes
+        for post in route.posts
+        if post is not selected_post and not post.is_owned()
+    ]
+
+    def can_assign(piece_index, posts):
+        if piece_index == len(remaining_pieces):
+            return True
+        piece = remaining_pieces[piece_index]
+        return any(
+            _move_piece_fits(player, piece, post)
+            and can_assign(piece_index + 1, posts[:index] + posts[index + 1 :])
+            for index, post in enumerate(posts)
+        )
+
+    return can_assign(0, available_posts)
+
+
 def mask_place_adjacent(game):
     tensor = _empty_mask(1)
     if game.turn_phase == TurnPhase.DISPLACEMENT:
-        displaced = game.displaced_player
-        if (
-            not displaced.played_displaced_shape
-            and not displaced.use_optional_displaced_shape
-            and displaced.total_pieces_to_place > 1
-            and optional_displacement_piece_available(game, displaced.displaced_shape)
-        ):
+        if can_select_optional_displaced_shape(game):
             tensor[0] = 1
         return tensor
     if game.turn_phase != TurnPhase.ACTIONS:
@@ -161,10 +190,7 @@ def mask_post_action(game):
                     shape = current_player.holding_pieces[0][0]
                     if post.required_shape in (None, shape):
                         post_tensor[post_idx + (MAX_POSTS if shape == "circle" else 0)] = 1
-            elif game.waiting_for_bm_tribute_trading_post:
-                if post is route.posts[0] and current_player.personal_supply_squares > 0:
-                    post_tensor[post_idx] = 1
-            elif game.waiting_for_bm_block_trade_route:
+            elif game.waiting_for_bm_tribute_trading_post or game.waiting_for_bm_block_trade_route:
                 if post is route.posts[0] and current_player.personal_supply_squares > 0:
                     post_tensor[post_idx] = 1
 
@@ -175,7 +201,9 @@ def mask_post_action(game):
                 if current_player.holding_pieces:
                     if is_post_empty:
                         shape_to_place, _, origin_region = current_player.holding_pieces[0]
-                        if current_player.is_valid_region_transition(origin_region, post.region):
+                        if current_player.is_valid_region_transition(
+                            origin_region, post.region
+                        ) and _can_finish_move_after_placement(game, post):
                             if shape_to_place == "square" and (
                                 not post.required_shape or post.required_shape == "square"
                             ):

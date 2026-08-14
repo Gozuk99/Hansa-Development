@@ -30,7 +30,11 @@ pygame.font.init()
 FONT_LARGE = pygame.font.Font(None, 36)
 FONT_PLAYERBOARD = pygame.font.SysFont(None, 32)
 FONT_SMALL = pygame.font.Font(None, 24)
-BORDER_WIDTH = 2  # black outline
+FONT_MARKER = pygame.font.SysFont(None, 20)
+FONT_STOCK = pygame.font.SysFont(None, 36)
+FONT_MISSION = pygame.font.SysFont(None, 25)
+FONT_CONTEXT = pygame.font.SysFont(None, 28)
+BORDER_WIDTH = 2
 
 
 @dataclass
@@ -39,6 +43,21 @@ class DrawLayout:
 
     action_rects: dict[int, pygame.Rect] = field(default_factory=dict)
     tile_rects: dict[str, pygame.Rect] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PlayerBoardLayout:
+    """GUI-only placement for one player's board."""
+
+    x: int
+    y: int
+    player: object
+    width: int = 790
+    height: int = 200
+
+
+def player_board_layout(map_width, player):
+    return PlayerBoardLayout(map_width, (player.order - 1) * 220, player)
 
 
 def draw_shape(window, shape_to_draw, color, x, y, width=None, height=None, points=None):
@@ -120,29 +139,18 @@ def draw_special_prestige_points(window, upgrade_type):
         height=upgrade_type.height,
     )
 
-    # Define the total width of all circles and spaces combined
     total_width = (CIRCLE_RADIUS * 2) * 4 + (SPACING * 3)
-
-    # Define starting position for the circles
-    start_x = (
-        upgrade_type.x_pos + (upgrade_type.width - total_width) / 2 + CIRCLE_RADIUS
-    )  # Adjust the starting position
-    start_y = (
-        upgrade_type.y_pos + upgrade_type.height / 2
-    )  # This centers the circle vertically in the rectangle
+    start_x = upgrade_type.x_pos + (upgrade_type.width - total_width) / 2 + CIRCLE_RADIUS
+    start_y = upgrade_type.y_pos + upgrade_type.height / 2
 
     for circle in upgrade_type.circle_data:
-        # Draw circle with the circle's color (either a privilege color or a player's color)
         pygame.draw.circle(window, circle["color"], (int(start_x), int(start_y)), CIRCLE_RADIUS)
-
-        # Render text
         text_surface = FONT_LARGE.render(
             str(circle["value"]), True, WHITE if circle["color"] == BLACK else BLACK
         )
         text_rect = text_surface.get_rect(center=(start_x, start_y))
         window.blit(text_surface, text_rect)
 
-        # Adjust start_x for next circle
         start_x += CIRCLE_RADIUS * 2 + SPACING
 
 
@@ -150,7 +158,6 @@ def draw_completed_cities_indicator(win, game):
     selected_map = game.selected_map
     num_full_cities = game.current_full_cities_count
 
-    # Draw label below the boxes
     draw_text(
         win,
         "Completed Cities",
@@ -161,23 +168,20 @@ def draw_completed_cities_indicator(win, game):
         centered=False,
     )
 
-    # Draw a rectangle for each city and the test value (city index) in each square
     for i in range(selected_map.max_full_cities):
         rect_x = selected_map.max_full_cities_x_pos + (SQUARE_SIZE + SPACING) * i
         rect_y = selected_map.max_full_cities_y_pos
         color = BLACK if i < num_full_cities else WHITE
 
-        # Draw the city rectangle using draw_shape function
         draw_shape(win, "rectangle", color, rect_x, rect_y, SQUARE_SIZE, SQUARE_SIZE)
 
-        # Draw the test value (city index) in each square using draw_text function
         draw_text(
             win,
             str(i + 1),
             rect_x + SQUARE_SIZE // 2,
             rect_y + SQUARE_SIZE // 2,
             FONT_SMALL,
-            BLACK,
+            WHITE if color == BLACK else BLACK,
             centered=True,
         )
 
@@ -216,17 +220,9 @@ def draw_bonus_markers(win, selected_map):
 
 
 def draw_board_bonus_markers(screen, bonus_marker, position, color=BLACK):
-    # Draw the bonus marker as a simple shape (e.g., a circle)
     pygame.draw.circle(screen, color, position, 30)
-    # Draw the text for the bonus marker type
-    font = pygame.font.SysFont(None, 20)
-    text = font.render(
-        bonus_marker.type, True, WHITE
-    )  # Render the text with the bonus marker's type
-    text_rect = text.get_rect(
-        center=position
-    )  # Get a rect object to center the text inside the circle
-    screen.blit(text, text_rect)  # Draw the text to the screen at the specified position
+    text = FONT_MARKER.render(bonus_marker.type, True, WHITE)
+    screen.blit(text, text.get_rect(center=position))
 
 
 def draw_line(surface, color, start_pos, end_pos, line_width, border_width):
@@ -341,9 +337,7 @@ def draw_route_post(win, post):
 
 
 def draw_actions_remaining(win, game):
-    padding = 5  # Define padding value for spacing around text
-
-    # Calculate text dimensions and positions
+    padding = 5
     if game.waiting_for_displaced_player:
         text_str = f"{COLOR_NAMES[game.current_player.color]} displaced {COLOR_NAMES[game.displaced_player.player.color]} - waiting for {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} pieces!"
     else:
@@ -355,16 +349,13 @@ def draw_actions_remaining(win, game):
     text_x = game.selected_map.map_width // 2 - text_width // 2
     text_y = game.selected_map.map_height - 50 - text_height // 2
 
-    # Draw the background for the new text
     draw_shape(win, "rectangle", WHITE, text_x, text_y, text_width, text_height)
-
-    # Draw the new text with padding applied
     win.blit(combined_text, (text_x + padding, text_y + padding))
 
 
 def draw_tiles(win, tile_pool, start_x, start_y):
-    tiles_pool_height = len(tile_pool) * 20 + 50  # Adjust based on text size and spacing
-    tiles_pool_width = 200  # Set the width according to your requirements
+    tiles_pool_height = len(tile_pool) * 20 + 50
+    tiles_pool_width = 200
     tiles_pool_rect = pygame.Rect(start_x, start_y, tiles_pool_width, tiles_pool_height)
 
     # Fill the tiles_pool background
@@ -392,8 +383,8 @@ def draw_tiles(win, tile_pool, start_x, start_y):
 
 
 def draw_scoreboard(win, players, start_x, start_y):
-    scoreboard_height = len(players) * 20 + 50  # Adjust based on text size and spacing
-    scoreboard_width = 200  # Set the width according to your requirements
+    scoreboard_height = len(players) * 20 + 50
+    scoreboard_width = 200
     scoreboard_rect = pygame.Rect(start_x, start_y, scoreboard_width, scoreboard_height)
 
     # Fill the scoreboard background
@@ -422,7 +413,7 @@ def draw_end_turn(win, game):
     start_y = game.selected_map.map_height - 170
     is_displacement = game.waiting_for_displaced_player
     end_turn_width = 145 if is_displacement else 75
-    end_turn_height = 70  # Adjust based on text size and spacing
+    end_turn_height = 70
 
     # Draw the End Turn rectangle background
     draw_shape(win, "rectangle", TAN, start_x, start_y, end_turn_width, end_turn_height)
@@ -485,7 +476,7 @@ def draw_bonus_marker_pool(win, game):
     start_x = game.selected_map.map_width + 5
     start_y = game.selected_map.map_height - 170
     bonus_marker_pool_text_box_width = 250
-    bonus_marker_pool_text_box_height = 140  # Adjust based on text size and spacing
+    bonus_marker_pool_text_box_height = 140
 
     draw_shape(
         win,
@@ -536,10 +527,11 @@ def redraw_window(win, game, legal_actions=()):
     draw_completed_cities_indicator(win, game)
 
     for player in game.players:
+        board = player_board_layout(selected_map.map_width, player)
         layout.action_rects.update(
             draw_player_board(
                 win,
-                player,
+                board,
                 acting_player,
                 game,
                 legal_actions,
@@ -554,8 +546,8 @@ def redraw_window(win, game, legal_actions=()):
     return layout
 
 
-def draw_player_board(window, player, current_player, game=None, legal_actions=()):
-    board = player.board
+def draw_player_board(window, board, current_player, game=None, legal_actions=()):
+    player = board.player
     action_rects = {}
 
     # Draw board background with player color
@@ -574,11 +566,20 @@ def draw_player_board(window, player, current_player, game=None, legal_actions=(
     draw_tiles_section(window, board)
     draw_actiones_section(window, board)
     draw_bank_section(window, board)
-    draw_used_bm_section(window, board, current_player)
+    show_private_information = player == current_player and getattr(
+        current_player.control,
+        "is_human",
+        True,
+    )
+    draw_used_bm_section(
+        window,
+        board,
+        current_player if show_private_information else None,
+    )
     draw_general_stock(window, board)
     draw_personal_supply(window, board)
 
-    if player == current_player:
+    if show_private_information:
         draw_player_card(window, board)
         if game is not None:
             action_rects.update(
@@ -617,8 +618,7 @@ def draw_city_keys_section(window, board):
 
 
 def draw_privilegium_section(window, board):
-    # Adjusted "Privilegium" section with buffer moved further down
-    privilege_y = board.y + 10 + 2 * SQUARE_SIZE + 10  # adjusting spacing
+    privilege_y = board.y + 10 + 2 * SQUARE_SIZE + 10
     colors = [WHITE, ORANGE, PINK, BLACK]
     for i, color in enumerate(colors):
         if board.player.has_unlocked_privilege(i):
@@ -641,8 +641,7 @@ def draw_privilegium_section(window, board):
 
 
 def draw_bonus_markers_section(window, board):
-    # Starting position for bonus markers (below the privilege section)
-    bm_start_y = board.y + board.height - CIRCLE_RADIUS * 2  # adjusting spacing
+    bm_start_y = board.y + board.height - CIRCLE_RADIUS * 2
 
     for i, bm in enumerate(board.player.bonus_markers):
         bm_x = board.x + 20 + CIRCLE_RADIUS + (i * (CIRCLE_RADIUS * 2 + 30))
@@ -840,12 +839,9 @@ def draw_used_bm_section(window, board, current_player):
 
 
 def draw_general_stock(window, board):
-    x_offset = board.x + 650  # Adjust this value based on exact positioning
-    y_offset = board.y + 10  # Adjust this value based on exact positioning
-
-    # Draw 'GS:' text
-    font = pygame.font.SysFont(None, 36)
-    draw_text(window, "GS:", x_offset, y_offset, font, BLACK)
+    x_offset = board.x + 650
+    y_offset = board.y + 10
+    draw_text(window, "GS:", x_offset, y_offset, FONT_STOCK, BLACK)
 
     # Draw square for squares count with the number inside
     x_offset += 50
@@ -855,34 +851,29 @@ def draw_general_stock(window, board):
         str(board.player.general_stock_squares),
         x_offset + 20,
         y_offset + 20,
-        font,
+        FONT_STOCK,
         BLACK,
         centered=True,
-    )  # Assuming black color for numbers
+    )
 
     # Draw circle next to square for circles count with number inside
     x_offset += 60
-    draw_shape(
-        window, "circle", board.player.color, x_offset, y_offset + 20, 20
-    )  # Assuming radius is half of square side
+    draw_shape(window, "circle", board.player.color, x_offset, y_offset + 20, 20)
     draw_text(
         window,
         str(board.player.general_stock_circles),
         x_offset,
         y_offset + 20,
-        font,
+        FONT_STOCK,
         BLACK,
         centered=True,
-    )  # Assuming black color for numbers
+    )
 
 
 def draw_personal_supply(window, board):
-    x_offset = board.x + 650  # Adjust this value based on exact positioning
-    y_offset = board.y + 80  # Positioning it further down than GS for clarity
-
-    # Draw 'PS:' text
-    font = pygame.font.SysFont(None, 36)
-    draw_text(window, "PS:", x_offset, y_offset, font, BLACK)
+    x_offset = board.x + 650
+    y_offset = board.y + 80
+    draw_text(window, "PS:", x_offset, y_offset, FONT_STOCK, BLACK)
 
     # Draw square for squares count in personal supply with the number inside
     x_offset += 50
@@ -892,7 +883,7 @@ def draw_personal_supply(window, board):
         str(board.player.personal_supply_squares),
         x_offset + 20,
         y_offset + 20,
-        font,
+        FONT_STOCK,
         BLACK,
         centered=True,
     )
@@ -905,22 +896,27 @@ def draw_personal_supply(window, board):
         str(board.player.personal_supply_circles),
         x_offset,
         y_offset + 20,
-        font,
+        FONT_STOCK,
         BLACK,
         centered=True,
     )
 
 
 def draw_player_card(window, board):
-    x_offset = board.x + 700  # Adjust this value based on exact positioning
-    y_offset = board.y + 90  # Positioning it further down than GS for clarity
-    font = pygame.font.SysFont(None, 25)
+    x_offset = board.x + 700
+    y_offset = board.y + 90
 
     if board.player.mission_card:
         # draw each city in the player mission card
         for i, city in enumerate(board.player.mission_card):
             draw_text(
-                window, str(city), x_offset + 35, y_offset + 40 + i * 25, font, BLACK, centered=True
+                window,
+                str(city),
+                x_offset + 35,
+                y_offset + 40 + i * 25,
+                FONT_MISSION,
+                BLACK,
+                centered=True,
             )
 
 
@@ -934,9 +930,6 @@ def draw_context_action_buttons(window, board, game, legal_actions):
     button_height = 30
     horizontal_spacing = 180  # Spacing between columns
     vertical_spacing = 35  # Spacing between rows
-
-    # Use the `draw_text` function for centering on both X and Y axis
-    font = pygame.font.SysFont(None, 28)
 
     # Calculate the center coordinates of the button
     button_center_x = income_x + button_width / 2
@@ -953,7 +946,7 @@ def draw_context_action_buttons(window, board, game, legal_actions):
         "Choose:",
         button_center_x,
         button_center_y,
-        font,
+        FONT_CONTEXT,
         BLACK,
         centered=True,
     )
@@ -961,7 +954,7 @@ def draw_context_action_buttons(window, board, game, legal_actions):
     rects = {}
     for i, action in enumerate(contextual_actions):
         label = fit_text(
-            pygame.font.SysFont(None, 20),
+            FONT_MARKER,
             action_label(action, game),
             button_width - 10,
         )
@@ -992,7 +985,7 @@ def draw_context_action_buttons(window, board, game, legal_actions):
             label,
             button_x + (button_width // 2),
             button_y + (button_height // 2),
-            pygame.font.SysFont(None, 20),
+            FONT_MARKER,
             WHITE,
             centered=True,
         )

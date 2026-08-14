@@ -22,7 +22,11 @@ from training.targeted_state_generator import (
     generate_state,
     save_generated_state,
 )
-from tools.generate_training_states import EVALUATION_SPECS, parse_args
+from tools.generate_training_states import (
+    EVALUATION_SPECS,
+    EVALUATION_SUITE_VERSION,
+    parse_args,
+)
 
 
 class TargetedStateGeneratorTests(unittest.TestCase):
@@ -84,7 +88,14 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         )
         self.assertEqual(sum(spec.east_west for spec in EVALUATION_SPECS), 9)
         self.assertTrue(any(spec.east_west and spec.regional_focus for spec in EVALUATION_SPECS))
-        self.assertEqual(sum(spec.immediate_finish for spec in EVALUATION_SPECS), 1)
+        immediate = [spec for spec in EVALUATION_SPECS if spec.immediate_finish]
+        harder = [spec for spec in EVALUATION_SPECS if not spec.immediate_finish]
+        self.assertEqual(len(immediate), 3)
+        self.assertEqual({spec.ending_condition for spec in immediate}, set(EndingCondition))
+        self.assertTrue(all(spec.score_range == (15, 16) for spec in harder))
+        self.assertTrue(all(spec.bonus_markers_remaining == 2 for spec in harder))
+        self.assertTrue(all(spec.completed_cities_below_limit == 2 for spec in harder))
+        self.assertTrue(all(spec.prepared_routes_one_short for spec in harder))
         self.assertTrue(
             all(not spec.mission_cards or spec.map_num == 1 for spec in EVALUATION_SPECS)
         )
@@ -97,6 +108,9 @@ class TargetedStateGeneratorTests(unittest.TestCase):
                 for entry in manifest
                 for field in ("save_file", "metadata_file")
             )
+        )
+        self.assertTrue(
+            all(entry["suite_version"] == EVALUATION_SUITE_VERSION for entry in manifest)
         )
         self.assertTrue(parse_args(["--eval"]).eval)
 

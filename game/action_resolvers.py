@@ -1,8 +1,12 @@
-from map_data.constants import DARK_GREEN
 from game.action_schema import (
     BONUS_MARKER_PAYMENT_TYPES,
     BONUS_MARKER_SLOT_BY_TYPE,
+    GREEN_CITY_SLOT_START,
+    ROUTE_COMPLETE_SLOT,
+    ROUTE_OUTCOME_SLOT_START,
     TILE_TYPES,
+    city_pair_catalogue,
+    green_city_catalogue,
 )
 from game.game_actions import (
     InvalidActionError,
@@ -34,10 +38,7 @@ def _raise_invalid_action(game, route=None):
 
 def resolve_post_interaction(game, post_slot, post_type):
     current_player = game.current_player
-    numbered_posts = enumerate(
-        (route, post) for route in game.selected_map.routes for post in route.posts
-    )
-    selected = next((item for slot, item in numbered_posts if slot == post_slot), None)
+    selected = game.post_context(post_slot)
     if selected is None:
         raise InvalidActionError(f"Post slot does not exist: {post_slot}")
     selected_route, selected_post = selected
@@ -49,32 +50,28 @@ def resolve_post_interaction(game, post_slot, post_type):
     )
 
     if game.waiting_for_displaced_player:
-        if (
+        can_pick_up_fallback = (
             selected_post.owner == game.displaced_player.player
             and game.displaced_player.is_general_stock_empty()
             and game.displaced_player.is_personal_supply_empty()
-        ):
-            displace_claim(game, selected_post, post_type)
-        elif selected_post in game.all_empty_posts:
+        )
+        if can_pick_up_fallback or selected_post in game.all_empty_posts:
             displace_claim(game, selected_post, post_type)
         else:
             _raise_invalid_action(game, selected_route)
 
-    elif game.waiting_for_bm_move_any_2:
-        move_action(game, selected_route, selected_post, post_type)
-
-    elif game.waiting_for_place2_from_route:
-        move_action(game, selected_route, selected_post, post_type)
+    elif game.waiting_for_bm_move_any_2 or game.waiting_for_place2_from_route:
+        move_action(game, selected_post)
 
     elif game.waiting_for_place2_in_scotland_or_wales:
         if not selected_post.is_owned() and selected_post.region in ("Scotland", "Wales"):
-            move_action(game, selected_route, selected_post, post_type)
+            move_action(game, selected_post)
         else:
             _raise_invalid_action(game, selected_route)
 
     elif game.waiting_for_bm_move3:
         if selected_post.owner != current_player:
-            move_action(game, selected_route, selected_post, post_type)
+            move_action(game, selected_post)
         else:
             _raise_invalid_action(game, selected_route)
     elif game.waiting_for_bm_tribute_trading_post:
@@ -89,26 +86,23 @@ def resolve_post_interaction(game, post_slot, post_type):
         post_type_available = any(piece[0] == post_type for piece in current_player.holding_pieces)
 
         if current_player.holding_pieces:
-            if (
+            valid_empty_destination = (
                 is_post_empty
                 and post_type_available
-                and (
-                    selected_post.required_shape is None
-                    or selected_post.required_shape == post_type
-                )
-            ):
-                move_action(game, selected_route, selected_post, post_type)
-            elif (
+                and selected_post.required_shape in (None, post_type)
+            )
+            valid_additional_pickup = (
                 is_post_owned
                 and selected_post.owner == current_player
                 and current_player.pieces_to_pickup > 0
                 and len(current_player.holding_pieces) < current_player.book
-            ):
-                move_action(game, selected_route, selected_post, post_type)
+            )
+            if valid_empty_destination or valid_additional_pickup:
+                move_action(game, selected_post)
             else:
                 _raise_invalid_action(game, selected_route)
         elif is_post_owned and selected_post.owner == current_player:
-            move_action(game, selected_route, selected_post, post_type)
+            move_action(game, selected_post)
         elif is_post_empty and game.check_brown_blue_priv(selected_route):
             if current_player.has_personal_supply(post_type) and (
                 selected_post.required_shape is None or selected_post.required_shape == post_type
@@ -131,7 +125,7 @@ def resolve_route_interaction(game, route_idx, interaction_slot):
     """Resolve one structured interaction with a completed route."""
     route = game.selected_map.routes[route_idx]
 
-    if interaction_slot == 0:
+    if interaction_slot == ROUTE_COMPLETE_SLOT:
         if route.is_controlled_by(game.current_player):
             claim_route_for_points(game, route)
         else:
@@ -146,7 +140,7 @@ def resolve_route_interaction(game, route_idx, interaction_slot):
             _raise_invalid_action(game, route)
 
     elif interaction_slot <= 6:
-        adjusted_index = interaction_slot - 3
+        adjusted_index = interaction_slot - ROUTE_OUTCOME_SLOT_START
         city_idx, upgrade_idx = divmod(adjusted_index, 2)
 
         city = route.cities[city_idx]
@@ -336,12 +330,9 @@ def resolve_bonus_marker_interaction(game, index):
         target = game.exchange_target_player
         if target is None:
             raise InvalidActionError("An exchange target must be selected first")
+        marker_type = BONUS_MARKER_PAYMENT_TYPES[index]
         exchanged_marker = next(
-            (
-                marker
-                for marker in target.used_bonus_markers
-                if BONUS_MARKER_SLOT_BY_TYPE.get(marker.type) == index
-            ),
+            (marker for marker in target.used_bonus_markers if marker.type == marker_type),
             None,
         )
         if exchanged_marker is None:
@@ -490,11 +481,7 @@ def resolve_player_interaction(game, player_slot):
 
 def resolve_city_interaction(game, action):
     if game.waiting_for_bm_swap_office:
-        catalogue = [
-            (city, (left, left + 1))
-            for city in game.selected_map.cities
-            for left in range(len(city.offices) - 1)
-        ]
+        catalogue = city_pair_catalogue(game.selected_map.cities)
         city, pair = catalogue[action.city_interaction_slot]
         if not city.swap_office_pair(game.current_player, pair, game):
             raise InvalidActionError("Trading-post exchange is no longer legal")
@@ -502,13 +489,8 @@ def resolve_city_interaction(game, action):
         return
 
     if game.waiting_for_bm_green_city:
-        catalogue = [
-            (city, shape)
-            for city in game.selected_map.cities
-            if city.color == DARK_GREEN
-            for shape in ("square", "circle")
-        ]
-        city, shape = catalogue[action.city_interaction_slot - 46]
+        catalogue = green_city_catalogue(game.selected_map.cities)
+        city, shape = catalogue[action.city_interaction_slot - GREEN_CITY_SLOT_START]
         if not city.claim_green_city(game, shape):
             raise InvalidActionError("Green-city choice is no longer legal")
         game.waiting_for_bm_green_city = False

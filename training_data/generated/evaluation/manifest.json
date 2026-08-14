@@ -5,8 +5,8 @@
     "player_count": 3,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      17,
+      18
     ],
     "east_west": false,
     "regional_focus": null,
@@ -14,11 +14,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": true,
-    "suite_version": 2,
+    "bonus_markers_remaining": 0,
+    "completed_cities_below_limit": 1,
+    "prepared_routes_one_short": false,
+    "suite_version": 3,
     "scenario": "near_score",
-    "seed": 1,
-    "save_file": "map1_3p_near_score/near_score/map_1/3_players/state-7aad94eb6632c2e1.hansa",
-    "metadata_file": "map1_3p_near_score/near_score/map_1/3_players/state-7aad94eb6632c2e1.json"
+    "seed": 1001,
+    "save_file": "map1_3p_near_score/near_score/map_1/3_players/state-8372e1ba5bc4295a.hansa",
+    "metadata_file": "map1_3p_near_score/near_score/map_1/3_players/state-8372e1ba5bc4295a.json"
   },
   {
     "name": "map1_3p_near_bonus_markers",
@@ -26,8 +29,8 @@
     "player_count": 3,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": null,
@@ -35,11 +38,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers+east_west",
-    "seed": 2,
-    "save_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-37f17518ee4719dc.hansa",
-    "metadata_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-37f17518ee4719dc.json"
+    "seed": 1002,
+    "save_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-e0b58294286d5f82.hansa",
+    "metadata_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-e0b58294286d5f82.json"
   },
   {
     "name": "map1_3p_near_completed_cities",
@@ -47,8 +53,8 @@
     "player_count": 3,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -56,11 +62,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities",
-    "seed": 3,
-    "save_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-c4d1e7370ef7e601.hansa",
-    "metadata_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-c4d1e7370ef7e601.json"
+    "seed": 1003,
+    "save_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-c7373121d62e58e7.hansa",
+    "metadata_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-c7373121d62e58e7.json"
   },
   {
     "name": "map1_4p_near_score",
@@ -68,8 +77,8 @@
     "player_count": 4,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -77,11 +86,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score",
-    "seed": 4,
-    "save_file": "map1_4p_near_score/near_score/map_1/4_players/state-5ef20a6e1a5811e1.hansa",
-    "metadata_file": "map1_4p_near_score/near_score/map_1/4_players/state-5ef20a6e1a5811e1.json"
+    "seed": 1004,
+    "save_file": "map1_4p_near_score/near_score/map_1/4_players/state-194334f417066b71.hansa",
+    "metadata_file": "map1_4p_near_score/near_score/map_1/4_players/state-194334f417066b71.json"
   },
   {
     "name": "map1_4p_near_bonus_markers",
@@ -89,8 +101,8 @@
     "player_count": 4,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -98,11 +110,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers",
-    "seed": 5,
-    "save_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-4c57a3cec20fd961.hansa",
-    "metadata_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-4c57a3cec20fd961.json"
+    "seed": 1005,
+    "save_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-47231de981f87224.hansa",
+    "metadata_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-47231de981f87224.json"
   },
   {
     "name": "map1_4p_near_completed_cities",
@@ -110,8 +125,8 @@
     "player_count": 4,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": null,
@@ -119,11 +134,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities+east_west",
-    "seed": 6,
-    "save_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-7751cf955809cc7d.hansa",
-    "metadata_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-7751cf955809cc7d.json"
+    "seed": 1006,
+    "save_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-85a04edd75262166.hansa",
+    "metadata_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-85a04edd75262166.json"
   },
   {
     "name": "map1_5p_near_score",
@@ -131,8 +149,8 @@
     "player_count": 5,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": null,
@@ -140,11 +158,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score+east_west",
-    "seed": 7,
-    "save_file": "map1_5p_near_score/near_score/map_1/5_players/state-a443ba3781058062.hansa",
-    "metadata_file": "map1_5p_near_score/near_score/map_1/5_players/state-a443ba3781058062.json"
+    "seed": 1007,
+    "save_file": "map1_5p_near_score/near_score/map_1/5_players/state-572d56432185f8c0.hansa",
+    "metadata_file": "map1_5p_near_score/near_score/map_1/5_players/state-572d56432185f8c0.json"
   },
   {
     "name": "map1_5p_near_bonus_markers",
@@ -152,8 +173,8 @@
     "player_count": 5,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -161,11 +182,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers",
-    "seed": 8,
-    "save_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-b827e47b095d1563.hansa",
-    "metadata_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-b827e47b095d1563.json"
+    "seed": 1008,
+    "save_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-f583f01d17d6e029.hansa",
+    "metadata_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-f583f01d17d6e029.json"
   },
   {
     "name": "map1_5p_near_completed_cities",
@@ -173,8 +197,8 @@
     "player_count": 5,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -182,11 +206,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities",
-    "seed": 9,
-    "save_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-f6c3913a67a89657.hansa",
-    "metadata_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-f6c3913a67a89657.json"
+    "seed": 1009,
+    "save_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-c79413f01ca17bbf.hansa",
+    "metadata_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-c79413f01ca17bbf.json"
   },
   {
     "name": "map2_3p_near_score",
@@ -194,8 +221,8 @@
     "player_count": 3,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -203,11 +230,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score",
-    "seed": 10,
-    "save_file": "map2_3p_near_score/near_score/map_2/3_players/state-a357104cfd2a9b4a.hansa",
-    "metadata_file": "map2_3p_near_score/near_score/map_2/3_players/state-a357104cfd2a9b4a.json"
+    "seed": 1010,
+    "save_file": "map2_3p_near_score/near_score/map_2/3_players/state-f936dc823fc483f7.hansa",
+    "metadata_file": "map2_3p_near_score/near_score/map_2/3_players/state-f936dc823fc483f7.json"
   },
   {
     "name": "map2_3p_near_bonus_markers",
@@ -215,8 +245,8 @@
     "player_count": 3,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -224,11 +254,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers",
-    "seed": 11,
-    "save_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-1a590de31877e3cb.hansa",
-    "metadata_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-1a590de31877e3cb.json"
+    "seed": 1011,
+    "save_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-2ff109a3fb3fe98e.hansa",
+    "metadata_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-2ff109a3fb3fe98e.json"
   },
   {
     "name": "map2_3p_near_completed_cities",
@@ -236,8 +269,8 @@
     "player_count": 3,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": null,
@@ -245,11 +278,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities+east_west",
-    "seed": 12,
-    "save_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-6b4f2b7f6e1a3380.hansa",
-    "metadata_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-6b4f2b7f6e1a3380.json"
+    "seed": 1012,
+    "save_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-b2ec8e112f2c18f0.hansa",
+    "metadata_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-b2ec8e112f2c18f0.json"
   },
   {
     "name": "map2_4p_near_score",
@@ -257,8 +293,8 @@
     "player_count": 4,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": null,
@@ -266,11 +302,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score+east_west",
-    "seed": 13,
-    "save_file": "map2_4p_near_score/near_score/map_2/4_players/state-0e4cf5477a07a500.hansa",
-    "metadata_file": "map2_4p_near_score/near_score/map_2/4_players/state-0e4cf5477a07a500.json"
+    "seed": 1013,
+    "save_file": "map2_4p_near_score/near_score/map_2/4_players/state-ab645c552826ab1d.hansa",
+    "metadata_file": "map2_4p_near_score/near_score/map_2/4_players/state-ab645c552826ab1d.json"
   },
   {
     "name": "map2_4p_near_bonus_markers",
@@ -278,20 +317,23 @@
     "player_count": 4,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      17,
+      18
     ],
     "east_west": false,
     "regional_focus": null,
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
-    "immediate_finish": false,
-    "suite_version": 2,
+    "immediate_finish": true,
+    "bonus_markers_remaining": 0,
+    "completed_cities_below_limit": 1,
+    "prepared_routes_one_short": false,
+    "suite_version": 3,
     "scenario": "near_bonus_markers",
-    "seed": 14,
-    "save_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-b493a50c1426eb2c.hansa",
-    "metadata_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-b493a50c1426eb2c.json"
+    "seed": 1014,
+    "save_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-c8cf4533ecd1aefb.hansa",
+    "metadata_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-c8cf4533ecd1aefb.json"
   },
   {
     "name": "map2_4p_near_completed_cities",
@@ -299,8 +341,8 @@
     "player_count": 4,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -308,11 +350,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities",
-    "seed": 15,
-    "save_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-a79ffe79f04afc85.hansa",
-    "metadata_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-a79ffe79f04afc85.json"
+    "seed": 1015,
+    "save_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-d6b8567db97021da.hansa",
+    "metadata_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-d6b8567db97021da.json"
   },
   {
     "name": "map2_5p_near_score",
@@ -320,8 +365,8 @@
     "player_count": 5,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -329,11 +374,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score",
-    "seed": 16,
-    "save_file": "map2_5p_near_score/near_score/map_2/5_players/state-521bfe02f0a17b49.hansa",
-    "metadata_file": "map2_5p_near_score/near_score/map_2/5_players/state-521bfe02f0a17b49.json"
+    "seed": 1016,
+    "save_file": "map2_5p_near_score/near_score/map_2/5_players/state-bedf24d01c8fb2e0.hansa",
+    "metadata_file": "map2_5p_near_score/near_score/map_2/5_players/state-bedf24d01c8fb2e0.json"
   },
   {
     "name": "map2_5p_near_bonus_markers",
@@ -341,8 +389,8 @@
     "player_count": 5,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": null,
@@ -350,11 +398,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers+east_west",
-    "seed": 17,
-    "save_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-4004845ad6b496be.hansa",
-    "metadata_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-4004845ad6b496be.json"
+    "seed": 1017,
+    "save_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-6892ed72e568c827.hansa",
+    "metadata_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-6892ed72e568c827.json"
   },
   {
     "name": "map2_5p_near_completed_cities",
@@ -362,8 +413,8 @@
     "player_count": 5,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -371,11 +422,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities",
-    "seed": 18,
-    "save_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-98b2723edddc2150.hansa",
-    "metadata_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-98b2723edddc2150.json"
+    "seed": 1018,
+    "save_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-a0c540fa3fd45121.hansa",
+    "metadata_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-a0c540fa3fd45121.json"
   },
   {
     "name": "map3_3p_near_score",
@@ -383,8 +437,8 @@
     "player_count": 3,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": null,
@@ -392,11 +446,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score+east_west",
-    "seed": 19,
-    "save_file": "map3_3p_near_score/near_score/map_3/3_players/state-8fd9423c52aac2ae.hansa",
-    "metadata_file": "map3_3p_near_score/near_score/map_3/3_players/state-8fd9423c52aac2ae.json"
+    "seed": 1019,
+    "save_file": "map3_3p_near_score/near_score/map_3/3_players/state-8e3caeb8d9b64ba1.hansa",
+    "metadata_file": "map3_3p_near_score/near_score/map_3/3_players/state-8e3caeb8d9b64ba1.json"
   },
   {
     "name": "map3_3p_near_bonus_markers",
@@ -404,8 +461,8 @@
     "player_count": 3,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": "britannia_wales",
@@ -413,11 +470,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers+britannia_wales",
-    "seed": 20,
-    "save_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-f542f17e00abc8b2.hansa",
-    "metadata_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-f542f17e00abc8b2.json"
+    "seed": 1020,
+    "save_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-2fb7ad3ef58d5b51.hansa",
+    "metadata_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-2fb7ad3ef58d5b51.json"
   },
   {
     "name": "map3_3p_near_completed_cities",
@@ -425,8 +485,8 @@
     "player_count": 3,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": null,
@@ -434,11 +494,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities",
-    "seed": 21,
-    "save_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-1833647982ec4cb2.hansa",
-    "metadata_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-1833647982ec4cb2.json"
+    "seed": 1021,
+    "save_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-642a94fedfc9bf84.hansa",
+    "metadata_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-642a94fedfc9bf84.json"
   },
   {
     "name": "map3_4p_near_score",
@@ -446,8 +509,8 @@
     "player_count": 4,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": "britannia_wales",
@@ -455,11 +518,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score+east_west+britannia_wales",
-    "seed": 22,
-    "save_file": "map3_4p_near_score/near_score/map_3/4_players/state-a35e5e0da8aa55c3.hansa",
-    "metadata_file": "map3_4p_near_score/near_score/map_3/4_players/state-a35e5e0da8aa55c3.json"
+    "seed": 1022,
+    "save_file": "map3_4p_near_score/near_score/map_3/4_players/state-8cb05e84d4866f8d.hansa",
+    "metadata_file": "map3_4p_near_score/near_score/map_3/4_players/state-8cb05e84d4866f8d.json"
   },
   {
     "name": "map3_4p_near_bonus_markers",
@@ -467,8 +533,8 @@
     "player_count": 4,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": "britannia_isle_of_man",
@@ -476,11 +542,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers+britannia_isle_of_man",
-    "seed": 23,
-    "save_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-4e51ef13e69d7499.hansa",
-    "metadata_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-4e51ef13e69d7499.json"
+    "seed": 1023,
+    "save_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-dda85ad9bb0c3576.hansa",
+    "metadata_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-dda85ad9bb0c3576.json"
   },
   {
     "name": "map3_4p_near_completed_cities",
@@ -488,8 +557,8 @@
     "player_count": 4,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": "britannia_scotland",
@@ -497,11 +566,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_completed_cities+britannia_scotland",
-    "seed": 24,
-    "save_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-f796ffd0b6fb6102.hansa",
-    "metadata_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-f796ffd0b6fb6102.json"
+    "seed": 1024,
+    "save_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-56c41259a9da5436.hansa",
+    "metadata_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-56c41259a9da5436.json"
   },
   {
     "name": "map3_5p_near_score",
@@ -509,8 +581,8 @@
     "player_count": 5,
     "ending_condition": "near_score",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": false,
     "regional_focus": "britannia_wales",
@@ -518,11 +590,14 @@
     "emperors_favour": true,
     "promo_markers": false,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_score+britannia_wales",
-    "seed": 25,
-    "save_file": "map3_5p_near_score/near_score/map_3/5_players/state-8673362241d30718.hansa",
-    "metadata_file": "map3_5p_near_score/near_score/map_3/5_players/state-8673362241d30718.json"
+    "seed": 1025,
+    "save_file": "map3_5p_near_score/near_score/map_3/5_players/state-1f2539bac09c5176.hansa",
+    "metadata_file": "map3_5p_near_score/near_score/map_3/5_players/state-1f2539bac09c5176.json"
   },
   {
     "name": "map3_5p_near_bonus_markers",
@@ -530,8 +605,8 @@
     "player_count": 5,
     "ending_condition": "near_bonus_markers",
     "score_range": [
-      16,
-      17
+      15,
+      16
     ],
     "east_west": true,
     "regional_focus": "britannia_scotland",
@@ -539,11 +614,14 @@
     "emperors_favour": false,
     "promo_markers": true,
     "immediate_finish": false,
-    "suite_version": 2,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": true,
+    "suite_version": 3,
     "scenario": "near_bonus_markers+east_west+britannia_scotland",
-    "seed": 26,
-    "save_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-f7363f0f49331fb6.hansa",
-    "metadata_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-f7363f0f49331fb6.json"
+    "seed": 1026,
+    "save_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-713451b8add4aabc.hansa",
+    "metadata_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-713451b8add4aabc.json"
   },
   {
     "name": "map3_5p_near_completed_cities",
@@ -551,19 +629,22 @@
     "player_count": 5,
     "ending_condition": "near_completed_cities",
     "score_range": [
-      16,
-      17
+      17,
+      18
     ],
     "east_west": false,
     "regional_focus": "britannia_isle_of_man",
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
-    "immediate_finish": false,
-    "suite_version": 2,
+    "immediate_finish": true,
+    "bonus_markers_remaining": 0,
+    "completed_cities_below_limit": 1,
+    "prepared_routes_one_short": false,
+    "suite_version": 3,
     "scenario": "near_completed_cities+britannia_isle_of_man",
-    "seed": 27,
-    "save_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-af4e30f7bddb8997.hansa",
-    "metadata_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-af4e30f7bddb8997.json"
+    "seed": 1027,
+    "save_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-3aee9f1e7aef9ff5.hansa",
+    "metadata_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-3aee9f1e7aef9ff5.json"
   }
 ]

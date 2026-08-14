@@ -36,7 +36,7 @@ from training.targeted_state_generator import (
 )
 
 
-GENERATOR_VERSION = 2
+GENERATOR_VERSION = 3
 
 
 class EndingCondition(str, Enum):
@@ -121,6 +121,7 @@ class BalancedGenerationRequest:
     bonus_markers_remaining: int = 0
     completed_cities_below_limit: int = 1
     prepared_routes_one_short: bool = False
+    development_range: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -169,6 +170,10 @@ def _validate_request(request):
         raise ValueError("bonus_markers_remaining cannot be negative")
     if request.completed_cities_below_limit < 1:
         raise ValueError("completed_cities_below_limit must be positive")
+    if request.development_range is not None:
+        minimum, maximum = request.development_range
+        if minimum < 0 or maximum < minimum or maximum > 20:
+            raise ValueError("development_range must be between 0 and 20")
 
 
 def _prepare_east_west_focus(game, pools, rng, request, focus):
@@ -378,9 +383,10 @@ def _apply_starting_scores(game, rng, request, prepared_player, focus):
         if _balance_projected_scores(game, rng) is None:
             return False
     else:
-        base_score = rng.randint(6, 16)
+        minimum_score, maximum_score = request.score_range
+        base_score = rng.randint(minimum_score, maximum_score)
         for player in game.players:
-            player.score = rng.randint(base_score, min(base_score + 1, 16))
+            player.score = rng.randint(base_score, min(base_score + 1, maximum_score))
 
     if request.strategic_focus not in (DUAL_EAST_WEST_FOCUSES | BLOCKED_EAST_WEST_FOCUSES):
         return True
@@ -459,13 +465,16 @@ def _build_once(request, attempt_seed):
     )
     game = configuration.create_game()
     pools = {player: _configure_player(player) for player in game.players}
-    development_range = rng.choice(DEVELOPMENT_RANGES)
+    development_range = request.development_range or rng.choice(DEVELOPMENT_RANGES)
     complicated_focus = (
         request.strategic_focus in DUAL_EAST_WEST_FOCUSES
         or request.strategic_focus in (StrategicFocus.SPECIAL_PRESTIGE, StrategicFocus.NETWORK_KEYS)
         or (request.strategic_focus in EAST_WEST_FOCUSES and request.regional_focus)
     )
-    initial_range = (0, 1) if complicated_focus else (3, 5)
+    if request.development_range is not None:
+        initial_range = (0, min(1, development_range[1]))
+    else:
+        initial_range = (0, 1) if complicated_focus else (3, 5)
     if _complete_balanced_development(game, pools, rng, initial_range, allow_offices=True) is None:
         return None
 
@@ -548,6 +557,7 @@ def save_balanced_state(generated, output_directory):
         "completed_cities_below_limit": request.completed_cities_below_limit,
         "starting_position": request.starting_position.value,
         "prepared_routes_one_short": request.prepared_routes_one_short,
+        "development_range": request.development_range,
         "regional_focus": request.regional_focus,
         "options": (
             request.use_mission_cards,

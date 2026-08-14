@@ -3,6 +3,20 @@
 from __future__ import annotations
 
 from game.action_codec import DEFAULT_ACTION_CODEC
+from game.action_schema import (
+    ADDITIONAL_TRADING_POST_SLOT,
+    BONUS_MARKER_PAYMENT_TYPES,
+    BONUS_MARKER_TYPES,
+    EXCHANGED_BONUS_MARKER_START,
+    GREEN_CITY_SLOT_START,
+    PRESTIGE_VALUES,
+    ROUTE_COMPLETE_SLOT,
+    ROUTE_OFFICE_SLOT_START,
+    ROUTE_OUTCOME_SLOT_START,
+    TILE_TYPES,
+    city_pair_catalogue,
+    green_city_catalogue,
+)
 from game.structured_actions import (
     AbilityInteraction,
     BonusMarkerInteraction,
@@ -16,18 +30,36 @@ from game.structured_actions import (
     TileInteraction,
 )
 from game.turn_state import TurnPhase
-from map_data.constants import DARK_GREEN
 
-
-BONUS_MARKER_NAMES = (
-    "Swap Office",
-    "Move 3",
-    "Upgrade Ability",
-    "+3 Actions",
-    "+4 Actions",
-    "Exchange Bonus Marker",
-    "Tribute Trading Post",
-    "Block Trade Route",
+BONUS_MARKER_LABELS = dict(
+    zip(
+        BONUS_MARKER_TYPES,
+        (
+            "Swap Office",
+            "Move 3",
+            "Upgrade Ability",
+            "+3 Actions",
+            "+4 Actions",
+            "Exchange Bonus Marker",
+            "Tribute Trading Post",
+            "Block Trade Route",
+        ),
+        strict=True,
+    )
+)
+TILE_LABELS = dict(
+    zip(
+        TILE_TYPES,
+        (
+            "Buy Displace Anywhere",
+            "Buy +1 Action",
+            "Buy Income Favour",
+            "Buy +1 Displaced Piece",
+            "Buy City Scoring",
+            "Buy Ability Scoring",
+        ),
+        strict=True,
+    )
 )
 
 
@@ -70,13 +102,21 @@ def action_label(index: int, game=None) -> str:
     if isinstance(action, IncomeInteraction):
         return _income_action_label(action, game)
     if isinstance(action, BonusMarkerInteraction):
-        if action.marker_slot == 8:
+        if action.marker_slot == ADDITIONAL_TRADING_POST_SLOT:
+            if getattr(game, "waiting_for_buy_tile_with_bm", False):
+                return "Pay Additional Trading Post"
+            if getattr(game, "exchange_target_player", None):
+                return "Take used Additional Trading Post"
             return "Use Additional Trading Post"
-        marker_slot = (
-            (action.marker_slot - 9) % 8 if action.marker_slot >= 9 else action.marker_slot
-        )
-        verb = "Take used" if getattr(game, "exchange_target_player", None) else "Use"
-        return f"{verb} {BONUS_MARKER_NAMES[marker_slot]}"
+        marker_slot = action.marker_slot
+        if marker_slot >= EXCHANGED_BONUS_MARKER_START:
+            marker_slot = (marker_slot - EXCHANGED_BONUS_MARKER_START) % len(BONUS_MARKER_TYPES)
+        marker_type = BONUS_MARKER_TYPES[marker_slot]
+        if getattr(game, "waiting_for_buy_tile_with_bm", False):
+            verb = "Pay"
+        else:
+            verb = "Take used" if getattr(game, "exchange_target_player", None) else "Use"
+        return f"{verb} {BONUS_MARKER_LABELS[marker_type]}"
     if isinstance(action, TileInteraction):
         return _tile_action_label(action, game)
     if isinstance(action, PlayerInteraction):
@@ -136,12 +176,13 @@ def _route_action_label(action, game) -> str:
     route = game.selected_map.routes[action.route_slot]
     if game.turn_phase == TurnPhase.REPLACE_BONUS_MARKERS:
         return f"Place marker: {route.cities[0].name}—{route.cities[1].name}"
-    if action.interaction_slot == 0:
+    if action.interaction_slot == ROUTE_COMPLETE_SLOT:
         return f"Complete route (no office): {route.cities[0].name}—{route.cities[1].name}"
-    if action.interaction_slot <= 2:
-        return f"Office in {route.cities[action.interaction_slot - 1].name}"
+    if action.interaction_slot < ROUTE_OUTCOME_SLOT_START:
+        endpoint = action.interaction_slot - ROUTE_OFFICE_SLOT_START
+        return f"Office in {route.cities[endpoint].name}"
 
-    route_choice = action.interaction_slot - 3
+    route_choice = action.interaction_slot - ROUTE_OUTCOME_SLOT_START
     if getattr(game, "waiting_for_bm_place_adjacent", False):
         city_index, shape_index = divmod(route_choice, 2)
         return (
@@ -153,7 +194,7 @@ def _route_action_label(action, game) -> str:
         None,
     )
     if special_city is not None:
-        return f"Prestige {(7, 8, 9, 11)[route_choice]}: {special_city.name}"
+        return f"Prestige {PRESTIGE_VALUES[route_choice]}: {special_city.name}"
     city_index, upgrade_index = divmod(route_choice, 2)
     city = route.cities[city_index]
     if upgrade_index < len(city.upgrade_city_type):
@@ -167,36 +208,24 @@ def _tile_action_label(action, game) -> str:
         labels = ("Income favour: Trader", "Income favour: Merchant", "Decline income favour")
         return labels[choice] if choice < len(labels) else f"Income favour choice {choice + 1}"
     if getattr(game, "waiting_for_buy_tile_with_bm", False):
-        return f"Pay {BONUS_MARKER_NAMES[choice]}"
-    tiles = (
-        "Buy Displace Anywhere",
-        "Buy +1 Action",
-        "Buy Income Favour",
-        "Buy +1 Displaced Piece",
-        "Buy City Scoring",
-        "Buy Ability Scoring",
-    )
-    return tiles[choice] if choice < len(tiles) else f"Tile choice {choice + 1}"
+        marker_type = BONUS_MARKER_PAYMENT_TYPES[choice]
+        if marker_type == "PlaceAdjacent":
+            return "Pay Additional Trading Post"
+        return f"Pay {BONUS_MARKER_LABELS[marker_type]}"
+    if choice < len(TILE_TYPES):
+        return TILE_LABELS[TILE_TYPES[choice]]
+    return f"Tile choice {choice + 1}"
 
 
 def _city_context_label(action, game) -> str:
     if game is None:
         return f"City choice {action.city_interaction_slot}"
     if game.waiting_for_bm_swap_office:
-        catalogue = [
-            (city, (left, left + 1))
-            for city in game.selected_map.cities
-            for left in range(len(city.offices) - 1)
-        ]
+        catalogue = city_pair_catalogue(game.selected_map.cities)
         city, pair = catalogue[action.city_interaction_slot]
         return f"Swap offices {pair[0] + 1}/{pair[1] + 1} in {city.name}"
     if game.waiting_for_bm_green_city:
-        catalogue = [
-            (city, shape)
-            for city in game.selected_map.cities
-            if city.color == DARK_GREEN
-            for shape in ("square", "circle")
-        ]
-        city, shape = catalogue[action.city_interaction_slot - 46]
+        catalogue = green_city_catalogue(game.selected_map.cities)
+        city, shape = catalogue[action.city_interaction_slot - GREEN_CITY_SLOT_START]
         return f"Green office in {city.name}: {shape.title()}"
     return f"City choice {action.city_interaction_slot + 1}"

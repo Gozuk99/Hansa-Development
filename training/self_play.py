@@ -6,6 +6,7 @@ from contextlib import nullcontext, redirect_stdout
 from dataclasses import asdict, dataclass, field, replace
 import hashlib
 import io
+import math
 from pathlib import Path
 import random
 import tempfile
@@ -18,7 +19,7 @@ from ai.ai_model import HansaNN, device
 from ai.observation_encoder import ObservationEncoder
 from ai.observation_schema import (
     observation_schema_metadata,
-    validate_observation_schema_metadata,
+    validate_model_observation_schema_metadata,
 )
 from game.action_codec import DEFAULT_ACTION_CODEC
 from game.action_schema import action_schema_metadata, validate_action_schema_metadata
@@ -45,8 +46,10 @@ ROUTE_BUILDING_DISPLACEMENT_REWARD = 3
 INTERMEDIATE_ABILITY_UPGRADE_REWARD = 250
 FIRST_ACTIONS_UPGRADE_REWARD = 400
 INTERMEDIATE_REWARDED_ABILITIES = ("privilege", "book", "actions", "bank")
-MASSIVE_MOVE_PENALTY = -1000
+MASSIVE_MOVE_PENALTY = -5000
 CONSECUTIVE_HIGH_CAPACITY_MOVE_PENALTY = -200
+SAME_POST_MOVE_PENALTY = -1000
+REDUNDANT_SWAP_PENALTY = -1000
 _CURRICULUM_STATE_UNSET = object()
 DEFAULT_TIER_TOP_K = (2, 5, 10, 15, 20)
 DEFAULT_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 0.35)
@@ -151,6 +154,7 @@ class TrainingDecision:
     model_rank: int
     legal_action_count: int
     game_turn_number: int = 0
+    movement_workflow_id: int | None = None
     reward_to_go: float | None = None
 
 
@@ -173,6 +177,8 @@ class CompletedTrajectory:
     selection_seconds: float = 0.0
     context_seconds: float = 0.0
     reward_seconds: float = 0.0
+    move_action_count: int = 0
+    spent_action_count: int = 0
 
 
 def should_fully_validate(action_count, interval, turn_before, phase_before, game):
@@ -228,10 +234,52 @@ def _post_context_at(game, slot):
     return next((item for index, item in enumerate(posts) if index == slot), None)
 
 
+def move_workflow_exploration_categories(game, legal_indices):
+    """Group concrete Move clicks so random pickup and placement are equally likely."""
+    post_contexts = {}
+    post_slot = 0
+    for route_index, route in enumerate(game.selected_map.routes):
+        for post in route.posts:
+            post_contexts[post_slot] = (route_index, route, post)
+            post_slot += 1
+
+    pickup_groups = {}
+    placement_groups = {}
+    for action_index in torch.as_tensor(legal_indices).tolist():
+        action_index = int(action_index)
+        action = DEFAULT_ACTION_CODEC.decode(action_index)
+        context = (
+            post_contexts.get(action.post_slot) if isinstance(action, PostInteraction) else None
+        )
+        if context is not None:
+            route_index, route, post = context
+            if post.owner is game.current_player:
+                # The occupied post already determines the piece shape.
+                key = ("pickup", action.post_slot)
+                groups = pickup_groups
+            elif post.owner is None and route.required_circles == 0:
+                # Shape remains a meaningful choice when several differently shaped
+                # pieces are held; only equivalent post locations are collapsed.
+                key = ("route_destination", route_index, action.shape)
+                groups = placement_groups
+            else:
+                key = ("action", action_index)
+                groups = placement_groups
+        else:
+            key = ("action", action_index)
+            groups = placement_groups
+        groups.setdefault(key, []).append(action_index)
+    return tuple(
+        tuple(tuple(group) for group in groups.values())
+        for groups in (pickup_groups, placement_groups)
+        if groups
+    )
+
+
 def _would_complete_east_west(game, player, route):
     if player in game.players_who_completed_east_west:
         return False
-    occupied = {city for city in game.selected_map.cities if city.has_office_controlled_by(player)}
+    occupied = {city for city in game.selected_map.cities if city.has_office_owned_by(player)}
     start_name, end_name = game.selected_map.east_west_cities
 
     def connected(cities):
@@ -425,6 +473,40 @@ def consecutive_move_penalty(movement_capacity, consecutive_moves):
     return 0.0
 
 
+def _is_normal_move_in_progress(action_phase, player):
+    return action_phase is TurnPhase.MOVE_PIECES and bool(player.holding_pieces)
+
+
+def same_post_move_penalty(pieces_moved, origin_posts, destination_posts):
+    """Penalize spending Move to return one piece to its original post."""
+    if (
+        pieces_moved == 1
+        and len(origin_posts) == 1
+        and len(destination_posts) == 1
+        and origin_posts[0] is destination_posts[0]
+    ):
+        return float(SAME_POST_MOVE_PENALTY)
+    return 0.0
+
+
+def redundant_piece_swap_penalty(origin_pieces, destination_posts):
+    """Penalize exchanging two pieces whose owner and shape are identical."""
+    if len(origin_pieces) != len(destination_posts):
+        return 0.0
+    for first in range(len(origin_pieces)):
+        first_post, first_owner, first_shape = origin_pieces[first]
+        for second in range(first + 1, len(origin_pieces)):
+            second_post, second_owner, second_shape = origin_pieces[second]
+            if (
+                first_owner is second_owner
+                and first_shape == second_shape
+                and destination_posts[first] is second_post
+                and destination_posts[second] is first_post
+            ):
+                return float(REDUNDANT_SWAP_PENALTY)
+    return 0.0
+
+
 def completed_route_move_reward(routes_before, routes_after):
     """Reward net claimable routes created by one completed normal Move."""
     return float(MOVE_COMPLETED_ROUTE_REWARD * (len(routes_after) - len(routes_before)))
@@ -543,6 +625,16 @@ class SelfPlayTrainer:
         numbers = numbers[offset:] + numbers[:offset]
         return tuple(replace(self._tier(number), epsilon=0.0) for number in numbers)
 
+    @staticmethod
+    def _rank_legal_positions(legal_scores, count):
+        """Rank tiny choice sets without paying the overhead of torch.topk."""
+        if legal_scores.numel() <= 3:
+            values = legal_scores.tolist()
+            return tuple(sorted(range(len(values)), key=lambda index: (-values[index], index)))[
+                :count
+            ]
+        return tuple(torch.topk(legal_scores, count, largest=True, sorted=True).indices.tolist())
+
     def _select_action(self, scores, legal_indices, tier):
         legal_indices = torch.as_tensor(legal_indices, dtype=torch.long, device=scores.device)
         legal_scores = scores[legal_indices]
@@ -561,15 +653,78 @@ class SelfPlayTrainer:
             )
         else:
             effective_k = min(tier.top_k or legal_count, legal_count)
-            ranked_positions = torch.topk(
-                legal_scores, effective_k, largest=True, sorted=True
-            ).indices
+            ranked_positions = self._rank_legal_positions(legal_scores, effective_k)
             selected_rank = self.rng.randrange(effective_k)
             selected = int(legal_indices[ranked_positions[selected_rank]].item())
             used_epsilon = False
             model_rank = selected_rank + 1
         return ActionSelection(
             selected,
+            used_epsilon,
+            model_rank,
+            legal_count,
+        )
+
+    def _select_workflow_action(self, scores, legal_indices, exploration_categories=None):
+        """Keep multi-click workflows coherent while retaining bounded exploration."""
+        legal_indices = torch.as_tensor(legal_indices, dtype=torch.long, device=scores.device)
+        legal_scores = scores[legal_indices]
+        legal_count = legal_indices.numel()
+        categories = (
+            None
+            if exploration_categories is None
+            else tuple(
+                tuple(tuple(int(index) for index in group) for group in category)
+                for category in exploration_categories
+            )
+        )
+        if categories is not None:
+            grouped_indices = [
+                index for category in categories for group in category for index in group
+            ]
+            if sorted(grouped_indices) != sorted(int(index) for index in legal_indices.tolist()):
+                raise ValueError(
+                    "Workflow exploration categories must contain every legal action exactly once"
+                )
+        if legal_count == 1:
+            return ActionSelection(int(legal_indices[0].item()), False, 1, 1)
+
+        ranked_positions = self._rank_legal_positions(legal_scores, min(3, legal_count))
+        roll = self.rng.random()
+        used_epsilon = False
+        if legal_count == 2:
+            selected_rank = 0 if roll < 0.60 else 1
+            selected_position = ranked_positions[selected_rank]
+            model_rank = selected_rank + 1
+        elif roll < 0.40:
+            selected_position = ranked_positions[0]
+            model_rank = 1
+        elif roll < 0.60:
+            selected_position = ranked_positions[1]
+            model_rank = 2
+        elif roll < 0.75:
+            selected_position = ranked_positions[2]
+            model_rank = 3
+        else:
+            if categories is None:
+                selected_index = int(legal_indices[self.rng.randrange(legal_count)].item())
+            else:
+                category = categories[self.rng.randrange(len(categories))]
+                group = category[self.rng.randrange(len(category))]
+                selected_index = (
+                    group[0] if len(group) == 1 else group[self.rng.randrange(len(group))]
+                )
+            selected_position = int((legal_indices == selected_index).nonzero()[0].item())
+            selected_score = legal_scores[selected_position]
+            model_rank = (
+                int((legal_scores > selected_score).sum().item())
+                + int((legal_scores[:selected_position] == selected_score).sum().item())
+                + 1
+            )
+            used_epsilon = True
+
+        return ActionSelection(
+            int(legal_indices[selected_position].item()),
             used_epsilon,
             model_rank,
             legal_count,
@@ -587,6 +742,8 @@ class SelfPlayTrainer:
         reason="normal",
         completed=True,
         timings=None,
+        move_action_count=0,
+        spent_action_count=0,
     ):
         trajectory = CompletedTrajectory(
             assign_reward_to_go(decisions, terminal_rewards, self.config.gamma),
@@ -597,6 +754,8 @@ class SelfPlayTrainer:
             tuple(tier.number for tier in seat_tiers),
             reason,
             *(timings or (0.0,) * 10),
+            move_action_count,
+            spent_action_count,
         )
         if completed:
             self.progress.completed_games += 1
@@ -640,7 +799,7 @@ class SelfPlayTrainer:
             )
 
         game = load_game(starting_state)
-        game.interactive_errors = False
+        game.set_interactive_errors(False)
         seat_tiers = (
             self._assign_evaluation_tiers(len(game.players), evaluation_tier_rotation)
             if evaluation
@@ -654,11 +813,21 @@ class SelfPlayTrainer:
         turn_action_budget = game.current_player.actions_remaining
         turn_actions_spent = 0
         turn_move_actions = 0
+        total_move_actions = 0
+        total_spent_actions = 0
         consecutive_move_actions = 0
         massive_move_penalty_applied = False
         move_destination_counts = {}
         move_completed_routes_before = set()
         move_tracking_active = False
+        move_pieces_picked_up = 0
+        move_origin_posts = []
+        move_origin_pieces = []
+        move_destination_posts = []
+        permanent_move_tracking_active = False
+        next_movement_workflow_id = 1
+        normal_move_workflow_id = None
+        permanent_move_workflow_id = None
         output = redirect_stdout(io.StringIO()) if quiet else nullcontext()
         scoring_started = perf_counter()
         projected_before = game.projected_scores()
@@ -679,6 +848,13 @@ class SelfPlayTrainer:
                     move_destination_counts = {}
                     move_completed_routes_before = set()
                     move_tracking_active = False
+                    move_pieces_picked_up = 0
+                    move_origin_posts = []
+                    move_origin_pieces = []
+                    move_destination_posts = []
+                    permanent_move_tracking_active = False
+                    normal_move_workflow_id = None
+                    permanent_move_workflow_id = None
                 action_attempted = False
                 try:
                     observation_started = perf_counter()
@@ -719,49 +895,88 @@ class SelfPlayTrainer:
                                 reason="no_replacement_route",
                                 completed=False,
                                 timings=timings(),
+                                move_action_count=total_move_actions,
+                                spent_action_count=total_spent_actions,
                             )
                         error = IncompleteGameError(
                             "The game has no legal interaction at "
                             f"turn {game.turn_number}, phase {game.turn_phase.value}"
                         )
-                        if failure_callback is not None:
-                            failure_callback(game, tuple(action_trace), seat_tiers, error)
                         raise error
                     inference_started = perf_counter()
                     scores = self.model(observation.features.float().unsqueeze(0).to(device))[0]
                     inference_seconds += perf_counter() - inference_started
                     selection_started = perf_counter()
                     tier = seat_tiers[observation.observer_index]
-                    selection = self._select_action(scores, legal_indices, tier)
+                    if game.turn_phase is TurnPhase.ACTIONS:
+                        selection = self._select_action(scores, legal_indices, tier)
+                    else:
+                        exploration_categories = (
+                            move_workflow_exploration_categories(game, legal_indices)
+                            if game.turn_phase is TurnPhase.MOVE_PIECES
+                            else None
+                        )
+                        selection = self._select_workflow_action(
+                            scores,
+                            legal_indices,
+                            exploration_categories,
+                        )
                     action_index = selection.action_index
                     action = DEFAULT_ACTION_CODEC.decode(action_index)
                     selection_seconds += perf_counter() - selection_started
                     context_started = perf_counter()
                     action_phase = game.turn_phase
                     acting_player = game.players[observation.observer_index]
-                    context = None
-                    if action_phase is TurnPhase.ACTIONS and isinstance(action, PostInteraction):
-                        context = _post_context_at(game, action.post_slot)
-                        if context is not None:
-                            route_index, _route, selected_post = context
-                            next_player_index = (observation.observer_index + 1) % len(game.players)
-                            next_player = game.players[next_player_index]
-                            if selected_post.owner is next_player:
-                                valuable_routes = valuable_completed_route_slots(game, next_player)
-                                if route_index in valuable_routes:
-                                    pending_disruption = (
-                                        observation.observer_index,
-                                        next_player_index,
-                                        len(valuable_routes),
-                                    )
+                    context = (
+                        _post_context_at(game, action.post_slot)
+                        if isinstance(action, PostInteraction)
+                        else None
+                    )
+                    if action_phase is TurnPhase.ACTIONS and context is not None:
+                        route_index, _route, selected_post = context
+                        next_player_index = (observation.observer_index + 1) % len(game.players)
+                        next_player = game.players[next_player_index]
+                        if selected_post.owner is next_player:
+                            valuable_routes = valuable_completed_route_slots(game, next_player)
+                            if route_index in valuable_routes:
+                                pending_disruption = (
+                                    observation.observer_index,
+                                    next_player_index,
+                                    len(valuable_routes),
+                                )
                     bank_capacity = acting_player.bank
-                    normal_move_in_progress = bool(acting_player.holding_pieces) and (
+                    normal_move_in_progress = _is_normal_move_in_progress(
+                        action_phase, acting_player
+                    )
+                    permanent_move_in_progress = bool(
+                        action_phase is TurnPhase.BONUS_MARKER_CHOICE
+                        and game.waiting_for_bm_move_any_2
+                    )
+                    starts_normal_move = bool(
                         action_phase is TurnPhase.ACTIONS
+                        and not acting_player.holding_pieces
+                        and isinstance(action, PostInteraction)
+                        and context is not None
+                        and context[2].owner is acting_player
+                    )
+                    if starts_normal_move:
+                        normal_move_workflow_id = next_movement_workflow_id
+                        next_movement_workflow_id += 1
+                    if permanent_move_in_progress and permanent_move_workflow_id is None:
+                        permanent_move_workflow_id = next_movement_workflow_id
+                        next_movement_workflow_id += 1
+                    movement_workflow_id = (
+                        normal_move_workflow_id
+                        if starts_normal_move or normal_move_in_progress
+                        else permanent_move_workflow_id
+                        if permanent_move_in_progress
+                        else None
                     )
                     movement_capacity = acting_player.book
-                    pieces_moved = movement_capacity - acting_player.pieces_to_pickup
+                    pieces_moved = move_pieces_picked_up
                     actions_remaining_before = acting_player.actions_remaining
                     move_placement_route = None
+                    move_placement_post = None
                     move_blocks_next_player = False
                     route_building_reward = 0.0
                     route_building_post = None
@@ -788,6 +1003,7 @@ class SelfPlayTrainer:
                         route_index, route, selected_post = context
                         if not selected_post.is_owned():
                             move_placement_route = route_index
+                            move_placement_post = selected_post
                             next_player = game.players[
                                 (observation.observer_index + 1) % len(game.players)
                             ]
@@ -795,8 +1011,40 @@ class SelfPlayTrainer:
                                 post is selected_post or post.owner is next_player
                                 for post in route.posts
                             )
+                        elif selected_post.owner is acting_player:
+                            move_origin_posts.append(selected_post)
+                            move_origin_pieces.append(
+                                (
+                                    selected_post,
+                                    selected_post.owner,
+                                    selected_post.owner_piece_shape,
+                                )
+                            )
                     elif (
-                        not acting_player.holding_pieces
+                        permanent_move_in_progress
+                        and isinstance(action, PostInteraction)
+                        and context is not None
+                    ):
+                        _route_index, _route, selected_post = context
+                        if selected_post.is_owned():
+                            if not permanent_move_tracking_active:
+                                move_origin_posts = []
+                                move_origin_pieces = []
+                                move_destination_posts = []
+                                permanent_move_tracking_active = True
+                            move_origin_posts.append(selected_post)
+                            move_origin_pieces.append(
+                                (
+                                    selected_post,
+                                    selected_post.owner,
+                                    selected_post.owner_piece_shape,
+                                )
+                            )
+                        elif acting_player.holding_pieces:
+                            move_placement_post = selected_post
+                    elif (
+                        action_phase is TurnPhase.ACTIONS
+                        and not acting_player.holding_pieces
                         and isinstance(action, PostInteraction)
                         and context is not None
                         and context[2].owner is acting_player
@@ -808,6 +1056,16 @@ class SelfPlayTrainer:
                             if route.is_controlled_by(acting_player)
                         }
                         move_tracking_active = True
+                        move_pieces_picked_up = 0
+                        move_origin_posts = [selected_post]
+                        move_origin_pieces = [
+                            (
+                                selected_post,
+                                selected_post.owner,
+                                selected_post.owner_piece_shape,
+                            )
+                        ]
+                        move_destination_posts = []
                     general_stock_before = (
                         acting_player.general_stock_squares + acting_player.general_stock_circles
                     )
@@ -824,6 +1082,12 @@ class SelfPlayTrainer:
                     action_attempted = True
                     execution_started = perf_counter()
                     game.apply_ai_action(action_index)
+                    if move_tracking_active:
+                        move_pieces_picked_up = max(
+                            move_pieces_picked_up, len(acting_player.holding_pieces)
+                        )
+                    if move_placement_post is not None and move_placement_post.is_owned():
+                        move_destination_posts.append(move_placement_post)
                     execution_seconds += perf_counter() - execution_started
                     if should_fully_validate(
                         action_number,
@@ -889,6 +1153,11 @@ class SelfPlayTrainer:
                     ),
                 )
                 normal_move_completed = normal_move_in_progress and not acting_player.holding_pieces
+                permanent_move_completed = bool(
+                    permanent_move_in_progress
+                    and not game.waiting_for_bm_move_any_2
+                    and not acting_player.holding_pieces
+                )
                 if move_placement_route is not None:
                     move_destination_counts[move_placement_route] = (
                         move_destination_counts.get(move_placement_route, 0) + 1
@@ -900,12 +1169,23 @@ class SelfPlayTrainer:
                 action_was_spent = acting_player.actions_remaining < actions_remaining_before
                 if action_was_spent:
                     turn_actions_spent += 1
+                    total_spent_actions += 1
                     if normal_move_completed:
                         turn_move_actions += 1
+                        total_move_actions += 1
                         consecutive_move_actions += 1
                         adjusted = list(player_reward_deltas)
                         adjusted[observation.observer_index] += consecutive_move_penalty(
                             movement_capacity, consecutive_move_actions
+                        )
+                        adjusted[observation.observer_index] += same_post_move_penalty(
+                            pieces_moved,
+                            move_origin_posts,
+                            move_destination_posts,
+                        )
+                        adjusted[observation.observer_index] += redundant_piece_swap_penalty(
+                            move_origin_pieces,
+                            move_destination_posts,
                         )
                         if any(count >= 2 for count in move_destination_counts.values()):
                             adjusted[observation.observer_index] += MOVE_ROUTE_FOCUS_REWARD
@@ -932,8 +1212,23 @@ class SelfPlayTrainer:
                         move_destination_counts = {}
                         move_completed_routes_before = set()
                         move_tracking_active = False
+                        move_pieces_picked_up = 0
+                        move_origin_posts = []
+                        move_origin_pieces = []
+                        move_destination_posts = []
                     else:
                         consecutive_move_actions = 0
+                if permanent_move_completed:
+                    adjusted = list(player_reward_deltas)
+                    adjusted[observation.observer_index] += redundant_piece_swap_penalty(
+                        move_origin_pieces,
+                        move_destination_posts,
+                    )
+                    player_reward_deltas = tuple(adjusted)
+                    move_origin_posts = []
+                    move_origin_pieces = []
+                    move_destination_posts = []
+                    permanent_move_tracking_active = False
                 player_reward_deltas = apply_route_completion_reward(
                     player_reward_deltas,
                     action=action,
@@ -973,8 +1268,13 @@ class SelfPlayTrainer:
                         selection.model_rank,
                         selection.legal_action_count,
                         turn_before,
+                        movement_workflow_id,
                     )
                 )
+                if normal_move_completed:
+                    normal_move_workflow_id = None
+                if permanent_move_completed:
+                    permanent_move_workflow_id = None
                 reward_seconds += perf_counter() - reward_started
                 end_is_pending = game.game_end or game.game_end_pending_immediate_resolution
                 if game_end_trigger_player is None and end_is_pending and not end_was_pending:
@@ -986,7 +1286,23 @@ class SelfPlayTrainer:
                 )
                 if failure_callback is not None:
                     failure_callback(game, tuple(action_trace), seat_tiers, error)
-                raise error
+                if evaluation:
+                    raise error
+                # A timeout is not a game loss. Keep every authoritative reward
+                # and penalty already earned, but add no invented terminal value.
+                return self._complete_trajectory(
+                    decisions,
+                    (0.0,) * len(game.players),
+                    projected_before,
+                    (),
+                    action_trace,
+                    seat_tiers,
+                    reason="action_limit",
+                    completed=False,
+                    timings=timings(),
+                    move_action_count=total_move_actions,
+                    spent_action_count=total_spent_actions,
+                )
 
         validation_started = perf_counter()
         validate_game(game)
@@ -1002,6 +1318,8 @@ class SelfPlayTrainer:
             seat_tiers,
             reason=completed_game_reason(game),
             timings=timings(),
+            move_action_count=total_move_actions,
+            spent_action_count=total_spent_actions,
         )
 
     @staticmethod
@@ -1052,48 +1370,96 @@ class SelfPlayTrainer:
             }
         return metrics
 
+    def _training_batches(self, decisions):
+        decisions = list(decisions)
+        batch_size = self.config.decision_batch_size
+        if len(decisions) <= batch_size:
+            self.rng.shuffle(decisions)
+            return (decisions,)
+
+        batch_count = min(4, math.ceil(len(decisions) / batch_size))
+        sample_size = min(len(decisions), batch_size * batch_count)
+        grouped = {}
+        for index, decision in enumerate(decisions):
+            key = (
+                ("movement", decision.movement_workflow_id)
+                if decision.movement_workflow_id is not None
+                else ("decision", index)
+            )
+            grouped.setdefault(key, []).append(decision)
+
+        final_key = (
+            ("movement", decisions[-1].movement_workflow_id)
+            if decisions[-1].movement_workflow_id is not None
+            else ("decision", len(decisions) - 1)
+        )
+        selected_keys = {final_key}
+        ordered_selected_keys = [final_key]
+        selected_count = len(grouped[final_key])
+        priority_groups = sorted(
+            (
+                (key, group)
+                for key, group in grouped.items()
+                if key != final_key and any(decision.immediate_reward for decision in group)
+            ),
+            key=lambda item: max(abs(decision.immediate_reward) for decision in item[1]),
+            reverse=True,
+        )
+        priority_budget = sample_size // 2
+        for key, group in priority_groups:
+            if selected_count + len(group) > priority_budget:
+                continue
+            selected_keys.add(key)
+            ordered_selected_keys.append(key)
+            selected_count += len(group)
+
+        remaining_keys = [key for key in grouped if key not in selected_keys]
+        self.rng.shuffle(remaining_keys)
+        for key in remaining_keys:
+            group_size = len(grouped[key])
+            if selected_count + group_size <= sample_size:
+                selected_keys.add(key)
+                ordered_selected_keys.append(key)
+                selected_count += group_size
+
+        batches = [[] for _ in range(batch_count)]
+        for key in ordered_selected_keys:
+            group = grouped[key]
+            available = [batch for batch in batches if len(batch) + len(group) <= batch_size]
+            if not available:
+                continue
+            target = min(available, key=len)
+            target.extend(group)
+        for batch in batches:
+            self.rng.shuffle(batch)
+        return tuple(batch for batch in batches if batch)
+
     def update_model(self, trajectories) -> float:
-        """Give each completed game one equally weighted model update."""
+        """Update from one to four representative batches per trajectory."""
         trajectories = tuple(trajectories)
         if not trajectories or any(not trajectory.decisions for trajectory in trajectories):
             raise TrainingRunError("Cannot train from an empty trajectory batch")
         self.model.train()
         losses = []
         for trajectory in trajectories:
-            decisions = list(trajectory.decisions)
-            if len(decisions) > self.config.decision_batch_size:
-                rewarded_indices = sorted(
-                    (
-                        index
-                        for index, decision in enumerate(decisions[:-1])
-                        if decision.immediate_reward
-                    ),
-                    key=lambda index: abs(decisions[index].immediate_reward),
-                    reverse=True,
-                )[: self.config.decision_batch_size // 2]
-                selected = set(rewarded_indices)
-                remaining_indices = [
-                    index for index in range(len(decisions) - 1) if index not in selected
-                ]
-                slots = self.config.decision_batch_size - len(rewarded_indices) - 1
-                selected.update(self.rng.sample(remaining_indices, slots))
-                batch = [decisions[index] for index in selected] + [decisions[-1]]
-            else:
-                batch = decisions
-            self.rng.shuffle(batch)
-            observations = torch.stack([sample.observation for sample in batch]).float().to(device)
-            actions = torch.tensor([sample.action_index for sample in batch], device=device)
-            targets = torch.tensor(
-                [sample.reward_to_go for sample in batch], dtype=torch.float32, device=device
-            )
-            predictions = self.model(observations).gather(1, actions.unsqueeze(1)).squeeze(1)
-            loss = functional.smooth_l1_loss(predictions, targets)
-            self.optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.max_gradient_norm)
-            self.optimizer.step()
-            losses.append(float(loss.detach().cpu()))
-            self.progress.training_updates += 1
+            for batch in self._training_batches(trajectory.decisions):
+                observations = (
+                    torch.stack([sample.observation for sample in batch]).float().to(device)
+                )
+                actions = torch.tensor([sample.action_index for sample in batch], device=device)
+                targets = torch.tensor(
+                    [sample.reward_to_go for sample in batch], dtype=torch.float32, device=device
+                )
+                predictions = self.model(observations).gather(1, actions.unsqueeze(1)).squeeze(1)
+                loss = functional.smooth_l1_loss(predictions, targets)
+                self.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.config.max_gradient_norm
+                )
+                self.optimizer.step()
+                losses.append(float(loss.detach().cpu()))
+                self.progress.training_updates += 1
         self.model.eval()
 
         value = sum(losses) / len(losses)
@@ -1188,7 +1554,9 @@ class SelfPlayTrainer:
         if checkpoint.get("training_checkpoint_version") != TRAINING_CHECKPOINT_VERSION:
             raise ValueError("Incompatible training checkpoint version")
         validate_action_schema_metadata(checkpoint, "Training checkpoint")
-        validate_observation_schema_metadata(checkpoint, "Training checkpoint")
+        migrated_observation_schema = validate_model_observation_schema_metadata(
+            checkpoint, "Training checkpoint"
+        )
 
         config_values = dict(checkpoint["training_config"])
         if config_values.get("learning_rate") == LEGACY_LEARNING_RATE:
@@ -1209,5 +1577,6 @@ class SelfPlayTrainer:
         trainer.loss_total = checkpoint["loss_total"]
         trainer.source_state_sha256 = checkpoint["source_state_sha256"]
         trainer.curriculum_state = checkpoint.get("curriculum_state")
+        trainer.model.migrated_observation_schema = migrated_observation_schema
         trainer.model.eval()
         return trainer

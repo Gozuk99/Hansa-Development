@@ -8,12 +8,20 @@ from tools.chart_training_results import (
     Series,
     _chart_ceiling,
     _evaluation_chart,
+    _statistics,
     _tier_player_count_charts,
     read_results,
 )
 
 
 class TrainingResultsChartTests(unittest.TestCase):
+    def test_loss_statistics_use_whole_numbers_except_percentage_change(self):
+        summary = _statistics(((1, 1000.25), (2, 2000.75)))
+
+        self.assertIn("<span>1,500</span>", summary)
+        self.assertNotIn("1,500.50", summary)
+        self.assertIn("<span>100.0%</span>", summary)
+
     def test_loss_charts_keep_history_and_group_only_the_visible_window(self):
         series = Series(max_points=10)
         for game_number in range(1, 26):
@@ -33,6 +41,47 @@ class TrainingResultsChartTests(unittest.TestCase):
         self.assertEqual(_chart_ceiling(54, 10, minimum=40, maximum=100), 60)
         self.assertEqual(_chart_ceiling(100, 10, minimum=40, maximum=100), 100)
         self.assertEqual(_chart_ceiling(40, 5, minimum=5), 45)
+
+    def test_training_loss_axis_ignores_evaluation_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "results.csv"
+            with path.open("w", newline="", encoding="utf-8") as output:
+                writer = csv.DictWriter(
+                    output,
+                    fieldnames=(
+                        "game#",
+                        "batch#",
+                        "run_type",
+                        "player_count",
+                        "latest_loss",
+                        "rolling_mean_loss",
+                    ),
+                )
+                writer.writeheader()
+                writer.writerows(
+                    (
+                        {"game#": 1, "run_type": "training", "latest_loss": 10},
+                        {
+                            "game#": 2,
+                            "batch#": 1,
+                            "run_type": "evaluation",
+                            "player_count": 3,
+                            "latest_loss": 20,
+                        },
+                        {
+                            "game#": 3,
+                            "batch#": 1,
+                            "run_type": "evaluation",
+                            "player_count": 3,
+                            "latest_loss": 30,
+                        },
+                        {"game#": 4, "run_type": "training", "latest_loss": 40},
+                    )
+                )
+
+            _rows, series, _counts = read_results(path, 100)
+
+            self.assertEqual(series["latest_loss", "training"].points, [(1.0, 10.0), (2.0, 40.0)])
 
     def test_evaluation_rows_are_grouped_into_batch_performance(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -127,6 +176,69 @@ class TrainingResultsChartTests(unittest.TestCase):
                 1,
             )
             self.assertNotIn("data-player-count-select", tier_chart)
+
+    def test_movement_metrics_do_not_add_empty_dashboard_charts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "results.csv"
+            fieldnames = (
+                "game#",
+                "batch#",
+                "run_type",
+                "player_count",
+                "action_count",
+                "move_action_count",
+                "spent_action_count",
+            )
+            with path.open("w", newline="", encoding="utf-8") as output:
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(
+                    (
+                        {
+                            "game#": 0,
+                            "batch#": 1,
+                            "run_type": "evaluation",
+                            "player_count": 3,
+                            "action_count": 400,
+                        },
+                        {
+                            "game#": 1,
+                            "batch#": 2,
+                            "run_type": "training",
+                            "player_count": 3,
+                            "move_action_count": 20,
+                            "spent_action_count": 100,
+                        },
+                        {
+                            "game#": 2,
+                            "batch#": 2,
+                            "run_type": "training_timeout",
+                            "player_count": 3,
+                            "move_action_count": 80,
+                            "spent_action_count": 100,
+                        },
+                        {
+                            "game#": 3,
+                            "batch#": 2,
+                            "run_type": "evaluation",
+                            "player_count": 3,
+                            "action_count": 500,
+                            "move_action_count": 12,
+                        },
+                    )
+                )
+
+            _rows, _series, counts = read_results(path, 100)
+            chart = _evaluation_chart(
+                counts["evaluation_batches"],
+                counts["evaluation_map_batches"],
+                counts["evaluation_player_batches"],
+                counts["evaluation_map_player_batches"],
+                counts["training_activity_batches"],
+            )
+            self.assertNotIn("Training Move-action share", chart)
+            self.assertNotIn("Average Move actions per evaluation game", chart)
+            self.assertIn("Training action-limit rate", chart)
 
 
 if __name__ == "__main__":

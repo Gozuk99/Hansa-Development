@@ -20,6 +20,27 @@ class PlayerAbilityTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             return player.perform_upgrade(ability)
 
+    def test_invalid_displaced_piece_shape_raises_instead_of_exiting(self):
+        game = create_headless_game(2, 3, seed=124)
+        with self.assertRaisesRegex(ValueError, "Unknown displaced piece shape"):
+            game.displaced_player.populate_displaced_player(game, game.current_player, "triangle")
+        with self.assertRaisesRegex(ValueError, "Unknown piece shape"):
+            game.displaced_player.has_general_stock("triangle")
+        with self.assertRaisesRegex(ValueError, "Unknown piece shape"):
+            game.displaced_player.has_personal_supply("triangle")
+
+    def test_headless_player_messages_are_disabled_but_interactive_messages_remain(self):
+        game = create_headless_game(2, 3, seed=124)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            game.current_player.start_move()
+        self.assertEqual(output.getvalue(), "")
+
+        game.set_interactive_errors(True)
+        with contextlib.redirect_stdout(output):
+            game.current_player.start_move()
+        self.assertIn("Starting move", output.getvalue())
+
     def test_rulebook_tracks_and_starting_values(self):
         self.assertEqual(CITY_KEYS_MAX_VALUES, [1, 2, 2, 3, 4])
         self.assertEqual(ACTIONS_MAX_VALUES, [2, 3, 3, 4, 4, 5])
@@ -35,6 +56,7 @@ class PlayerAbilityTests(unittest.TestCase):
                 self.assertEqual(player.actions, 2)
                 self.assertEqual(player.actions_index, 0)
                 self.assertEqual(player.actions_remaining, 2)
+                self.assertEqual(player.actions_at_turn_start, 2)
                 self.assertEqual(player.privilege, "WHITE")
                 self.assertEqual(player.book, 2)
                 self.assertEqual(player.bank, 3)
@@ -91,9 +113,7 @@ class PlayerAbilityTests(unittest.TestCase):
         player = self.make_player()
         starting_circles = player.personal_supply_circles
 
-        for index, expected_value in enumerate(
-            BOOK_OF_KNOWLEDGE_MAX_VALUES[1:], start=1
-        ):
+        for index, expected_value in enumerate(BOOK_OF_KNOWLEDGE_MAX_VALUES[1:], start=1):
             self.assertTrue(self.upgrade(player, "book"))
             self.assertEqual(player.book, expected_value)
             self.assertEqual(player.personal_supply_circles, starting_circles + index)
