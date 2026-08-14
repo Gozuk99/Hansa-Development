@@ -3,10 +3,13 @@ import json
 import random
 
 from game.action_codec import DEFAULT_ACTION_CODEC
-from game.action_schema import action_schema_metadata, validate_action_schema_metadata
+from game.action_schema import (
+    ACTION_SPACE_SIZE,
+    action_schema_metadata,
+    validate_action_schema_metadata,
+)
 from game.game_info import Game
 from game.invariants import validate_game
-from game.action_schema import ACTION_SPACE_SIZE
 from game.structured_actions import (
     ControlInteraction,
     IncomeInteraction,
@@ -126,17 +129,6 @@ def replay_game(
     return game
 
 
-def _post_context_for_action(game, action):
-    post_index = action.post_slot
-    current_index = 0
-    for route in game.selected_map.routes:
-        for post in route.posts:
-            if current_index == post_index:
-                return route, post
-            current_index += 1
-    return None, None
-
-
 def select_progress_action(game, legal_actions, policy_rng):
     """Choose a legal action with a bias toward reaching a terminal state."""
     indexed_actions = [(index, DEFAULT_ACTION_CODEC.decode(index)) for index in legal_actions]
@@ -177,7 +169,7 @@ def select_progress_action(game, legal_actions, policy_rng):
     progressing_post_actions = []
     post_action_scores = {}
     for index, action in post_actions:
-        route, post = _post_context_for_action(game, action)
+        route, post = game.post_context(action.post_slot)
         if pending_post_workflow or (post is not None and post.owner is not game.current_player):
             progressing_post_actions.append(index)
             post_action_scores[index] = sum(

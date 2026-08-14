@@ -15,6 +15,11 @@ from drawing.scaled_display import ScaledDisplay
 from drawing.save_dialogs import choose_save_file
 from game.game_config import PlayerControl, choose_ranked_ai_action
 from game.action_codec import DEFAULT_ACTION_CODEC
+from game.action_schema import (
+    ROUTE_OFFICE_SLOT_START,
+    ROUTE_OUTCOME_SLOT_START,
+    TILE_SLOT_BY_TYPE,
+)
 from game.persistence import save_game
 from game.structured_actions import (
     ControlInteraction,
@@ -103,15 +108,14 @@ class GameWindow:
             self.screen.blit(label, position)
             self.action_rects.append((pygame.Rect(position, (panel.width - 24, 21)), action))
 
-    def choose_ai_action(self, _legal_actions):
+    def choose_ai_action(self, legal_actions):
         player = self.acting_player
         state = public_game_state(self.observation_encoder, self.game, player).float()
-        ai_actions = [index for index, enabled in enumerate(self.game.ai_action_mask()) if enabled]
         if self.game.ai_model is None:
             raise RuntimeError("The game has no shared AI model")
         with torch.no_grad():
             scores = self.game.ai_model(state.unsqueeze(0)).squeeze(0)
-        ranked = [(index, float(scores[index])) for index in ai_actions]
+        ranked = [(index, float(scores[index])) for index in legal_actions]
         return choose_ranked_ai_action(
             ranked,
             player.control,
@@ -188,25 +192,17 @@ class GameWindow:
                 city_index = route.cities.index(clicked_city)
                 if button == 1:
                     action = DEFAULT_ACTION_CODEC.encode(
-                        RouteInteraction(route_index, city_index + 1)
+                        RouteInteraction(route_index, ROUTE_OFFICE_SLOT_START + city_index)
                     )
                     return action if action in legal_actions else None
                 if button == 3:
                     action = DEFAULT_ACTION_CODEC.encode(RouteInteraction(route_index, 0))
                     return action if action in legal_actions else None
 
-        tile_names = (
-            "DisplaceAnywhere",
-            "+1Action",
-            "+1IncomeIfOthersIncome",
-            "+1DisplacedPiece",
-            "+4PtsPerOwnedCity",
-            "+7PtsPerCompletedAbility",
-        )
         tile_rects = layout.tile_rects if layout is not None else {}
         for tile, rect in tile_rects.items():
             if rect.collidepoint(position):
-                action = DEFAULT_ACTION_CODEC.encode(TileInteraction(tile_names.index(tile)))
+                action = DEFAULT_ACTION_CODEC.encode(TileInteraction(TILE_SLOT_BY_TYPE[tile]))
                 return action if action in legal_actions else None
         return None
 
@@ -238,7 +234,9 @@ class GameWindow:
             choice = int(relative_x * 4 / upgrade.width)
             for route in city.routes:
                 route_index = selected_map.routes.index(route)
-                action = DEFAULT_ACTION_CODEC.encode(RouteInteraction(route_index, choice + 3))
+                action = DEFAULT_ACTION_CODEC.encode(
+                    RouteInteraction(route_index, ROUTE_OUTCOME_SLOT_START + choice)
+                )
                 if action in legal_actions:
                     candidates.append((action, route))
         else:
@@ -247,7 +245,10 @@ class GameWindow:
                 route_index = selected_map.routes.index(route)
                 city_index = route.cities.index(city)
                 action = DEFAULT_ACTION_CODEC.encode(
-                    RouteInteraction(route_index, city_index * 2 + upgrade_index + 3)
+                    RouteInteraction(
+                        route_index,
+                        ROUTE_OUTCOME_SLOT_START + city_index * 2 + upgrade_index,
+                    )
                 )
                 if action in legal_actions:
                     candidates.append((action, route))

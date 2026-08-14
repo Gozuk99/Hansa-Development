@@ -8,7 +8,7 @@ Use one shared Hansa model for every AI-controlled seat. Each decision and rewar
 
 `HansaNN` accepts the fixed player-visible observation and produces one value for each entry in the 768-action schema. `GameConfiguration` loads at most one shared inference model. Human-only games do not load PyTorch models.
 
-Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. One update is performed after each collected learning trajectory, including penalized no-replacement-route failures, before the next game begins; evaluation games never update the model.
+Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. Training performs one update per started block of 256 trajectory decisions, capped at four non-overlapping representative updates and 1,024 sampled decisions per game. Penalized no-replacement-route failures also train before the next game begins; evaluation games never update the model.
 
 ## Player-Visible Decisions
 
@@ -18,7 +18,11 @@ Training owns one shared model and one optimizer through `SelfPlayTrainer`, outs
 - the acting player's 768-entry legal-action mask; and
 - the observer's seat index.
 
-Player data and ownership identifiers are relative to the observer. Public state is visible to every player, while private Mission Cards are encoded only for their owner.
+Player data and ownership identifiers are relative to the observer. Public state
+is visible to every player, while private Mission Cards are encoded only for
+their owner. Opponents' used bonus-marker counts are visible, but their
+face-down identities remain hidden unless that opponent is the selected
+Exchange Bonus Marker target.
 
 The engine owns legality through `Game.get_legal_actions()`. The central codec maps stable interactions to indices, and `Game.apply_ai_action()` executes the selected index. GUI code is not involved in headless inference or training.
 
@@ -69,10 +73,17 @@ One versioned checkpoint stores:
 - source-state hashes; and
 - exact observation and action schema identities.
 
-Incompatible checkpoints fail clearly. Older seat-numbered or legacy reward checkpoints are not silently migrated.
+Incompatible checkpoints fail clearly. The shape-compatible observation-v1
+model/checkpoint has one explicit transfer path into observation version 2 so
+trained weights are preserved while opponent used-marker identities become
+hidden. The next save records version 2. Older seat-numbered or legacy reward
+checkpoints are not silently migrated.
 
 ## Remaining Work
 
-1. Expand training beyond targeted near-end positions to full games.
-2. Add held-out evaluation against frozen checkpoints and baseline policies.
-3. Tune exploration, discounting, batches, and the network only after evaluation can measure improvement.
+1. Reintroduce mid-, early-, and fresh-game positions after late/end performance
+   remains stable.
+2. Use the fixed evaluation suite and dashboard to measure changes before
+   adjusting exploration, rewards, discounting, or the network.
+3. Expand evaluation coverage when a new strategic focus is added, while
+   retaining old fixed positions for historical comparison.

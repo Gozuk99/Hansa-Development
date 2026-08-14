@@ -18,6 +18,7 @@ from map_data.constants import (
     GREY,
     WHITE,
 )
+from map_data.map_attributes import BonusMarker
 
 
 class ObservationEncoderTests(unittest.TestCase):
@@ -26,6 +27,45 @@ class ObservationEncoderTests(unittest.TestCase):
 
     def observation(self, game):
         return ObservationEncoder().build(game)
+
+    def test_structural_cache_preserves_observation_contract_after_dynamic_changes(self):
+        expected = {
+            1: (
+                "83f10dacc5381d20972c260b735da3299e3f498883bbcf43efecd8b32de7b233",
+                "b3efcebca0a0ab461649655916945e524097a38bf7d921fa53365a793c53796c",
+            ),
+            2: (
+                "b97e894bf6b3c295a250e35e4a1bc90e34ee98e3e7d2773b6b885d00e6f38e56",
+                "203fb75f0dd734e1ba290a4e603f481383aa8e2ddcd5cc5cbdda50b41bd47791",
+            ),
+            3: (
+                "facc801e38406057ede4e8331fdee335ba36b5faf61435854dcfcce29ecda009",
+                "d513289b9d55fcaac4e88fc270385c4f42e714c9803ab2131df73a3089fb8cab",
+            ),
+        }
+        for map_num in (1, 2, 3):
+            game = self.game(map_num=map_num, players=5)
+            encoder = ObservationEncoder()
+            initial = encoder.get_game_state(game)
+            self.assertEqual(
+                hashlib.sha256(initial.numpy().tobytes()).hexdigest(),
+                expected[map_num][0],
+            )
+
+            player = game.current_player
+            player.score += 2
+            player.general_stock_squares += 1
+            route = game.selected_map.routes[0]
+            route.posts[0].claim(player, route.posts[0].required_shape or "square")
+            city = game.selected_map.cities[0]
+            city.offices[0].controller = player
+            city.create_new_office(player.color).controller = game.players[1]
+            game.active_player = 1
+            changed = encoder.get_game_state(game)
+            self.assertEqual(
+                hashlib.sha256(changed.numpy().tobytes()).hexdigest(),
+                expected[map_num][1],
+            )
 
     def test_fixed_shape_and_legal_mask_share_acting_player(self):
         game = self.game(use_mission_cards=True)
@@ -70,6 +110,41 @@ class ObservationEncoderTests(unittest.TestCase):
 
         acting.mission_card = list(reversed(acting.mission_card))
         self.assertFalse(torch.equal(original, encoder.get_game_state(game)))
+
+    def test_opponent_used_marker_types_are_hidden_until_exchange_target_is_selected(self):
+        game = self.game()
+        encoder = ObservationEncoder()
+        opponent = game.players[1]
+        opponent.used_bonus_markers = [
+            BonusMarker("Move3", owner=opponent),
+            BonusMarker("SwapOffice", owner=opponent),
+        ]
+        hidden = encoder.get_game_state(game)
+        opponent_start = encoder.GAME_SIZE + encoder.PLAYER_SIZE
+        used_start = opponent_start + 28
+        self.assertEqual(
+            hidden[used_start : used_start + 15].tolist(),
+            [encoder.HIDDEN_USED_BONUS_MARKER_ID] * 2 + [0] * 13,
+        )
+
+        opponent.used_bonus_markers = [
+            BonusMarker("3Actions", owner=opponent),
+            BonusMarker("BlockTradeRoute", owner=opponent),
+        ]
+        self.assertTrue(torch.equal(hidden, encoder.get_game_state(game)))
+
+        game.waiting_for_bm_exchange_bm = True
+        game.exchange_target_player = opponent
+        visible = encoder.get_game_state(game)
+        self.assertEqual(
+            visible[used_start : used_start + 15].tolist(),
+            [
+                encoder.BONUS_MARKER_TYPE_TO_ID["3Actions"],
+                encoder.BONUS_MARKER_TYPE_TO_ID["BlockTradeRoute"],
+                *([0] * 13),
+            ],
+        )
+        self.assertFalse(torch.equal(hidden, visible))
 
     def test_relative_player_slots_rotate_with_active_player(self):
         game = self.game()

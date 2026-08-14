@@ -22,6 +22,8 @@ builds and validates one immutable configuration before any `Game` is created.
 7. `GameWindow` submits only indices from the engine's legal-action mask.
    Right-clicking a controlled route's city scores the route, left-clicking
    claims an office, and left-clicking a drawn upgrade box selects that upgrade.
+8. **Load Saved Game** restores an exact validated `.hansa` game, including
+   in-progress workflows and controller configuration.
 
 Invalid configurations raise `ValueError` before game construction. This keeps
 validation testable without opening a Pygame window and gives future maps or

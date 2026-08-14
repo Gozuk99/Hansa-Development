@@ -1,0 +1,34 @@
+{
+  "generator_version": 3,
+  "seed": 1026,
+  "attempt_seed": 80001266,
+  "map_num": 3,
+  "player_count": 5,
+  "ending_condition": "near_bonus_markers",
+  "score_range": [
+    15,
+    16
+  ],
+  "strategic_focus": "east_west",
+  "bonus_markers_remaining": 2,
+  "completed_cities_below_limit": 2,
+  "starting_position": "one_round_before",
+  "prepared_routes_one_short": true,
+  "development_range": [
+    9,
+    11
+  ],
+  "regional_focus": "britannia_scotland",
+  "options": [
+    false,
+    false,
+    true
+  ],
+  "state_id": "state-713451b8add4aabc",
+  "strategic_focuses": [
+    "east_west:short",
+    "britannia_scotland:Scotland"
+  ],
+  "prepared_player_index": 3,
+  "save_file": "state-713451b8add4aabc.hansa"
+}

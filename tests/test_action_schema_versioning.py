@@ -8,6 +8,7 @@ import torch
 
 from ai.ai_model import HansaNN
 from ai.observation_schema import (
+    LEGACY_OBSERVATION_SCHEMA_V1_FINGERPRINT,
     OBSERVATION_SCHEMA_VERSION,
     OBSERVATION_SIZE,
     observation_schema_metadata,
@@ -59,6 +60,18 @@ class TestActionSchemaVersioning(unittest.TestCase):
             self.assertEqual(checkpoint["observation_schema_version"], OBSERVATION_SCHEMA_VERSION)
             self.assertEqual(checkpoint["action_space_size"], ACTION_SPACE_SIZE)
             HansaNN(model_file=path)
+
+            legacy = torch.load(path, map_location="cpu")
+            legacy["observation_schema_version"] = 1
+            legacy["observation_schema_fingerprint"] = LEGACY_OBSERVATION_SCHEMA_V1_FINGERPRINT
+            torch.save(legacy, path)
+            migrated = HansaNN(model_file=path)
+            self.assertTrue(migrated.migrated_observation_schema)
+            migrated.save_model(path)
+            self.assertEqual(
+                torch.load(path, map_location="cpu")["observation_schema_version"],
+                OBSERVATION_SCHEMA_VERSION,
+            )
 
             torch.save(model.state_dict(), path)
             with self.assertRaisesRegex(ValueError, "missing"):

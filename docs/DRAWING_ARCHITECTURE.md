@@ -22,17 +22,19 @@ encoded through the central 768-entry codec before `Game.apply_action()`.
 
 ## Rules-Sensitive Presentation
 
-- Mission cards appear only on the active player's writing desk.
+- Mission cards appear only on the active human player's writing desk. A human
+  viewer never sees an AI-controlled player's private card.
 - The replacement bonus-marker supply displays its remaining count, not its
   shuffled face-down contents.
 - Opponents' used bonus markers display only face-down counts. Their types become
   selectable through the legal-action list only while resolving the promotional
   Exchange Bonus Marker.
 - End Turn is clickable only when the codec's End Turn control is legal.
-- Indices `522–526` describe ordinary Income, Tribute income, or mandatory
-  two-piece selection according to the current `TurnPhase`.
-- Indices `535–542` describe tile purchases, tile payments, or the optional
-  Income Favour response according to pending engine state.
+- Income interactions `576–580` describe ordinary Income, Tribute income, or
+  mandatory two-piece selection according to the current `TurnPhase`.
+- Tile interactions `640–645` describe purchases or the optional Income Favour
+  response. Tile payment reuses bonus-marker interactions `592–600` because the
+  player is selecting physical markers they own.
 - Replacement routes, office claims, upgrades, Special Prestige values,
   Additional Trading Posts, and bonus-marker workflows have descriptive labels.
 

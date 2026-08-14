@@ -87,6 +87,22 @@ class TurnStructureTests(unittest.TestCase):
         with self.assertRaises(TurnStateError):
             _ = game.turn_phase
 
+    def test_tribute_income_precedes_permanent_bonus_marker_follow_up(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        claimant = game.current_player
+        tribute_owner = game.players[1]
+        game.waiting_for_bm_move_any_2 = True
+        game.begin_tribute_income_responses([tribute_owner])
+
+        self.assertEqual(game.turn_phase, TurnPhase.TRIBUTE_INCOME_RESPONSE)
+        self.assertIs(game.players[game.active_player], tribute_owner)
+
+        game.resolve_tribute_income(0)
+
+        self.assertEqual(game.turn_phase, TurnPhase.BONUS_MARKER_CHOICE)
+        self.assertIs(game.current_player, claimant)
+        self.assertEqual(game.active_player, game.current_player_index)
+
     def test_displacement_finishes_before_end_of_turn_marker_replacement(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         game.current_player.forfeit_remaining_actions()

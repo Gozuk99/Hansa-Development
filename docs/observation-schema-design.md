@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This document defines the player-visible AI observation implemented by Issue
-#32. Model architecture and training behavior remain separate work.
+This document defines the active player-visible AI observation used by the
+shared model, headless play, and training.
 
 The governing rule is:
 
@@ -33,9 +33,13 @@ that layout.
 Schema versions and fingerprints are checkpoint/file compatibility metadata.
 They are never neural-network features.
 
-The implemented observation contract is version 1. Shared model checkpoints
-store its version, 4,241-value size, and fingerprint alongside the action-schema
-metadata. Loading rejects either schema when it does not match the runtime.
+The implemented observation contract is version 2. Version 2 hides opponents'
+used bonus-marker identities outside the Exchange Bonus Marker workflow. Shared
+model checkpoints store its version, 4,241-value size, and fingerprint alongside
+the action-schema metadata. Unknown or shape-incompatible schemas are rejected.
+The one explicit exception is a version-1 model or training checkpoint: its
+same-shaped weights and optimizer may transfer into version 2, and its next save
+records version 2. Old observation datasets are not silently reinterpreted.
 
 ## Relative players
 
@@ -112,8 +116,8 @@ scores, counters, and thresholds above.
 | `personal_supply` | 2 | Trader, Merchant counts |
 | `ability_positions` | 5 | Keys, Privilege, Book, Actions, Bank track positions |
 | `actions_remaining` | 1 | Public remaining actions |
-| `unused_bonus_markers` | 15 | Visible marker type IDs, then padding |
-| `used_bonus_markers` | 15 | Visible marker type IDs, then padding |
+| `unused_bonus_markers` | 15 | Public face-up marker type IDs, then padding |
+| `used_bonus_markers` | 15 | Acting player's exact types; opponents use one hidden-marker ID per face-down marker. The selected Exchange target's exact types become visible while choosing the exchanged marker. |
 | `owned_tiles` | 6 | One boolean per Emperor's Favour tile type |
 | `map3_privileges` | 3 | Cardiff, Carlisle, London counters |
 | `mission_cities` | 3 | Acting player's card only; otherwise zero |
@@ -250,17 +254,17 @@ All unused workflow fields are zero. The legal mask supplies destination and
 choice availability; internal search lists and legality-helper values are not
 features.
 
-Before this observation can be activated, `Game.get_legal_actions()` and
-`ai_action_mask()` must be verified to evaluate legality for `active_player` in
-every response phase. Any remaining use of `current_player` for the responding
-player must be corrected in that implementation work. The observation builder
-must not pair an active player's private view with another player's choices.
+`Game.get_legal_actions()` and `ai_action_mask()` evaluate legality for
+`active_player` in response phases. The observation builder pairs that same
+player's visible information with the returned legal mask.
 
 ## Hidden information
 
 The feature groups never contain:
 
 - any Mission Card except the acting player's own card;
+- opponents' face-down used bonus-marker identities, except for the selected
+  target while resolving Exchange Bonus Marker;
 - face-down replacement-marker types or order;
 - drawn replacement-marker types before the player reaches marker placement;
 - random-generator state or future random results;
@@ -275,8 +279,8 @@ without changing its visible count must not change the observation.
 
 ## Numeric and capacity failures
 
-Scores and turn counters must not wrap at 255 as the current `uint8` encoder
-can. Capacity overflow is always an explicit error, never silent truncation.
+The encoder uses `int16`, so scores and turn counters do not wrap at 255.
+Capacity overflow is always an explicit error, never silent truncation.
 
 Practical collection capacities are:
 
@@ -286,7 +290,7 @@ bonus markers/player 15 unused + 15 used; tiles 6; held pieces 5;
 pending replacement markers 15; route Tribute owners 5; route Block owners 5.
 ```
 
-## Verification before implementation is activated
+## Verification
 
 Tests must prove:
 
@@ -297,12 +301,15 @@ Tests must prove:
 - all supported maps, player counts, modules, and phases fit the capacities;
 - the acting player's Mission Card changes their observation;
 - opponents' Mission Cards do not change it;
+- changing an opponent's used marker types without changing the visible count
+  does not change it outside Exchange;
+- the selected Exchange target's used marker types are visible during selection;
 - hidden marker types/order do not change it;
 - each visible field changes only its documented feature location;
 - values do not overflow;
 - capacity overflow fails clearly;
 - GUI and headless AI receive the same observation.
 
-The previous 4,445-value encoder has been replaced by this 4,241-value
-player-visible encoder. Connecting that input to a model architecture remains
-separate work.
+The previous 4,445-value encoder was replaced by this 4,241-value
+player-visible encoder. `HansaNN` consumes this input directly, and model and
+training checkpoints store its exact schema identity.

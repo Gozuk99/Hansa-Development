@@ -1,4 +1,5 @@
 import random
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -7,8 +8,8 @@ from unittest import mock
 
 from training.balanced_curriculum import (
     CONFIGURATIONS,
-    CLOSE_FINISH_INTERVAL,
-    NEAR_SCORE_RANGES,
+    MATURITY_CYCLE,
+    MATURITY_PROFILES,
     BalancedCurriculumRunner,
     _select_focus,
 )
@@ -142,12 +143,18 @@ class BalancedCurriculumTests(unittest.TestCase):
             generated.game.selected_map.max_full_cities - 2,
         )
 
-    def test_close_finish_frequency_is_five_percent(self):
-        immediate_games = [
-            game_number for game_number in range(100) if game_number % CLOSE_FINISH_INTERVAL == 0
-        ]
+    def test_active_maturity_cycle_focuses_on_late_and_end_games(self):
+        runner = self._runner()
+        observed = Counter(
+            runner._maturity_for_game(game_number).name
+            for game_number in range(len(MATURITY_CYCLE))
+        )
 
-        self.assertEqual(len(immediate_games), 5)
+        self.assertEqual(
+            observed,
+            {"late": 4, "end": 1},
+        )
+        self.assertEqual(sum(profile.weight for profile in MATURITY_PROFILES), 5)
 
     def test_completed_city_focus_does_not_select_dual_east_west(self):
         for seed in range(100):
@@ -170,15 +177,55 @@ class BalancedCurriculumTests(unittest.TestCase):
             self.assertIsNot(focus, StrategicFocus.BLOCKED_DUAL_EAST_WEST)
             self.assertIsNot(regional, RegionalFocus.ISLE_OF_MAN)
 
-    def test_starting_score_ranges_are_equally_balanced(self):
-        runner = self._runner()
-        selected = []
-        for game_number in range(4):
-            runner.training_generation_number = game_number
-            selected.append(runner._score_range_for_game())
+    def test_regional_dual_east_west_focus_drops_only_the_blocker(self):
+        saw_dual_regional = False
+        for seed in range(1_000):
+            focus, regional = _select_focus(random.Random(seed), 3, 5, EndingCondition.NEAR_SCORE)
+            if regional is not None:
+                self.assertIsNot(focus, StrategicFocus.BLOCKED_DUAL_EAST_WEST)
+                saw_dual_regional |= focus is StrategicFocus.DUAL_EAST_WEST
 
-        self.assertCountEqual(selected, ((12, 14), (14, 16), (16, 18), (12, 16)))
-        self.assertEqual(len(NEAR_SCORE_RANGES), 4)
+        self.assertTrue(saw_dual_regional)
+
+    def test_three_player_focus_does_not_combine_dual_east_west_with_blocker(self):
+        saw_dual = False
+        for seed in range(1_000):
+            focus, _regional = _select_focus(random.Random(seed), 2, 3, EndingCondition.NEAR_SCORE)
+            self.assertIsNot(focus, StrategicFocus.BLOCKED_DUAL_EAST_WEST)
+            saw_dual |= focus is StrategicFocus.DUAL_EAST_WEST
+
+        self.assertTrue(saw_dual)
+
+    def test_maturity_profiles_progress_from_fresh_to_end_game(self):
+        profiles = {profile.name: profile for profile in MATURITY_PROFILES}
+
+        self.assertEqual(set(profiles), {"late", "end"})
+        self.assertEqual(profiles["late"].bonus_markers_remaining, 2)
+        self.assertEqual(profiles["end"].completed_cities_below_limit, 2)
+        self.assertIs(
+            profiles["end"].starting_position,
+            StartingPosition.TWO_DECISIONS_BEFORE,
+        )
+
+    def test_early_state_applies_early_scores_and_development(self):
+        generated = generate_balanced_state(
+            BalancedGenerationRequest(
+                seed=901,
+                map_num=1,
+                player_count=3,
+                ending_condition=EndingCondition.NEAR_BONUS_MARKERS,
+                score_range=(0, 5),
+                development_range=(2, 4),
+                bonus_markers_remaining=5,
+                completed_cities_below_limit=7,
+                prepared_routes_one_short=True,
+            )
+        )
+
+        self.assertTrue(all(0 <= player.score <= 5 for player in generated.game.players))
+        self.assertEqual(len(generated.game.selected_map.bonus_marker_pool), 5)
+        minimum, maximum = generated.development_range
+        self.assertEqual((minimum, maximum), (2, 4))
 
     def test_east_west_and_isle_of_man_can_be_generated_together(self):
         generated = generate_balanced_state(

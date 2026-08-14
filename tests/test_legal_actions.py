@@ -115,6 +115,30 @@ class LegalActionTests(unittest.TestCase):
         self.assertEqual(ai_mask[MAX_POSTS + post_slot], 0)
         self.assert_structured_matches_mask(game)
 
+    def test_move_cannot_strand_a_later_held_piece(self):
+        game = create_headless_game(2, 3, seed=124)
+        player = game.current_player
+        posts = [post for route in game.selected_map.routes for post in route.posts]
+        circle_post = next(post for post in posts if post.required_shape == "circle")
+        flexible_post = next(post for post in posts if post.required_shape is None)
+
+        for post in posts:
+            if post not in (circle_post, flexible_post):
+                post.claim(player, post.required_shape or "square")
+        player.holding_pieces = [
+            ("circle", player, None),
+            ("square", player, None),
+        ]
+        player.pieces_to_pickup = 0
+
+        actions = game.get_legal_actions()
+        circle_slot = posts.index(circle_post)
+        flexible_slot = posts.index(flexible_post)
+
+        self.assertIn(DEFAULT_ACTION_CODEC.decode(MAX_POSTS + circle_slot), actions)
+        self.assertNotIn(DEFAULT_ACTION_CODEC.decode(MAX_POSTS + flexible_slot), actions)
+        self.assert_structured_matches_mask(game)
+
     def test_exchange_bonus_marker_has_both_structured_stages(self):
         game = create_headless_game(1, 3, seed=124)
         player, opponent = game.players[:2]
@@ -140,6 +164,25 @@ class LegalActionTests(unittest.TestCase):
         self.assertEqual(used_markers[0], BonusMarkerInteraction(10))
         game.apply_structured_action(used_markers[0])
         self.assert_structured_matches_mask(game)
+
+    def test_exchange_can_take_used_place_adjacent_marker(self):
+        game = create_headless_game(1, 3, seed=124)
+        player, opponent = game.players[:2]
+        player.bonus_markers = [BonusMarker("ExchangeBonusMarker", owner=player)]
+        opponent.used_bonus_markers = [BonusMarker("PlaceAdjacent", owner=opponent)]
+
+        game.apply_structured_action(BonusMarkerInteraction(5))
+        self.assertEqual(game.get_legal_actions(), [PlayerInteraction(1)])
+        game.apply_structured_action(PlayerInteraction(1))
+        self.assertEqual(game.get_legal_actions(), [BonusMarkerInteraction(8)])
+        game.apply_structured_action(BonusMarkerInteraction(8))
+
+        self.assertEqual([marker.type for marker in player.bonus_markers], ["PlaceAdjacent"])
+        self.assertEqual(
+            [marker.type for marker in opponent.used_bonus_markers],
+            ["ExchangeBonusMarker"],
+        )
+        self.assertFalse(game.waiting_for_bm_exchange_bm)
 
     def test_exchange_last_opponent_and_marker_type_fit_reserved_family(self):
         game = create_headless_game(1, 5, seed=124)

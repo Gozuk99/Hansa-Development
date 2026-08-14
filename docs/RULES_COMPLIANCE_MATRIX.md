@@ -2,7 +2,8 @@
 
 ## Purpose
 
-This document maps the supplied rules to the current game engine, action-index dispatcher, legal-action masks, and automated tests.
+This document maps the supplied rules to the current game engine, structured
+legal actions, 768-entry interaction codec, executor, and automated tests.
 
 It is an audit, not a declaration that the implementation is correct. A rule is only considered verified when a focused test constructs the relevant position, checks which actions are legal, applies the action, and checks every required state change.
 
@@ -39,24 +40,16 @@ The copied rulebook may contain source or OCR errors. Where a value looks questi
 
 ## Current Test Baseline
 
-The current tests establish only that:
-
-- A model-free game can be constructed.
-- Seeded setup is repeatable for the tested cases.
-- A fresh game exposes at least one action in the 768-entry structured-action mask.
-- A deterministic baseline can finish selected three-player games on maps 1 and 2.
-
-They do **not** yet prove that individual actions, scoring, expansions, or complete games follow all rules.
-
-Existing tests:
-
-- `tests/test_game_setup.py`
-- `tests/test_legal_actions.py`
-- `tests/test_complete_game.py`
+The automated suite now covers setup, structured legality and execution,
+individual actions, turn workflows, scoring, all three maps, optional modules,
+save/load, replay, observations, training, and deterministic complete games.
+Focused scenario tests remain the authority for individual rules; complete-game
+tests establish integration and termination rather than proving every decision
+inside a trace.
 
 ## Core Setup and Turn Structure
 
-| Rule | Rule source | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Rule source | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Support 3–5 players | Game Setup | `game.setup.validate_game_configuration`; `Game.__init__`, `Game.create_players` | N/A | All supported player counts construct; invalid counts are rejected | **Implemented** | The supported range is centralized and explicitly excludes two-player play. Complete-game verification remains a separate concern. |
 | Select the correct board layout for player count | Base and expansion setup | `Game.assign_map`; player-count branches in `Map1` and `Map3` | N/A | Exact city/route topology for all nine map/player-count combinations | **Implemented** | Map 1 and Britannia select their 3-player versus 4–5-player geometry; the Eastern map has one layout for all supported counts. |
@@ -68,16 +61,16 @@ Existing tests:
 | Optionally deal one secret Mission card on map 1 | Mission Cards optional module | `use_mission_cards`; seeded `Map1.mission_cards`; `assign_mission_cards` | N/A | Disabled by default; unique three-city cards for 3–5 players when enabled; rejected on other maps | **Implemented** | Mission Cards are optional and map-1-only. When enabled, the nine cards are shuffled, one is dealt per player, and unused cards remain undealt. |
 | Optionally select Emperor’s Favour tiles on any map | Emperor’s Favour optional module | `use_emperors_favour`; `Game.initialize_tile_pool` | Tile purchase mask | Disabled by default; every map/player count checks allowed types, exact count, and uniqueness when enabled | **Implemented** | Emperor’s Favour is optional on every supported map. When enabled, the display is a seeded random subset of the six unique tiles equal to player count. |
 | Begin with an empty board and zeroed public counters | Game Setup | `Game.__init__`; map/city/route constructors | N/A | Every map/player-count combination checks posts, offices, scores, completed cities, East–West count, and pending replacements | **Implemented** | Completed Cities begins at zero, no trading posts or routes are occupied, every score is zero, and no end condition or replacement obligation is active. |
-| Turn order and actions per turn | Game Play | `Game.advance_turn`; `Player.start_turn`, `spend_action`, `grant_actions`, `forfeit_remaining_actions` | `map_end_turn_action`, `mask_end_turn` | Direct action-count, switching, round numbering, early-end rejection, optional marker forfeit, and +1 Action tile tests | **Implemented** | Action counts cannot go negative. Turn advancement and the next player’s allowance are initialized in one place. |
-| Finish one action before beginning another | Game Play | `Game.apply_action`; `Game.turn_phase`; pending workflow state | Authoritative mask validation plus `restrict_mask_to_turn_phase` | Rejected masked/out-of-range actions; phase-exclusive masks; advancement guards; sequential end-of-turn obligations | **Implemented** | The supported mutation boundary validates every action against the current legal mask before dispatch. Displacement, movement, tile payment, marker choices, and marker replacement restrict legal actions to their own workflow. Low-level functions are implementation details. |
+| Turn order and actions per turn | Game Play | `Game.advance_turn`; `Player.start_turn`, `spend_action`, `grant_actions`, `forfeit_remaining_actions` | `ControlInteraction`; `resolve_control_interaction` | Direct action-count, switching, round numbering, early-end rejection, optional marker forfeit, and +1 Action tile tests | **Implemented** | Action counts cannot go negative. Turn advancement and the next player’s allowance are initialized in one place. |
+| Finish one action before beginning another | Game Play | `Game.apply_action`; `Game.turn_phase`; pending workflow state | `Game.get_legal_actions`; `execute_action` | Rejected masked/out-of-range actions; phase-exclusive masks; advancement guards; sequential end-of-turn obligations | **Implemented** | The supported mutation boundary validates every action against the current legal set before execution. Displacement, movement, tile payment, marker choices, and marker replacement expose only their own workflow interactions. Low-level functions are implementation details. |
 | Deterministic setup | Development requirement | `Game(seed=...)` owns the RNG passed into map, marker, mission-card, and tile setup | N/A | Same-seed setup across all maps; global RNG isolation | **Implemented** | Setup randomness no longer temporarily reseeds or consumes Python’s global random generator. Runtime stochastic policies use their own seeded generator. |
 
 ## Core Actions
 
-| Rule | Rule source | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Rule source | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| A) Income up to current Bank capacity | Game Play A | `Player.income_action`; `map_income_action` | `mask_income_actions` | Every Bank value, mixed shapes, insufficient stock, over-capacity rejection, and conservation | **Implemented** | `C` means all and is represented internally by `50`. The indexed action chooses a merchant count and automatically fills the remaining capacity with traders, producing a strategically equivalent maximal transfer. |
-| B) Place one tradesman from personal supply on a free point | Game Play B | `claim_post_action` | Post indices `0–241`; `mask_post_action` | Action/supply cost, required merchant point, conservation, and Britannia permissions | **Implemented** | Only an empty compatible point is exposed; one personal-supply piece and one action are consumed. |
+| A) Income up to current Bank capacity | Game Play A | `Player.income_action` | `IncomeInteraction` `576–580`; `resolve_income_interaction` | Every Bank value, mixed shapes, insufficient stock, over-capacity rejection, and conservation | **Implemented** | `C` means all and is represented internally by `50`. The interaction chooses a merchant count and automatically fills the remaining capacity with traders, producing a strategically equivalent maximal transfer. |
+| B) Place one tradesman from personal supply on a free point | Game Play B | `claim_post_action` | `PostInteraction` `0–241`; `resolve_post_interaction` | Action/supply cost, required merchant point, conservation, and Britannia permissions | **Implemented** | Only an empty compatible point is exposed; one personal-supply piece and one action are consumed. |
 | C) Displace an opposing trader for one extra piece | Game Play C | `displace_action`, `displace_claim`, `displace_to` | Post mask and displacement phase | Exact actor cost and two-piece opponent relocation | **Implemented** | The replacing piece comes from personal supply and one additional payment returns to general stock. |
 | C) Displace an opposing merchant for two extra pieces | Game Play C | Same as above | Same as above | Exact three-piece cost and relocation count | **Implemented** | Merchant displacement requires the replacing piece plus two additional personal-supply pieces. |
 | Displaced pieces go to nearest available adjacent routes | Game Play C | `gather_empty_adjacent_posts`, `get_adjacent_routes` | Displacement post and supply interactions | Nearest-route restriction, required shape, placement order, general-stock, personal-supply, and board fallback | **Implemented** | The displaced piece is mandatory but need not be placed first. At each nearest route distance, the player may place any compatible remaining piece; the search expands only when no remaining piece fits there. Thus an optional Trader may take an ordinary post before the displaced Merchant moves farther out, while a circle-only maritime post forces a remaining Merchant to use it. The dedicated supply interaction selects the optional source piece so source exhaustion and later Personal Supply choices remain exact. General Stock has priority over Personal Supply, and a board-fallback piece uses its own shape and restarts the search from the original route. |
@@ -88,12 +81,12 @@ Existing tests:
 
 ## Creating a Trade Route
 
-| Rule | Rule source | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Rule source | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Route can be created only when every point is occupied by the active player | Game Play E | `Route.is_controlled_by`; route-claim functions | `mask_claim_route` | Empty, mixed, and fully controlled route masks | **Implemented** | Route creation is explicit; merely filling a route does not create it. |
 | Step 1: score controllers of both endpoint cities | Game Play E.1 | `score_route`; `City.get_controller` | Performed by every route alternative | Exact endpoint increments and rightmost-office tie | **Implemented** | Each endpoint controller gains one point before the selected step-3 result is resolved. |
 | Step 2: take a route bonus marker | Game Play E.2 | `handle_bonus_marker`, `finalize_route_claim` | Route actions plus replacement phase | Ownership, immediate replacement draw, and empty-supply trigger | **Implemented** | The acquired marker becomes usable after the route action. Its replacement is drawn immediately; inability to draw triggers game end only after the action completes. |
-| Replacement marker must be placed at end of turn | Game Play E.2 | `pending_bonus_markers`; `assign_new_bonus_marker_on_route` | Indices `543–582`; replacement phase | All three placement restrictions and pending-marker identity | **Implemented** | Placement follows optional +3/+4 actions and cannot target marked, occupied, or fully closed routes. |
+| Replacement marker must be placed at end of turn | Game Play E.2 | `pending_bonus_markers`; `assign_new_bonus_marker_on_route` | Route-body interactions `256–295`; replacement phase | All three placement restrictions and pending-marker identity | **Implemented** | Placement follows optional +3/+4 actions and cannot target marked, occupied, or fully closed routes. |
 | Step 3 offers exactly one of office, ability, or special prestige | Game Play E.3 | Separate route-claim functions | Fixed route action alternatives | Simultaneous legal alternatives followed by single-result invalidation | **Implemented** | Points-only represents skipping step 3; applying any one alternative clears the route and makes every other alternative unavailable. |
 | 3a) Establish the leftmost vacant trading post | Game Play E.3a | `City.update_next_open_office_ownership`; `claim_route_for_office` | Office route actions | Leftmost placement, route-piece origin, and stock return | **Implemented** | The office receives a matching piece from the completed route; no vacant office can be skipped. |
 | Office requires matching trader/merchant shape | Game Play E.3a | `City.has_required_piece_shape`; route reset functions | `mask_claim_route` | Positive matches plus circle-only→square and square-only→circle rejection | **Implemented** | A square office requires a trader on the completed route; a round office requires a merchant. Any number of the opposite shape cannot substitute. |
@@ -106,7 +99,7 @@ Existing tests:
 
 ## East–West Connection
 
-| Rule | Rule source | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Rule source | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | Connection requires a continuous chain of the active player’s offices | Game Play E.3a | `check_for_east_west_connection`, `has_east_west_connection` | Triggered after office claims | Connected, disconnected, and opponent-interrupted paths on all maps | **Implemented** | Both endpoints and every city in the path must contain an office belonging to the active player. |
 | First three players score 7/4/2 once each | Game Play E.3a | `east_west_completed_count`, `players_who_completed_east_west` | N/A | Three-player award order plus repeat-call rejection | **Implemented** | Each player can receive the award once; later completions receive no connection points. |
@@ -116,7 +109,7 @@ Existing tests:
 
 | Rule | Rule source | Engine implementation | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
-| End after the action that reaches 20+ points | End of Game; FAQ | Route dispatch calls `Game.check_for_game_end` after the selected route alternative and immediate effects | Route scoring, office establishment, upgrades, bonus-marker collection, and twentieth-point timing | **Implemented** | The entire route action resolves before terminal scoring. Remaining ordinary actions are then forfeited. |
+| End after the action that reaches 20+ points | End of Game; FAQ | Route execution calls `Game.check_for_game_end` after the selected route alternative and immediate effects | Route scoring, office establishment, upgrades, bonus-marker collection, and twentieth-point timing | **Implemented** | The entire route action resolves before terminal scoring. Remaining ordinary actions are then forfeited. |
 | End when a replacement marker must be drawn but supply is empty | End of Game | `bonus_pool_exhausted_during_claim` is set only on a required failed draw | Empty supply alone does not end; failed required draw does | **Implemented** | The newly collected marker remains collected, no pending replacement is created, and the game ends after the route action. |
 | End on 10 completed cities; 8 on Britannia | End of Game | `selected_map.max_full_cities` and derived full-city count | Exact map-1 and Britannia thresholds; office-route timing; Additional Trading Post remains an already-occupied extension | **Implemented** | The threshold is evaluated after office establishment and complete route resolution. |
 | Pending replacement markers on the silver plate do not score | FAQ | Pending marker types remain on `Game`, outside both player marker lists | Collected marker versus two pending replacements | **Implemented** | Only used and unused markers actually collected by the player count. |
@@ -130,27 +123,27 @@ Existing tests:
 
 ## Standard Bonus Markers
 
-| Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
-| Exchange Trading Posts | Adjacent-pair enumeration and `City.swap_office_pair` | BM index 527 plus contextual adjacent-pair choice | Multiple eligible pairs; city controller may exchange; shape/privilege ignored; no gold points; additional offices excluded | **Implemented** | Every occupied adjacent pair containing exactly one of the player’s standard offices is selectable. Special-prestige spaces are not offices and never enter the choices. |
-| Develop 1 Ability | `Player.perform_upgrade` | BM index 529 plus one of five ability choices | All five choices exposed; released piece; fully developed filtering; marker remains spent | **Implemented** | Develops exactly one non-maxed ability and transfers its leftmost trader or merchant to personal supply without spending an action. |
-| Additional Trading Post | `waiting_for_bm_place_adjacent`; `claim_route_for_additional_office` | Dedicated bonus-marker interaction, then route interactions encode city and route-piece shape | Activation legality; city and trader/merchant choice; occupied lowest standard office; route clearing; marker spending; swap exclusion; conservation | **Implemented** | This modifies route creation step 3a. It may be chosen even when a normal office is available, uses a selected piece from that route, creates the lowest-valued office to the left, and never participates in exchanges. |
-| +3 Actions | `BonusMarker.handle_3_actions` | BM index 530 | Adds exactly three without spending an action; spent-marker preservation | **Implemented** | May be used at any point in the owner’s turn, including after ordinary actions reach zero but before the turn is finalized. |
-| +4 Actions | `BonusMarker.handle_4_actions` | BM index 531 | Adds exactly four without spending an action; spent-marker preservation | **Implemented** | Same timing as +3 Actions. |
+| Exchange Trading Posts | Adjacent-pair enumeration and `City.swap_office_pair` | Bonus-marker interaction `592`, then a `CityInteraction` for the adjacent pair | Multiple eligible pairs; city controller may exchange; shape/privilege ignored; no gold points; added-office handling | **Implemented** | Every occupied eligible adjacent pair containing exactly one of the player's offices is selectable. Added offices are excluded except in Map 2 green cities, where every office is swappable. Special-prestige spaces are not offices and never enter the choices. |
+| Develop 1 Ability | `Player.perform_upgrade` | Bonus-marker interaction `594`, then one of five `AbilityInteraction` choices | All five choices exposed; released piece; fully developed filtering; marker remains spent | **Implemented** | Develops exactly one non-maxed ability and transfers its leftmost trader or merchant to personal supply without spending an action. |
+| Additional Trading Post | `waiting_for_bm_place_adjacent`; `claim_route_for_additional_office` | Dedicated bonus-marker interaction, then route interactions encode city and route-piece shape | Activation legality; city and trader/merchant choice; occupied lowest standard office; route clearing; marker spending; swap eligibility; conservation | **Implemented** | This modifies route creation step 3a. It may be chosen even when a normal office is available, uses a selected piece from that route, and creates the lowest-valued office to the left. Added offices cannot be exchanged outside Map 2 green cities; every green-city office remains swappable. |
+| +3 Actions | `BonusMarker.handle_3_actions` | Bonus-marker interaction `595` | Adds exactly three without spending an action; spent-marker preservation | **Implemented** | May be used at any point in the owner’s turn, including after ordinary actions reach zero but before the turn is finalized. |
+| +4 Actions | `BonusMarker.handle_4_actions` | Bonus-marker interaction `596` | Adds exactly four without spending an action; spent-marker preservation | **Implemented** | Same timing as +3 Actions. |
 | Move 3 opponent tradesmen (“Remove 3 Resources” in the FAQ) | `BonusMarker.handle_move3`, `move_action` | Bonus-marker interaction, opponent post choices, Finish Move control, then destinations | Multiple owners and shapes; up-to-three early transition; swapping through vacated posts; no displacement; spent-marker preservation | **Implemented** | These are two names for the same marker. A trader or merchant each counts as one piece. Route completion remains a separate action. Britannia adds country restrictions audited in its own section. |
 
 ## Mission Cards and Emperor’s Favour
 
-| Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
 | Secret mission-card setup and AI information | `use_mission_cards`; `Map1.assign_mission_cards`; `Player.mission_card`; perspective-filtered AI observation | N/A | Disabled by default; map 1 uniqueness and three-city card structure; enablement rejected on other maps; own card visible before game end; opponents’ cards hidden | **Implemented** | This optional module can only be enabled for map 1. Exact engine state retains every dealt card. Throughout play, an acting AI observes its own three mission cities so reinforcement learning can pursue them, while opponents’ cards remain hidden. |
 | Mission final scoring | `Game.get_mission_card_points`; `Game.finalize_end_of_game_points` | N/A | One point for any office without control; three-city control bonus; loss of bonus when one city is not controlled | **Implemented** | At game end, actual board ownership is evaluated: each listed city containing at least one of the player’s offices scores 1 point. Controlling all three, including the normal rightmost-office tie break, adds 5 points, for a maximum of 8. |
-| Buy one Emperor’s Favour tile at start of turn using two unused markers | `buy_tile`; tile state on `Game` | Tile indices `535–542`; `mask_buy_tile` | Exact two-marker payment; explicit selection from more than two; duplicate marker types; invalid timing/payment; turn forfeiture | **Implemented** | The six tile choices use the first six context-sensitive slots. During payment all eight slots identify marker types. Exactly two distinct unused marker objects move to the used area, the tile leaves the display, and the buyer forfeits all actions and acquires no second tile that turn. |
+| Buy one Emperor’s Favour tile at start of turn using two unused markers | `buy_tile`; tile state on `Game` | Tile interactions `640–645`; payment reuses bonus-marker interactions `592–600` | Exact two-marker payment; explicit selection from more than two; duplicate marker types; invalid timing/payment; turn forfeiture | **Implemented** | The six tile slots select the public tile. During payment, existing bonus-marker slots identify the physical markers being spent. Exactly two distinct unused marker objects move to the used area, the tile leaves the display, and the buyer forfeits all actions and acquires no second tile that turn. |
 | Six tile effects | Owner fields on `Game`; displacement, turn-start, income-response, and scoring hooks | Contextual Favour response uses tile slots for trader, merchant, or decline | Displace-anywhere ownership; extra action; other-player income with both shape choices and decline; extra displaced trader; four-point city control; seven-point completed abilities | **Implemented** | All six effects are isolated in tests. The optional income response interrupts completion of the other player’s Income action, permits either available shape or decline, and does not trigger on its owner’s Income action. |
 
 ## Eastern Hanseatic League
 
-| Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
 | Waren offers Actions or Bank upgrade | Two upgrade types on Waren | Two contextual upgrade slots for each adjacent route | Both choices legal; ordinary office prohibited; Additional Trading Post remains available | **Implemented** | Each Waren route offers Actions or Bank. An office requires the Eastern Additional Trading Post exception. |
 | Green/yellow cities cannot receive ordinary offices | `DARK_GREEN` route exclusion; Eastern-aware Additional Trading Post and permanent-marker paths | Ordinary office mask rejects; contextual alternatives choose city and shape | Ordinary rejection; first Additional office; completed-city behavior; right/left placement | **Implemented** | Belgard, Waren, and Dresden use the shared special-city representation. Additional offices go left; permanent-marker offices go right. |
@@ -163,7 +156,7 @@ Existing tests:
 
 ## Britannia
 
-| Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
 | Cardiff grants one Wales placement/displacement per turn | Live Cardiff control; `brown_priv_count` | `check_brown_blue_priv` in mask and engine | Control changes, availability, and single consumption | **Implemented** | Permission is recalculated from the current rightmost-tiebreak city controller at turn start. Legality checks do not consume it. |
 | Carlisle grants one Scotland placement/displacement per turn | Live Carlisle control; `blue_priv_count` | Same | Layout and regional permission scenarios | **Implemented** | Present only where Scotland is in play and consumed by one B or C action. |
@@ -178,12 +171,12 @@ Existing tests:
 
 ## Promo Bonus Markers
 
-| Rule | Engine implementation | Mask/dispatcher | Tests | Status | Audit notes |
+| Rule | Engine implementation | Legal action/execution | Tests | Status | Audit notes |
 | --- | --- | --- | --- | --- | --- |
 | Optionally use exactly 15 total markers with a player-chosen promo mix | `bonus_marker_supply`; `Map.configure_bonus_marker_supply` | Setup API and repeatable `--bonus-marker` CLI option | Default excludes promos; explicit seeded mix; exactly 12 supply plus 3 starting markers; unknown, excess, and wrong-count rejection | **Implemented** | Promo markers never enter default play. The caller explicitly supplies all 12 replacement-supply marker types; physical component limits are enforced and the 3 fixed starting markers preserve exactly 15 total. |
-| Exchange Bonus Marker | Explicit pending exchange marker and target player on `Game` | BM index 532, contextual player choice, then used-marker type choice | Chosen opponent; only used markers; acquired marker becomes unused; Exchange marker remains spent at opponent | **Implemented** | The player chooses an opponent who has used markers, then chooses one marker type from that player’s used area. The exchanged marker is immediately usable and the Exchange marker moves to the chosen opponent’s used area. |
-| Tribute for Establishing a Trading Post | Route-level `tribute_owners`; committed trader conservation; queued tribute-income response | BM index 533, unrestricted route choice, then contextual two-piece Income composition | One-trader setup; every route eligible; self-trigger; neighboring-route isolation; persistent marker; two-piece shape choice | **Implemented** | The marker and one trader remain on the selected route. Establishing an office in either neighboring city queues two tradesmen from general stock for every Tribute marker on that route, including the active player’s own marker. |
-| Block Trade Route | Route-level `block_marker_owners`; committed trader conservation; ordinary-placement surcharge | BM index 534 plus unrestricted route choice; ordinary post mask includes surcharge affordability | One-trader setup; every route eligible; marker persistence; extra-piece payment and piece conservation | **Implemented** | Each Block marker on the route adds one extra tradesman returned to general stock for action B placement. It applies to every player, including the marker owner; movement and displacement are not charged. |
+| Exchange Bonus Marker | Explicit pending exchange marker and target player on `Game` | Bonus-marker interaction `597`, a `PlayerInteraction`, then an opponent-used bonus-marker interaction | Chosen opponent; hidden identities before target selection; only used markers; acquired marker becomes unused; Exchange marker remains spent at opponent | **Implemented** | The player chooses an opponent who has used markers, may then inspect that target's used-marker identities, and chooses one marker type. The exchanged marker is immediately usable and the Exchange marker moves to the chosen opponent's used area. |
+| Tribute for Establishing a Trading Post | Route-level `tribute_owners`; committed trader conservation; queued tribute-income response | Bonus-marker interaction `598`, a route-body interaction, then contextual `IncomeInteraction` choices | One-trader setup; every route eligible; self-trigger; neighboring-route isolation; persistent marker; two-piece shape choice | **Implemented** | The marker and one trader remain on the selected route. Establishing an office in either neighboring city queues two tradesmen from general stock for every Tribute marker on that route, including the active player’s own marker. |
+| Block Trade Route | Route-level `block_marker_owners`; committed trader conservation; ordinary-placement surcharge | Bonus-marker interaction `599`, then a route-body interaction; ordinary post legality includes surcharge affordability | One-trader setup; every route eligible; marker persistence; extra-piece payment and piece conservation | **Implemented** | Each Block marker on the route adds one extra tradesman returned to general stock for action B placement. It applies to every player, including the marker owner; movement and displacement are not charged. |
 
 ## Highest-Priority Remaining Risks
 
@@ -201,24 +194,9 @@ Existing tests:
    Keep scenario tests as the authority for individual rules while expanding
    deterministic full-game traces.
 
-## Recommended Test Implementation Order
+## Ongoing Verification Pattern
 
-1. Setup values and piece conservation
-2. Income combinations
-3. Ordinary placement and required shapes
-4. Trader and merchant displacement, including adjacency fallback
-5. Normal movement and early completion
-6. Route creation and ordered substeps
-7. Office privilege, shape, coin, and city-completion rules
-8. Ability upgrades
-9. Bonus-marker acquisition and replacement
-10. End triggers and exact final scoring
-11. Standard bonus markers
-12. Eastern map rules
-13. Britannia regional rules and scoring
-14. Promo markers, mission cards, and Emperor’s Favour
-
-For each row, the preferred test pattern is:
+For each rule, focused tests should:
 
 1. Construct the smallest relevant position.
 2. Assert the complete legal-action set for that decision.

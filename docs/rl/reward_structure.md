@@ -2,7 +2,12 @@
 
 ## Decision
 
-Training uses score-derived rewards after every selected interaction and winner-only rewards after final scoring. The shared model remains frozen while a game is active. One model update is performed after each collected learning trajectory, including penalized no-replacement-route failures; evaluation games never update the model.
+Training uses score-derived rewards after every selected interaction and winner-only rewards after final scoring. The shared model remains frozen while a game is active. Training performs one update per started block of 256 trajectory decisions, capped at four non-overlapping representative updates and 1,024 sampled decisions per game. Penalized no-replacement-route failures also train; evaluation games never update the model.
+
+Representative sampling keeps every pickup and placement from a selected normal
+Move or permanent Move Any 2 workflow together. A movement penalty is still
+recorded only once when the workflow completes; grouping ensures that its earlier
+choices retain the resulting reward-to-go during training.
 
 Authoritative projected scoring provides the main reward signal. A smaller set of
 explicit training-only rewards and penalties supplements it where score changes
@@ -90,7 +95,9 @@ If one interaction changes several categories, its reward is the net projected-s
 
 ## Neutral Actions
 
-The following have no fixed reward merely for being performed:
+The following receive no automatic base reward merely for being performed.
+Specific results can still earn the focused training rewards or penalties
+documented below:
 
 - Income;
 - normal Move;
@@ -133,8 +140,12 @@ The current trainer also applies these deliberately shaped signals:
   the first Actions upgrade receives `+400`;
 - `-200` for moving only one piece and `-100` for moving only two when the
   player's Book permits at least three;
-- penalties for repeatedly spending actions on normal Move when the player's
-  movement capacity makes that behavior clearly inefficient; and
+- `-1,000` for using normal Move to pick up exactly one piece and return it to
+  the identical post; bonus-marker movement and multi-piece Moves are excluded;
+- `-1,000` for swapping two pieces with the same owner and shape during normal
+  Move or the permanent Move Any 2 bonus; different owners or shapes are valid;
+- `-5,000` upon spending a third consecutive action on normal Move, in addition
+  to the smaller inefficient-capacity penalties above; and
 - `-500` for the player responsible for leaving no legal route on which to place
   a required replacement bonus marker.
 

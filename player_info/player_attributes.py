@@ -1,6 +1,5 @@
 # player_attributes.py
 
-import sys
 from map_data.constants import (
     CITY_KEYS_MAX_VALUES,
     ACTIONS_MAX_VALUES,
@@ -14,10 +13,27 @@ from map_data.constants import (
 from game.setup import starting_inventory
 
 
+def valid_region_transition(start_region, target_region):
+    if start_region is None:
+        return target_region is None
+    if start_region in ("Wales", "Scotland"):
+        return target_region in (start_region, None)
+    return False
+
+
+def _piece_count(squares, circles, shape):
+    if shape == "square":
+        return squares
+    if shape == "circle":
+        return circles
+    raise ValueError(f"Unknown piece shape: {shape!r}")
+
+
 class Player:
-    def __init__(self, color, order):
+    def __init__(self, color, order, messages_enabled=True):
         self.color = color
         self.order = order
+        self.messages_enabled = messages_enabled
         self.score = 0  # Initial score
         self.final_score = 0
         self.final_score_breakdown = {}
@@ -38,6 +54,7 @@ class Player:
         self.actions_index = 0
         self.actions = ACTIONS_MAX_VALUES[0]
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
+        self.actions_at_turn_start = self.actions_remaining
         self.actions_granted_this_turn = 0
         self.bank = 3
 
@@ -47,7 +64,6 @@ class Player:
         self.personal_supply_squares = inventory.personal_supply_squares
         self.personal_supply_circles = inventory.personal_supply_circles
 
-        self.board = None
         self.ending_turn = False
 
         self.brown_priv_count = 0
@@ -119,23 +135,22 @@ class Player:
         if controllers.get("London") == self:
             self.london_priv_count = 1
 
-    def add_bonus_marker(self, marker):
-        self.bonus_markers.append(marker)
-
     def start_move(self):
         # Start a new move by setting pieces to place equal to book value
         self.pieces_to_pickup = self.book
         self.holding_pieces = []
-        print(f"Starting move: you can move up to {self.book} pieces.")
+        if self.messages_enabled:
+            print(f"Starting move: you can move up to {self.book} pieces.")
 
     def pick_up_piece(self, post):
         # Pick up a piece from the post if under the limit
         if self.pieces_to_pickup > 0 and post.owner_piece_shape:
             self.holding_pieces.append((post.owner_piece_shape, post.owner, post.region))
             self.pieces_to_pickup -= 1
-            print(
-                f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_pickup} moves left."
-            )
+            if self.messages_enabled:
+                print(
+                    f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_pickup} moves left."
+                )
             post.reset_post()
         else:
             message = (
@@ -143,73 +158,76 @@ class Player:
                 if self.pieces_to_pickup <= 0
                 else "This post is empty."
             )
-            print(message)
+            if self.messages_enabled:
+                print(message)
 
     def place_piece(self, post, shape):
         if not self.holding_pieces:
-            print("No pieces to place.")
+            if self.messages_enabled:
+                print("No pieces to place.")
             return False
 
         shape_to_place, owner_to_place, origin_region = self.holding_pieces[0]
 
         # Check if the post has a specific required shape
         if post.required_shape and post.required_shape != shape:
-            print(
-                f"Cannot place a {shape} on this post. This post requires a {post.required_shape}."
-            )
+            if self.messages_enabled:
+                print(
+                    f"Cannot place a {shape} on this post. This post requires a {post.required_shape}."
+                )
             return False
 
         # Check if the placement is valid based on the regions
         if self.is_valid_region_transition(origin_region, post.region):
             if shape_to_place == shape:
-                print(
-                    f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}."
-                )
-                print(f"[{self.actions_remaining}] {COLOR_NAMES[self.color]} placed a piece")
+                if self.messages_enabled:
+                    print(
+                        f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}."
+                    )
+                    print(f"[{self.actions_remaining}] {COLOR_NAMES[self.color]} placed a piece")
                 post.claim(owner_to_place, shape_to_place)
                 self.holding_pieces.pop(0)
-                print(
-                    f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board."
-                )
+                if self.messages_enabled:
+                    print(
+                        f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board."
+                    )
                 return True
         else:
-            print("Invalid placement: Cannot move piece between incompatible regions.")
+            if self.messages_enabled:
+                print("Invalid placement: Cannot move piece between incompatible regions.")
 
         # If the next piece to place is available
         if self.holding_pieces:
             next_shape, next_owner, _ = self.holding_pieces[0]
-            print(
-                f"The next piece to place must be Player {COLOR_NAMES[next_owner.color]}'s {next_shape}."
-            )
+            if self.messages_enabled:
+                print(
+                    f"The next piece to place must be Player {COLOR_NAMES[next_owner.color]}'s {next_shape}."
+                )
         return False
 
     def is_valid_region_transition(self, start_region, target_region):
-        # If the piece was picked up from a white/None region, it can only be placed in a white/None region
-        if start_region is None:
-            return target_region is None
-
-        # If the piece was picked up from Wales or Scotland, it can be placed in the same or a white/None region
-        elif start_region in ["Wales", "Scotland"]:
-            return target_region in [start_region, None]
-
-        return False
+        return valid_region_transition(start_region, target_region)
 
     def finish_move(self):
         # End the move process if no pieces are being held
         if not self.holding_pieces:
-            print("Move completed.")
+            if self.messages_enabled:
+                print("Move completed.")
             self.pieces_to_pickup = 0  # Clear the move commitment
             self.pieces_to_place = 0  # Clear the move commitment
         else:
-            print("You still have pieces to place. Finish your move.")
+            if self.messages_enabled:
+                print("You still have pieces to place. Finish your move.")
 
     def upgrade_keys(self):
-        print("Upgrade Keys called")
+        if self.messages_enabled:
+            print("Upgrade Keys called")
         if self.keys < max(CITY_KEYS_MAX_VALUES):
             self.keys_index += 1
             self.keys = CITY_KEYS_MAX_VALUES[self.keys_index]
         else:
-            print("City_Keys is already at its maximum level!")
+            if self.messages_enabled:
+                print("City_Keys is already at its maximum level!")
 
     def upgrade_actions(self):
         # Check if we can upgrade
@@ -223,31 +241,38 @@ class Player:
             if self.actions > previous_actions:
                 self.grant_actions(1)
         else:
-            print("Actions are already at maximum!")
+            if self.messages_enabled:
+                print("Actions are already at maximum!")
 
     def upgrade_privilege(self):
-        print("Upgrade priv called")
+        if self.messages_enabled:
+            print("Upgrade priv called")
         if PRIVILEGE_COLORS.index(self.privilege) < len(PRIVILEGE_COLORS) - 1:
             self.privilege = PRIVILEGE_COLORS[PRIVILEGE_COLORS.index(self.privilege) + 1]
         else:
-            print("Privilege is already at its maximum level!")
+            if self.messages_enabled:
+                print("Privilege is already at its maximum level!")
 
     def upgrade_book(self):
-        print("Upgrade book called")
+        if self.messages_enabled:
+            print("Upgrade book called")
         if self.book < max(BOOK_OF_KNOWLEDGE_MAX_VALUES):
             self.book = BOOK_OF_KNOWLEDGE_MAX_VALUES[
                 BOOK_OF_KNOWLEDGE_MAX_VALUES.index(self.book) + 1
             ]
         else:
-            print("Book_of_Knowledge is already at its maximum level!")
+            if self.messages_enabled:
+                print("Book_of_Knowledge is already at its maximum level!")
 
     def upgrade_bank(self):
-        print("Upgrade bank called")
+        if self.messages_enabled:
+            print("Upgrade bank called")
         current_index = BANK_MAX_VALUES.index(self.bank)
         if current_index < len(BANK_MAX_VALUES) - 1:
             self.bank = BANK_MAX_VALUES[current_index + 1]
         else:
-            print("Bank is already at its maximum level!")
+            if self.messages_enabled:
+                print("Bank is already at its maximum level!")
 
     def perform_upgrade(self, upgrade_type):
         method_name = UPGRADE_METHODS_MAP[upgrade_type.lower()]
@@ -266,17 +291,17 @@ class Player:
             # If this is called from a bonus marker, you might not want to adjust actions or switch player
             return True
         else:
-            print(
-                f"{upgrade_type} is already at its maximum value for player {COLOR_NAMES[self.color]}."
-            )
+            if self.messages_enabled:
+                print(
+                    f"{upgrade_type} is already at its maximum value for player {COLOR_NAMES[self.color]}."
+                )
             return False
 
     def has_unlocked_key(self, index):
         return self.keys_index + 1 > index
 
     def has_unlocked_privilege(self, index):
-        privileges_order = ["WHITE", "ORANGE", "PINK", "BLACK"]
-        return privileges_order.index(self.privilege) >= index
+        return PRIVILEGE_COLORS.index(self.privilege) >= index
 
     def has_unlocked_book(self, index):
         return self.book > index + 1
@@ -315,22 +340,6 @@ class Player:
         if not tribute_income:
             self.spend_action()
 
-    def income_action_based_on_circle_count(self, max_circles, bank, general_stock_squares):
-        button_labels = []
-
-        if bank == 50:
-            label = f"{general_stock_squares}S/{max_circles}C"
-            button_labels.append(label)
-            return button_labels
-
-        for i in range(max_circles + 1):
-            circles = i
-            squares = min(bank - circles, general_stock_squares)
-            if 0 <= squares:
-                label = f"{squares}S/{circles}C"
-                button_labels.append(label)
-        return button_labels
-
     def add_1_income(self, shape):
         if shape == "square" and self.general_stock_squares > 0:
             self.general_stock_squares -= 1
@@ -347,18 +356,10 @@ class Player:
         return office_color in allowed_office_colors
 
     def has_general_stock(self, shape):
-        if shape == "circle":
-            return self.general_stock_circles > 0
-        elif shape == "square":
-            return self.general_stock_squares > 0
-        return False
+        return _piece_count(self.general_stock_squares, self.general_stock_circles, shape) > 0
 
     def has_personal_supply(self, shape):
-        if shape == "circle":
-            return self.personal_supply_circles > 0
-        elif shape == "square":
-            return self.personal_supply_squares > 0
-        return False
+        return _piece_count(self.personal_supply_squares, self.personal_supply_circles, shape) > 0
 
 
 class DisplacedPlayer:
@@ -382,41 +383,19 @@ class DisplacedPlayer:
         elif self.displaced_shape == "circle":
             self.total_pieces_to_place = 3
         else:
-            sys.exit()
+            raise ValueError(f"Unknown displaced piece shape: {displaced_shape!r}")
 
     def all_pieces_placed(self):
         return self.total_pieces_to_place == 0 and self.played_displaced_shape
 
     def has_general_stock(self, shape):
-        if shape == "square":
-            return self.player.general_stock_squares > 0
-        return self.player.general_stock_circles > 0
+        return self.player.has_general_stock(shape)
 
     def is_general_stock_empty(self):
         return self.player.general_stock_squares == 0 and self.player.general_stock_circles == 0
 
     def has_personal_supply(self, shape):
-        if shape == "square":
-            return self.player.personal_supply_squares > 0
-        return self.player.personal_supply_circles > 0
+        return self.player.has_personal_supply(shape)
 
     def is_personal_supply_empty(self):
         return self.player.personal_supply_squares == 0 and self.player.personal_supply_circles == 0
-
-
-class PlayerBoard:
-    def __init__(self, x, y, player):
-        self.x = x
-        self.y = y
-        self.player = player
-        self.width = 790  # adjust based on your requirement
-        self.height = 200  # adjust based on your requirement
-        self.start_x = 0
-        self.actions_y = 0
-        self.circle_buttons = []
-        self.button_labels = []
-
-    def income_action_based_on_circle_count(self, idx):
-        label = self.button_labels[idx]
-        num_squares, num_circles = [int(x[:-1]) for x in label.split("/")]
-        self.player.income_action(num_squares, num_circles)

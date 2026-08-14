@@ -7,8 +7,8 @@ from tests.action_helpers import legal_action_mask
 from ai.observation_encoder import ObservationEncoder
 from game.game_actions import buy_tile
 from game.game_runner import create_headless_game
+from map_data.constants import UPGRADE_MAX_VALUES
 from map_data.map_attributes import BonusMarker
-from player_info.player_attributes import UPGRADE_MAX_VALUES
 
 
 TILE_ACTION_START = 640

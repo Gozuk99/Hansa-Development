@@ -1,6 +1,7 @@
 from collections import deque
 
 from map_data.constants import DARK_GREEN
+from player_info.player_attributes import valid_region_transition
 
 
 class InvalidActionError(RuntimeError):
@@ -262,16 +263,39 @@ def optional_displacement_piece_available(game, shape):
     return displaced.has_general_stock(shape)
 
 
-def select_optional_displaced_shape(game):
-    """Use an optional source piece before the identical mandatory piece."""
+def can_select_optional_displaced_shape(game):
+    """Whether the identical optional piece can be placed without stranding the mandatory one."""
     displaced = game.displaced_player
+    shape = displaced.displaced_shape
     if (
         displaced.played_displaced_shape
         or displaced.use_optional_displaced_shape
         or displaced.total_pieces_to_place <= 1
-        or not optional_displacement_piece_available(game, displaced.displaced_shape)
+        or not optional_displacement_piece_available(game, shape)
     ):
+        return False
+
+    for post in game.all_empty_posts:
+        if post.is_owned() or post.required_shape not in (None, shape):
+            continue
+        if game.DisplaceAnywhereOwner == displaced.player:
+            remaining_targets = gather_all_empty_posts(game, (shape,), (post,))
+        else:
+            remaining_targets = gather_empty_adjacent_posts(
+                game.original_route_of_displacement,
+                (shape,),
+                (post,),
+            )
+        if remaining_targets:
+            return True
+    return False
+
+
+def select_optional_displaced_shape(game):
+    """Use an optional source piece before the identical mandatory piece."""
+    if not can_select_optional_displaced_shape(game):
         raise RuntimeError("No identical optional displacement piece is available")
+    displaced = game.displaced_player
     displaced.use_optional_displaced_shape = True
     refresh_displacement_targets(game)
 
@@ -287,14 +311,14 @@ def can_pick_up_displacement_fallback(game, post):
 
 def can_place_displacement_piece(game, post, shape):
     """Apply nearest-target, shape, and source rules at one boundary."""
+    displaced = game.displaced_player
     held_piece_matches = True
-    if game.displaced_player.player.holding_pieces:
-        held_shape, _owner, origin_region = game.displaced_player.player.holding_pieces[0]
-        held_piece_matches = (
-            held_shape == shape
-            and game.displaced_player.player.is_valid_region_transition(origin_region, post.region)
+    if displaced.player.holding_pieces:
+        held_shape, _owner, origin_region = displaced.player.holding_pieces[0]
+        held_piece_matches = held_shape == shape and displaced.player.is_valid_region_transition(
+            origin_region, post.region
         )
-    return (
+    placement_is_legal = (
         post in game.all_empty_posts
         and not post.is_owned()
         and shape in displacement_shapes_to_place(game)
@@ -302,6 +326,23 @@ def can_place_displacement_piece(game, post, shape):
         and displacement_piece_available(game, shape)
         and held_piece_matches
     )
+    if not placement_is_legal:
+        return False
+    placing_mandatory_piece = (
+        shape == displaced.displaced_shape and not displaced.use_optional_displaced_shape
+    )
+    if displaced.played_displaced_shape or placing_mandatory_piece:
+        return True
+
+    if game.DisplaceAnywhereOwner == displaced.player:
+        remaining_targets = gather_all_empty_posts(game, (displaced.displaced_shape,), (post,))
+    else:
+        remaining_targets = gather_empty_adjacent_posts(
+            game.original_route_of_displacement,
+            (displaced.displaced_shape,),
+            (post,),
+        )
+    return bool(remaining_targets)
 
 
 def refresh_displacement_targets(game):
@@ -337,17 +378,7 @@ def get_adjacent_routes(current_route, start_route_region):
     return adjacent_routes
 
 
-def valid_region_transition(start_region, target_region):
-    if start_region is None:
-        # Routes with no specific region can consider only routes with no specific region
-        return target_region is None
-    elif start_region in ["Scotland", "Wales"]:
-        # Brown and blue can consider their own and None regions
-        return target_region in [start_region, None]
-    return False
-
-
-def move_action(game, route, post, shape):
+def move_action(game, post):
     player = game.current_player
 
     if post is None:
@@ -428,18 +459,11 @@ def displace_claim(game, post, desired_shape):
     displaced_player = game.displaced_player
 
     # Check if the player is forced to use the displaced shape
-    must_use_displaced_piece = False
-    if not displaced_player.played_displaced_shape:
-        if (
-            displaced_player.displaced_shape == "circle"
-            and displaced_player.total_pieces_to_place == 1
-        ):
-            must_use_displaced_piece = True
-        elif (
-            displaced_player.displaced_shape == "square"
-            and displaced_player.total_pieces_to_place == 1
-        ):
-            must_use_displaced_piece = True
+    must_use_displaced_piece = (
+        not displaced_player.played_displaced_shape
+        and displaced_player.displaced_shape in ("square", "circle")
+        and displaced_player.total_pieces_to_place == 1
+    )
 
     if must_use_displaced_piece and desired_shape != displaced_player.displaced_shape:
         raise InvalidActionError("The mandatory displaced piece must be placed")
@@ -580,7 +604,7 @@ def assign_new_bonus_marker_on_route(game, route):
     return False
 
 
-def score_route(current_player, route):
+def score_route(route):
     # Allocate points
     for city in route.cities:
         player = city.get_controller()
@@ -593,13 +617,13 @@ def claim_route_for_office(game, city, route):
     next_open_office_color = city.get_next_open_office_color()
     if current_player.player_can_claim_office(next_open_office_color) and city.color != DARK_GREEN:
         if city.has_required_piece_shape(current_player, route):
-            score_route(current_player, route)
+            score_route(route)
             placed_piece_shape = city.get_next_open_office_shape()
             city.update_next_open_office_ownership(game, placed_piece_shape)
             finalize_route_claim(game, route, placed_piece_shape)
             route.award_tributes(game)
     elif "PlaceAdjacent" in (bm.type for bm in current_player.bonus_markers):
-        score_route(current_player, route)
+        score_route(route)
         city.claim_office_with_bonus_marker(current_player)
         finalize_route_claim(game, route, "square")
         route.award_tributes(game)
@@ -609,7 +633,7 @@ def claim_route_for_additional_office(game, city, route, shape):
     player = game.current_player
     if not city.can_claim_additional_office(player, route, shape):
         raise ValueError("Additional Trading Post choice is no longer legal")
-    score_route(player, route)
+    score_route(route)
     city.claim_office_with_bonus_marker(player, shape)
     finalize_route_claim(game, route, shape)
     route.award_tributes(game)
@@ -627,20 +651,19 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice, prestige_value=No
             else specialprestigepoints_city.claim_highest_prestige(current_player)
         )
         if claimed:
-            score_route(current_player, route)
+            score_route(route)
             finalize_route_claim(game, route, "circle")
     elif any(
         upgrade_type in ["Keys", "Privilege", "Book", "Actions", "Bank"]
         for upgrade_type in city.upgrade_city_type
     ):
         if upgrade_choice and current_player.perform_upgrade(upgrade_choice):
-            score_route(current_player, route)
+            score_route(route)
             finalize_route_claim(game, route)
 
 
 def claim_route_for_points(game, route):
-    current_player = game.current_player
-    score_route(current_player, route)
+    score_route(route)
     finalize_route_claim(game, route)
 
 

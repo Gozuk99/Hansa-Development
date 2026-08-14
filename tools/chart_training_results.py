@@ -279,8 +279,10 @@ def read_results(path: Path, max_points: int):
         "evaluation_map_player_batches": {},
         "evaluation_versions": {},
         "current_evaluation_suite_version": 0,
+        "training_activity_batches": {},
     }
     row_count = 0
+    training_game_number = 0
     with path.open(newline="", encoding="utf-8-sig") as source:
         reader = csv.DictReader(source)
         required = {"game#", "run_type"}
@@ -290,14 +292,30 @@ def read_results(path: Path, max_points: int):
 
         for row_count, row in enumerate(reader, start=1):
             run_type = row.get("run_type", "").strip().lower()
-            if run_type not in ("training", "evaluation"):
+            if run_type not in ("training", "training_timeout", "evaluation"):
+                continue
+            if run_type in ("training", "training_timeout"):
+                batch = int(_number(row.get("batch#")) or 0)
+                activity = counts["training_activity_batches"].setdefault(
+                    batch, {"attempts": 0, "action_limits": 0}
+                )
+                activity["attempts"] += 1
+                activity["action_limits"] += int(run_type == "training_timeout")
+            if run_type == "training_timeout":
+                counts["run_type"][run_type] += 1
+                counts["completion_reason"]["action_limit"] += 1
                 continue
             game_number = _number(row.get("game#")) or float(row_count)
+            if run_type == "training":
+                training_game_number += 1
+            chart_game_number = (
+                float(training_game_number) if run_type == "training" else game_number
+            )
             latest_loss = _row_value(row, "latest_loss")
             if run_type == "training" and latest_loss is not None:
                 recent_training_losses.append(latest_loss)
                 series["rolling_median_50", "training"].add(
-                    game_number, statistics.median(recent_training_losses)
+                    chart_game_number, statistics.median(recent_training_losses)
                 )
             for name in counts:
                 if name in row:
@@ -399,7 +417,7 @@ def read_results(path: Path, max_points: int):
             for column, _title in CHART_COLUMNS:
                 value = _row_value(row, column)
                 if value is not None:
-                    series[column, run_type].add(game_number, value)
+                    series[column, run_type].add(chart_game_number, value)
     if counts["evaluation_versions"]:
         latest_version = max(counts["evaluation_versions"])
         latest = counts["evaluation_versions"][latest_version]
@@ -436,7 +454,9 @@ def _statistics(points):
         ("Beginning-to-latest change (%)", change),
     )
     return "".join(
-        f"<div><strong>{html.escape(label)}</strong><span>{value:,.2f}</span></div>"
+        f"<div><strong>{html.escape(label)}</strong><span>{value:,.1f}%</span></div>"
+        if label.endswith("(%)")
+        else f"<div><strong>{html.escape(label)}</strong><span>{value:,.0f}</span></div>"
         for label, value in entries
     )
 
@@ -718,7 +738,14 @@ def _tier_player_count_charts(counts):
     )
 
 
-def _evaluation_chart(batches, map_batches, player_batches, map_player_batches, suite_version=1):
+def _evaluation_chart(
+    batches,
+    map_batches,
+    player_batches,
+    map_player_batches,
+    training_activity_batches=None,
+    suite_version=1,
+):
     if not batches:
         return ""
     width, height = 920, 300
@@ -880,6 +907,24 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches, 
         point_details=loss_details,
     )
 
+    training_ordered = sorted((training_activity_batches or {}).items())
+    action_limit_chart = ""
+    if training_ordered:
+        action_limit_chart = line_chart(
+            "Training action-limit rate",
+            "Lower is better. Timed-out trajectories still train from their genuine "
+            "rewards and penalties, but are not counted as completed games.",
+            training_ordered,
+            {
+                "Action limits": [
+                    entry["action_limits"] / entry["attempts"] * 100 if entry["attempts"] else None
+                    for _batch, entry in training_ordered
+                ]
+            },
+            "%",
+            maximum=100,
+        )
+
     panels = []
     for (map_value, player_value), current_batches in datasets.items():
         ordered = sorted(current_batches.items())
@@ -984,6 +1029,7 @@ def _evaluation_chart(batches, map_batches, player_batches, map_player_batches, 
       <label>Players: <select data-evaluation-players><option value="all">All players</option>
       <option value="3">3 players</option><option value="4">4 players</option>
       <option value="5">5 players</option></select></label></div>
+      {action_limit_chart}
       {evaluation_loss_chart}
       {"".join(panels)}
       <p class="hint">Each point summarizes one batch of fixed evaluation positions.
@@ -1072,6 +1118,7 @@ grid-template-columns:1fr; gap:20px; margin-top:18px; }}
             counts["evaluation_map_batches"],
             counts["evaluation_player_batches"],
             counts["evaluation_map_player_batches"],
+            counts["training_activity_batches"],
             counts["current_evaluation_suite_version"],
         )
     }

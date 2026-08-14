@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from map_data.constants import DARK_GREEN
+
 
 ACTION_SPACE_SIZE = 768
 ACTION_SCHEMA_VERSION = 2
@@ -22,6 +24,8 @@ BONUS_MARKER_TYPES = (
 )
 BONUS_MARKER_SLOT_BY_TYPE = {name: slot for slot, name in enumerate(BONUS_MARKER_TYPES)}
 BONUS_MARKER_PAYMENT_TYPES = BONUS_MARKER_TYPES + ("PlaceAdjacent",)
+ADDITIONAL_TRADING_POST_SLOT = BONUS_MARKER_PAYMENT_TYPES.index("PlaceAdjacent")
+EXCHANGED_BONUS_MARKER_START = len(BONUS_MARKER_PAYMENT_TYPES)
 
 TILE_TYPES = (
     "DisplaceAnywhere",
@@ -32,6 +36,27 @@ TILE_TYPES = (
     "+7PtsPerCompletedAbility",
 )
 TILE_SLOT_BY_TYPE = {name: slot for slot, name in enumerate(TILE_TYPES)}
+
+ROUTE_COMPLETE_SLOT = 0
+ROUTE_OFFICE_SLOT_START = 1
+ROUTE_OUTCOME_SLOT_START = 3
+PRESTIGE_VALUES = (7, 8, 9, 11)
+GREEN_CITY_SLOT_START = 46
+
+
+def city_pair_catalogue(cities):
+    """Return the stable city/office-pair ordering used by city actions."""
+    return [(city, (left, left + 1)) for city in cities for left in range(len(city.offices) - 1)]
+
+
+def green_city_catalogue(cities):
+    """Return the stable green-city/shape ordering used by city actions."""
+    return [
+        (city, shape)
+        for city in cities
+        if city.color == DARK_GREEN
+        for shape in ("square", "circle")
+    ]
 
 
 class ActionSchemaCompatibilityError(ValueError):

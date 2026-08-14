@@ -7,6 +7,29 @@ from map_data.constants import BANK_MAX_VALUES
 
 
 class GameSetupTests(unittest.TestCase):
+    def test_map2_has_marker_coordinates_for_every_route(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        route_names = {
+            tuple(sorted((route.cities[0].name, route.cities[1].name)))
+            for route in game.selected_map.routes
+        }
+        self.assertEqual(set(game.selected_map.bonus_marker_positions), route_names)
+
+    def test_map3_has_marker_coordinates_for_every_route(self):
+        for num_players in (3, 4, 5):
+            with self.subTest(num_players=num_players):
+                game = create_headless_game(map_num=3, num_players=num_players, seed=124)
+                route_names = {
+                    tuple(sorted((route.cities[0].name, route.cities[1].name)))
+                    for route in game.selected_map.routes
+                }
+                self.assertEqual(set(game.selected_map.bonus_marker_positions), route_names)
+                for position in game.selected_map.bonus_marker_positions.values():
+                    self.assertGreaterEqual(position[0], 0)
+                    self.assertLess(position[0], game.selected_map.map_width)
+                    self.assertGreaterEqual(position[1], 0)
+                    self.assertLess(position[1], game.selected_map.map_height)
+
     def test_headless_game_does_not_create_models(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         self.assertIsNone(game.ai_model)

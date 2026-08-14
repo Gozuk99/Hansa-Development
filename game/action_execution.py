@@ -11,7 +11,12 @@ from game.action_resolvers import (
     resolve_route_interaction,
     resolve_tile_interaction,
 )
-from game.action_schema import BONUS_MARKER_PAYMENT_TYPES, BONUS_MARKER_TYPES
+from game.action_schema import (
+    ADDITIONAL_TRADING_POST_SLOT,
+    BONUS_MARKER_PAYMENT_TYPES,
+    BONUS_MARKER_TYPES,
+    EXCHANGED_BONUS_MARKER_START,
+)
 from game.game_actions import select_optional_displaced_shape
 from game.turn_state import TurnPhase
 from game.structured_actions import (
@@ -42,13 +47,17 @@ def execute_action(game, action):
     elif isinstance(action, IncomeInteraction):
         resolve_income_interaction(game, action.merchant_count)
     elif isinstance(action, BonusMarkerInteraction):
-        if action.marker_slot == 8:
-            resolve_additional_office_marker(game)
+        if action.marker_slot == ADDITIONAL_TRADING_POST_SLOT:
+            if game.waiting_for_bm_exchange_bm:
+                resolve_bonus_marker_interaction(game, action.marker_slot)
+            else:
+                resolve_additional_office_marker(game)
         else:
-            exchanged_start = len(BONUS_MARKER_PAYMENT_TYPES)
             marker_type_slot = action.marker_slot
-            if marker_type_slot >= exchanged_start:
-                marker_type_slot = (marker_type_slot - exchanged_start) % len(BONUS_MARKER_TYPES)
+            if marker_type_slot >= EXCHANGED_BONUS_MARKER_START:
+                marker_type_slot = (marker_type_slot - EXCHANGED_BONUS_MARKER_START) % len(
+                    BONUS_MARKER_TYPES
+                )
             resolve_bonus_marker_interaction(game, marker_type_slot)
     elif isinstance(action, TileInteraction):
         resolve_tile_interaction(game, action.tile_slot)

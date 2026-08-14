@@ -27,6 +27,10 @@ class SaveGameError(ValueError):
     """Raised when a saved game is invalid or incompatible."""
 
 
+class _LegacyPlayerBoard:
+    """Load-only target for player-board layout stored by older saves."""
+
+
 _SAFE_GLOBALS = {
     ("builtins", "bytearray"),
     ("builtins", "complex"),
@@ -55,6 +59,8 @@ class _GameSavePickler(pickle.Pickler):
 
 class _GameSaveUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
+        if (module, name) == ("player_info.player_attributes", "PlayerBoard"):
+            return _LegacyPlayerBoard
         if (module, name) in _SAFE_GLOBALS or module.startswith(_PROJECT_MODULE_PREFIXES):
             return super().find_class(module, name)
         raise pickle.UnpicklingError(f"Save file references forbidden type {module}.{name}")
@@ -111,6 +117,8 @@ def _remove_legacy_player_state(game: Game) -> None:
             del player.reward
         if hasattr(player, "reward_structure"):
             del player.reward_structure
+        if hasattr(player, "board"):
+            del player.board
 
 
 def default_save_directory() -> Path:

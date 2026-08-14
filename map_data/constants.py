@@ -3,9 +3,6 @@ SQUARE_SIZE = 26
 BUFFER = 10  # Buffer around the rectangle
 SPACING = 10  # Increased spacing between the shapes
 
-# Compatibility alias for the fixed action output size.
-OUTPUT_SIZE = 768
-
 MAX_CITIES = 30
 MAX_ROUTES = 40
 MAX_POSTS = 121

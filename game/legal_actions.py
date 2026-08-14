@@ -12,7 +12,14 @@ from game.action_legality import (
     mask_post_action,
     mask_replace_bm,
 )
-from game.action_schema import BONUS_MARKER_PAYMENT_TYPES, BONUS_MARKER_TYPES
+from game.action_schema import (
+    ADDITIONAL_TRADING_POST_SLOT,
+    BONUS_MARKER_PAYMENT_TYPES,
+    BONUS_MARKER_TYPES,
+    GREEN_CITY_SLOT_START,
+    city_pair_catalogue,
+    green_city_catalogue,
+)
 from game.structured_actions import (
     AbilityInteraction,
     BonusMarkerInteraction,
@@ -27,28 +34,11 @@ from game.structured_actions import (
     TileInteraction,
 )
 from game.turn_state import TurnPhase
-from map_data.constants import DARK_GREEN, MAX_POSTS, MAX_ROUTES
+from map_data.constants import MAX_POSTS, MAX_ROUTES
 
 
 def _enabled(mask):
     return (index for index, enabled in enumerate(mask) if enabled)
-
-
-def _city_pair_catalogue(game):
-    return [
-        (city, (left, left + 1))
-        for city in game.selected_map.cities
-        for left in range(len(city.offices) - 1)
-    ]
-
-
-def _green_catalogue(game):
-    return [
-        (city, shape)
-        for city in game.selected_map.cities
-        if city.color == DARK_GREEN
-        for shape in ("square", "circle")
-    ]
 
 
 def _post_actions(game):
@@ -91,6 +81,15 @@ def _tile_and_marker_actions(game):
             )
         else:
             yield BonusMarkerInteraction(local)
+    if (
+        game.waiting_for_bm_exchange_bm
+        and game.exchange_target_player is not None
+        and any(
+            marker.type == "PlaceAdjacent"
+            for marker in game.exchange_target_player.used_bonus_markers
+        )
+    ):
+        yield BonusMarkerInteraction(ADDITIONAL_TRADING_POST_SLOT)
 
 
 def _income_actions(game):
@@ -115,21 +114,21 @@ def _city_actions(game):
             for city in game.selected_map.cities
             for pair in city.eligible_swap_pairs(game.current_player, game)
         ]
-        catalogue = _city_pair_catalogue(game)
+        catalogue = city_pair_catalogue(game.selected_map.cities)
         yield from (
             CityInteraction(catalogue.index(choice))
             for local, choice in enumerate(eligible)
             if bool(city_mask[local])
         )
     elif game.waiting_for_bm_green_city:
-        catalogue = _green_catalogue(game)
+        catalogue = green_city_catalogue(game.selected_map.cities)
         eligible = [
             (city, shape)
             for city, shape in catalogue
             if game.current_player.has_personal_supply(shape)
         ]
         yield from (
-            CityInteraction(46 + catalogue.index(choice))
+            CityInteraction(GREEN_CITY_SLOT_START + catalogue.index(choice))
             for local, choice in enumerate(eligible)
             if bool(city_mask[local])
         )
@@ -152,7 +151,7 @@ def _supply_actions(game):
     if game.turn_phase == TurnPhase.DISPLACEMENT:
         yield SupplyInteraction(0)
     else:
-        yield BonusMarkerInteraction(8)
+        yield BonusMarkerInteraction(ADDITIONAL_TRADING_POST_SLOT)
 
 
 PHASE_BUILDERS = {
@@ -188,12 +187,11 @@ PHASE_BUILDERS = {
 
 def get_legal_actions(game):
     """Return every legal structured interaction for the current phase."""
-    if game.turn_phase == TurnPhase.GAME_OVER:
+    phase = game.turn_phase
+    if phase == TurnPhase.GAME_OVER:
         return []
 
-    actions = [
-        action for builder in PHASE_BUILDERS.get(game.turn_phase, ()) for action in builder(game)
-    ]
+    actions = [action for builder in PHASE_BUILDERS.get(phase, ()) for action in builder(game)]
     unique = list(dict.fromkeys(actions))
     if len(unique) != len(actions):
         raise RuntimeError("Legal interaction generation produced a duplicate")

@@ -58,11 +58,6 @@ def parse_args(argv=None):
     parser.add_argument("--loss-tolerance", type=float, default=0.10)
     parser.add_argument("--rolling-loss-window", type=int, default=5)
     parser.add_argument("--skip-tier-one-promotion-check", action="store_true")
-    parser.add_argument(
-        "--fresh",
-        action="store_true",
-        help="start with new model weights and replace prior recovery/CSV progress",
-    )
     return parser.parse_args(argv)
 
 
@@ -71,14 +66,7 @@ def main(argv=None):
     stale_states = DEFAULT_DIRECTORY / "states"
     if stale_states.is_dir():
         shutil.rmtree(stale_states)
-    if args.fresh:
-        args.checkpoint.unlink(missing_ok=True)
-        args.csv.unlink(missing_ok=True)
-        trainer = SelfPlayTrainer(
-            model=HansaNN(),
-            config=TrainingConfig(seed=args.seed),
-        )
-    elif args.checkpoint.exists():
+    if args.checkpoint.exists():
         trainer = SelfPlayTrainer.from_checkpoint(args.checkpoint)
     else:
         trainer = SelfPlayTrainer(
@@ -115,7 +103,7 @@ def main(argv=None):
         f"Training complete: {args.batch} batch(es), "
         f"{args.batch * args.iterations} learning game(s), and "
         f"evaluation suite after each batch.\n"
-        f"Current stage: {config.stages[state['stage_index']].name}.\n"
+        "Training mix: late/end focus (four late games per end game).\n"
         f"Latest loss: {trainer.progress.last_loss}.\n"
         f"Replacement-route deadlocks: {trainer.progress.replacement_route_deadlocks}.\n"
         f"Playable model: {args.playable_model}.\n"

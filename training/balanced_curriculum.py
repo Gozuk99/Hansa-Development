@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 
 from game.game_config import GameConfiguration, human_players
 from game.persistence import save_game
@@ -23,8 +24,32 @@ CONFIGURATIONS = tuple(
     (map_num, player_count) for map_num in (1, 2, 3) for player_count in (3, 4, 5)
 )
 ENDING_CONDITIONS = tuple(EndingCondition)
-CLOSE_FINISH_INTERVAL = 20
-NEAR_SCORE_RANGES = ((12, 14), (14, 16), (16, 18), (12, 16))
+
+
+@dataclass(frozen=True)
+class MaturityProfile:
+    name: str
+    weight: int
+    score_range: tuple[int, int] | None
+    development_range: tuple[int, int] | None
+    bonus_markers_remaining: int | None
+    completed_cities_below_limit: int | None
+    starting_position: StartingPosition | None
+
+    @property
+    def fresh(self):
+        return self.score_range is None
+
+
+MATURITY_PROFILES = (
+    # Temporarily excluded while the model relearns decisive late-game play:
+    # MaturityProfile("fresh", 1, None, None, None, None, None),
+    # MaturityProfile("early", 4, (0, 5), (2, 4), 5, 7, StartingPosition.ONE_ROUND_BEFORE),
+    # MaturityProfile("mid", 6, (6, 11), (5, 7), 3, 5, StartingPosition.ONE_ROUND_BEFORE),
+    MaturityProfile("late", 4, (12, 15), (7, 9), 2, 3, StartingPosition.ONE_ROUND_BEFORE),
+    MaturityProfile("end", 1, (16, 18), (9, 11), 1, 2, StartingPosition.TWO_DECISIONS_BEFORE),
+)
+MATURITY_CYCLE = tuple(profile for profile in MATURITY_PROFILES for _ in range(profile.weight))
 
 
 def _select_focus(rng, map_num, player_count, ending_condition):
@@ -53,6 +78,8 @@ def _select_focus(rng, map_num, player_count, ending_condition):
             and focus is StrategicFocus.BLOCKED_DUAL_EAST_WEST
         ):
             focus = StrategicFocus.BLOCKED_EAST_WEST
+        elif player_count == 3 and focus is StrategicFocus.BLOCKED_DUAL_EAST_WEST:
+            focus = StrategicFocus.DUAL_EAST_WEST
     regional = None
     if (
         focus
@@ -71,6 +98,8 @@ def _select_focus(rng, map_num, player_count, ending_condition):
         elif ending_condition is EndingCondition.NEAR_BONUS_MARKERS:
             choices = [choice for choice in choices if choice is not RegionalFocus.ISLE_OF_MAN]
         regional = rng.choice(choices)
+        if focus is StrategicFocus.BLOCKED_DUAL_EAST_WEST:
+            focus = StrategicFocus.DUAL_EAST_WEST
     return focus, regional
 
 
@@ -108,11 +137,22 @@ class BalancedCurriculumRunner(CurriculumRunner):
         random.Random(self.config.seed + block * 1_000_003).shuffle(configurations)
         return configurations[index]
 
-    def _score_range_for_game(self):
-        block, index = divmod(self.training_generation_number, len(NEAR_SCORE_RANGES))
-        score_ranges = list(NEAR_SCORE_RANGES)
-        random.Random(self.config.seed + 500_009 + block * 1_000_003).shuffle(score_ranges)
-        return score_ranges[index]
+    def _maturity_for_game(self, generation_number=None):
+        generation_number = (
+            self.training_generation_number if generation_number is None else generation_number
+        )
+        block, index = divmod(generation_number, len(MATURITY_CYCLE))
+        profiles = list(MATURITY_CYCLE)
+        random.Random(self.config.seed + 500_009 + block * 1_000_003).shuffle(profiles)
+        return profiles[index]
+
+    @staticmethod
+    def _stage_label(_stage):
+        return "late_end_game"
+
+    @staticmethod
+    def _stage_action_limit(_stage):
+        return 10_000
 
     def _generate_state(self, stage, seed, directory, *, map_num=None, player_count=None):
         rng = random.Random(seed)
@@ -130,7 +170,10 @@ class BalancedCurriculumRunner(CurriculumRunner):
         use_missions = map_num == 1 and rng.choice((False, True))
         use_favour = rng.choice((False, True))
         use_promos = rng.choice((False, True))
-        if stage.full_game:
+        maturity = self._maturity_for_game(
+            self.training_generation_number if is_training_generation else seed
+        )
+        if maturity.fresh:
             configuration = GameConfiguration(
                 map_num=map_num,
                 player_count=player_count,
@@ -141,7 +184,7 @@ class BalancedCurriculumRunner(CurriculumRunner):
                 seed=seed,
             )
             path = save_game(configuration.create_game(), directory / f"full-{seed}.hansa")
-            descriptor = StateDescriptor(path, None, map_num, player_count, seed, "full_game")
+            descriptor = StateDescriptor(path, None, map_num, player_count, seed, "fresh", "fresh")
             self._latest_descriptor = descriptor
             if is_training_generation:
                 self.training_generation_number += 1
@@ -151,31 +194,38 @@ class BalancedCurriculumRunner(CurriculumRunner):
             self.training_generation_number % len(ENDING_CONDITIONS)
         ]
         focus, regional = _select_focus(rng, map_num, player_count, ending_condition)
-        two_decision_finish = self.training_generation_number % CLOSE_FINISH_INTERVAL == 0
+        if maturity.name == "early":
+            focus, regional = StrategicFocus.NONE, None
+        elif maturity.name == "mid":
+            focus = {
+                StrategicFocus.DUAL_EAST_WEST: StrategicFocus.EAST_WEST,
+                StrategicFocus.BLOCKED_DUAL_EAST_WEST: StrategicFocus.BLOCKED_EAST_WEST,
+                StrategicFocus.NETWORK_KEYS: StrategicFocus.NONE,
+            }.get(focus, focus)
+            regional = None
         generated = generate_balanced_state(
             BalancedGenerationRequest(
                 seed=seed,
                 map_num=map_num,
                 player_count=player_count,
                 ending_condition=ending_condition,
-                score_range=self._score_range_for_game(),
+                score_range=maturity.score_range,
                 strategic_focus=focus,
                 regional_focus=regional,
                 use_mission_cards=use_missions,
                 use_emperors_favour=use_favour,
                 use_promo_markers=use_promos,
-                bonus_markers_remaining=0 if two_decision_finish else 1,
-                completed_cities_below_limit=1 if two_decision_finish else 2,
-                starting_position=(
-                    StartingPosition.TWO_DECISIONS_BEFORE
-                    if two_decision_finish
-                    else StartingPosition.ONE_ROUND_BEFORE
-                ),
+                bonus_markers_remaining=maturity.bonus_markers_remaining,
+                completed_cities_below_limit=maturity.completed_cities_below_limit,
+                starting_position=maturity.starting_position,
                 prepared_routes_one_short=True,
+                development_range=maturity.development_range,
             )
         )
         path, metadata_path = save_balanced_state(generated, directory)
-        scenario = "+".join((ending_condition.value, *_focus_labels(focus, regional)))
+        scenario = "+".join(
+            (maturity.name, ending_condition.value, *_focus_labels(focus, regional))
+        )
         descriptor = StateDescriptor(
             path,
             metadata_path,
@@ -183,7 +233,7 @@ class BalancedCurriculumRunner(CurriculumRunner):
             player_count,
             seed,
             scenario,
-            "two_decisions_before" if two_decision_finish else "one_round_before",
+            maturity.starting_position.value,
         )
         self._latest_descriptor = descriptor
         if is_training_generation:

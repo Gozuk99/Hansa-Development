@@ -1,7 +1,7 @@
 # fmt: off
 # map_attributes.py
 import random
-from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, BLACK, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN, DARK_BLUE, BLACKISH_BROWN
+from map_data.constants import BLACK, CIRCLE_RADIUS, SQUARE_SIZE, BUFFER, SPACING, TAN, COLOR_NAMES, WHITE, ORANGE, PINK, PRIVILEGE_COLORS, DARK_GREEN
 
 class Map:
     STANDARD_BONUS_MARKER_SUPPLY = {
@@ -20,14 +20,27 @@ class Map:
 
     def __init__(self, rng=None):
         self.rng = rng if rng is not None else random.Random()
+        self.messages_enabled = True
         # This should never change
         self.initial_bonus_types = ['Move3', 'SwapOffice', 'PlaceAdjacent']
-        self.permanent_bm_types = ['MoveAny2', '+1Priv', 'ClaimGreenCity', "Place2TradesmenFromRoute", "Place2ScotlandOrWales"]
         self.bonus_marker_pool = []
-        self.place_new_bonus_marker = False
         self.specialprestigepoints = None
         # Prepare the starting bonus markers
         self.assign_bm_pool_default()
+
+    def set_messages_enabled(self, enabled):
+        """Enable console messages for interactive games only."""
+        self.messages_enabled = bool(enabled)
+        for city in getattr(self, "cities", ()):
+            city.messages_enabled = self.messages_enabled
+        upgrades = list(getattr(self, "upgrade_cities", ()))
+        special_prestige = getattr(self, "specialprestigepoints", None)
+        if special_prestige is not None:
+            upgrades.append(special_prestige)
+        for upgrade in upgrades:
+            upgrade.messages_enabled = self.messages_enabled
+        for route in getattr(self, "routes", ()):
+            route.messages_enabled = self.messages_enabled
 
     def assign_starting_bonus_markers(self):
          # Ensure we shuffle the initial bonus types to randomize the assignment
@@ -41,7 +54,8 @@ class Map:
                     # print(f"Assigning bonus marker: {bm_type} to route between {route.cities[0].name} and {route.cities[1].name}")
                     route.assign_map_new_bonus_marker(bm_type)
                 else:
-                    print(f"Ran out of initial bonus types to assign for route between {route.cities[0].name} and {route.cities[1].name}")
+                    if self.messages_enabled:
+                        print(f"Ran out of initial bonus types to assign for route between {route.cities[0].name} and {route.cities[1].name}")
 
     def assign_bm_pool_default(self):
         for bm_type, count in self.STANDARD_BONUS_MARKER_SUPPLY.items():
@@ -133,7 +147,8 @@ class City:
     def determine_controller(self):
         """Return current city control without mutating cached drawing state."""
         if not self.offices:
-            print(f"ERROR: No offices in {self.name}, therefore no controller.")
+            if getattr(self, "messages_enabled", True):
+                print(f"ERROR: No offices in {self.name}, therefore no controller.")
             return None
 
         player_counts = {}
@@ -158,10 +173,7 @@ class City:
         return self.controller
     
     def has_empty_office(self):
-        for office in self.offices:
-            if office.controller == None:
-                return True
-        return False
+        return any(office.controller is None for office in self.offices)
 
     def has_required_piece_shape(self, player, route):
         """Returns True if the player has the required piece shape on the route to claim an office in the city."""
@@ -272,15 +284,15 @@ class City:
             player.bonus_markers.remove(place_adjacent_bm)
 
         # Notify that the bonus marker was used to place adjacent
-        print(f"{COLOR_NAMES[player.color]} used 'PlaceAdjacent' bonus marker to claim a new office in {self.name}.")
+        if getattr(self, "messages_enabled", True):
+            print(f"{COLOR_NAMES[player.color]} used 'PlaceAdjacent' bonus marker to claim a new office in {self.name}.")
         
     def city_is_full(self):
         if self.color == DARK_GREEN:
             # For DARK_GREEN cities, the city is full if any office is occupied
             return any(office.controller is not None for office in self.offices)
-        else:
-            # For other cities, all offices must be occupied to be considered full
-            return self.city_all_offices_occupied()
+        # For other cities, all offices must be occupied to be considered full
+        return self.city_all_offices_occupied()
         
     def city_all_offices_occupied(self):
         return all(office.controller is not None for office in self.offices)
@@ -291,14 +303,8 @@ class City:
         self.offices.insert(0, new_office)  # Insert the new office at the beginning of the list
         return new_office
         
-    def has_office_controlled_by(self, player):
-        return any(office.controller == player for office in self.offices)
-    
     def has_office_owned_by(self, player):
-        for office in self.offices:
-            if office.controller == player:
-                return True
-        return False
+        return any(office.controller == player for office in self.offices)
     
     def claim_green_city(self, game, shape):
         player = game.current_player
@@ -371,7 +377,9 @@ class Upgrade:
     
     def claim_highest_prestige(self, player):
         # Log player details and privileges
-        print(f"Player's Color: {COLOR_NAMES[player.color]}, Player's Privilege: {player.privilege}")
+        messages_enabled = getattr(self, "messages_enabled", True)
+        if messages_enabled:
+            print(f"Player's Color: {COLOR_NAMES[player.color]}, Player's Privilege: {player.privilege}")
 
         # Player's privilege color
         player_privilege_color = player.privilege  # This should directly return one of the values in PRIVILEGE_COLORS
@@ -380,13 +388,15 @@ class Upgrade:
         try:
             player_privilege_index = PRIVILEGE_COLORS.index(player_privilege_color)
         except ValueError:
-            print(f"Player's privilege color {player_privilege_color} not found in PRIVILEGE_COLORS.")
+            if messages_enabled:
+                print(f"Player's privilege color {player_privilege_color} not found in PRIVILEGE_COLORS.")
             return False
 
         # Check each circle in decreasing order of value
         for circle in sorted(self.circle_data, key=lambda x: x["value"], reverse=True):
             # Log circle details
-            print(f"Checking Circle: {circle}")
+            if messages_enabled:
+                print(f"Checking Circle: {circle}")
 
             # Map RGB to its string name
             circle_color_name = COLOR_NAMES.get(circle["color"])
@@ -401,7 +411,8 @@ class Upgrade:
                 circle["owner"] = player
                 # Change the circle color to the player's RGB to indicate ownership
                 circle["color"] = player.color
-                print(f"Circle claimed by player. Circle color changed to {COLOR_NAMES[player.color]}.")
+                if messages_enabled:
+                    print(f"Circle claimed by player. Circle color changed to {COLOR_NAMES[player.color]}.")
                 return True
         return False
         
@@ -459,57 +470,35 @@ class Route:
 
         return posts
 
-    def find_empty_post(self):
-        for post in self.posts:
-            if post.owner == None:
-                return post
-        return None
-    
     def has_tradesmen(self):
-        for post in self.posts:
-            if post.owner is not None:
-                # print(f"Route check: Tradesman found at post {self.posts.index(post)+1}/{self.num_posts} on the route between {self.cities[0].name} and {self.cities[1].name}.")
-                return True
-        # print(f"Route check: No tradesmen found on the route between {self.cities[0].name} and {self.cities[1].name}.")
-        return False
+        return any(post.owner is not None for post in self.posts)
 
     def has_empty_office_in_cities(self):
         city1, city2 = self.cities
-        if city1.has_empty_office() or city2.has_empty_office():
-            # print(f"Route check: At least one empty office found in cities {city1.name} or {city2.name}.")
-            return True
-        # print(f"Route check: No empty offices found in cities {city1.name} and {city2.name}.")
-        return False
+        return city1.has_empty_office() or city2.has_empty_office()
     
     def is_controlled_by(self, player):
         return all(post.owner == player for post in self.posts)
 
-    def is_complete(self):
-        for post in self.posts:
-            if post.color == BLACK:
-                return False
-        return True
-    
     def assign_map_new_bonus_marker(self, bm_type):
         if not self.bonus_marker:  # Only assign if there's no bonus marker already
             # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
             self.bonus_marker = BonusMarker(bm_type)
             self.has_bonus_marker = True
         else:
-            print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
+            if getattr(self, "messages_enabled", True):
+                print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
 
     def assign_map_permanent_bonus_marker(self, bm_type):
         if not self.bonus_marker:  # Only assign if there's no bonus marker already
             # print(f"Route between {self.cities[0].name} and {self.cities[1].name} is being assigned a bonus marker of type {bm_type}")
             self.permanent_bonus_marker = BonusMarker(bm_type)
         else:
-            print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
+            if getattr(self, "messages_enabled", True):
+                print(f"Route between {self.cities[0].name} and {self.cities[1].name} already has a bonus marker assigned")
 
     def contains_a_circle(self):
-        for post in self.posts:
-            if post.owner_piece_shape == "circle":
-                return True
-        return False
+        return any(post.owner_piece_shape == "circle" for post in self.posts)
         
     def establish_tribute_on_route(self, player):
         self.tribute_owners.append(player)
@@ -533,69 +522,17 @@ class BonusMarker:
         self.owner = owner
         self.position = (0, 0)
     
-    def is_clicked(self, mouse_pos):
-        # Check if the mouse click is within the circle of the bonus marker
-        distance_squared = (self.position[0] - mouse_pos[0]) ** 2 + (self.position[1] - mouse_pos[1]) ** 2
-        return distance_squared <= CIRCLE_RADIUS ** 2
-        
-    def handle_swap_office(self, city, player, game=None):
-        if city.check_if_eligible_to_swap_offices(player, game):
-            print ("Valid City to swap offices")
-            city.swap_offices(player, game)
-            return True
-        else:
-            print ("Invalid City to Swap offices, please try another city.")
-            return False
-        
     def handle_move3(self, game):
         game.waiting_for_bm_move3 = True
         game.current_player.pieces_to_pickup = 3  # Set the pieces to move to 3 as per the bonus marker
-        print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
+        if game.interactive_errors:
+            print("You can now move up to 3 opponent's pieces. Click on an opponent's piece to move it.")
         
-    def handle_upgrade_ability(self, upgrade, player):
-        if player.perform_upgrade(upgrade.upgrade_type):
-            print("Successfully used Upgrade BM")
-            return True
-        else:
-            print("Invalid click when Upgrading via BM")
-            return False
-
     def handle_3_actions(self, current_player):
         current_player.grant_actions(3)
 
     def handle_4_actions(self, current_player):
         current_player.grant_actions(4)
-
-    def handle_tribute4_establishing_tp(self, route, current_player):
-        if current_player.personal_supply_squares <= 0:
-            print("Player has no Tradesmen in their personal supply to establish a trade post.")
-            return False
-        current_player.personal_supply_squares -= 1
-        route.establish_tribute_on_route(current_player)
-        return True
-    
-    def handle_block_trade_route(self, route, current_player):
-        if current_player.personal_supply_squares <= 0:
-            print("Player has no Tradesmen in their personal supply to establish a trade post.")
-            return False
-        current_player.personal_supply_squares -= 1
-        route.establish_blocked_route(current_player)
-        return True
-    
-    def handle_exchange_bonus_marker(self, game):
-        used_bm_owner = self.owner
-        current_player = game.current_player
-
-        current_player.bonus_markers.append(self)
-        used_bm_owner.used_bonus_markers.remove(self)
-        self.owner = current_player
-
-        for used_bms in current_player.used_bonus_markers:
-            if used_bms.type == "ExchangeBonusMarker":
-                used_bm_owner.used_bonus_markers.append(used_bms)
-                current_player.used_bonus_markers.remove(used_bms)
-                used_bms.owner = used_bm_owner
-                break
 
 class Post:
     def __init__(self, position, owner=None, required_shape=None, region=None):
@@ -624,13 +561,6 @@ class Post:
     def can_be_claimed_by(self, shape):
         return self.owner is None and (self.required_shape is None or self.required_shape == shape)
     
-    def is_valid_for_displacement(self, player):
-        if self.owner is not None:
-            return False  # The post is already claimed
-        if self.required_shape is None or player.has_general_stock(self.required_shape):
-            return True  # The post is empty and the player has the required shape
-        return False
-
     def claim(self, player, shape):
         if shape == "circle":
             self.circle_color = player.color
@@ -640,21 +570,3 @@ class Post:
             self.circle_color = TAN
         self.owner = player
         self.owner_piece_shape = shape
-    
-    def DEBUG_print_post_details(self):
-        print(f"Post Details!!!")
-        print(f"Required Shape: {self.required_shape}")
-        print(f"Post Position: {self.pos}")
-        print(f"Owner Piece Shape: {self.owner_piece_shape}")
-        
-        # Check if owner is None before trying to access its color
-        owner_color = 'None' if self.owner is None else COLOR_NAMES[self.owner.color]
-        print(f"Owner: {owner_color}")
-
-        # Check if circle_color is None before trying to access its color name
-        circle_color_name = 'None' if self.circle_color is None else COLOR_NAMES.get(self.circle_color, 'Unknown')
-        print(f"Circle Color: {circle_color_name}")
-
-        # Check if square_color is None before trying to access its color name
-        square_color_name = 'None' if self.square_color is None else COLOR_NAMES.get(self.square_color, 'Unknown')
-        print(f"Square Color: {square_color_name}")

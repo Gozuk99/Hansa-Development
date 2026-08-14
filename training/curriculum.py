@@ -39,6 +39,8 @@ CSV_FIELDS = (
     "final_player_scores",
     "completion_reason",
     "action_count",
+    "move_action_count",
+    "spent_action_count",
     "retry_count",
     "latest_loss",
     "rolling_mean_loss",
@@ -69,7 +71,7 @@ class CurriculumStage:
 
 DEFAULT_STAGES = (
     CurriculumStage("near_end_18_19", 10_000, (10, 17)),
-    CurriculumStage("late_game_15_17", 4_000, (15, 17)),
+    CurriculumStage("late_game_15_17", 10_000, (15, 17)),
     CurriculumStage("mid_game", 6_000, (8, 14)),
     CurriculumStage("early_game", 8_000, (0, 7)),
     CurriculumStage("full_game", 10_000, full_game=True),
@@ -178,6 +180,17 @@ def _play_timing_breakdown(trajectory):
     return ", ".join(f"{name} {seconds:.2f}s" for name, seconds in timings if seconds >= 1)
 
 
+def _format_game_numbers(game_numbers):
+    numbers = list(dict.fromkeys(game_numbers))
+    if len(numbers) > 1 and numbers == list(range(numbers[0], numbers[-1] + 1)):
+        return f"{numbers[0]}-{numbers[-1]}"
+    if len(numbers) < 2:
+        return str(numbers[0])
+    if len(numbers) == 2:
+        return f"{numbers[0]} and {numbers[1]}"
+    return f"{', '.join(map(str, numbers[:-1]))}, and {numbers[-1]}"
+
+
 def _rounded_seconds(value):
     return round(float(value), 2)
 
@@ -211,6 +224,7 @@ class CurriculumRunner:
         signature = self._configuration_signature()
         compatible_signatures = {
             signature,
+            self._configuration_signature(late_game_action_limit=4_000),
             self._configuration_signature(near_end_score_range=(10, 18)),
             self._configuration_signature(near_end_action_limit=6_000),
             self._configuration_signature(
@@ -266,16 +280,34 @@ class CurriculumRunner:
         return len(json.loads(manifest_path.read_text(encoding="utf-8")))
 
     def _configuration_signature(
-        self, *, near_end_action_limit=None, near_end_score_range=None, retry_limit=None
+        self,
+        *,
+        near_end_action_limit=None,
+        near_end_score_range=None,
+        late_game_action_limit=None,
+        retry_limit=None,
     ):
         stages = [
             replace(
                 stage,
-                action_limit=(near_end_action_limit or stage.action_limit),
-                score_range=(near_end_score_range or stage.score_range),
+                action_limit=(
+                    near_end_action_limit
+                    if stage.name == "near_end_18_19" and near_end_action_limit is not None
+                    else late_game_action_limit
+                    if stage.name == "late_game_15_17" and late_game_action_limit is not None
+                    else stage.action_limit
+                ),
+                score_range=(
+                    near_end_score_range
+                    if stage.name == "near_end_18_19" and near_end_score_range is not None
+                    else stage.score_range
+                ),
             )
-            if (near_end_action_limit is not None or near_end_score_range is not None)
-            and stage.name == "near_end_18_19"
+            if (
+                stage.name == "near_end_18_19"
+                and (near_end_action_limit is not None or near_end_score_range is not None)
+            )
+            or (stage.name == "late_game_15_17" and late_game_action_limit is not None)
             else stage
             for stage in self.config.stages
         ]
@@ -301,6 +333,14 @@ class CurriculumRunner:
 
     def _generate_state(self, stage, seed, directory, *, map_num=None, player_count=None):
         raise NotImplementedError
+
+    @staticmethod
+    def _stage_label(stage):
+        return "full_game" if stage.full_game else "mixed_end_game"
+
+    @staticmethod
+    def _stage_action_limit(stage):
+        return stage.action_limit
 
     def _failure_callback(self, stage, descriptor, retry_count, run_type):
         def capture(game, action_trace, seat_tiers, error):
@@ -335,8 +375,8 @@ class CurriculumRunner:
         seat_tiers=(),
     ):
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-        directory = self.failure_directory / timestamp
-        directory.mkdir(parents=True, exist_ok=False)
+        self.failure_directory.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix=f"{timestamp}_", dir=self.failure_directory))
         if descriptor is not None and descriptor.path.is_file():
             shutil.copy2(descriptor.path, directory / "source_state.hansa")
         latest_state_error = None
@@ -406,6 +446,8 @@ class CurriculumRunner:
             "final_player_scores": json.dumps(trajectory.final_scores),
             "completion_reason": getattr(trajectory, "completion_reason", "normal"),
             "action_count": len(trajectory.action_trace),
+            "move_action_count": getattr(trajectory, "move_action_count", 0),
+            "spent_action_count": getattr(trajectory, "spent_action_count", 0),
             "retry_count": retry_count,
             "latest_loss": latest_loss,
             "rolling_mean_loss": rolling_mean_loss,
@@ -460,6 +502,7 @@ class CurriculumRunner:
         descriptors = []
         pending_update = []
         pending_rows = []
+        pending_game_numbers = []
         rows = []
         recent_losses = []
         unfinished = 0
@@ -474,11 +517,10 @@ class CurriculumRunner:
             )
             self.trainer.model.save_model(self.playable_model_path)
             self._append_csv(pending_rows)
-            if pending_rows:
-                first_saved = len(rows) - len(pending_rows) + 1
-                self._report(f"Saved learning games {first_saved}-{len(rows)}")
+            self._report(f"Saved training games {_format_game_numbers(pending_game_numbers)}")
             pending_update.clear()
             pending_rows.clear()
+            pending_game_numbers.clear()
 
         total_games = self.config.training_games_per_batch
         game_index = 0
@@ -554,9 +596,31 @@ class CurriculumRunner:
                     f"play {trajectory.play_seconds:.2f}s{loss}{timing}{generation}{learning}"
                 )
                 pending_update.append(trajectory)
-                completed = result != "no_replacement_route"
+                pending_game_numbers.append(game_index + 1)
+                completed = result not in {"no_replacement_route", "action_limit"}
                 if not completed:
                     unfinished += 1
+                    if result == "action_limit":
+                        self.game_number += 1
+                        self.report_game_number += 1
+                        pending_rows.append(
+                            self._trajectory_row(
+                                trajectory,
+                                descriptor,
+                                stage,
+                                "training_timeout",
+                                retry_count,
+                                game_loss,
+                                None,
+                                self.report_game_number,
+                                generation_seconds=generation_seconds,
+                                learning_seconds=learning_seconds,
+                            )
+                        )
+                        if len(pending_update) == self.config.update_batch_size:
+                            save_completed_group()
+                        completed_game = True
+                        break
                     if len(pending_update) == self.config.update_batch_size:
                         save_completed_group()
                     if retry_count < self.config.retry_limit:
@@ -774,7 +838,7 @@ class CurriculumRunner:
         for run_batch_index in range(self.config.iterations):
             self.run_batch_number = run_batch_index + 1
             stage = self.config.stages[self.stage_index]
-            stage_label = "full_game" if stage.full_game else "mixed_end_game"
+            stage_label = self._stage_label(stage)
             self._report(
                 f"Starting stage '{stage_label}': "
                 f"{self.config.training_games_per_batch} training games and "
@@ -787,7 +851,7 @@ class CurriculumRunner:
             batch_directory.mkdir(parents=True, exist_ok=False)
             self.trainer.config = replace(
                 self.trainer.config,
-                max_actions=stage.action_limit,
+                max_actions=self._stage_action_limit(stage),
                 disable_move_action=False,
             )
             try:
