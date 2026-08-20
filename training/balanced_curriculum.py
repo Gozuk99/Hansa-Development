@@ -42,12 +42,12 @@ class MaturityProfile:
 
 
 MATURITY_PROFILES = (
-    # Temporarily excluded while the model relearns decisive late-game play:
+    # Fresh remains excluded until early-game performance is stable.
     # MaturityProfile("fresh", 1, None, None, None, None, None),
-    # MaturityProfile("early", 4, (0, 5), (2, 4), 5, 7, StartingPosition.ONE_ROUND_BEFORE),
-    # MaturityProfile("mid", 6, (6, 11), (5, 7), 3, 5, StartingPosition.ONE_ROUND_BEFORE),
-    MaturityProfile("late", 4, (12, 15), (7, 9), 2, 3, StartingPosition.ONE_ROUND_BEFORE),
-    MaturityProfile("end", 1, (16, 18), (9, 11), 1, 2, StartingPosition.TWO_DECISIONS_BEFORE),
+    MaturityProfile("early", 2, (0, 5), (2, 4), 9, 7, StartingPosition.ONE_ROUND_BEFORE),
+    MaturityProfile("mid", 3, (6, 11), (5, 7), 3, 5, StartingPosition.ONE_ROUND_BEFORE),
+    MaturityProfile("late", 3, (12, 15), (7, 9), 2, 3, StartingPosition.ONE_ROUND_BEFORE),
+    MaturityProfile("end", 2, (16, 17), (9, 11), 1, 2, StartingPosition.TWO_DECISIONS_BEFORE),
 )
 MATURITY_CYCLE = tuple(profile for profile in MATURITY_PROFILES for _ in range(profile.weight))
 
@@ -60,26 +60,13 @@ def _select_focus(rng, map_num, player_count, ending_condition):
     elif focus_roll < 0.25:
         focus = StrategicFocus.NETWORK_KEYS
     elif focus_roll < 0.50:
-        dual = rng.random() < 0.5
-        blocked = rng.random() < 0.5
-        focus = {
-            (False, False): StrategicFocus.EAST_WEST,
-            (True, False): StrategicFocus.DUAL_EAST_WEST,
-            (False, True): StrategicFocus.BLOCKED_EAST_WEST,
-            (True, True): StrategicFocus.BLOCKED_DUAL_EAST_WEST,
-        }[dual, blocked]
+        focus = (
+            StrategicFocus.DUAL_EAST_WEST
+            if rng.random() < 0.5
+            else StrategicFocus.EAST_WEST
+        )
         if ending_condition is EndingCondition.NEAR_COMPLETED_CITIES:
-            focus = {
-                StrategicFocus.DUAL_EAST_WEST: StrategicFocus.EAST_WEST,
-                StrategicFocus.BLOCKED_DUAL_EAST_WEST: StrategicFocus.BLOCKED_EAST_WEST,
-            }.get(focus, focus)
-        elif (
-            ending_condition is EndingCondition.NEAR_BONUS_MARKERS
-            and focus is StrategicFocus.BLOCKED_DUAL_EAST_WEST
-        ):
-            focus = StrategicFocus.BLOCKED_EAST_WEST
-        elif player_count == 3 and focus is StrategicFocus.BLOCKED_DUAL_EAST_WEST:
-            focus = StrategicFocus.DUAL_EAST_WEST
+            focus = StrategicFocus.EAST_WEST
     regional = None
     if (
         focus
@@ -98,8 +85,6 @@ def _select_focus(rng, map_num, player_count, ending_condition):
         elif ending_condition is EndingCondition.NEAR_BONUS_MARKERS:
             choices = [choice for choice in choices if choice is not RegionalFocus.ISLE_OF_MAN]
         regional = rng.choice(choices)
-        if focus is StrategicFocus.BLOCKED_DUAL_EAST_WEST:
-            focus = StrategicFocus.DUAL_EAST_WEST
     return focus, regional
 
 
@@ -116,6 +101,16 @@ def _focus_labels(focus, regional):
     if regional is not None:
         labels.append(regional.value)
     return tuple(labels)
+
+
+def _scenario_condition_label(maturity, ending_condition):
+    if maturity.name != "early":
+        return ending_condition.value
+    return {
+        EndingCondition.NEAR_SCORE: "score_focus",
+        EndingCondition.NEAR_BONUS_MARKERS: "bonus_marker_focus",
+        EndingCondition.NEAR_COMPLETED_CITIES: "completed_city_focus",
+    }[ending_condition]
 
 
 class BalancedCurriculumRunner(CurriculumRunner):
@@ -148,7 +143,7 @@ class BalancedCurriculumRunner(CurriculumRunner):
 
     @staticmethod
     def _stage_label(_stage):
-        return "late_end_game"
+        return "early_mid_late_end_game"
 
     @staticmethod
     def _stage_action_limit(_stage):
@@ -224,7 +219,11 @@ class BalancedCurriculumRunner(CurriculumRunner):
         )
         path, metadata_path = save_balanced_state(generated, directory)
         scenario = "+".join(
-            (maturity.name, ending_condition.value, *_focus_labels(focus, regional))
+            (
+                maturity.name,
+                _scenario_condition_label(maturity, ending_condition),
+                *_focus_labels(focus, regional),
+            )
         )
         descriptor = StateDescriptor(
             path,

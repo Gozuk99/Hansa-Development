@@ -21,6 +21,15 @@ CHART_COLUMNS = (
     ("rolling_mean_loss", "Rolling mean loss"),
 )
 COLORS = {"training": "#2563eb", "evaluation": "#f97316"}
+MOVEMENT_COUNT_FIELDS = (
+    "move_action_count",
+    "spent_action_count",
+    "pointless_move_workflows",
+    "repeated_move_penalties",
+    "all_move_turn_penalties",
+    "moves_creating_claimable_route",
+    "move_claim_conversions",
+)
 
 
 def _chart_ceiling(value, interval, *, minimum, maximum=None):
@@ -279,7 +288,6 @@ def read_results(path: Path, max_points: int):
         "evaluation_map_player_batches": {},
         "evaluation_versions": {},
         "current_evaluation_suite_version": 0,
-        "training_activity_batches": {},
     }
     row_count = 0
     training_game_number = 0
@@ -294,13 +302,6 @@ def read_results(path: Path, max_points: int):
             run_type = row.get("run_type", "").strip().lower()
             if run_type not in ("training", "training_timeout", "evaluation"):
                 continue
-            if run_type in ("training", "training_timeout"):
-                batch = int(_number(row.get("batch#")) or 0)
-                activity = counts["training_activity_batches"].setdefault(
-                    batch, {"attempts": 0, "action_limits": 0}
-                )
-                activity["attempts"] += 1
-                activity["action_limits"] += int(run_type == "training_timeout")
             if run_type == "training_timeout":
                 counts["run_type"][run_type] += 1
                 counts["completion_reason"]["action_limit"] += 1
@@ -346,6 +347,9 @@ def read_results(path: Path, max_points: int):
                         (map_num, player_count, batch),
                     ),
                 )
+                movement_values = {
+                    field: _row_value(row, field) for field in MOVEMENT_COUNT_FIELDS
+                }
                 for collection, key in targets:
                     evaluation = collection.setdefault(
                         key,
@@ -363,6 +367,8 @@ def read_results(path: Path, max_points: int):
                             "loss_total": 0.0,
                             "loss_games": 0,
                             "expected": 0,
+                            "movement_totals": Counter(),
+                            "movement_games": Counter(),
                         },
                     )
                     evaluation["games"] += 1
@@ -383,6 +389,10 @@ def read_results(path: Path, max_points: int):
                         evaluation["expected"],
                         int(_number(row.get("evaluation_suite_size")) or 0),
                     )
+                    for field, value in movement_values.items():
+                        if value is not None:
+                            evaluation["movement_totals"][field] += value
+                            evaluation["movement_games"][field] += 1
                     for tier, score in zip(assigned_tiers, final_scores):
                         evaluation["tier_games"][tier] += 1
                         if isinstance(score, (int, float)):
@@ -743,7 +753,6 @@ def _evaluation_chart(
     map_batches,
     player_batches,
     map_player_batches,
-    training_activity_batches=None,
     suite_version=1,
 ):
     if not batches:
@@ -907,28 +916,32 @@ def _evaluation_chart(
         point_details=loss_details,
     )
 
-    training_ordered = sorted((training_activity_batches or {}).items())
-    action_limit_chart = ""
-    if training_ordered:
-        action_limit_chart = line_chart(
-            "Training action-limit rate",
-            "Lower is better. Timed-out trajectories still train from their genuine "
-            "rewards and penalties, but are not counted as completed games.",
-            training_ordered,
-            {
-                "Action limits": [
-                    entry["action_limits"] / entry["attempts"] * 100 if entry["attempts"] else None
-                    for _batch, entry in training_ordered
-                ]
-            },
-            "%",
-            maximum=100,
-        )
-
     panels = []
     for (map_value, player_value), current_batches in datasets.items():
         ordered = sorted(current_batches.items())
         tiers = sorted({tier for _batch, entry in ordered for tier in entry["tier_games"]})
+
+        def movement_ratio(entry, numerator, denominator):
+            numerator_total = entry["movement_totals"][numerator]
+            denominator_total = entry["movement_totals"][denominator]
+            if not denominator_total:
+                return None
+            return numerator_total / denominator_total
+
+        def movement_average(entry, field):
+            games = entry["movement_games"][field]
+            if not games:
+                return None
+            return entry["movement_totals"][field] / games
+
+        def movement_percentage(entry, numerator, denominator):
+            ratio = movement_ratio(entry, numerator, denominator)
+            return ratio * 100 if ratio is not None else None
+
+        def display_metric(value, *, percentage=False):
+            if value is None:
+                return "&mdash;"
+            return f"{value * 100:.1f}%" if percentage else f"{value:.2f}"
 
         def rolling(values, window=10):
             result = []
@@ -969,6 +982,42 @@ def _evaluation_chart(
                 for _batch, entry in ordered
             ]
         }
+        move_percentage_series = {
+            "Move %": [
+                movement_percentage(
+                    entry, "move_action_count", "spent_action_count"
+                )
+                for _batch, entry in ordered
+            ]
+        }
+        pointless_move_series = {
+            "Pointless Moves/game": [
+                movement_average(entry, "pointless_move_workflows")
+                for _batch, entry in ordered
+            ]
+        }
+        repeated_move_series = {
+            "Repeated-Move penalties/game": [
+                movement_average(entry, "repeated_move_penalties")
+                for _batch, entry in ordered
+            ]
+        }
+        all_move_turn_series = {
+            "All-Move-turn penalties/game": [
+                movement_average(entry, "all_move_turn_penalties")
+                for _batch, entry in ordered
+            ]
+        }
+        move_claim_series = {
+            "Move to Claim conversion": [
+                movement_percentage(
+                    entry,
+                    "move_claim_conversions",
+                    "moves_creating_claimable_route",
+                )
+                for _batch, entry in ordered
+            ]
+        }
         baseline = rolling([entry["random"] / entry["games"] * 100 for _batch, entry in ordered])
         latest = ordered[-1][1]
         tier_one_games = latest["tier_games"][1]
@@ -976,6 +1025,15 @@ def _evaluation_chart(
         tier_one_win = latest["tier_wins"][1] / tier_one_games * 100 if tier_one_games else 0
         tier_one_score = latest["tier_score"][1] / tier_one_scores if tier_one_scores else 0
         average_actions = latest["actions"] / latest["completed"] if latest["completed"] else 0
+        latest_move_ratio = movement_ratio(
+            latest, "move_action_count", "spent_action_count"
+        )
+        latest_pointless_moves = movement_average(latest, "pointless_move_workflows")
+        latest_move_claim_rate = movement_ratio(
+            latest,
+            "move_claim_conversions",
+            "moves_creating_claimable_route",
+        )
         failures = [f"{reason}: {count}" for reason, count in latest["failure_reasons"].items()]
         warning = (
             '<p class="evaluation-warning"><strong>Evaluation failures:</strong> '
@@ -991,6 +1049,9 @@ def _evaluation_chart(
             f"<div><strong>Tier 1 win rate</strong><span>{tier_one_win:.1f}%</span></div>"
             f"<div><strong>Tier 1 average score</strong><span>{tier_one_score:.1f}</span></div>"
             f"<div><strong>Average game length</strong><span>{average_actions:.0f} actions</span></div>"
+            f"<div><strong>Move %</strong><span>{display_metric(latest_move_ratio, percentage=True)}</span></div>"
+            f"<div><strong>Pointless Moves/game</strong><span>{display_metric(latest_pointless_moves)}</span></div>"
+            f"<div><strong>Move &rarr; Claim rate</strong><span>{display_metric(latest_move_claim_rate, percentage=True)}</span></div>"
             f"</div>{warning}"
             + line_chart(
                 "Win rate by tier",
@@ -1018,6 +1079,47 @@ def _evaluation_chart(
                 action_series,
                 " actions",
             )
+            + line_chart(
+                "Move % of paid actions",
+                "Lower generally indicates less reliance on Move, but Move remains a legal "
+                "and sometimes necessary action.",
+                ordered,
+                move_percentage_series,
+                "%",
+                maximum=100,
+            )
+            + line_chart(
+                "Pointless Move workflows per game",
+                "Lower is better. Counts movement workflows receiving the existing "
+                "pointless-movement target.",
+                ordered,
+                pointless_move_series,
+                " workflows/game",
+            )
+            + line_chart(
+                "Repeated-Move penalties per game",
+                "Lower is better. Counts applications of the existing consecutive-Move "
+                "penalty.",
+                ordered,
+                repeated_move_series,
+                " penalties/game",
+            )
+            + line_chart(
+                "All-Move-turn penalties per game",
+                "Lower is better. Counts turns where every paid action was a normal Move.",
+                ordered,
+                all_move_turn_series,
+                " penalties/game",
+            )
+            + line_chart(
+                "Move &rarr; Claim conversion rate",
+                "Higher means more route-creating normal Moves were followed by an immediate "
+                "paid claim. This is diagnostic, not a requirement for every Move.",
+                ordered,
+                move_claim_series,
+                "%",
+                maximum=100,
+            )
             + "</div>"
         )
     return f"""
@@ -1029,7 +1131,6 @@ def _evaluation_chart(
       <label>Players: <select data-evaluation-players><option value="all">All players</option>
       <option value="3">3 players</option><option value="4">4 players</option>
       <option value="5">5 players</option></select></label></div>
-      {action_limit_chart}
       {evaluation_loss_chart}
       {"".join(panels)}
       <p class="hint">Each point summarizes one batch of fixed evaluation positions.
@@ -1118,7 +1219,6 @@ grid-template-columns:1fr; gap:20px; margin-top:18px; }}
             counts["evaluation_map_batches"],
             counts["evaluation_player_batches"],
             counts["evaluation_map_player_batches"],
-            counts["training_activity_batches"],
             counts["current_evaluation_suite_version"],
         )
     }

@@ -2,12 +2,17 @@
 
 ## Decision
 
-Training uses score-derived rewards after every selected interaction and winner-only rewards after final scoring. The shared model remains frozen while a game is active. Training performs one update per started block of 256 trajectory decisions, capped at four non-overlapping representative updates and 1,024 sampled decisions per game. Penalized no-replacement-route failures also train; evaluation games never update the model.
+Training uses score-derived rewards after every selected interaction and winner-only rewards after final scoring. The shared model remains frozen while a game is active. Training performs one update per started block of 256 trajectory decisions, capped at four non-overlapping representative updates and 1,024 sampled decisions per game. Penalized no-replacement-route failures and action-limit trajectories also train; an action-limit trajectory keeps its genuine rewards and penalties but receives no invented terminal reward. Evaluation games never update the model.
 
 Representative sampling keeps every pickup and placement from a selected normal
 Move or permanent Move Any 2 workflow together. A movement penalty is still
-recorded only once when the workflow completes; grouping ensures that its earlier
-choices retain the resulting reward-to-go during training.
+recorded only once when the workflow completes. Objectively pointless movement
+workflows receive a local negative target instead of inheriting terminal credit;
+grouping keeps every interaction that produced that outcome in the same sample.
+Paid normal-Move workflows also begin without terminal credit. They regain it
+only when the next non-Move paid action claims a route completed by their
+uninterrupted same-turn Move chain, and only for workflows that contributed to
+that route. Permanent Move Any 2 is unaffected.
 
 Authoritative projected scoring provides the main reward signal. A smaller set of
 explicit training-only rewards and penalties supplements it where score changes
@@ -131,8 +136,15 @@ movement, or later reward-to-go.
 The current trainer also applies these deliberately shaped signals:
 
 - `+50` for completing a route, before subtracting prestige awarded to opponents;
-- `+70` for each net claimable route produced by a completed normal Move;
-- `+25` for concentrating at least two moved pieces on one route;
+- `+50` for each net claimable route produced by a completed normal Move, or
+  `-50` for each previously claimable route broken by that Move;
+- `+10` for concentrating at least two moved pieces on one route. Each player
+  can earn this only once per route until that route is claimed;
+- `+250` when the player's next paid action claims one of the routes that the
+  preceding Move made fully controlled. Filling multiple routes still awards
+  the combination once, and taking any other paid action first forfeits it;
+- `-250` when a paid route claim gives the acting player no office, upgrade,
+  bonus marker, permanent-marker benefit, or actual/projected points;
 - `+25` for disrupting an immediately following player's valuable completed route;
 - `+5` for placing on a route where the player already has a piece, or `+3` when
   doing so through displacement;
@@ -140,12 +152,16 @@ The current trainer also applies these deliberately shaped signals:
   the first Actions upgrade receives `+400`;
 - `-200` for moving only one piece and `-100` for moving only two when the
   player's Book permits at least three;
-- `-1,000` for using normal Move to pick up exactly one piece and return it to
-  the identical post; bonus-marker movement and multi-piece Moves are excluded;
-- `-1,000` for swapping two pieces with the same owner and shape during normal
-  Move or the permanent Move Any 2 bonus; different owners or shapes are valid;
-- `-5,000` upon spending a third consecutive action on normal Move, in addition
-  to the smaller inefficient-capacity penalties above; and
+- a local `-1,000` target for a normal Move or permanent Move Any 2 workflow
+  that leaves every affected post with the same owner and shape as before, or
+  merely rearranges the same owner/shape totals among equivalent posts of one
+  non-maritime route. Maritime posts remain distinct;
+- a local `-1,500` target for the third and every subsequent consecutive
+  completed normal Move. A different normal action or a new turn resets the
+  sequence; and
+- a local `-500` target for every normal Move workflow in a completed turn when
+  the player spent at least two actions and every paid action was Move. Any
+  other paid action prevents this whole-turn penalty; and
 - `-500` for the player responsible for leaving no legal route on which to place
   a required replacement bonus marker.
 
@@ -161,7 +177,12 @@ After final scoring:
 - the player whose decision triggered game end receives another `+150` only if that player is an eventual winner; and
 - triggering game end while losing gives no terminal bonus.
 
-Normal immediate rewards are never erased. A losing player keeps legitimate reward from the final decision even though their terminal reward is zero.
+Normal decisions retain their immediate and terminal rewards. A losing player
+keeps legitimate reward from the final decision even though their terminal
+reward is zero. Paid normal-Move workflows retain their immediate and later
+non-terminal rewards but receive terminal credit only through the immediate
+Move-to-claim chain described above. Explicitly identified pointless movement
+patterns instead use their local negative training target.
 
 ## Per-Decision Credit Assignment
 
@@ -174,6 +195,8 @@ Every `TrainingDecision` records:
 - the game turn containing the decision;
 - the projected-score reward delta for every player caused by that interaction;
 - the acting player's immediate reward delta;
+- an optional workflow-local movement target;
+- whether the decision may inherit terminal credit;
 - the assigned policy tier and selection metadata; and
 - the discounted reward-to-go calculated after the game.
 
@@ -189,6 +212,12 @@ All interactions within one player turn have the same discount distance to later
 rewards. Gamma is applied only when that player begins another turn. Decisions by
 other players do not discount, receive, erase, or replace that return. The initial
 discount is `gamma = 0.99`, stored in the training configuration and checkpoint.
+
+After normal reward-to-go is calculated, an explicitly flagged movement workflow
+uses its local negative target for training. The target is attached once to the
+grouped workflow, not added repeatedly to the player's reward stream. Earlier and
+later productive non-Move decisions therefore keep their score and terminal credit;
+normal Move uses the narrower Move-to-claim terminal-credit rule above.
 
 ## Worked Route Example
 

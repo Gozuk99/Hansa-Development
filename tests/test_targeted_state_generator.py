@@ -370,7 +370,7 @@ class TargetedStateGeneratorTests(unittest.TestCase):
             (game.players.index(prepared_player) + 1) % len(game.players),
         )
 
-    def test_one_round_bonus_marker_position_has_only_the_prepared_marker(self):
+    def test_one_round_bonus_marker_position_keeps_all_three_route_markers(self):
         generated = generate_state(
             GenerationRequest(
                 seed=1357,
@@ -383,10 +383,16 @@ class TargetedStateGeneratorTests(unittest.TestCase):
             route for route in generated.game.selected_map.routes if route.bonus_marker is not None
         ]
 
-        self.assertEqual(len(marker_routes), 1)
-        owners = {post.owner for post in marker_routes[0].posts}
-        self.assertEqual(len(owners), 1)
-        self.assertNotIn(None, owners)
+        self.assertEqual(len(marker_routes), 3)
+        self.assertTrue(
+            any(
+                route.is_controlled_by(player)
+                for route in marker_routes
+                for player in generated.game.players
+            )
+        )
+        self.assertEqual(generated.game.replace_bonus_marker, 0)
+        self.assertEqual(generated.game.pending_bonus_markers, [])
 
     def test_saved_state_is_organized_and_round_trips(self):
         generated = generate_state(

@@ -41,6 +41,13 @@ CSV_FIELDS = (
     "action_count",
     "move_action_count",
     "spent_action_count",
+    "move_ratio",
+    "pointless_move_workflows",
+    "repeated_move_penalties",
+    "all_move_turn_penalties",
+    "moves_creating_claimable_route",
+    "move_claim_conversions",
+    "move_claim_conversion_rate",
     "retry_count",
     "latest_loss",
     "rolling_mean_loss",
@@ -430,6 +437,22 @@ class CurriculumRunner:
     ):
         winner_players = [index + 1 for index in trajectory.winner_indices]
         winner_tiers = [trajectory.seat_tiers[index] for index in trajectory.winner_indices]
+        move_action_count = getattr(trajectory, "move_action_count", 0)
+        spent_action_count = getattr(trajectory, "spent_action_count", 0)
+        move_ratio = getattr(trajectory, "move_ratio", None)
+        if move_ratio is None and spent_action_count:
+            move_ratio = move_action_count / spent_action_count
+        moves_creating_claimable_route = getattr(
+            trajectory, "moves_creating_claimable_route", 0
+        )
+        move_claim_conversions = getattr(trajectory, "move_claim_conversions", 0)
+        move_claim_conversion_rate = getattr(
+            trajectory, "move_claim_conversion_rate", None
+        )
+        if move_claim_conversion_rate is None and moves_creating_claimable_route:
+            move_claim_conversion_rate = (
+                move_claim_conversions / moves_creating_claimable_route
+            )
         return {
             "game#": game_number,
             "batch#": self.report_batch_number,
@@ -446,8 +469,21 @@ class CurriculumRunner:
             "final_player_scores": json.dumps(trajectory.final_scores),
             "completion_reason": getattr(trajectory, "completion_reason", "normal"),
             "action_count": len(trajectory.action_trace),
-            "move_action_count": getattr(trajectory, "move_action_count", 0),
-            "spent_action_count": getattr(trajectory, "spent_action_count", 0),
+            "move_action_count": move_action_count,
+            "spent_action_count": spent_action_count,
+            "move_ratio": move_ratio,
+            "pointless_move_workflows": getattr(
+                trajectory, "pointless_move_workflows", 0
+            ),
+            "repeated_move_penalties": getattr(
+                trajectory, "repeated_move_penalties", 0
+            ),
+            "all_move_turn_penalties": getattr(
+                trajectory, "all_move_turn_penalties", 0
+            ),
+            "moves_creating_claimable_route": moves_creating_claimable_route,
+            "move_claim_conversions": move_claim_conversions,
+            "move_claim_conversion_rate": move_claim_conversion_rate,
             "retry_count": retry_count,
             "latest_loss": latest_loss,
             "rolling_mean_loss": rolling_mean_loss,
