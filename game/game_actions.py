@@ -306,6 +306,12 @@ def can_pick_up_displacement_fallback(game, post):
         displacement_uses_board_fallback(game)
         and displaced.player.pieces_to_pickup > 0
         and post.owner == displaced.player
+        and any(
+            not target.is_owned()
+            and target.required_shape in (None, post.owner_piece_shape)
+            and displaced.player.is_valid_region_transition(post.region, target.region)
+            for target in game.all_empty_posts
+        )
     )
 
 

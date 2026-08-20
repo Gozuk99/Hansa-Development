@@ -1,4 +1,5 @@
 from dataclasses import replace
+import math
 from pathlib import Path
 import tempfile
 import unittest
@@ -15,30 +16,45 @@ from game.persistence import load_game
 from game.turn_state import TurnPhase
 from map_data.constants import MAX_POSTS
 from training.self_play import (
+    ALL_MOVE_TURN_LOCAL_TARGET,
+    MOVE_CLAIM_COMBO_REWARD,
+    MOVE_ROUTE_FOCUS_REWARD,
+    MovementBehaviorMetrics,
+    POINTLESS_ROUTE_CLAIM_PENALTY,
     NO_REPLACEMENT_ROUTE_PENALTY,
     PolicyTier,
     SelfPlayTrainer,
     TrainingConfig,
     TrainingDecision,
     _is_normal_move_in_progress,
+    action_phase_selection_groups,
+    apply_all_move_turn_target,
     apply_income_efficiency_penalty,
     apply_movement_efficiency_penalty,
     apply_opponent_route_score_penalty,
     apply_route_completion_reward,
     assign_reward_to_go,
+    assign_training_targets,
     calculate_terminal_rewards,
     completed_game_reason,
     completed_route_move_reward,
     consecutive_move_penalty,
+    credited_movement_workflows,
+    grant_movement_workflow_terminal_credit,
     income_efficiency_penalty,
+    inverse_sqrt_rank_weights,
     intermediate_ability_upgrade_reward,
+    mark_movement_workflow_target,
+    move_route_focus_reward,
     movement_efficiency_penalty,
     move_workflow_exploration_categories,
-    redundant_piece_swap_penalty,
+    normalized_rank_weights,
+    pointless_movement_penalty,
+    pointless_route_claim_penalty,
     route_building_post_reward,
-    same_post_move_penalty,
     should_fully_validate,
     training_action_mask,
+    update_move_claim_combo,
     valuable_completed_route_slots,
 )
 from game.structured_actions import (
@@ -53,7 +69,16 @@ from tests.action_helpers import self_play_test_state
 STATE = self_play_test_state()
 
 
-def training_decision(action, player, rewards, immediate, turn=1, movement_workflow_id=None):
+def training_decision(
+    action,
+    player,
+    rewards,
+    immediate,
+    turn=1,
+    movement_workflow_id=None,
+    equivalent_action_indices=(),
+    receives_terminal_credit=True,
+):
     empty = torch.empty(0)
     return TrainingDecision(
         empty,
@@ -70,10 +95,26 @@ def training_decision(action, player, rewards, immediate, turn=1, movement_workf
         1,
         turn,
         movement_workflow_id,
+        equivalent_action_indices=equivalent_action_indices,
+        receives_terminal_credit=receives_terminal_credit,
     )
 
 
 class SelfPlayTrainingTests(unittest.TestCase):
+    def test_movement_behavior_metric_rates_are_blank_without_denominators(self):
+        metrics = MovementBehaviorMetrics()
+
+        self.assertIsNone(metrics.move_ratio)
+        self.assertIsNone(metrics.move_claim_conversion_rate)
+
+        metrics.move_action_count = 3
+        metrics.spent_action_count = 12
+        metrics.moves_creating_claimable_route = 4
+        metrics.move_claim_conversions = 3
+
+        self.assertEqual(metrics.move_ratio, 0.25)
+        self.assertEqual(metrics.move_claim_conversion_rate, 0.75)
+
     def test_completed_game_reason_reports_authoritative_end_conditions(self):
         game = mock.Mock()
         game.players = [mock.Mock(score=20), mock.Mock(score=12)]
@@ -365,12 +406,13 @@ class SelfPlayTrainingTests(unittest.TestCase):
     def test_consecutive_move_penalties_follow_book_capacity(self):
         self.assertEqual(consecutive_move_penalty(2, 1), 0)
         self.assertEqual(consecutive_move_penalty(2, 2), 0)
-        self.assertEqual(consecutive_move_penalty(2, 3), -5000)
-        self.assertEqual(consecutive_move_penalty(3, 3), -5000)
+        self.assertEqual(consecutive_move_penalty(2, 3), -1500)
+        self.assertEqual(consecutive_move_penalty(3, 3), -1500)
         self.assertEqual(consecutive_move_penalty(4, 1), 0)
         self.assertEqual(consecutive_move_penalty(4, 2), -200)
-        self.assertEqual(consecutive_move_penalty(4, 3), -5000)
-        self.assertEqual(consecutive_move_penalty(5, 3), -5000)
+        self.assertEqual(consecutive_move_penalty(4, 3), -1500)
+        self.assertEqual(consecutive_move_penalty(4, 4), -1500)
+        self.assertEqual(consecutive_move_penalty(5, 3), -1500)
 
     def test_normal_move_tracking_uses_the_held_piece_phase(self):
         player = type("Player", (), {"holding_pieces": [("square", None, None)]})()
@@ -379,46 +421,191 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertFalse(_is_normal_move_in_progress(TurnPhase.ACTIONS, player))
         self.assertFalse(_is_normal_move_in_progress(TurnPhase.BONUS_MARKER_CHOICE, player))
 
-    def test_same_post_move_penalty_requires_one_piece_and_identical_post(self):
-        origin = object()
-        other = object()
-
-        self.assertEqual(same_post_move_penalty(1, [origin], [origin]), -1000)
-        self.assertEqual(same_post_move_penalty(1, [origin], [other]), 0)
-        self.assertEqual(same_post_move_penalty(2, [origin, other], [origin, other]), 0)
-
-    def test_redundant_swap_penalty_requires_matching_owner_and_shape(self):
-        first_post = object()
-        second_post = object()
+    def test_pointless_movement_penalty_requires_an_unchanged_board(self):
         blue = object()
         green = object()
+        first_post = mock.Mock(owner=blue, owner_piece_shape="square")
+        second_post = mock.Mock(owner=blue, owner_piece_shape="square")
 
         self.assertEqual(
-            redundant_piece_swap_penalty(
+            pointless_movement_penalty(
+                [(first_post, blue, "square")],
+                [first_post],
+            ),
+            -1000,
+        )
+        self.assertEqual(
+            pointless_movement_penalty(
                 [(first_post, blue, "square"), (second_post, blue, "square")],
                 [second_post, first_post],
             ),
             -1000,
         )
+        first_post.owner_piece_shape = "circle"
+        second_post.owner_piece_shape = "square"
         self.assertEqual(
-            redundant_piece_swap_penalty(
+            pointless_movement_penalty(
                 [(first_post, blue, "square"), (second_post, blue, "circle")],
                 [second_post, first_post],
             ),
             0,
         )
+        first_post.owner = green
+        first_post.owner_piece_shape = "square"
+        second_post.owner = blue
         self.assertEqual(
-            redundant_piece_swap_penalty(
+            pointless_movement_penalty(
                 [(first_post, blue, "square"), (second_post, green, "square")],
                 [second_post, first_post],
             ),
             0,
         )
+        third_post = mock.Mock(owner=blue, owner_piece_shape="square")
+        self.assertEqual(
+            pointless_movement_penalty(
+                [(first_post, blue, "square")],
+                [third_post],
+            ),
+            0,
+        )
+
+    def test_pointless_movement_penalty_treats_land_route_posts_as_equivalent(self):
+        blue = object()
+        land_route = mock.Mock(required_circles=0)
+        other_route = mock.Mock(required_circles=0)
+        maritime_route = mock.Mock(required_circles=1)
+        land_origin = mock.Mock(owner=None, owner_piece_shape=None)
+        land_destination = mock.Mock(owner=blue, owner_piece_shape="square")
+        other_destination = mock.Mock(owner=blue, owner_piece_shape="square")
+        maritime_origin = mock.Mock(owner=None, owner_piece_shape=None)
+        maritime_destination = mock.Mock(owner=blue, owner_piece_shape="square")
+        post_routes = {
+            land_origin: land_route,
+            land_destination: land_route,
+            other_destination: other_route,
+            maritime_origin: maritime_route,
+            maritime_destination: maritime_route,
+        }
+
+        self.assertEqual(
+            pointless_movement_penalty(
+                [(land_origin, blue, "square")],
+                [land_destination],
+                post_routes,
+            ),
+            -1000,
+        )
+        self.assertEqual(
+            pointless_movement_penalty(
+                [(land_origin, blue, "square")],
+                [other_destination],
+                post_routes,
+            ),
+            0,
+        )
+        self.assertEqual(
+            pointless_movement_penalty(
+                [(maritime_origin, blue, "square")],
+                [maritime_destination],
+                post_routes,
+            ),
+            0,
+        )
 
     def test_completed_move_rewards_only_net_new_claimable_routes(self):
-        self.assertEqual(completed_route_move_reward({1}, {1, 2}), 70)
-        self.assertEqual(completed_route_move_reward({1, 2}, {1}), -70)
+        self.assertEqual(completed_route_move_reward({1}, {1, 2}), 50)
+        self.assertEqual(completed_route_move_reward({1, 2}, {1}), -50)
         self.assertEqual(completed_route_move_reward({1}, {2}), 0)
+
+    def test_route_focus_reward_has_a_cooldown_until_claim(self):
+        rewarded, reward = move_route_focus_reward((), {4: 2})
+        self.assertEqual(rewarded, frozenset({4}))
+        self.assertEqual(reward, 10)
+
+        rewarded, reward = move_route_focus_reward(rewarded, {4: 3})
+        self.assertEqual(rewarded, frozenset({4}))
+        self.assertEqual(reward, 0)
+
+        rewarded, reward = move_route_focus_reward(rewarded - {4}, {4: 2})
+        self.assertEqual(rewarded, frozenset({4}))
+        self.assertEqual(reward, 10)
+
+    def test_move_claim_combo_requires_the_next_paid_action_to_claim_that_route(self):
+        pending, reward = update_move_claim_combo(
+            {4},
+            action=RouteInteraction(4, 1),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+        )
+        self.assertEqual(pending, frozenset())
+        self.assertEqual(reward, 250)
+
+        pending, reward = update_move_claim_combo(
+            {4},
+            action=RouteInteraction(3, 1),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+        )
+        self.assertEqual(pending, frozenset())
+        self.assertEqual(reward, 0)
+
+    def test_move_claim_combo_tracks_every_route_filled_by_the_move(self):
+        pending, reward = update_move_claim_combo(
+            (),
+            action=PostInteraction(0, PieceShape.TRADER),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+            newly_completed_routes={2, 7},
+        )
+        self.assertEqual(pending, frozenset({2, 7}))
+        self.assertEqual(reward, 0)
+
+        unchanged, reward = update_move_claim_combo(
+            pending,
+            action=PostInteraction(1, PieceShape.TRADER),
+            turn_phase=TurnPhase.MOVE_PIECES,
+            action_was_spent=False,
+        )
+        self.assertEqual(unchanged, pending)
+        self.assertEqual(reward, 0)
+
+    def test_move_reward_values(self):
+        self.assertEqual(MOVE_ROUTE_FOCUS_REWARD, 10)
+        self.assertEqual(MOVE_CLAIM_COMBO_REWARD, 250)
+
+    def test_route_claim_without_an_outcome_is_penalized(self):
+        penalty = pointless_route_claim_penalty(
+            action=RouteInteraction(4, 0),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+            gained_office=False,
+            gained_upgrade=False,
+            gained_marker=False,
+            gained_points=False,
+            route_had_permanent_marker=False,
+        )
+        self.assertEqual(penalty, POINTLESS_ROUTE_CLAIM_PENALTY)
+
+    def test_any_useful_route_claim_outcome_avoids_the_penalty(self):
+        outcomes = (
+            "gained_office",
+            "gained_upgrade",
+            "gained_marker",
+            "gained_points",
+            "route_had_permanent_marker",
+        )
+        for outcome in outcomes:
+            values = {name: name == outcome for name in outcomes}
+            with self.subTest(outcome=outcome):
+                self.assertEqual(
+                    pointless_route_claim_penalty(
+                        action=RouteInteraction(4, 0),
+                        turn_phase=TurnPhase.ACTIONS,
+                        action_was_spent=True,
+                        **values,
+                    ),
+                    0,
+                )
 
     def test_route_building_post_rewards(self):
         self.assertEqual(
@@ -528,15 +715,34 @@ class SelfPlayTrainingTests(unittest.TestCase):
                 for old, current in zip(before, trainer.model.parameters())
             )
         )
+        expected_move_ratio = (
+            trajectory.move_action_count / trajectory.spent_action_count
+            if trajectory.spent_action_count
+            else None
+        )
+        self.assertEqual(trajectory.move_ratio, expected_move_ratio)
+        self.assertLessEqual(
+            trajectory.move_claim_conversions,
+            trajectory.moves_creating_claimable_route,
+        )
+        expected_conversion_rate = (
+            trajectory.move_claim_conversions / trajectory.moves_creating_claimable_route
+            if trajectory.moves_creating_claimable_route
+            else None
+        )
+        self.assertEqual(
+            trajectory.move_claim_conversion_rate,
+            expected_conversion_rate,
+        )
 
     def test_evaluation_keeps_tiers_but_disables_epsilon(self):
         trainer = self.trainer()
         selected_tiers = []
         select_action = trainer._select_action
 
-        def capture_tier(scores, legal_indices, tier):
+        def capture_tier(scores, legal_indices, tier, equivalent_groups=None):
             selected_tiers.append(tier)
-            return select_action(scores, legal_indices, tier)
+            return select_action(scores, legal_indices, tier, equivalent_groups)
 
         trainer._select_action = capture_tier
         trainer.collect_game(STATE, evaluation=True)
@@ -562,28 +768,29 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(trainer.progress.completed_games, 1)
         self.assertEqual(trainer.progress.training_updates, 1)
 
-    def test_long_game_receives_two_bounded_updates(self):
+    def test_long_game_receives_four_bounded_updates(self):
         trainer = self.trainer()
         trainer.config = replace(trainer.config, decision_batch_size=10)
         trajectory = trainer.collect_game(STATE)
 
         trainer.update_model((trajectory,))
 
-        self.assertEqual(trainer.progress.training_updates, 2)
+        self.assertEqual(trainer.progress.training_updates, 4)
 
     def test_long_game_samples_are_bounded_and_non_overlapping(self):
         trainer = self.trainer()
         trainer.config = replace(trainer.config, decision_batch_size=4)
-        decisions = tuple(
+        decisions = [
             training_decision(
                 index,
                 0,
                 (0,),
-                -5000 if index == 3 else 0,
+                0,
                 movement_workflow_id=1 if index in (1, 2, 3) else None,
             )
             for index in range(8)
-        )
+        ]
+        mark_movement_workflow_target(decisions, 1, -1500)
 
         batches = trainer._training_batches(decisions)
         selected_actions = [decision.action_index for batch in batches for decision in batch]
@@ -621,13 +828,29 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertTrue(selection.used_epsilon)
         self.assertEqual(selection.model_rank, 2)
         trainer.rng.randrange.assert_called_once_with(2)
+        trainer.rng.choices.assert_not_called()
 
-    def test_top_k_selects_uniformly_from_effective_legal_pool(self):
+    def test_inverse_sqrt_rank_weights_and_normalization(self):
+        raw = inverse_sqrt_rank_weights(5)
+        normalized = normalized_rank_weights(5)
+
+        self.assertEqual(raw, tuple(1.0 / math.sqrt(rank) for rank in range(1, 6)))
+        self.assertAlmostEqual(sum(normalized), 1.0)
+        self.assertAlmostEqual(normalized[0], 0.3094, places=4)
+        self.assertAlmostEqual(normalized[4], 0.1384, places=4)
+
+    def test_top_two_uses_normalized_rank_weighting(self):
+        weights = normalized_rank_weights(2)
+
+        self.assertAlmostEqual(weights[0], 0.5858, places=4)
+        self.assertAlmostEqual(weights[1], 0.4142, places=4)
+
+    def test_top_k_selects_with_inverse_sqrt_rank_weighting(self):
         trainer = self.trainer()
         scores = torch.tensor([0.0, 5.0, 2.0, 7.0])
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.9
-        trainer.rng.randrange.return_value = 1
+        trainer.rng.choices.return_value = [1]
 
         selection = trainer._select_action(scores, [1, 2, 3], PolicyTier(1, 2, 0.05))
 
@@ -635,19 +858,27 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertFalse(selection.used_epsilon)
         self.assertEqual(selection.model_rank, 2)
         self.assertEqual(selection.legal_action_count, 3)
-        trainer.rng.randrange.assert_called_once_with(2)
+        trainer.rng.choices.assert_called_once_with(
+            range(2),
+            weights=normalized_rank_weights(2),
+            k=1,
+        )
 
     def test_top_k_with_tied_scores_stays_within_legal_pool(self):
         trainer = self.trainer()
         scores = torch.tensor([0.0, 5.0, 5.0, 5.0])
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.9
-        trainer.rng.randrange.return_value = 0
+        trainer.rng.choices.return_value = [0]
 
         selection = trainer._select_action(scores, [1, 2, 3], PolicyTier(1, 2, 0.05))
 
         self.assertIn(selection.action_index, {1, 2, 3})
-        trainer.rng.randrange.assert_called_once_with(2)
+        trainer.rng.choices.assert_called_once_with(
+            range(2),
+            weights=normalized_rank_weights(2),
+            k=1,
+        )
 
     def test_effective_k_and_fully_random_tier(self):
         trainer = self.trainer()
@@ -655,11 +886,15 @@ class SelfPlayTrainingTests(unittest.TestCase):
         trainer.rng = mock.Mock()
         trainer.rng.reset_mock()
         trainer.rng.random.return_value = 0.9
-        trainer.rng.randrange.return_value = 1
+        trainer.rng.choices.return_value = [1]
 
         selection = trainer._select_action(scores, [1, 2], PolicyTier(3, 10, 0.2))
         self.assertEqual(selection.action_index, 2)
-        trainer.rng.randrange.assert_called_once_with(2)
+        trainer.rng.choices.assert_called_once_with(
+            range(2),
+            weights=normalized_rank_weights(2),
+            k=1,
+        )
 
         trainer.rng.reset_mock()
         trainer.rng.random.return_value = 0.2
@@ -668,6 +903,7 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(selection.action_index, 1)
         self.assertTrue(selection.used_epsilon)
         trainer.rng.randrange.assert_called_once_with(2)
+        trainer.rng.choices.assert_not_called()
 
     def test_single_legal_action_is_always_selected(self):
         trainer = self.trainer()
@@ -770,11 +1006,173 @@ class SelfPlayTrainingTests(unittest.TestCase):
             ),
         )
 
+    def test_action_phase_groups_equivalent_empty_land_posts(self):
+        player = object()
+        land_route = mock.Mock(
+            required_circles=0,
+            posts=[mock.Mock(owner=None), mock.Mock(owner=None), mock.Mock(owner=player)],
+        )
+        maritime_route = mock.Mock(
+            required_circles=1,
+            posts=[mock.Mock(owner=None), mock.Mock(owner=None)],
+        )
+        game = mock.Mock()
+        game.selected_map.routes = [land_route, maritime_route]
+        trader_indices = [
+            DEFAULT_ACTION_CODEC.encode(PostInteraction(slot, PieceShape.TRADER))
+            for slot in range(5)
+        ]
+
+        groups = action_phase_selection_groups(game, trader_indices)
+
+        self.assertEqual(
+            groups,
+            (
+                (trader_indices[0], trader_indices[1]),
+                (trader_indices[2],),
+                (trader_indices[3],),
+                (trader_indices[4],),
+            ),
+        )
+
+    def test_action_phase_groups_matching_displacements_and_move_pickups(self):
+        current_player = object()
+        opponent_one = object()
+        opponent_two = object()
+        route = mock.Mock(
+            required_circles=0,
+            posts=[
+                mock.Mock(owner=opponent_one, owner_piece_shape="square"),
+                mock.Mock(owner=opponent_one, owner_piece_shape="square"),
+                mock.Mock(owner=opponent_two, owner_piece_shape="square"),
+                mock.Mock(owner=current_player, owner_piece_shape="square"),
+                mock.Mock(owner=current_player, owner_piece_shape="square"),
+                mock.Mock(owner=current_player, owner_piece_shape="circle"),
+            ],
+        )
+        game = mock.Mock()
+        game.current_player = current_player
+        game.selected_map.routes = [route]
+        trader_indices = [
+            DEFAULT_ACTION_CODEC.encode(PostInteraction(slot, PieceShape.TRADER))
+            for slot in range(6)
+        ]
+
+        groups = action_phase_selection_groups(game, trader_indices)
+
+        self.assertEqual(
+            groups,
+            (
+                (trader_indices[0], trader_indices[1]),
+                (trader_indices[2],),
+                (trader_indices[3], trader_indices[4]),
+                (trader_indices[5],),
+            ),
+        )
+
+    def test_move_workflow_groups_same_shape_pickups_on_one_land_route(self):
+        player = object()
+        route = mock.Mock(
+            required_circles=0,
+            posts=[
+                mock.Mock(owner=player, owner_piece_shape="square"),
+                mock.Mock(owner=player, owner_piece_shape="square"),
+                mock.Mock(owner=player, owner_piece_shape="circle"),
+            ],
+        )
+        game = mock.Mock()
+        game.current_player = player
+        game.selected_map.routes = [route]
+        indices = [
+            DEFAULT_ACTION_CODEC.encode(PostInteraction(slot, PieceShape.TRADER))
+            for slot in range(3)
+        ]
+
+        categories = move_workflow_exploration_categories(game, indices)
+
+        self.assertEqual(categories, (((indices[0], indices[1]), (indices[2],)),))
+
+    def test_move3_groups_matching_opponent_pieces_but_not_different_owners(self):
+        current_player = object()
+        opponent_one = object()
+        opponent_two = object()
+        route = mock.Mock(
+            required_circles=0,
+            posts=[
+                mock.Mock(owner=opponent_one, owner_piece_shape="square"),
+                mock.Mock(owner=opponent_one, owner_piece_shape="square"),
+                mock.Mock(owner=opponent_one, owner_piece_shape="circle"),
+                mock.Mock(owner=opponent_two, owner_piece_shape="square"),
+            ],
+        )
+        game = mock.Mock()
+        game.current_player = current_player
+        game.selected_map.routes = [route]
+        indices = [
+            DEFAULT_ACTION_CODEC.encode(PostInteraction(slot, PieceShape.TRADER))
+            for slot in range(4)
+        ]
+
+        categories = move_workflow_exploration_categories(
+            game,
+            indices,
+            opponent_pickups=True,
+        )
+
+        self.assertEqual(
+            categories,
+            (((indices[0], indices[1]), (indices[2],), (indices[3],)),),
+        )
+
+    def test_ranked_action_selection_collapses_equivalent_placements(self):
+        trainer = self.trainer()
+        trainer.rng = mock.Mock()
+        trainer.rng.random.return_value = 0.90
+        trainer.rng.choices.return_value = [0]
+        trainer.rng.randrange.return_value = 1
+        scores = torch.tensor([10.0, 20.0, 30.0, 5.0])
+
+        selection = trainer._select_action(
+            scores,
+            [0, 1, 2, 3],
+            PolicyTier(1, 1, 0.05),
+            ((0, 1, 2), (3,)),
+        )
+
+        self.assertEqual(selection.action_index, 1)
+        self.assertEqual(selection.model_rank, 1)
+        self.assertEqual(selection.legal_action_count, 2)
+        self.assertEqual(selection.equivalent_action_indices, (0, 1, 2))
+        trainer.rng.choices.assert_called_once_with(
+            range(1),
+            weights=(1.0,),
+            k=1,
+        )
+
     def test_workflow_exploration_randomizes_the_post_inside_a_chosen_route(self):
         trainer = self.trainer()
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.90
         trainer.rng.randrange.side_effect = (1, 0, 1)
+        scores = torch.tensor([10.0, 20.0, 30.0, 5.0, 1.0])
+
+        selection = trainer._select_workflow_action(
+            scores,
+            [0, 1, 2, 3, 4],
+            (((3,),), ((0, 1, 2), (4,))),
+        )
+
+        self.assertEqual(selection.action_index, 1)
+        self.assertTrue(selection.used_epsilon)
+        self.assertEqual(selection.model_rank, 1)
+        self.assertEqual(selection.legal_action_count, 3)
+        self.assertEqual(selection.equivalent_action_indices, (0, 1, 2))
+
+    def test_ranked_workflow_choice_collapses_equivalent_posts(self):
+        trainer = self.trainer()
+        trainer.rng = mock.Mock()
+        trainer.rng.random.return_value = 0.10
+        trainer.rng.randrange.return_value = 1
         scores = torch.tensor([10.0, 20.0, 30.0, 5.0])
 
         selection = trainer._select_workflow_action(
@@ -784,25 +1182,10 @@ class SelfPlayTrainingTests(unittest.TestCase):
         )
 
         self.assertEqual(selection.action_index, 1)
-        self.assertTrue(selection.used_epsilon)
-        self.assertEqual(selection.model_rank, 2)
-        self.assertEqual(selection.legal_action_count, 4)
-
-    def test_ranked_workflow_choice_keeps_specific_posts(self):
-        trainer = self.trainer()
-        trainer.rng = mock.Mock()
-        trainer.rng.random.return_value = 0.10
-        scores = torch.tensor([10.0, 20.0, 30.0, 5.0])
-
-        selection = trainer._select_workflow_action(
-            scores,
-            [0, 1, 2, 3],
-            (((3,),), ((0, 1, 2),)),
-        )
-
-        self.assertEqual(selection.action_index, 2)
         self.assertFalse(selection.used_epsilon)
         self.assertEqual(selection.model_rank, 1)
+        self.assertEqual(selection.legal_action_count, 2)
+        self.assertEqual(selection.equivalent_action_indices, (0, 1, 2))
 
     def test_default_tier_subsets_and_random_assignment(self):
         trainer = self.trainer(seed=99)
@@ -874,6 +1257,133 @@ class SelfPlayTrainingTests(unittest.TestCase):
         completed = assign_reward_to_go(decisions, (3000, 0, 0), gamma=0.5)
 
         self.assertEqual(completed[0].reward_to_go, 3000)
+
+    def test_local_movement_target_replaces_terminal_credit_only_for_its_workflow(self):
+        decisions = [
+            training_decision(1, 0, (0,), 0, turn=1),
+            training_decision(2, 0, (0,), 0, turn=1, movement_workflow_id=7),
+            training_decision(3, 0, (0,), 0, turn=1, movement_workflow_id=7),
+            training_decision(4, 0, (0,), 0, turn=1),
+        ]
+        mark_movement_workflow_target(decisions, 7, -1500)
+
+        completed = assign_training_targets(decisions, (5000,), gamma=0.99)
+
+        self.assertEqual(
+            [decision.reward_to_go for decision in completed],
+            [5000, -1500, -1500, 5000],
+        )
+        self.assertEqual([decision.immediate_reward for decision in completed], [0, 0, 0, 0])
+
+    def test_normal_move_without_claim_keeps_rewards_but_not_terminal_credit(self):
+        decisions = (
+            training_decision(
+                1,
+                0,
+                (10,),
+                10,
+                turn=1,
+                movement_workflow_id=7,
+                receives_terminal_credit=False,
+            ),
+            training_decision(2, 0, (100,), 100, turn=1),
+        )
+
+        completed = assign_training_targets(decisions, (5000,), gamma=0.99)
+
+        self.assertEqual([decision.reward_to_go for decision in completed], [110, 5100])
+
+    def test_immediate_claim_restores_terminal_credit_to_contributing_moves(self):
+        decisions = [
+            training_decision(
+                1,
+                0,
+                (0,),
+                0,
+                turn=1,
+                movement_workflow_id=7,
+                receives_terminal_credit=False,
+            ),
+            training_decision(
+                2,
+                0,
+                (0,),
+                0,
+                turn=1,
+                movement_workflow_id=8,
+                receives_terminal_credit=False,
+            ),
+        ]
+        workflow_ids = credited_movement_workflows(
+            ((7, frozenset({4})), (8, frozenset({4, 6}))),
+            {4},
+            4,
+        )
+        for workflow_id in workflow_ids:
+            grant_movement_workflow_terminal_credit(decisions, workflow_id)
+
+        completed = assign_training_targets(decisions, (5000,), gamma=0.99)
+
+        self.assertEqual(workflow_ids, (7, 8))
+        self.assertEqual([decision.reward_to_go for decision in completed], [5000, 5000])
+
+    def test_claim_credits_only_moves_that_contributed_to_that_completed_route(self):
+        workflow_ids = credited_movement_workflows(
+            ((7, frozenset({4})), (8, frozenset({6}))),
+            {4, 6},
+            4,
+        )
+
+        self.assertEqual(workflow_ids, (7,))
+        self.assertEqual(
+            credited_movement_workflows(((7, frozenset({4})),), set(), 4),
+            (),
+        )
+
+    def test_all_move_turn_targets_only_its_move_workflows(self):
+        decisions = [
+            training_decision(1, 0, (0,), 0, turn=1, movement_workflow_id=7),
+            training_decision(2, 0, (0,), 0, turn=1, movement_workflow_id=7),
+            training_decision(3, 0, (0,), 0, turn=1, movement_workflow_id=8),
+            training_decision(4, 0, (0,), 0, turn=1),
+        ]
+
+        applied = apply_all_move_turn_target(decisions, (7, 8), spent_actions=2)
+        completed = assign_training_targets(decisions, (5000,), gamma=0.99)
+
+        self.assertTrue(applied)
+        self.assertEqual(
+            [decision.reward_to_go for decision in completed],
+            [
+                ALL_MOVE_TURN_LOCAL_TARGET,
+                ALL_MOVE_TURN_LOCAL_TARGET,
+                ALL_MOVE_TURN_LOCAL_TARGET,
+                5000,
+            ],
+        )
+
+    def test_mixed_action_turn_does_not_receive_all_move_target(self):
+        decisions = [
+            training_decision(1, 0, (0,), 0, movement_workflow_id=7),
+            training_decision(2, 0, (0,), 0),
+        ]
+
+        applied = apply_all_move_turn_target(decisions, (7,), spent_actions=2)
+
+        self.assertFalse(applied)
+        self.assertTrue(all(decision.local_training_target is None for decision in decisions))
+
+    def test_all_move_turn_does_not_weaken_a_stronger_movement_target(self):
+        decisions = [
+            training_decision(1, 0, (0,), 0, movement_workflow_id=7),
+            training_decision(2, 0, (0,), 0, movement_workflow_id=8),
+        ]
+        mark_movement_workflow_target(decisions, 7, -1500)
+
+        apply_all_move_turn_target(decisions, (7, 8), spent_actions=2)
+
+        self.assertEqual(decisions[0].local_training_target, -1500)
+        self.assertEqual(decisions[1].local_training_target, ALL_MOVE_TURN_LOCAL_TARGET)
 
     def test_terminal_reward_is_winner_only_and_trigger_bonus_requires_winner(self):
         game = mock.Mock()
@@ -975,6 +1485,39 @@ class SelfPlayTrainingTests(unittest.TestCase):
 
         self.assertNotEqual(float(model.values[7]), 0)
         unchanged = torch.cat((model.values[:7], model.values[8:]))
+        self.assertTrue(torch.equal(unchanged, torch.zeros_like(unchanged)))
+
+    def test_equivalent_route_outputs_share_the_training_target(self):
+        class IndependentOutputs(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.values = torch.nn.Parameter(torch.zeros(ACTION_SPACE_SIZE))
+
+            def forward(self, observations):
+                return self.values.unsqueeze(0).expand(len(observations), -1)
+
+        model = IndependentOutputs().to(device)
+        trainer = SelfPlayTrainer(model=model, config=TrainingConfig())
+        with torch.no_grad():
+            model.values[7:10] = torch.tensor([50.0, 100.0, 150.0], device=device)
+        decision = replace(
+            training_decision(
+                7,
+                0,
+                (100,),
+                100,
+                equivalent_action_indices=(7, 8, 9),
+            ),
+            reward_to_go=100.0,
+        )
+        trajectory = mock.Mock(decisions=(decision,))
+
+        trainer.update_model((trajectory,))
+
+        self.assertGreater(float(model.values[7]), 50.0)
+        self.assertEqual(float(model.values[8]), 100.0)
+        self.assertLess(float(model.values[9]), 150.0)
+        unchanged = torch.cat((model.values[:7], model.values[10:]))
         self.assertTrue(torch.equal(unchanged, torch.zeros_like(unchanged)))
 
     def test_training_clips_each_minibatch_gradient(self):

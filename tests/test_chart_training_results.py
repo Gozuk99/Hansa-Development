@@ -177,17 +177,23 @@ class TrainingResultsChartTests(unittest.TestCase):
             )
             self.assertNotIn("data-player-count-select", tier_chart)
 
-    def test_movement_metrics_do_not_add_empty_dashboard_charts(self):
+    def test_evaluation_movement_metrics_are_aggregated_and_charted(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "results.csv"
             fieldnames = (
                 "game#",
                 "batch#",
                 "run_type",
+                "map",
                 "player_count",
                 "action_count",
                 "move_action_count",
                 "spent_action_count",
+                "pointless_move_workflows",
+                "repeated_move_penalties",
+                "all_move_turn_penalties",
+                "moves_creating_claimable_route",
+                "move_claim_conversions",
             )
             with path.open("w", newline="", encoding="utf-8") as output:
                 writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -195,35 +201,34 @@ class TrainingResultsChartTests(unittest.TestCase):
                 writer.writerows(
                     (
                         {
-                            "game#": 0,
+                            "game#": 1,
                             "batch#": 1,
                             "run_type": "evaluation",
+                            "map": 2,
                             "player_count": 3,
                             "action_count": 400,
-                        },
-                        {
-                            "game#": 1,
-                            "batch#": 2,
-                            "run_type": "training",
-                            "player_count": 3,
                             "move_action_count": 20,
                             "spent_action_count": 100,
+                            "pointless_move_workflows": 2,
+                            "repeated_move_penalties": 3,
+                            "all_move_turn_penalties": 1,
+                            "moves_creating_claimable_route": 4,
+                            "move_claim_conversions": 2,
                         },
                         {
                             "game#": 2,
-                            "batch#": 2,
-                            "run_type": "training_timeout",
-                            "player_count": 3,
-                            "move_action_count": 80,
-                            "spent_action_count": 100,
-                        },
-                        {
-                            "game#": 3,
-                            "batch#": 2,
+                            "batch#": 1,
                             "run_type": "evaluation",
+                            "map": 2,
                             "player_count": 3,
                             "action_count": 500,
-                            "move_action_count": 12,
+                            "move_action_count": 10,
+                            "spent_action_count": 50,
+                            "pointless_move_workflows": 1,
+                            "repeated_move_penalties": 1,
+                            "all_move_turn_penalties": 0,
+                            "moves_creating_claimable_route": 2,
+                            "move_claim_conversions": 1,
                         },
                     )
                 )
@@ -234,11 +239,16 @@ class TrainingResultsChartTests(unittest.TestCase):
                 counts["evaluation_map_batches"],
                 counts["evaluation_player_batches"],
                 counts["evaluation_map_player_batches"],
-                counts["training_activity_batches"],
             )
-            self.assertNotIn("Training Move-action share", chart)
-            self.assertNotIn("Average Move actions per evaluation game", chart)
-            self.assertIn("Training action-limit rate", chart)
+            self.assertIn("Move % of paid actions", chart)
+            self.assertIn("Pointless Move workflows per game", chart)
+            self.assertIn("Repeated-Move penalties per game", chart)
+            self.assertIn("All-Move-turn penalties per game", chart)
+            self.assertIn("Move &rarr; Claim conversion rate", chart)
+            self.assertIn("<strong>Move %</strong><span>20.0%</span>", chart)
+            self.assertIn("<strong>Pointless Moves/game</strong><span>1.50</span>", chart)
+            self.assertIn("<strong>Move &rarr; Claim rate</strong><span>50.0%</span>", chart)
+            self.assertIn('data-map="2" data-players="3"', chart)
 
 
 if __name__ == "__main__":

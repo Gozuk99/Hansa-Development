@@ -36,7 +36,7 @@ from training.targeted_state_generator import (
 )
 
 
-GENERATOR_VERSION = 3
+GENERATOR_VERSION = 4
 
 
 class EndingCondition(str, Enum):
@@ -199,7 +199,9 @@ def _prepare_east_west_focus(game, pools, rng, request, focus):
         pools,
         rng,
         path_length,
-        False if request.prepared_routes_one_short else None,
+        False
+        if request.strategic_focus in BLOCKED_EAST_WEST_FOCUSES
+        else not request.prepared_routes_one_short,
     )
     if prepared is None:
         return False
@@ -246,7 +248,12 @@ def _prepare_strategic_focus(game, pools, rng, request, development_range):
     if request.strategic_focus is StrategicFocus.NETWORK_KEYS:
         if _complete_balanced_development(game, pools, rng, development_range) is None:
             return None
-        prepared = _prepare_network_keys(game, pools, rng)
+        prepared = _prepare_network_keys(
+            game,
+            pools,
+            rng,
+            leave_one_open=request.prepared_routes_one_short,
+        )
         if prepared is None:
             return None
         player, shape, variant = prepared
@@ -267,7 +274,7 @@ def _prepare_strategic_focus(game, pools, rng, request, development_range):
             pools,
             rng,
             REGIONAL_SCENARIOS[request.regional_focus],
-            False if request.prepared_routes_one_short else None,
+            not request.prepared_routes_one_short,
         )
         if prepared is None:
             return None
@@ -298,10 +305,7 @@ def _prepare_ending_condition(game, pools, rng, request):
 
 
 def _open_ending_route(game, pools, rng, request, player):
-    if (
-        request.starting_position is not StartingPosition.TWO_DECISIONS_BEFORE
-        and not request.prepared_routes_one_short
-    ):
+    if not request.prepared_routes_one_short:
         return None
     routes = [
         route
@@ -432,6 +436,12 @@ def _configure_turn(game, rng, request, prepared_player):
 def _is_valid_generated_state(game, request):
     if max(game.projected_scores()) - min(game.projected_scores()) > 3:
         return False
+    if request.ending_condition is EndingCondition.NEAR_BONUS_MARKERS and (
+        sum(route.bonus_marker is not None for route in game.selected_map.routes) != 3
+        or game.replace_bonus_marker != 0
+        or game.pending_bonus_markers
+    ):
+        return False
     try:
         validate_game(game)
         validate_loaded_game(game)
@@ -469,7 +479,7 @@ def _build_once(request, attempt_seed):
     complicated_focus = (
         request.strategic_focus in DUAL_EAST_WEST_FOCUSES
         or request.strategic_focus in (StrategicFocus.SPECIAL_PRESTIGE, StrategicFocus.NETWORK_KEYS)
-        or (request.strategic_focus in EAST_WEST_FOCUSES and request.regional_focus)
+        or request.regional_focus is not None
     )
     if request.development_range is not None:
         initial_range = (0, min(1, development_range[1]))
@@ -505,8 +515,6 @@ def _build_once(request, attempt_seed):
         _configure_bonus_marker_scenario(
             game,
             rng,
-            prepared_player,
-            request.starting_position is StartingPosition.IMMEDIATE_FINISH,
             request.bonus_markers_remaining,
         )
     _assign_some_emperor_tiles(game, rng)

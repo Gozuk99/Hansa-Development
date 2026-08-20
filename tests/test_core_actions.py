@@ -6,6 +6,7 @@ from tests.action_helpers import legal_action_mask
 
 from game.game_actions import InvalidActionError
 from game.game_actions import (
+    can_pick_up_displacement_fallback,
     can_place_displacement_piece,
     displacement_can_be_completed,
     get_adjacent_routes,
@@ -723,6 +724,43 @@ class CoreActionTests(unittest.TestCase):
         self.assertEqual(mask[post_index(game, normal_post, "circle")].item(), 1)
         self.apply(game, post_index(game, normal_post, "circle"))
         self.assertFalse(opponent.holding_pieces)
+
+    def test_britannia_board_fallback_only_offers_pieces_that_can_reach_a_target(self):
+        game = create_headless_game(3, 4, seed=124)
+        opponent = game.players[1]
+        scotland_posts = [
+            post
+            for route in game.selected_map.routes
+            if route.region == "Scotland"
+            for post in route.posts
+            if post.required_shape in (None, "square")
+        ]
+        scotland_source, scotland_target = scotland_posts[:2]
+        england_source = next(
+            post
+            for route in game.selected_map.routes
+            if route.region is None
+            for post in route.posts
+            if post.required_shape in (None, "square")
+        )
+        scotland_source.claim(opponent, "square")
+        england_source.claim(opponent, "square")
+        opponent.general_stock_squares = 0
+        opponent.general_stock_circles = 0
+        opponent.personal_supply_squares = 0
+        opponent.personal_supply_circles = 0
+        opponent.pieces_to_pickup = 1
+        game.waiting_for_displaced_player = True
+        game.displaced_player.populate_displaced_player(game, opponent, "square")
+        game.displaced_player.played_displaced_shape = True
+        game.displaced_player.total_pieces_to_place = 1
+        game.all_empty_posts = [scotland_target]
+
+        self.assertTrue(can_pick_up_displacement_fallback(game, scotland_source))
+        self.assertFalse(can_pick_up_displacement_fallback(game, england_source))
+        mask = legal_action_mask(game)
+        self.assertEqual(mask[post_index(game, scotland_source)].item(), 1)
+        self.assertEqual(mask[post_index(game, england_source)].item(), 0)
 
     def test_britannia_place_requires_and_consumes_one_regional_permission(self):
         game = create_headless_game(3, 4, seed=124)

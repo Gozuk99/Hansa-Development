@@ -46,6 +46,15 @@ def completed_trajectory():
         selection_seconds=0.05,
         context_seconds=0.01,
         reward_seconds=0.05,
+        move_action_count=2,
+        spent_action_count=5,
+        move_ratio=0.4,
+        pointless_move_workflows=1,
+        repeated_move_penalties=2,
+        all_move_turn_penalties=1,
+        moves_creating_claimable_route=2,
+        move_claim_conversions=1,
+        move_claim_conversion_rate=0.5,
     )
 
 
@@ -211,6 +220,15 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(row["learning_seconds"], 0.99)
             self.assertEqual(row["curriculum_stage"], "near_bonus_markers")
             self.assertEqual(row["starting_position"], "full_game")
+            self.assertEqual(row["move_action_count"], 2)
+            self.assertEqual(row["spent_action_count"], 5)
+            self.assertEqual(row["move_ratio"], 0.4)
+            self.assertEqual(row["pointless_move_workflows"], 1)
+            self.assertEqual(row["repeated_move_penalties"], 2)
+            self.assertEqual(row["all_move_turn_penalties"], 1)
+            self.assertEqual(row["moves_creating_claimable_route"], 2)
+            self.assertEqual(row["move_claim_conversions"], 1)
+            self.assertEqual(row["move_claim_conversion_rate"], 0.5)
 
     def config(self, **changes):
         values = {
@@ -224,6 +242,32 @@ class CurriculumTrainingTests(unittest.TestCase):
         }
         values.update(changes)
         return CurriculumConfig(**values)
+
+    def test_movement_rates_remain_blank_without_denominators(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runner = self.runner(root)
+            trajectory = completed_trajectory()
+            trajectory.move_action_count = 0
+            trajectory.spent_action_count = 0
+            trajectory.move_ratio = None
+            trajectory.moves_creating_claimable_route = 0
+            trajectory.move_claim_conversions = 0
+            trajectory.move_claim_conversion_rate = None
+
+            row = runner._trajectory_row(
+                trajectory,
+                StateDescriptor(VALIDATION_STATE, None, 1, 3, 1, "score_focus"),
+                runner.config.stages[0],
+                "evaluation",
+                0,
+                None,
+                None,
+                1,
+            )
+
+            self.assertIsNone(row["move_ratio"])
+            self.assertIsNone(row["move_claim_conversion_rate"])
 
     def runner(self, root, trainer=None, **config_changes):
         return TestRunner(

@@ -11,6 +11,7 @@ from training.balanced_curriculum import (
     MATURITY_CYCLE,
     MATURITY_PROFILES,
     BalancedCurriculumRunner,
+    _scenario_condition_label,
     _select_focus,
 )
 from training.balanced_state_generator import (
@@ -79,6 +80,12 @@ class BalancedCurriculumTests(unittest.TestCase):
         )
 
         self.assertEqual(len(generated.game.selected_map.bonus_marker_pool), 1)
+        self.assertEqual(
+            sum(route.bonus_marker is not None for route in generated.game.selected_map.routes),
+            3,
+        )
+        self.assertEqual(generated.game.replace_bonus_marker, 0)
+        self.assertEqual(generated.game.pending_bonus_markers, [])
 
     def test_prepared_bonus_marker_route_is_one_post_short(self):
         generated = generate_balanced_state(
@@ -127,6 +134,38 @@ class BalancedCurriculumTests(unittest.TestCase):
         self.assertGreater(len(open_indices), 1)
         self.assertEqual(observed_shapes, {"square", "circle"})
 
+    def test_partial_prepared_routes_leave_exactly_one_post_open(self):
+        player = object()
+        for route_size in (2, 3, 4):
+            with self.subTest(route_size=route_size):
+                posts = []
+                for _index in range(route_size):
+                    post = mock.Mock(required_shape=None, owner=None, owner_piece_shape=None)
+                    post.is_owned.return_value = False
+                    posts.append(post)
+                prepared, missing_shape = _fill_prepared_route(
+                    SimpleNamespace(posts=posts),
+                    player,
+                    {"square": 10, "circle": 10},
+                    None,
+                    True,
+                    random.Random(route_size),
+                )
+
+                self.assertTrue(prepared)
+                self.assertIn(missing_shape, ("square", "circle"))
+                self.assertEqual(sum(post.owner is player for post in posts), route_size - 1)
+                self.assertEqual(sum(post.owner is None for post in posts), 1)
+
+    def test_automatic_focus_selection_never_adds_a_blocker(self):
+        blocked = {
+            StrategicFocus.BLOCKED_EAST_WEST,
+            StrategicFocus.BLOCKED_DUAL_EAST_WEST,
+        }
+        for seed in range(1_000):
+            focus, _regional = _select_focus(random.Random(seed), 3, 5, EndingCondition.NEAR_SCORE)
+            self.assertNotIn(focus, blocked)
+
     def test_training_completed_city_state_stays_two_cities_below_limit(self):
         generated = generate_balanced_state(
             BalancedGenerationRequest(
@@ -143,7 +182,7 @@ class BalancedCurriculumTests(unittest.TestCase):
             generated.game.selected_map.max_full_cities - 2,
         )
 
-    def test_active_maturity_cycle_focuses_on_late_and_end_games(self):
+    def test_active_maturity_cycle_includes_early_without_dominating(self):
         runner = self._runner()
         observed = Counter(
             runner._maturity_for_game(game_number).name
@@ -152,9 +191,23 @@ class BalancedCurriculumTests(unittest.TestCase):
 
         self.assertEqual(
             observed,
-            {"late": 4, "end": 1},
+            {"early": 2, "mid": 3, "late": 3, "end": 2},
         )
-        self.assertEqual(sum(profile.weight for profile in MATURITY_PROFILES), 5)
+        self.assertEqual(sum(profile.weight for profile in MATURITY_PROFILES), 10)
+        self.assertEqual(runner._stage_label(None), "early_mid_late_end_game")
+
+    def test_early_scenario_labels_describe_focus_not_proximity(self):
+        early = next(profile for profile in MATURITY_PROFILES if profile.name == "early")
+        late = next(profile for profile in MATURITY_PROFILES if profile.name == "late")
+
+        self.assertEqual(
+            [_scenario_condition_label(early, condition) for condition in EndingCondition],
+            ["score_focus", "bonus_marker_focus", "completed_city_focus"],
+        )
+        self.assertEqual(
+            _scenario_condition_label(late, EndingCondition.NEAR_BONUS_MARKERS),
+            "near_bonus_markers",
+        )
 
     def test_completed_city_focus_does_not_select_dual_east_west(self):
         for seed in range(100):
@@ -199,8 +252,13 @@ class BalancedCurriculumTests(unittest.TestCase):
     def test_maturity_profiles_progress_from_fresh_to_end_game(self):
         profiles = {profile.name: profile for profile in MATURITY_PROFILES}
 
-        self.assertEqual(set(profiles), {"late", "end"})
+        self.assertEqual(set(profiles), {"early", "mid", "late", "end"})
+        self.assertEqual(profiles["early"].score_range, (0, 5))
+        self.assertEqual(profiles["early"].development_range, (2, 4))
+        self.assertEqual(profiles["early"].bonus_markers_remaining, 9)
+        self.assertEqual(profiles["mid"].score_range, (6, 11))
         self.assertEqual(profiles["late"].bonus_markers_remaining, 2)
+        self.assertEqual(profiles["end"].score_range, (16, 17))
         self.assertEqual(profiles["end"].completed_cities_below_limit, 2)
         self.assertIs(
             profiles["end"].starting_position,
@@ -216,14 +274,18 @@ class BalancedCurriculumTests(unittest.TestCase):
                 ending_condition=EndingCondition.NEAR_BONUS_MARKERS,
                 score_range=(0, 5),
                 development_range=(2, 4),
-                bonus_markers_remaining=5,
+                bonus_markers_remaining=9,
                 completed_cities_below_limit=7,
                 prepared_routes_one_short=True,
             )
         )
 
         self.assertTrue(all(0 <= player.score <= 5 for player in generated.game.players))
-        self.assertEqual(len(generated.game.selected_map.bonus_marker_pool), 5)
+        self.assertEqual(len(generated.game.selected_map.bonus_marker_pool), 9)
+        self.assertEqual(
+            sum(route.bonus_marker is not None for route in generated.game.selected_map.routes),
+            3,
+        )
         minimum, maximum = generated.development_range
         self.assertEqual((minimum, maximum), (2, 4))
 
@@ -245,6 +307,26 @@ class BalancedCurriculumTests(unittest.TestCase):
         self.assertTrue(any(value.startswith("east_west:") for value in generated.focus_variants))
         self.assertTrue(
             any(value.startswith("britannia_isle_of_man:") for value in generated.focus_variants)
+        )
+
+    def test_near_score_isle_of_man_focus_generates_without_exhausting_attempts(self):
+        generated = generate_balanced_state(
+            BalancedGenerationRequest(
+                seed=0,
+                map_num=3,
+                player_count=5,
+                ending_condition=EndingCondition.NEAR_SCORE,
+                score_range=(16, 17),
+                regional_focus=RegionalFocus.ISLE_OF_MAN,
+                prepared_routes_one_short=True,
+                development_range=(7, 9),
+            ),
+            max_attempts=100,
+        )
+
+        self.assertIn(
+            "britannia_isle_of_man:Wales+Scotland",
+            generated.focus_variants,
         )
 
     def test_dual_east_west_prepares_two_safe_competitors(self):
@@ -342,7 +424,7 @@ class BalancedCurriculumTests(unittest.TestCase):
             )
         )
 
-    def test_close_finish_state_requires_placement_before_route_completion(self):
+    def test_close_finish_state_starts_with_a_claimable_route(self):
         generated = generate_balanced_state(
             BalancedGenerationRequest(
                 seed=412,
@@ -357,13 +439,7 @@ class BalancedCurriculumTests(unittest.TestCase):
         prepared = game.players[generated.prepared_player_index]
 
         self.assertIs(game.current_player, prepared)
-        self.assertTrue(
-            any(
-                sum(post.owner is None for post in route.posts) == 1
-                and all(post.owner in (None, prepared) for post in route.posts)
-                for route in game.selected_map.routes
-            )
-        )
+        self.assertTrue(any(route.is_controlled_by(prepared) for route in game.selected_map.routes))
 
     def test_configuration_shuffle_is_reproducible(self):
         expected = list(CONFIGURATIONS)

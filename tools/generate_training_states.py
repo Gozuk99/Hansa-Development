@@ -56,7 +56,7 @@ class EvaluationSpec:
     prepared_routes_one_short: bool = True
 
 
-EVALUATION_SUITE_VERSION = 3
+EVALUATION_SUITE_VERSION = 4
 
 
 def _regional_focus(player_count, ending_index):

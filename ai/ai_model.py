@@ -24,7 +24,7 @@ MODEL_INITIALIZATION_SEED = 124
 
 
 class HansaNN(nn.Module):
-    """One policy network shared by every AI-controlled player."""
+    """Shared action-value network for every AI-controlled player."""
 
     def __init__(self, model_file=None):
         super().__init__()

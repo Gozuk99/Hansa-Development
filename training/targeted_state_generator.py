@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
 import hashlib
@@ -164,6 +165,16 @@ def _prepare_player_for_office(player, office, pools, rng):
     return True
 
 
+def _ensure_pool_count(player, pools, shape, required, rng):
+    """Unlock enough pieces of one shape for a prepared board position."""
+    while pools[player][shape] < required:
+        choices = [choice for choice in _upgrade_choices(player) if choice[1] == shape]
+        if not choices:
+            return False
+        _apply_upgrade(player, pools, rng.choice(choices))
+    return True
+
+
 def _office_choices(game, player, pools):
     choices = []
     for city in game.selected_map.cities:
@@ -283,7 +294,7 @@ def _fill_prepared_route(route, player, pool, required_shape, leave_one_open, rn
 def _can_prepare_route(route):
     return bool(
         route
-        and len(route.posts) >= 3
+        and len(route.posts) >= 2
         and route.bonus_marker is None
         and route.permanent_bonus_marker is None
         and not any(post.is_owned() for post in route.posts)
@@ -546,7 +557,7 @@ def _prepare_special_prestige(game, pools, rng, leave_one_open=False):
         routes = list(special_city.routes)
         rng.shuffle(routes)
         for route in routes:
-            if len(route.posts) < 3 or any(post.is_owned() for post in route.posts):
+            if len(route.posts) < 2 or any(post.is_owned() for post in route.posts):
                 continue
             if not prestige.can_claim_prestige(player):
                 continue
@@ -558,7 +569,7 @@ def _prepare_special_prestige(game, pools, rng, leave_one_open=False):
     return None
 
 
-def _prepare_network_keys(game, pools, rng):
+def _prepare_network_keys(game, pools, rng, leave_one_open=True):
     players = list(game.players)
     rng.shuffle(players)
     cities = [
@@ -623,7 +634,12 @@ def _prepare_network_keys(game, pools, rng):
             if office is None or not _prepare_player_for_office(player, office, pools, rng):
                 continue
             prepared, missing_shape = _fill_prepared_route(
-                route, player, pools[player], office.shape, True, rng
+                route,
+                player,
+                pools[player],
+                office.shape,
+                leave_one_open,
+                rng,
             )
             if prepared:
                 return player, missing_shape, f"network_{target_offices}_keys_{target_keys}"
@@ -699,8 +715,25 @@ def _prepare_britannia_region(game, pools, rng, scenario, prepared_route_full):
                 if len(candidates) < 2:
                     possible = False
                     break
-                support[(region, actor)], support[(region, rival)] = candidates[:2]
-                used.update(candidates[:2])
+                pairs = [
+                    (actor_city, rival_city)
+                    for actor_city in candidates
+                    for rival_city in candidates
+                    if actor_city is not rival_city
+                ]
+                smallest_office_gap = min(
+                    abs(len(actor_city.offices) - len(rival_city.offices))
+                    for actor_city, rival_city in pairs
+                )
+                balanced_pairs = [
+                    pair
+                    for pair in pairs
+                    if abs(len(pair[0].offices) - len(pair[1].offices)) == smallest_office_gap
+                ]
+                actor_city, rival_city = rng.choice(balanced_pairs)
+                support[(region, actor)] = actor_city
+                support[(region, rival)] = rival_city
+                used.update((actor_city, rival_city))
             if not possible:
                 continue
             for route in routes:
@@ -709,26 +742,17 @@ def _prepare_britannia_region(game, pools, rng, scenario, prepared_route_full):
                     return None
                 if not _prepare_player_for_office(rival, target_city.offices[0], pools, rng):
                     return None
-                for region in regions:
-                    if not _fill_city_for_player(support[(region, actor)], actor, pools, rng):
-                        return None
-                    if not _fill_city_for_player(support[(region, rival)], rival, pools, rng):
-                        return None
                 if not _place_office(target_city.offices[0], rival, pools):
                     return None
-
-                before = game.calculate_britannia_region_points()
-                original_color = target_office.color
-                target_office.controller = actor
-                target_office.owner_piece_shape = target_office.shape
-                target_office.color = actor.color
-                after = game.calculate_britannia_region_points()
-                target_office.controller = None
-                target_office.owner_piece_shape = None
-                target_office.color = original_color
-                if after[actor] <= before[actor]:
+                required_shapes = Counter(
+                    post.required_shape for post in route.posts if post.required_shape
+                )
+                required_shapes[target_office.shape] = max(required_shapes[target_office.shape], 1)
+                if any(
+                    not _ensure_pool_count(actor, pools, shape, count, rng)
+                    for shape, count in required_shapes.items()
+                ):
                     return None
-
                 leave_one_open = (
                     rng.choice((False, True))
                     if prepared_route_full is None
@@ -743,6 +767,23 @@ def _prepare_britannia_region(game, pools, rng, scenario, prepared_route_full):
                     rng,
                 )
                 if not route_prepared:
+                    return None
+                for region in regions:
+                    if not _fill_city_for_player(support[(region, actor)], actor, pools, rng):
+                        return None
+                    if not _fill_city_for_player(support[(region, rival)], rival, pools, rng):
+                        return None
+
+                before = game.calculate_britannia_region_points()
+                original_color = target_office.color
+                target_office.controller = actor
+                target_office.owner_piece_shape = target_office.shape
+                target_office.color = actor.color
+                after = game.calculate_britannia_region_points()
+                target_office.controller = None
+                target_office.owner_piece_shape = None
+                target_office.color = original_color
+                if after[actor] <= before[actor]:
                     return None
                 return actor, missing_shape, "+".join(regions)
     return None
@@ -796,7 +837,7 @@ def _prepare_completed_cities(game, pools, rng):
         office_counts[owner] += 1
 
     office = open_offices[-1]
-    routes = [route for route in trigger_city.routes if len(route.posts) >= 3]
+    routes = [route for route in trigger_city.routes if len(route.posts) >= 2]
     rng.shuffle(routes)
     players = list(game.players)
     rng.shuffle(players)
@@ -819,7 +860,7 @@ def _prepare_bonus_marker_route(game, pools, rng):
     routes = [
         route
         for route in game.selected_map.routes
-        if route.bonus_marker is not None and len(route.posts) >= 3
+        if route.bonus_marker is not None and len(route.posts) >= 2
     ]
     rng.shuffle(routes)
     players = list(game.players)
@@ -841,7 +882,7 @@ def _prepare_score_route(game, pools, rng):
     routes = [
         route
         for route in game.selected_map.routes
-        if len(route.posts) >= 3
+        if len(route.posts) >= 2
         and route.bonus_marker is None
         and route.permanent_bonus_marker is None
         and all(city.color != DARK_GREEN and city.offices for city in route.cities)
@@ -926,25 +967,11 @@ def _give_marker_to_player(game, marker, rng):
     destination.append(marker)
 
 
-def _configure_bonus_marker_scenario(
-    game, rng, prepared_player, immediate_finish, markers_remaining=0
-):
+def _configure_bonus_marker_scenario(game, rng, markers_remaining=0):
+    """Shorten the marker supply without removing the three markers in play."""
     while len(game.selected_map.bonus_marker_pool) > markers_remaining:
         marker = BonusMarker(game.selected_map.bonus_marker_pool.pop())
         _give_marker_to_player(game, marker, rng)
-    if not immediate_finish:
-        for route in game.selected_map.routes:
-            prepared_route = any(post.owner is prepared_player for post in route.posts) and all(
-                post.owner in (None, prepared_player) for post in route.posts
-            )
-            if (
-                route.bonus_marker is not None
-                and not route.is_controlled_by(prepared_player)
-                and not prepared_route
-            ):
-                marker = route.bonus_marker
-                route.bonus_marker = None
-                _give_marker_to_player(game, marker, rng)
 
 
 def _assign_some_emperor_tiles(game, rng):
@@ -1075,9 +1102,7 @@ def _build_once(request, attempt_seed):
         for player in game.players:
             player.score = rng.randint(base_score, base_score + 1)
     if scenario is EndGameScenario.NEAR_BONUS_MARKERS:
-        _configure_bonus_marker_scenario(
-            game, rng, prepared_current_player, request.immediate_finish
-        )
+        _configure_bonus_marker_scenario(game, rng)
 
     _assign_some_emperor_tiles(game, rng)
     game.current_full_cities_count = sum(city.city_is_full() for city in game.selected_map.cities)
@@ -1103,6 +1128,12 @@ def _build_once(request, attempt_seed):
 
     projected_scores = game.projected_scores()
     if max(projected_scores) - min(projected_scores) > 3:
+        return None
+    if scenario is EndGameScenario.NEAR_BONUS_MARKERS and (
+        sum(route.bonus_marker is not None for route in game.selected_map.routes) != 3
+        or game.replace_bonus_marker != 0
+        or game.pending_bonus_markers
+    ):
         return None
     validate_game(game)
     validate_loaded_game(game)
