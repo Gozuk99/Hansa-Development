@@ -728,8 +728,7 @@ def _prepare_britannia_region(game, pools, rng, scenario, prepared_route_full):
                 balanced_pairs = [
                     pair
                     for pair in pairs
-                    if abs(len(pair[0].offices) - len(pair[1].offices))
-                    == smallest_office_gap
+                    if abs(len(pair[0].offices) - len(pair[1].offices)) == smallest_office_gap
                 ]
                 actor_city, rival_city = rng.choice(balanced_pairs)
                 support[(region, actor)] = actor_city
@@ -748,9 +747,7 @@ def _prepare_britannia_region(game, pools, rng, scenario, prepared_route_full):
                 required_shapes = Counter(
                     post.required_shape for post in route.posts if post.required_shape
                 )
-                required_shapes[target_office.shape] = max(
-                    required_shapes[target_office.shape], 1
-                )
+                required_shapes[target_office.shape] = max(required_shapes[target_office.shape], 1)
                 if any(
                     not _ensure_pool_count(actor, pools, shape, count, rng)
                     for shape, count in required_shapes.items()

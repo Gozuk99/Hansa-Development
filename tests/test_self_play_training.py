@@ -726,8 +726,7 @@ class SelfPlayTrainingTests(unittest.TestCase):
             trajectory.moves_creating_claimable_route,
         )
         expected_conversion_rate = (
-            trajectory.move_claim_conversions
-            / trajectory.moves_creating_claimable_route
+            trajectory.move_claim_conversions / trajectory.moves_creating_claimable_route
             if trajectory.moves_creating_claimable_route
             else None
         )

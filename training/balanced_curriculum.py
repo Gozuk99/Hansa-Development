@@ -60,11 +60,7 @@ def _select_focus(rng, map_num, player_count, ending_condition):
     elif focus_roll < 0.25:
         focus = StrategicFocus.NETWORK_KEYS
     elif focus_roll < 0.50:
-        focus = (
-            StrategicFocus.DUAL_EAST_WEST
-            if rng.random() < 0.5
-            else StrategicFocus.EAST_WEST
-        )
+        focus = StrategicFocus.DUAL_EAST_WEST if rng.random() < 0.5 else StrategicFocus.EAST_WEST
         if ending_condition is EndingCondition.NEAR_COMPLETED_CITIES:
             focus = StrategicFocus.EAST_WEST
     regional = None

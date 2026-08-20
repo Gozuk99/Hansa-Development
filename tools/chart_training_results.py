@@ -347,9 +347,7 @@ def read_results(path: Path, max_points: int):
                         (map_num, player_count, batch),
                     ),
                 )
-                movement_values = {
-                    field: _row_value(row, field) for field in MOVEMENT_COUNT_FIELDS
-                }
+                movement_values = {field: _row_value(row, field) for field in MOVEMENT_COUNT_FIELDS}
                 for collection, key in targets:
                     evaluation = collection.setdefault(
                         key,
@@ -984,28 +982,23 @@ def _evaluation_chart(
         }
         move_percentage_series = {
             "Move %": [
-                movement_percentage(
-                    entry, "move_action_count", "spent_action_count"
-                )
+                movement_percentage(entry, "move_action_count", "spent_action_count")
                 for _batch, entry in ordered
             ]
         }
         pointless_move_series = {
             "Pointless Moves/game": [
-                movement_average(entry, "pointless_move_workflows")
-                for _batch, entry in ordered
+                movement_average(entry, "pointless_move_workflows") for _batch, entry in ordered
             ]
         }
         repeated_move_series = {
             "Repeated-Move penalties/game": [
-                movement_average(entry, "repeated_move_penalties")
-                for _batch, entry in ordered
+                movement_average(entry, "repeated_move_penalties") for _batch, entry in ordered
             ]
         }
         all_move_turn_series = {
             "All-Move-turn penalties/game": [
-                movement_average(entry, "all_move_turn_penalties")
-                for _batch, entry in ordered
+                movement_average(entry, "all_move_turn_penalties") for _batch, entry in ordered
             ]
         }
         move_claim_series = {
@@ -1025,9 +1018,7 @@ def _evaluation_chart(
         tier_one_win = latest["tier_wins"][1] / tier_one_games * 100 if tier_one_games else 0
         tier_one_score = latest["tier_score"][1] / tier_one_scores if tier_one_scores else 0
         average_actions = latest["actions"] / latest["completed"] if latest["completed"] else 0
-        latest_move_ratio = movement_ratio(
-            latest, "move_action_count", "spent_action_count"
-        )
+        latest_move_ratio = movement_ratio(latest, "move_action_count", "spent_action_count")
         latest_pointless_moves = movement_average(latest, "pointless_move_workflows")
         latest_move_claim_rate = movement_ratio(
             latest,
@@ -1098,8 +1089,7 @@ def _evaluation_chart(
             )
             + line_chart(
                 "Repeated-Move penalties per game",
-                "Lower is better. Counts applications of the existing consecutive-Move "
-                "penalty.",
+                "Lower is better. Counts applications of the existing consecutive-Move penalty.",
                 ordered,
                 repeated_move_series,
                 " penalties/game",

@@ -81,10 +81,7 @@ class BalancedCurriculumTests(unittest.TestCase):
 
         self.assertEqual(len(generated.game.selected_map.bonus_marker_pool), 1)
         self.assertEqual(
-            sum(
-                route.bonus_marker is not None
-                for route in generated.game.selected_map.routes
-            ),
+            sum(route.bonus_marker is not None for route in generated.game.selected_map.routes),
             3,
         )
         self.assertEqual(generated.game.replace_bonus_marker, 0)
@@ -166,9 +163,7 @@ class BalancedCurriculumTests(unittest.TestCase):
             StrategicFocus.BLOCKED_DUAL_EAST_WEST,
         }
         for seed in range(1_000):
-            focus, _regional = _select_focus(
-                random.Random(seed), 3, 5, EndingCondition.NEAR_SCORE
-            )
+            focus, _regional = _select_focus(random.Random(seed), 3, 5, EndingCondition.NEAR_SCORE)
             self.assertNotIn(focus, blocked)
 
     def test_training_completed_city_state_stays_two_cities_below_limit(self):
@@ -288,10 +283,7 @@ class BalancedCurriculumTests(unittest.TestCase):
         self.assertTrue(all(0 <= player.score <= 5 for player in generated.game.players))
         self.assertEqual(len(generated.game.selected_map.bonus_marker_pool), 9)
         self.assertEqual(
-            sum(
-                route.bonus_marker is not None
-                for route in generated.game.selected_map.routes
-            ),
+            sum(route.bonus_marker is not None for route in generated.game.selected_map.routes),
             3,
         )
         minimum, maximum = generated.development_range
@@ -447,12 +439,7 @@ class BalancedCurriculumTests(unittest.TestCase):
         prepared = game.players[generated.prepared_player_index]
 
         self.assertIs(game.current_player, prepared)
-        self.assertTrue(
-            any(
-                route.is_controlled_by(prepared)
-                for route in game.selected_map.routes
-            )
-        )
+        self.assertTrue(any(route.is_controlled_by(prepared) for route in game.selected_map.routes))
 
     def test_configuration_shuffle_is_reproducible(self):
         expected = list(CONFIGURATIONS)

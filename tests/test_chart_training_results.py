@@ -246,12 +246,8 @@ class TrainingResultsChartTests(unittest.TestCase):
             self.assertIn("All-Move-turn penalties per game", chart)
             self.assertIn("Move &rarr; Claim conversion rate", chart)
             self.assertIn("<strong>Move %</strong><span>20.0%</span>", chart)
-            self.assertIn(
-                "<strong>Pointless Moves/game</strong><span>1.50</span>", chart
-            )
-            self.assertIn(
-                "<strong>Move &rarr; Claim rate</strong><span>50.0%</span>", chart
-            )
+            self.assertIn("<strong>Pointless Moves/game</strong><span>1.50</span>", chart)
+            self.assertIn("<strong>Move &rarr; Claim rate</strong><span>50.0%</span>", chart)
             self.assertIn('data-map="2" data-players="3"', chart)
 
 

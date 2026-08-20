@@ -691,9 +691,7 @@ def pointless_movement_penalty(origin_pieces, destination_posts, post_routes=Non
     involved_routes = set(origin_routes + destination_routes)
     if None in involved_routes or any(route.required_circles for route in involved_routes):
         return 0.0
-    before = Counter(
-        (post_routes[post], owner, shape) for post, owner, shape in origin_pieces
-    )
+    before = Counter((post_routes[post], owner, shape) for post, owner, shape in origin_pieces)
     after = Counter(
         (post_routes[post], post.owner, post.owner_piece_shape) for post in destination_posts
     )
@@ -916,9 +914,7 @@ class SelfPlayTrainer:
     @staticmethod
     def _validate_action_groups(legal_indices, groups, description):
         grouped_indices = [index for group in groups for index in group]
-        if len(grouped_indices) != len(legal_indices) or set(grouped_indices) != set(
-            legal_indices
-        ):
+        if len(grouped_indices) != len(legal_indices) or set(grouped_indices) != set(legal_indices):
             raise ValueError(f"{description} must contain every legal action exactly once")
 
     def _select_action(self, scores, legal_indices, tier, equivalent_groups=None):
@@ -986,9 +982,7 @@ class SelfPlayTrainer:
             return ActionSelection(selected, False, 1, 1, group)
         candidate_scores = self._group_mean_scores(scores, candidate_groups)
 
-        ranked_positions = self._rank_legal_positions(
-            candidate_scores, min(3, candidate_count)
-        )
+        ranked_positions = self._rank_legal_positions(candidate_scores, min(3, candidate_count))
         roll = self.rng.random()
         used_epsilon = False
         if candidate_count == 2:
@@ -1009,9 +1003,10 @@ class SelfPlayTrainer:
                 category_position = self.rng.randrange(len(categories))
                 category = categories[category_position]
                 group_position = self.rng.randrange(len(category))
-                selected_group_position = sum(
-                    len(previous) for previous in categories[:category_position]
-                ) + group_position
+                selected_group_position = (
+                    sum(len(previous) for previous in categories[:category_position])
+                    + group_position
+                )
             else:
                 selected_group_position = self.rng.randrange(candidate_count)
             model_rank = self._model_rank(candidate_scores, selected_group_position)
@@ -1109,12 +1104,8 @@ class SelfPlayTrainer:
         game = load_game(starting_state)
         game.set_interactive_errors(False)
         post_contexts = _post_contexts_by_slot(game)
-        post_routes = {
-            post: route for _route_index, route, post in post_contexts
-        }
-        post_route_indices = {
-            post: route_index for route_index, _route, post in post_contexts
-        }
+        post_routes = {post: route for _route_index, route, post in post_contexts}
+        post_route_indices = {post: route_index for route_index, _route, post in post_contexts}
         seat_tiers = (
             self._assign_evaluation_tiers(len(game.players), evaluation_tier_rotation)
             if evaluation
@@ -1161,9 +1152,7 @@ class SelfPlayTrainer:
                         turn_move_workflow_ids,
                         turn_spent_actions,
                     )
-                    movement_metrics.all_move_turn_penalties += int(
-                        all_move_penalty_applied
-                    )
+                    movement_metrics.all_move_turn_penalties += int(all_move_penalty_applied)
                     tracked_turn = game.turn_number
                     pending_move_claim_routes = [frozenset() for _player in game.players]
                     pending_terminal_move_workflows = []
@@ -1563,16 +1552,13 @@ class SelfPlayTrainer:
                     )
                     movement_local_target = no_change_penalty or None
                 movement_metrics.pointless_move_workflows += int(bool(no_change_penalty))
-                movement_metrics.repeated_move_penalties += int(
-                    bool(repeated_move_penalty)
-                )
+                movement_metrics.repeated_move_penalties += int(bool(repeated_move_penalty))
                 player_reward_deltas = apply_movement_efficiency_penalty(
                     player_reward_deltas,
                     acting_player_index=observation.observer_index,
                     movement_capacity=movement_capacity,
                     pieces_moved=pieces_moved,
-                    normal_move_completed=normal_move_completed
-                    and movement_local_target is None,
+                    normal_move_completed=normal_move_completed and movement_local_target is None,
                 )
                 if move_placement_route is not None:
                     move_destination_counts[move_placement_route] = (
@@ -1620,11 +1606,9 @@ class SelfPlayTrainer:
                             )
                             adjusted[observation.observer_index] += route_focus_reward
                             if move_tracking_active:
-                                adjusted[observation.observer_index] += (
-                                    completed_route_move_reward(
-                                        move_completed_routes_before,
-                                        completed_routes_after,
-                                    )
+                                adjusted[observation.observer_index] += completed_route_move_reward(
+                                    move_completed_routes_before,
+                                    completed_routes_after,
                                 )
                         player_reward_deltas = tuple(adjusted)
                         move_destination_counts = {}
@@ -1637,16 +1621,10 @@ class SelfPlayTrainer:
                         move_destination_posts = []
                     else:
                         consecutive_move_actions = 0
-                    if action_phase is TurnPhase.ACTIONS and isinstance(
-                        action, RouteInteraction
-                    ):
-                        rewarded = set(
-                            rewarded_move_focus_routes[observation.observer_index]
-                        )
+                    if action_phase is TurnPhase.ACTIONS and isinstance(action, RouteInteraction):
+                        rewarded = set(rewarded_move_focus_routes[observation.observer_index])
                         rewarded.discard(action.route_slot)
-                        rewarded_move_focus_routes[observation.observer_index] = frozenset(
-                            rewarded
-                        )
+                        rewarded_move_focus_routes[observation.observer_index] = frozenset(rewarded)
                     pending_routes, combo_reward = update_move_claim_combo(
                         pending_move_claim_routes[observation.observer_index],
                         action=action,
