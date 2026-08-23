@@ -150,8 +150,11 @@ The current trainer also applies these deliberately shaped signals:
   doing so through displacement;
 - `+250` for an intermediate Privilege, Book, Actions, or Bank upgrade, except
   the first Actions upgrade receives `+400`;
-- `-200` for moving only one piece and `-100` for moving only two when the
-  player's Book permits at least three;
+- a workflow-local additive `-200` for moving only one piece, `-100` for moving
+  only two when the player's Book permits at least three, and `-200` for a
+  second consecutive Move when Book permits at least four. These adjustments
+  modify only the offending Move's calculated return and do not enter the
+  reward stream for earlier decisions;
 - a local `-1,000` target for a normal Move or permanent Move Any 2 workflow
   that leaves every affected post with the same owner and shape as before, or
   merely rearranges the same owner/shape totals among equivalent posts of one
@@ -196,6 +199,7 @@ Every `TrainingDecision` records:
 - the projected-score reward delta for every player caused by that interaction;
 - the acting player's immediate reward delta;
 - an optional workflow-local movement target;
+- an optional workflow-local additive movement adjustment;
 - whether the decision may inherit terminal credit;
 - the assigned policy tier and selection metadata; and
 - the discounted reward-to-go calculated after the game.
@@ -213,11 +217,12 @@ rewards. Gamma is applied only when that player begins another turn. Decisions b
 other players do not discount, receive, erase, or replace that return. The initial
 discount is `gamma = 0.99`, stored in the training configuration and checkpoint.
 
-After normal reward-to-go is calculated, an explicitly flagged movement workflow
-uses its local negative target for training. The target is attached once to the
-grouped workflow, not added repeatedly to the player's reward stream. Earlier and
-later productive non-Move decisions therefore keep their score and terminal credit;
-normal Move uses the narrower Move-to-claim terminal-credit rule above.
+After normal reward-to-go is calculated, small Move-efficiency penalties are
+added only to the offending grouped workflow's target. Explicitly flagged hard
+movement mistakes instead replace that workflow's calculated target. Neither
+kind enters the player's chronological reward stream, so earlier productive
+non-Move decisions keep their score and terminal credit. Normal Move still uses
+the narrower Move-to-claim terminal-credit rule above.
 
 ## Worked Route Example
 

@@ -250,6 +250,174 @@ class TrainingResultsChartTests(unittest.TestCase):
             self.assertIn("<strong>Move &rarr; Claim rate</strong><span>50.0%</span>", chart)
             self.assertIn('data-map="2" data-players="3"', chart)
 
+    def test_early_evaluation_has_a_separate_filtered_dashboard_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "results.csv"
+            fieldnames = (
+                "game#",
+                "batch#",
+                "run_type",
+                "evaluation_set",
+                "evaluation_suite_version",
+                "evaluation_suite_size",
+                "map",
+                "player_count",
+                "winner_tier",
+                "tier_to_seat_assignments",
+                "final_player_scores",
+                "completion_reason",
+                "action_count",
+                "move_action_count",
+                "spent_action_count",
+                "pointless_move_workflows",
+                "repeated_move_penalties",
+                "all_move_turn_penalties",
+                "moves_creating_claimable_route",
+                "move_claim_conversions",
+            )
+            with path.open("w", newline="", encoding="utf-8") as output:
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(
+                    (
+                        {
+                            "game#": 1,
+                            "batch#": 2,
+                            "run_type": "evaluation",
+                            "evaluation_set": "mid_late_end",
+                            "evaluation_suite_version": 5,
+                            "evaluation_suite_size": 1,
+                            "map": 1,
+                            "player_count": 3,
+                            "winner_tier": "[3]",
+                            "tier_to_seat_assignments": "[1, 3, 5]",
+                            "final_player_scores": "[20, 30, 21]",
+                            "completion_reason": "20_points",
+                            "action_count": 100,
+                        },
+                        {
+                            "game#": 2,
+                            "batch#": 2,
+                            "run_type": "evaluation",
+                            "evaluation_set": "early",
+                            "evaluation_suite_version": 5,
+                            "evaluation_suite_size": 1,
+                            "map": 2,
+                            "player_count": 5,
+                            "winner_tier": "[1]",
+                            "tier_to_seat_assignments": "[1, 2, 3, 4, 5]",
+                            "final_player_scores": "[30, 20, 19, 18, 17]",
+                            "completion_reason": "action_limit",
+                            "action_count": 10000,
+                            "move_action_count": 20,
+                            "spent_action_count": 100,
+                            "pointless_move_workflows": 2,
+                            "repeated_move_penalties": 1,
+                            "all_move_turn_penalties": 1,
+                            "moves_creating_claimable_route": 4,
+                            "move_claim_conversions": 2,
+                        },
+                    )
+                )
+
+            _rows, _series, counts = read_results(path, 100)
+            standard = _evaluation_chart(
+                counts["evaluation_batches"],
+                counts["evaluation_map_batches"],
+                counts["evaluation_player_batches"],
+                counts["evaluation_map_player_batches"],
+                counts["current_evaluation_suite_version"],
+            )
+            early = _evaluation_chart(
+                counts["early_evaluation_batches"],
+                counts["early_evaluation_map_batches"],
+                counts["early_evaluation_player_batches"],
+                counts["early_evaluation_map_player_batches"],
+                counts["current_early_evaluation_suite_version"],
+                early_game=True,
+            )
+
+            self.assertIn("Evaluation results", standard)
+            self.assertNotIn("Early Game Evaluation", standard)
+            self.assertIn("Early Game Evaluation", early)
+            self.assertIn("Tier 1 win rate by player count", early)
+            self.assertIn("Average interactions per early-game evaluation", early)
+            self.assertIn("Early-game timeout rate", early)
+            self.assertIn("Move % of paid actions", early)
+            self.assertIn("Move &rarr; Claim conversion rate", early)
+            self.assertIn("100.0%", early)
+            self.assertNotIn("Average final score by tier", early)
+
+    def test_mixed_evaluation_reports_tiers_by_starting_role(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "results.csv"
+            fieldnames = (
+                "game#",
+                "batch#",
+                "run_type",
+                "evaluation_set",
+                "evaluation_suite_version",
+                "evaluation_suite_size",
+                "map",
+                "player_count",
+                "winner_tier",
+                "tier_to_seat_assignments",
+                "starting_score_by_seat",
+                "development_role_by_seat",
+                "final_player_scores",
+                "completion_reason",
+                "action_count",
+                "move_action_count",
+                "spent_action_count",
+                "moves_creating_claimable_route",
+                "move_claim_conversions",
+            )
+            with path.open("w", newline="", encoding="utf-8") as output:
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "game#": 1,
+                        "batch#": 3,
+                        "run_type": "evaluation",
+                        "evaluation_set": "mixed_development",
+                        "evaluation_suite_version": 8,
+                        "evaluation_suite_size": 1,
+                        "map": 3,
+                        "player_count": 3,
+                        "winner_tier": "[1]",
+                        "tier_to_seat_assignments": "[1, 3, 5]",
+                        "starting_score_by_seat": "[2, 6, 10]",
+                        "development_role_by_seat": '["low", "medium", "high"]',
+                        "final_player_scores": "[30, 22, 25]",
+                        "completion_reason": "20_points",
+                        "action_count": 500,
+                        "move_action_count": 20,
+                        "spent_action_count": 100,
+                        "moves_creating_claimable_route": 4,
+                        "move_claim_conversions": 2,
+                    }
+                )
+
+            _rows, _series, counts = read_results(path, 100)
+            mixed = _evaluation_chart(
+                counts["mixed_evaluation_batches"],
+                counts["mixed_evaluation_map_batches"],
+                counts["mixed_evaluation_player_batches"],
+                counts["mixed_evaluation_map_player_batches"],
+                counts["current_mixed_evaluation_suite_version"],
+                mixed_development=True,
+            )
+
+            self.assertIn("Mixed Development Evaluation", mixed)
+            self.assertIn("Performance by starting development role", mixed)
+            self.assertIn("Tier 1", mixed)
+            self.assertIn("Low", mixed)
+            self.assertIn("+28.0", mixed)
+            self.assertIn("Average interactions per mixed-development evaluation", mixed)
+            self.assertIn("Move % of paid actions", mixed)
+            self.assertIn("Move &rarr; Claim conversion rate", mixed)
+
 
 if __name__ == "__main__":
     unittest.main()

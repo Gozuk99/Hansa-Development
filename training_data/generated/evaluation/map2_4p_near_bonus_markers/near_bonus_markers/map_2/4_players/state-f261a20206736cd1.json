@@ -1,0 +1,51 @@
+{
+  "generator_version": 6,
+  "seed": 1000000013,
+  "attempt_seed": 1001000016,
+  "map_num": 2,
+  "player_count": 4,
+  "ending_condition": "near_bonus_markers",
+  "score_range": [
+    17,
+    18
+  ],
+  "strategic_focus": "none",
+  "bonus_markers_remaining": 0,
+  "completed_cities_below_limit": 1,
+  "starting_position": "immediate_finish",
+  "prepared_routes_one_short": false,
+  "development_range": [
+    7,
+    9
+  ],
+  "prepare_ending_condition": true,
+  "round_range": [
+    8,
+    20
+  ],
+  "mixed_development": false,
+  "bonus_marker_setup": "mixed",
+  "regional_focus": null,
+  "options": [
+    false,
+    false,
+    "mixed"
+  ],
+  "state_id": "state-f261a20206736cd1",
+  "strategic_focuses": [],
+  "prepared_player_index": 0,
+  "starting_score_by_seat": [
+    18,
+    18,
+    18,
+    18
+  ],
+  "starting_development_by_seat": [
+    9,
+    7,
+    7,
+    8
+  ],
+  "development_role_by_seat": [],
+  "save_file": "state-f261a20206736cd1.hansa"
+}

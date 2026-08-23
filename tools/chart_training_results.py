@@ -287,7 +287,18 @@ def read_results(path: Path, max_points: int):
         "evaluation_player_batches": {},
         "evaluation_map_player_batches": {},
         "evaluation_versions": {},
+        "evaluation_set_versions": {},
         "current_evaluation_suite_version": 0,
+        "early_evaluation_batches": {},
+        "early_evaluation_map_batches": {},
+        "early_evaluation_player_batches": {},
+        "early_evaluation_map_player_batches": {},
+        "current_early_evaluation_suite_version": 0,
+        "mixed_evaluation_batches": {},
+        "mixed_evaluation_map_batches": {},
+        "mixed_evaluation_player_batches": {},
+        "mixed_evaluation_map_player_batches": {},
+        "current_mixed_evaluation_suite_version": 0,
     }
     row_count = 0
     training_game_number = 0
@@ -328,8 +339,10 @@ def read_results(path: Path, max_points: int):
             if run_type == "evaluation":
                 batch = int(_number(row.get("batch#")) or 0)
                 map_num = row.get("map", "unknown") or "unknown"
+                evaluation_set = row.get("evaluation_set", "").strip() or "mid_late_end"
                 suite_version = int(_number(row.get("evaluation_suite_version")) or 1)
-                version = counts["evaluation_versions"].setdefault(
+                set_versions = counts["evaluation_set_versions"].setdefault(evaluation_set, {})
+                version = set_versions.setdefault(
                     suite_version,
                     {
                         "batches": {},
@@ -348,6 +361,10 @@ def read_results(path: Path, max_points: int):
                     ),
                 )
                 movement_values = {field: _row_value(row, field) for field in MOVEMENT_COUNT_FIELDS}
+                starting_scores = _json_list(row.get("starting_score_by_seat"))
+                development_roles = _json_list(row.get("development_role_by_seat"))
+                winner_tier_set = set(winner_tiers)
+                evaluation_win_share = 1 / len(winner_tiers) if winner_tiers else 0
                 for collection, key in targets:
                     evaluation = collection.setdefault(
                         key,
@@ -362,21 +379,30 @@ def read_results(path: Path, max_points: int):
                             "tier_score": Counter(),
                             "tier_score_games": Counter(),
                             "actions": 0,
+                            "all_actions": 0,
+                            "timeouts": 0,
                             "loss_total": 0.0,
                             "loss_games": 0,
                             "expected": 0,
                             "movement_totals": Counter(),
                             "movement_games": Counter(),
+                            "role_metrics": {},
                         },
                     )
                     evaluation["games"] += 1
                     evaluation["random"] += 1 / int(player_count)
                     completion_reason = row.get("completion_reason", "normal") or "normal"
                     evaluation["completion_reasons"][completion_reason] += 1
-                    completed = row.get("completed", "true").strip().lower() != "false"
+                    timeout = completion_reason == "action_limit"
+                    evaluation["timeouts"] += int(timeout)
+                    action_count = int(_number(row.get("action_count")) or 0)
+                    evaluation["all_actions"] += action_count
+                    completed = (
+                        row.get("completed", "true").strip().lower() != "false" and not timeout
+                    )
                     if completed:
                         evaluation["completed"] += 1
-                        evaluation["actions"] += int(_number(row.get("action_count")) or 0)
+                        evaluation["actions"] += action_count
                     else:
                         evaluation["failure_reasons"][completion_reason] += 1
                     evaluation_loss = _row_value(row, "latest_loss")
@@ -396,7 +422,29 @@ def read_results(path: Path, max_points: int):
                         if isinstance(score, (int, float)):
                             evaluation["tier_score"][tier] += score
                             evaluation["tier_score_games"][tier] += 1
-                    evaluation_win_share = 1 / len(winner_tiers) if winner_tiers else 0
+                    for tier, role, starting_score, final_score in zip(
+                        assigned_tiers,
+                        development_roles,
+                        starting_scores,
+                        final_scores,
+                    ):
+                        if not role:
+                            continue
+                        role_entry = evaluation["role_metrics"].setdefault(
+                            (tier, str(role)), Counter()
+                        )
+                        role_entry["games"] += 1
+                        role_entry["completed"] += int(completed)
+                        role_entry["timeouts"] += int(timeout)
+                        role_entry["actions"] += action_count
+                        if tier in winner_tier_set:
+                            role_entry["wins"] += evaluation_win_share
+                        if isinstance(final_score, (int, float)):
+                            role_entry["final_score"] += final_score
+                            role_entry["score_games"] += 1
+                            if isinstance(starting_score, (int, float)):
+                                role_entry["score_gain"] += final_score - starting_score
+                                role_entry["gain_games"] += 1
                     for tier in winner_tiers:
                         evaluation["tier_wins"][tier] += evaluation_win_share
             for tier in assigned_tiers:
@@ -426,6 +474,7 @@ def read_results(path: Path, max_points: int):
                 value = _row_value(row, column)
                 if value is not None:
                     series[column, run_type].add(chart_game_number, value)
+    counts["evaluation_versions"] = counts["evaluation_set_versions"].get("mid_late_end", {})
     if counts["evaluation_versions"]:
         latest_version = max(counts["evaluation_versions"])
         latest = counts["evaluation_versions"][latest_version]
@@ -434,6 +483,24 @@ def read_results(path: Path, max_points: int):
         counts["evaluation_map_batches"] = latest["map_batches"]
         counts["evaluation_player_batches"] = latest["player_batches"]
         counts["evaluation_map_player_batches"] = latest["map_player_batches"]
+    early_versions = counts["evaluation_set_versions"].get("early", {})
+    if early_versions:
+        latest_version = max(early_versions)
+        latest = early_versions[latest_version]
+        counts["current_early_evaluation_suite_version"] = latest_version
+        counts["early_evaluation_batches"] = latest["batches"]
+        counts["early_evaluation_map_batches"] = latest["map_batches"]
+        counts["early_evaluation_player_batches"] = latest["player_batches"]
+        counts["early_evaluation_map_player_batches"] = latest["map_player_batches"]
+    mixed_versions = counts["evaluation_set_versions"].get("mixed_development", {})
+    if mixed_versions:
+        latest_version = max(mixed_versions)
+        latest = mixed_versions[latest_version]
+        counts["current_mixed_evaluation_suite_version"] = latest_version
+        counts["mixed_evaluation_batches"] = latest["batches"]
+        counts["mixed_evaluation_map_batches"] = latest["map_batches"]
+        counts["mixed_evaluation_player_batches"] = latest["player_batches"]
+        counts["mixed_evaluation_map_player_batches"] = latest["map_player_batches"]
     return row_count, series, counts
 
 
@@ -752,6 +819,9 @@ def _evaluation_chart(
     player_batches,
     map_player_batches,
     suite_version=1,
+    *,
+    early_game=False,
+    mixed_development=False,
 ):
     if not batches:
         return ""
@@ -883,6 +953,17 @@ def _evaluation_chart(
             "</svg></div>"
         )
 
+    def rolling(values, window=10):
+        result = []
+        for index in range(len(values)):
+            current = [
+                value
+                for value in values[max(0, index - window + 1) : index + 1]
+                if value is not None
+            ]
+            result.append(statistics.fmean(current) if current else None)
+        return result
+
     loss_ordered = sorted(batches.items())
     loss_values = [
         entry["loss_total"] / entry["loss_games"] if entry["loss_games"] else None
@@ -900,19 +981,44 @@ def _evaluation_chart(
         f"; {entry['completed']}/{entry['expected'] or entry['games']} boards completed"
         for _batch, entry in loss_ordered
     ]
-    evaluation_loss_chart = line_chart(
-        "Evaluation loss by batch",
-        "Lower is better. Each point averages the completed fixed evaluation boards; "
-        "hover to see how many boards completed.",
-        loss_ordered,
-        {
-            "Evaluation loss": loss_values,
-            "Five-batch average": rolling_loss_values,
-        },
-        "",
-        focus_range=True,
-        point_details=loss_details,
-    )
+    evaluation_loss_chart = ""
+    if not early_game and not mixed_development:
+        evaluation_loss_chart = line_chart(
+            "Evaluation loss by batch",
+            "Lower is better. Each point averages the completed fixed evaluation boards; "
+            "hover to see how many boards completed.",
+            loss_ordered,
+            {
+                "Evaluation loss": loss_values,
+                "Five-batch average": rolling_loss_values,
+            },
+            "",
+            focus_range=True,
+            point_details=loss_details,
+        )
+
+    early_tier_one_chart = ""
+    if early_game:
+        ordered_batches = [batch for batch, _entry in loss_ordered]
+        tier_one_by_players = {}
+        for players in (3, 4, 5):
+            values = []
+            for batch in ordered_batches:
+                entry = player_batches.get((str(players), batch))
+                games = 0 if entry is None else entry["tier_games"][1]
+                values.append(
+                    entry["tier_wins"][1] / games * 100 if entry is not None and games else None
+                )
+            tier_one_by_players[f"Tier 1 — {players}P"] = rolling(values)
+        early_tier_one_chart = line_chart(
+            "Tier 1 win rate by player count",
+            "Higher is better. Each line is a rolling 10-batch rate across the same "
+            "fixed early positions.",
+            loss_ordered,
+            tier_one_by_players,
+            "%",
+            maximum=100,
+        )
 
     panels = []
     for (map_value, player_value), current_batches in datasets.items():
@@ -941,17 +1047,6 @@ def _evaluation_chart(
                 return "&mdash;"
             return f"{value * 100:.1f}%" if percentage else f"{value:.2f}"
 
-        def rolling(values, window=10):
-            result = []
-            for index in range(len(values)):
-                current = [
-                    value
-                    for value in values[max(0, index - window + 1) : index + 1]
-                    if value is not None
-                ]
-                result.append(statistics.fmean(current) if current else None)
-            return result
-
         win_series = {
             tier: rolling(
                 [
@@ -974,9 +1069,22 @@ def _evaluation_chart(
             )
             for tier in tiers
         }
+        benchmark_set = early_game or mixed_development
         action_series = {
-            "Game length": [
-                entry["actions"] / entry["completed"] if entry["completed"] else None
+            "Interactions/game" if benchmark_set else "Game length": [
+                (
+                    entry["all_actions"] / entry["games"]
+                    if benchmark_set and entry["games"]
+                    else entry["actions"] / entry["completed"]
+                    if entry["completed"]
+                    else None
+                )
+                for _batch, entry in ordered
+            ]
+        }
+        timeout_series = {
+            "Timeout rate": [
+                entry["timeouts"] / entry["games"] * 100 if entry["games"] else None
                 for _batch, entry in ordered
             ]
         }
@@ -1018,6 +1126,9 @@ def _evaluation_chart(
         tier_one_win = latest["tier_wins"][1] / tier_one_games * 100 if tier_one_games else 0
         tier_one_score = latest["tier_score"][1] / tier_one_scores if tier_one_scores else 0
         average_actions = latest["actions"] / latest["completed"] if latest["completed"] else 0
+        if early_game and latest["games"]:
+            average_actions = latest["all_actions"] / latest["games"]
+        timeout_rate = latest["timeouts"] / latest["games"] if latest["games"] else 0
         latest_move_ratio = movement_ratio(latest, "move_action_count", "spent_action_count")
         latest_pointless_moves = movement_average(latest, "pointless_move_workflows")
         latest_move_claim_rate = movement_ratio(
@@ -1033,6 +1144,45 @@ def _evaluation_chart(
             if failures
             else '<p class="evaluation-success">All latest evaluation games completed normally.</p>'
         )
+        role_summary = ""
+        if mixed_development:
+            role_totals = {}
+            for _batch, entry in ordered:
+                for key, metrics in entry["role_metrics"].items():
+                    role_totals.setdefault(key, Counter()).update(metrics)
+            role_order = {
+                name: index
+                for index, name in enumerate(
+                    ("very_low", "low", "low_mid", "medium", "high_mid", "high", "very_high")
+                )
+            }
+            rows = []
+            for (tier, role), metrics in sorted(
+                role_totals.items(),
+                key=lambda item: (int(item[0][0]), role_order.get(item[0][1], 99)),
+            ):
+                games = metrics["games"]
+                score_games = metrics["score_games"]
+                gain_games = metrics["gain_games"]
+                rows.append(
+                    "<tr>"
+                    f"<td>Tier {tier}</td><td>{html.escape(role.replace('_', ' ').title())}</td>"
+                    f"<td>{games}</td><td>{metrics['wins'] / games * 100:.1f}%</td>"
+                    f"<td>{metrics['completed'] / games * 100:.1f}%</td>"
+                    f"<td>{metrics['timeouts'] / games * 100:.1f}%</td>"
+                    f"<td>{metrics['final_score'] / score_games:.1f}</td>"
+                    f"<td>{metrics['score_gain'] / gain_games:+.1f}</td>"
+                    f"<td>{metrics['actions'] / games:.0f}</td></tr>"
+                )
+            role_summary = (
+                '<div class="evaluation-chart"><h3>Performance by starting development role</h3>'
+                "<p>Roles rotate among policy tiers across evaluation batches.</p>"
+                '<div class="table-scroll"><table><thead><tr><th>Tier</th><th>Starting role</th>'
+                "<th>Games</th><th>Win rate</th><th>Completion</th><th>Timeout</th>"
+                "<th>Final score</th><th>Score gain</th><th>Interactions</th></tr></thead><tbody>"
+                + "".join(rows)
+                + "</tbody></table></div></div>"
+            )
         panels.append(
             f'<div data-evaluation-panel data-map="{map_value}" data-players="{player_value}" hidden>'
             '<div class="statistics">'
@@ -1040,10 +1190,15 @@ def _evaluation_chart(
             f"<div><strong>Tier 1 win rate</strong><span>{tier_one_win:.1f}%</span></div>"
             f"<div><strong>Tier 1 average score</strong><span>{tier_one_score:.1f}</span></div>"
             f"<div><strong>Average game length</strong><span>{average_actions:.0f} actions</span></div>"
-            f"<div><strong>Move %</strong><span>{display_metric(latest_move_ratio, percentage=True)}</span></div>"
+            + (
+                f"<div><strong>Timeout rate</strong><span>{timeout_rate * 100:.1f}%</span></div>"
+                if benchmark_set
+                else ""
+            )
+            + f"<div><strong>Move %</strong><span>{display_metric(latest_move_ratio, percentage=True)}</span></div>"
             f"<div><strong>Pointless Moves/game</strong><span>{display_metric(latest_pointless_moves)}</span></div>"
             f"<div><strong>Move &rarr; Claim rate</strong><span>{display_metric(latest_move_claim_rate, percentage=True)}</span></div>"
-            f"</div>{warning}"
+            f"</div>{warning}{role_summary}"
             + line_chart(
                 "Win rate by tier",
                 "Higher is better. Each colored line is a rolling 10-batch policy-tier rate.",
@@ -1053,22 +1208,45 @@ def _evaluation_chart(
                 maximum=100,
                 baseline=baseline,
             )
-            + line_chart(
-                "Average final score by tier",
-                "Higher is generally better. Lines show rolling 10-batch averages across "
-                "the same fixed positions.",
-                ordered,
-                score_series,
-                " points",
-                focus_range=True,
-                tick_step=5,
+            + (
+                ""
+                if early_game
+                else line_chart(
+                    "Average final score by tier",
+                    "Higher is generally better. Lines show rolling 10-batch averages across "
+                    "the same fixed positions.",
+                    ordered,
+                    score_series,
+                    " points",
+                    focus_range=True,
+                    tick_step=5,
+                )
             )
             + line_chart(
-                "Average completed-game length",
-                "Lower is generally better, provided games still finish normally.",
+                "Average interactions per early-game evaluation"
+                if early_game
+                else "Average interactions per mixed-development evaluation"
+                if mixed_development
+                else "Average completed-game length",
+                "Includes completed games and timeouts."
+                if benchmark_set
+                else "Lower is generally better, provided games still finish normally.",
                 ordered,
                 action_series,
                 " actions",
+            )
+            + (
+                line_chart(
+                    "Early-game timeout rate",
+                    "Lower is better. A timeout means the fixed early position reached the "
+                    "evaluation interaction limit.",
+                    ordered,
+                    timeout_series,
+                    "%",
+                    maximum=100,
+                )
+                if benchmark_set
+                else ""
             )
             + line_chart(
                 "Move % of paid actions",
@@ -1079,27 +1257,31 @@ def _evaluation_chart(
                 "%",
                 maximum=100,
             )
-            + line_chart(
-                "Pointless Move workflows per game",
-                "Lower is better. Counts movement workflows receiving the existing "
-                "pointless-movement target.",
-                ordered,
-                pointless_move_series,
-                " workflows/game",
-            )
-            + line_chart(
-                "Repeated-Move penalties per game",
-                "Lower is better. Counts applications of the existing consecutive-Move penalty.",
-                ordered,
-                repeated_move_series,
-                " penalties/game",
-            )
-            + line_chart(
-                "All-Move-turn penalties per game",
-                "Lower is better. Counts turns where every paid action was a normal Move.",
-                ordered,
-                all_move_turn_series,
-                " penalties/game",
+            + (
+                ""
+                if benchmark_set
+                else line_chart(
+                    "Pointless Move workflows per game",
+                    "Lower is better. Counts movement workflows receiving the existing "
+                    "pointless-movement target.",
+                    ordered,
+                    pointless_move_series,
+                    " workflows/game",
+                )
+                + line_chart(
+                    "Repeated-Move penalties per game",
+                    "Lower is better. Counts applications of the existing consecutive-Move penalty.",
+                    ordered,
+                    repeated_move_series,
+                    " penalties/game",
+                )
+                + line_chart(
+                    "All-Move-turn penalties per game",
+                    "Lower is better. Counts turns where every paid action was a normal Move.",
+                    ordered,
+                    all_move_turn_series,
+                    " penalties/game",
+                )
             )
             + line_chart(
                 "Move &rarr; Claim conversion rate",
@@ -1112,15 +1294,23 @@ def _evaluation_chart(
             )
             + "</div>"
         )
+    heading_title = (
+        "Early Game Evaluation"
+        if early_game
+        else "Mixed Development Evaluation"
+        if mixed_development
+        else "Evaluation results"
+    )
     return f"""
     <section class="card evaluation-performance"><div class="chart-heading">
-      <h2>Evaluation results — suite version {suite_version}</h2>
+      <h2>{heading_title} — suite version {suite_version}</h2>
       <label>Board: <select data-evaluation-map><option value="all">All maps</option>
       <option value="1">Map 1</option><option value="2">Map 2</option>
       <option value="3">Map 3</option></select></label>
       <label>Players: <select data-evaluation-players><option value="all">All players</option>
       <option value="3">3 players</option><option value="4">4 players</option>
       <option value="5">5 players</option></select></label></div>
+      {early_tier_one_chart}
       {evaluation_loss_chart}
       {"".join(panels)}
       <p class="hint">Each point summarizes one batch of fixed evaluation positions.
@@ -1210,6 +1400,26 @@ grid-template-columns:1fr; gap:20px; margin-top:18px; }}
             counts["evaluation_player_batches"],
             counts["evaluation_map_player_batches"],
             counts["current_evaluation_suite_version"],
+        )
+    }
+{
+        _evaluation_chart(
+            counts["early_evaluation_batches"],
+            counts["early_evaluation_map_batches"],
+            counts["early_evaluation_player_batches"],
+            counts["early_evaluation_map_player_batches"],
+            counts["current_early_evaluation_suite_version"],
+            early_game=True,
+        )
+    }
+{
+        _evaluation_chart(
+            counts["mixed_evaluation_batches"],
+            counts["mixed_evaluation_map_batches"],
+            counts["mixed_evaluation_player_batches"],
+            counts["mixed_evaluation_map_player_batches"],
+            counts["current_mixed_evaluation_suite_version"],
+            mixed_development=True,
         )
     }
 {charts}<div class="summaries">{summaries}</div>

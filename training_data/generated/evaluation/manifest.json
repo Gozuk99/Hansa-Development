@@ -13,15 +13,35 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": true,
     "bonus_markers_remaining": 0,
     "completed_cities_below_limit": 1,
     "prepared_routes_one_short": false,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score",
-    "seed": 1,
-    "save_file": "map1_3p_near_score/near_score/map_1/3_players/state-9cc52715e9cd41d8.hansa",
-    "metadata_file": "map1_3p_near_score/near_score/map_1/3_players/state-9cc52715e9cd41d8.json"
+    "starting_score_by_seat": [
+      17,
+      18,
+      18
+    ],
+    "starting_development_by_seat": [
+      12,
+      13,
+      12
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000000,
+    "save_file": "map1_3p_near_score/near_score/map_1/3_players/state-d1c0c2756aaa29d9.hansa",
+    "metadata_file": "map1_3p_near_score/near_score/map_1/3_players/state-d1c0c2756aaa29d9.json"
   },
   {
     "name": "map1_3p_near_bonus_markers",
@@ -37,15 +57,35 @@
     "mission_cards": true,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers+east_west",
-    "seed": 2,
-    "save_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-05a3d73f151c2bb3.hansa",
-    "metadata_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-05a3d73f151c2bb3.json"
+    "starting_score_by_seat": [
+      5,
+      19,
+      19
+    ],
+    "starting_development_by_seat": [
+      11,
+      11,
+      12
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000001,
+    "save_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-086dfbe3250c2d2f.hansa",
+    "metadata_file": "map1_3p_near_bonus_markers/near_bonus_markers/map_1/3_players/state-086dfbe3250c2d2f.json"
   },
   {
     "name": "map1_3p_near_completed_cities",
@@ -61,15 +101,35 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities",
-    "seed": 3,
-    "save_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-606d09a7313d41fe.hansa",
-    "metadata_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-606d09a7313d41fe.json"
+    "starting_score_by_seat": [
+      16,
+      15,
+      15
+    ],
+    "starting_development_by_seat": [
+      11,
+      13,
+      12
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000002,
+    "save_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-04d4af1c38a465fe.hansa",
+    "metadata_file": "map1_3p_near_completed_cities/near_completed_cities/map_1/3_players/state-04d4af1c38a465fe.json"
   },
   {
     "name": "map1_4p_near_score",
@@ -85,15 +145,37 @@
     "mission_cards": true,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score",
-    "seed": 4,
-    "save_file": "map1_4p_near_score/near_score/map_1/4_players/state-648a495865a0c4bd.hansa",
-    "metadata_file": "map1_4p_near_score/near_score/map_1/4_players/state-648a495865a0c4bd.json"
+    "starting_score_by_seat": [
+      16,
+      16,
+      15,
+      16
+    ],
+    "starting_development_by_seat": [
+      7,
+      9,
+      9,
+      9
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000003,
+    "save_file": "map1_4p_near_score/near_score/map_1/4_players/state-7efad079e7a30b21.hansa",
+    "metadata_file": "map1_4p_near_score/near_score/map_1/4_players/state-7efad079e7a30b21.json"
   },
   {
     "name": "map1_4p_near_bonus_markers",
@@ -109,15 +191,37 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers",
-    "seed": 5,
-    "save_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-b92c90262e2d26e9.hansa",
-    "metadata_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-b92c90262e2d26e9.json"
+    "starting_score_by_seat": [
+      16,
+      15,
+      16,
+      16
+    ],
+    "starting_development_by_seat": [
+      10,
+      11,
+      10,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000004,
+    "save_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-16c9d875b95ef364.hansa",
+    "metadata_file": "map1_4p_near_bonus_markers/near_bonus_markers/map_1/4_players/state-16c9d875b95ef364.json"
   },
   {
     "name": "map1_4p_near_completed_cities",
@@ -133,15 +237,37 @@
     "mission_cards": true,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities+east_west",
-    "seed": 6,
-    "save_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-cc5657c245da45cc.hansa",
-    "metadata_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-cc5657c245da45cc.json"
+    "starting_score_by_seat": [
+      9,
+      17,
+      6,
+      10
+    ],
+    "starting_development_by_seat": [
+      12,
+      12,
+      13,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000005,
+    "save_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-e8b876e28c01d224.hansa",
+    "metadata_file": "map1_4p_near_completed_cities/near_completed_cities/map_1/4_players/state-e8b876e28c01d224.json"
   },
   {
     "name": "map1_5p_near_score",
@@ -157,15 +283,39 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score+east_west",
-    "seed": 7,
-    "save_file": "map1_5p_near_score/near_score/map_1/5_players/state-1e5544491cc1e161.hansa",
-    "metadata_file": "map1_5p_near_score/near_score/map_1/5_players/state-1e5544491cc1e161.json"
+    "starting_score_by_seat": [
+      12,
+      16,
+      15,
+      18,
+      18
+    ],
+    "starting_development_by_seat": [
+      9,
+      10,
+      9,
+      10,
+      9
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000006,
+    "save_file": "map1_5p_near_score/near_score/map_1/5_players/state-0f4db98901d45ee6.hansa",
+    "metadata_file": "map1_5p_near_score/near_score/map_1/5_players/state-0f4db98901d45ee6.json"
   },
   {
     "name": "map1_5p_near_bonus_markers",
@@ -181,15 +331,39 @@
     "mission_cards": true,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers",
-    "seed": 8,
-    "save_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-81a9dd390639981b.hansa",
-    "metadata_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-81a9dd390639981b.json"
+    "starting_score_by_seat": [
+      16,
+      16,
+      16,
+      16,
+      16
+    ],
+    "starting_development_by_seat": [
+      10,
+      9,
+      10,
+      9,
+      9
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000007,
+    "save_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-db864955d3d3d073.hansa",
+    "metadata_file": "map1_5p_near_bonus_markers/near_bonus_markers/map_1/5_players/state-db864955d3d3d073.json"
   },
   {
     "name": "map1_5p_near_completed_cities",
@@ -205,15 +379,39 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities",
-    "seed": 9,
-    "save_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-50c240098ab7ee07.hansa",
-    "metadata_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-50c240098ab7ee07.json"
+    "starting_score_by_seat": [
+      16,
+      15,
+      16,
+      15,
+      16
+    ],
+    "starting_development_by_seat": [
+      13,
+      13,
+      11,
+      12,
+      13
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000008,
+    "save_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-5b4101d77452e0f8.hansa",
+    "metadata_file": "map1_5p_near_completed_cities/near_completed_cities/map_1/5_players/state-5b4101d77452e0f8.json"
   },
   {
     "name": "map2_3p_near_score",
@@ -229,15 +427,35 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score",
-    "seed": 10,
-    "save_file": "map2_3p_near_score/near_score/map_2/3_players/state-4a19193f1394f8a5.hansa",
-    "metadata_file": "map2_3p_near_score/near_score/map_2/3_players/state-4a19193f1394f8a5.json"
+    "starting_score_by_seat": [
+      15,
+      15,
+      16
+    ],
+    "starting_development_by_seat": [
+      12,
+      13,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000009,
+    "save_file": "map2_3p_near_score/near_score/map_2/3_players/state-5b7c9a4e6ae131d9.hansa",
+    "metadata_file": "map2_3p_near_score/near_score/map_2/3_players/state-5b7c9a4e6ae131d9.json"
   },
   {
     "name": "map2_3p_near_bonus_markers",
@@ -253,15 +471,35 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers",
-    "seed": 11,
-    "save_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-77c41890e0cbc313.hansa",
-    "metadata_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-77c41890e0cbc313.json"
+    "starting_score_by_seat": [
+      16,
+      16,
+      16
+    ],
+    "starting_development_by_seat": [
+      9,
+      11,
+      10
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000010,
+    "save_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-c4b145a6befb854e.hansa",
+    "metadata_file": "map2_3p_near_bonus_markers/near_bonus_markers/map_2/3_players/state-c4b145a6befb854e.json"
   },
   {
     "name": "map2_3p_near_completed_cities",
@@ -277,15 +515,35 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities+east_west",
-    "seed": 12,
-    "save_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-6c6c8288d10cc094.hansa",
-    "metadata_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-6c6c8288d10cc094.json"
+    "starting_score_by_seat": [
+      1,
+      7,
+      9
+    ],
+    "starting_development_by_seat": [
+      13,
+      12,
+      13
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000011,
+    "save_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-c3b9b7a419d29bd1.hansa",
+    "metadata_file": "map2_3p_near_completed_cities/near_completed_cities/map_2/3_players/state-c3b9b7a419d29bd1.json"
   },
   {
     "name": "map2_4p_near_score",
@@ -301,15 +559,37 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score+east_west",
-    "seed": 13,
-    "save_file": "map2_4p_near_score/near_score/map_2/4_players/state-9d17f320d5613a5f.hansa",
-    "metadata_file": "map2_4p_near_score/near_score/map_2/4_players/state-9d17f320d5613a5f.json"
+    "starting_score_by_seat": [
+      4,
+      18,
+      16,
+      16
+    ],
+    "starting_development_by_seat": [
+      11,
+      11,
+      13,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000012,
+    "save_file": "map2_4p_near_score/near_score/map_2/4_players/state-cec9744e384889c1.hansa",
+    "metadata_file": "map2_4p_near_score/near_score/map_2/4_players/state-cec9744e384889c1.json"
   },
   {
     "name": "map2_4p_near_bonus_markers",
@@ -325,15 +605,37 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": true,
     "bonus_markers_remaining": 0,
     "completed_cities_below_limit": 1,
     "prepared_routes_one_short": false,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers",
-    "seed": 14,
-    "save_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-e2baa723c37cd0af.hansa",
-    "metadata_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-e2baa723c37cd0af.json"
+    "starting_score_by_seat": [
+      18,
+      18,
+      18,
+      18
+    ],
+    "starting_development_by_seat": [
+      9,
+      7,
+      7,
+      8
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000013,
+    "save_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-f261a20206736cd1.hansa",
+    "metadata_file": "map2_4p_near_bonus_markers/near_bonus_markers/map_2/4_players/state-f261a20206736cd1.json"
   },
   {
     "name": "map2_4p_near_completed_cities",
@@ -349,15 +651,37 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities",
-    "seed": 15,
-    "save_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-3dbf65949e50b6d6.hansa",
-    "metadata_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-3dbf65949e50b6d6.json"
+    "starting_score_by_seat": [
+      16,
+      16,
+      16,
+      16
+    ],
+    "starting_development_by_seat": [
+      11,
+      10,
+      10,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000014,
+    "save_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-bc019720558f54a6.hansa",
+    "metadata_file": "map2_4p_near_completed_cities/near_completed_cities/map_2/4_players/state-bc019720558f54a6.json"
   },
   {
     "name": "map2_5p_near_score",
@@ -373,15 +697,39 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score",
-    "seed": 16,
-    "save_file": "map2_5p_near_score/near_score/map_2/5_players/state-039fbfc6f3d61afd.hansa",
-    "metadata_file": "map2_5p_near_score/near_score/map_2/5_players/state-039fbfc6f3d61afd.json"
+    "starting_score_by_seat": [
+      16,
+      15,
+      15,
+      16,
+      15
+    ],
+    "starting_development_by_seat": [
+      11,
+      9,
+      11,
+      9,
+      9
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000015,
+    "save_file": "map2_5p_near_score/near_score/map_2/5_players/state-ebee1e85890958ac.hansa",
+    "metadata_file": "map2_5p_near_score/near_score/map_2/5_players/state-ebee1e85890958ac.json"
   },
   {
     "name": "map2_5p_near_bonus_markers",
@@ -397,15 +745,39 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers+east_west",
-    "seed": 17,
-    "save_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-1d82da29303a4b04.hansa",
-    "metadata_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-1d82da29303a4b04.json"
+    "starting_score_by_seat": [
+      6,
+      15,
+      17,
+      17,
+      17
+    ],
+    "starting_development_by_seat": [
+      9,
+      7,
+      7,
+      7,
+      9
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000016,
+    "save_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-c5c2f3e02b863278.hansa",
+    "metadata_file": "map2_5p_near_bonus_markers/near_bonus_markers/map_2/5_players/state-c5c2f3e02b863278.json"
   },
   {
     "name": "map2_5p_near_completed_cities",
@@ -421,15 +793,39 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities",
-    "seed": 18,
-    "save_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-3122f577410a5a0b.hansa",
-    "metadata_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-3122f577410a5a0b.json"
+    "starting_score_by_seat": [
+      16,
+      16,
+      16,
+      16,
+      16
+    ],
+    "starting_development_by_seat": [
+      13,
+      12,
+      11,
+      13,
+      12
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000017,
+    "save_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-c4ee1eb49e60d65f.hansa",
+    "metadata_file": "map2_5p_near_completed_cities/near_completed_cities/map_2/5_players/state-c4ee1eb49e60d65f.json"
   },
   {
     "name": "map3_3p_near_score",
@@ -445,15 +841,35 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score+east_west",
-    "seed": 19,
-    "save_file": "map3_3p_near_score/near_score/map_3/3_players/state-15071c936190f0c1.hansa",
-    "metadata_file": "map3_3p_near_score/near_score/map_3/3_players/state-15071c936190f0c1.json"
+    "starting_score_by_seat": [
+      13,
+      16,
+      19
+    ],
+    "starting_development_by_seat": [
+      11,
+      9,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000018,
+    "save_file": "map3_3p_near_score/near_score/map_3/3_players/state-3ff688abfa92532c.hansa",
+    "metadata_file": "map3_3p_near_score/near_score/map_3/3_players/state-3ff688abfa92532c.json"
   },
   {
     "name": "map3_3p_near_bonus_markers",
@@ -469,15 +885,35 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers+britannia_wales",
-    "seed": 20,
-    "save_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-4432f7d7ecb6cfdf.hansa",
-    "metadata_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-4432f7d7ecb6cfdf.json"
+    "starting_score_by_seat": [
+      16,
+      6,
+      8
+    ],
+    "starting_development_by_seat": [
+      8,
+      8,
+      7
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000019,
+    "save_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-b0f6de43fdea753a.hansa",
+    "metadata_file": "map3_3p_near_bonus_markers/near_bonus_markers/map_3/3_players/state-b0f6de43fdea753a.json"
   },
   {
     "name": "map3_3p_near_completed_cities",
@@ -493,15 +929,35 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities",
-    "seed": 21,
-    "save_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-1a7f0d759af410c6.hansa",
-    "metadata_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-1a7f0d759af410c6.json"
+    "starting_score_by_seat": [
+      16,
+      16,
+      16
+    ],
+    "starting_development_by_seat": [
+      13,
+      13,
+      13
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000020,
+    "save_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-10fef7b0b3cf229c.hansa",
+    "metadata_file": "map3_3p_near_completed_cities/near_completed_cities/map_3/3_players/state-10fef7b0b3cf229c.json"
   },
   {
     "name": "map3_4p_near_score",
@@ -517,15 +973,37 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score+east_west+britannia_wales",
-    "seed": 22,
-    "save_file": "map3_4p_near_score/near_score/map_3/4_players/state-59a34918c975fa17.hansa",
-    "metadata_file": "map3_4p_near_score/near_score/map_3/4_players/state-59a34918c975fa17.json"
+    "starting_score_by_seat": [
+      6,
+      16,
+      6,
+      0
+    ],
+    "starting_development_by_seat": [
+      13,
+      12,
+      13,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000021,
+    "save_file": "map3_4p_near_score/near_score/map_3/4_players/state-138ab3c066cfdaf4.hansa",
+    "metadata_file": "map3_4p_near_score/near_score/map_3/4_players/state-138ab3c066cfdaf4.json"
   },
   {
     "name": "map3_4p_near_bonus_markers",
@@ -541,15 +1019,37 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers+britannia_isle_of_man",
-    "seed": 23,
-    "save_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-de4e4f4e6307795e.hansa",
-    "metadata_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-de4e4f4e6307795e.json"
+    "starting_score_by_seat": [
+      19,
+      0,
+      5,
+      19
+    ],
+    "starting_development_by_seat": [
+      11,
+      13,
+      13,
+      11
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000022,
+    "save_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-4bf566c76db7fb0a.hansa",
+    "metadata_file": "map3_4p_near_bonus_markers/near_bonus_markers/map_3/4_players/state-4bf566c76db7fb0a.json"
   },
   {
     "name": "map3_4p_near_completed_cities",
@@ -565,15 +1065,37 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities+britannia_scotland",
-    "seed": 24,
-    "save_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-c508d0cb7f609e34.hansa",
-    "metadata_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-c508d0cb7f609e34.json"
+    "starting_score_by_seat": [
+      16,
+      15,
+      18,
+      9
+    ],
+    "starting_development_by_seat": [
+      13,
+      12,
+      11,
+      13
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000023,
+    "save_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-1590c11b520887b9.hansa",
+    "metadata_file": "map3_4p_near_completed_cities/near_completed_cities/map_3/4_players/state-1590c11b520887b9.json"
   },
   {
     "name": "map3_5p_near_score",
@@ -589,15 +1111,39 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_score+britannia_wales",
-    "seed": 25,
-    "save_file": "map3_5p_near_score/near_score/map_3/5_players/state-a8ae7a87ef8fd23f.hansa",
-    "metadata_file": "map3_5p_near_score/near_score/map_3/5_players/state-a8ae7a87ef8fd23f.json"
+    "starting_score_by_seat": [
+      14,
+      18,
+      18,
+      16,
+      10
+    ],
+    "starting_development_by_seat": [
+      11,
+      11,
+      9,
+      9,
+      9
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000024,
+    "save_file": "map3_5p_near_score/near_score/map_3/5_players/state-f4fc3db9cb264730.hansa",
+    "metadata_file": "map3_5p_near_score/near_score/map_3/5_players/state-f4fc3db9cb264730.json"
   },
   {
     "name": "map3_5p_near_bonus_markers",
@@ -613,15 +1159,39 @@
     "mission_cards": false,
     "emperors_favour": false,
     "promo_markers": true,
+    "bonus_marker_setup": null,
     "immediate_finish": false,
     "bonus_markers_remaining": 2,
     "completed_cities_below_limit": 2,
     "prepared_routes_one_short": true,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_bonus_markers+east_west+britannia_scotland",
-    "seed": 26,
-    "save_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-ea4491d904a22207.hansa",
-    "metadata_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-ea4491d904a22207.json"
+    "starting_score_by_seat": [
+      1,
+      18,
+      14,
+      9,
+      13
+    ],
+    "starting_development_by_seat": [
+      11,
+      11,
+      10,
+      11,
+      10
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000025,
+    "save_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-6c86d9809843e71c.hansa",
+    "metadata_file": "map3_5p_near_bonus_markers/near_bonus_markers/map_3/5_players/state-6c86d9809843e71c.json"
   },
   {
     "name": "map3_5p_near_completed_cities",
@@ -637,14 +1207,1847 @@
     "mission_cards": false,
     "emperors_favour": true,
     "promo_markers": false,
+    "bonus_marker_setup": null,
     "immediate_finish": true,
     "bonus_markers_remaining": 0,
     "completed_cities_below_limit": 1,
     "prepared_routes_one_short": false,
-    "suite_version": 4,
+    "development_range": null,
+    "evaluation_set": "mid_late_end",
+    "prepare_ending_condition": true,
+    "round_range": [
+      8,
+      20
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
     "scenario": "near_completed_cities+britannia_isle_of_man",
-    "seed": 27,
-    "save_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-1db2eb432077749b.hansa",
-    "metadata_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-1db2eb432077749b.json"
+    "starting_score_by_seat": [
+      19,
+      14,
+      6,
+      18,
+      19
+    ],
+    "starting_development_by_seat": [
+      9,
+      11,
+      11,
+      10,
+      9
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000026,
+    "save_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-1ad9fc07fcf5b64a.hansa",
+    "metadata_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-1ad9fc07fcf5b64a.json"
+  },
+  {
+    "name": "map1_3p_early_default",
+    "map_num": 1,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 9,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      1,
+      1,
+      1
+    ],
+    "starting_development_by_seat": [
+      2,
+      4,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000027,
+    "save_file": "map1_3p_early_default/early_game/map_1/3_players/state-8a0951748a96bd0d.hansa",
+    "metadata_file": "map1_3p_early_default/early_game/map_1/3_players/state-8a0951748a96bd0d.json"
+  },
+  {
+    "name": "map1_3p_early_all_promos",
+    "map_num": 1,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 10,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      3,
+      3,
+      4
+    ],
+    "starting_development_by_seat": [
+      2,
+      2,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000028,
+    "save_file": "map1_3p_early_all_promos/early_game/map_1/3_players/state-2afa2ef94f6abcf1.hansa",
+    "metadata_file": "map1_3p_early_all_promos/early_game/map_1/3_players/state-2afa2ef94f6abcf1.json"
+  },
+  {
+    "name": "map1_3p_early_mixed",
+    "map_num": 1,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 11,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      3,
+      3,
+      2
+    ],
+    "starting_development_by_seat": [
+      2,
+      2,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000029,
+    "save_file": "map1_3p_early_mixed/early_game/map_1/3_players/state-28164dddc0361366.hansa",
+    "metadata_file": "map1_3p_early_mixed/early_game/map_1/3_players/state-28164dddc0361366.json"
+  },
+  {
+    "name": "map1_4p_early_default",
+    "map_num": 1,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 12,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      0,
+      1,
+      1,
+      0
+    ],
+    "starting_development_by_seat": [
+      4,
+      2,
+      2,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000030,
+    "save_file": "map1_4p_early_default/early_game/map_1/4_players/state-641d6a1f3f75aae1.hansa",
+    "metadata_file": "map1_4p_early_default/early_game/map_1/4_players/state-641d6a1f3f75aae1.json"
+  },
+  {
+    "name": "map1_4p_early_all_promos",
+    "map_num": 1,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 9,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      5,
+      5,
+      5,
+      5
+    ],
+    "starting_development_by_seat": [
+      3,
+      4,
+      3,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000031,
+    "save_file": "map1_4p_early_all_promos/early_game/map_1/4_players/state-2252bdc1701f318a.hansa",
+    "metadata_file": "map1_4p_early_all_promos/early_game/map_1/4_players/state-2252bdc1701f318a.json"
+  },
+  {
+    "name": "map1_4p_early_mixed",
+    "map_num": 1,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 10,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      5,
+      5,
+      5,
+      5
+    ],
+    "starting_development_by_seat": [
+      2,
+      3,
+      2,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000032,
+    "save_file": "map1_4p_early_mixed/early_game/map_1/4_players/state-5f06b672f0b60a0b.hansa",
+    "metadata_file": "map1_4p_early_mixed/early_game/map_1/4_players/state-5f06b672f0b60a0b.json"
+  },
+  {
+    "name": "map1_5p_early_default",
+    "map_num": 1,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 11,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "starting_development_by_seat": [
+      4,
+      2,
+      3,
+      4,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000033,
+    "save_file": "map1_5p_early_default/early_game/map_1/5_players/state-0772693667f1e2ab.hansa",
+    "metadata_file": "map1_5p_early_default/early_game/map_1/5_players/state-0772693667f1e2ab.json"
+  },
+  {
+    "name": "map1_5p_early_all_promos",
+    "map_num": 1,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 12,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      0,
+      1,
+      1,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      3,
+      2,
+      2,
+      3,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000034,
+    "save_file": "map1_5p_early_all_promos/early_game/map_1/5_players/state-c3f14c99caa9abfc.hansa",
+    "metadata_file": "map1_5p_early_all_promos/early_game/map_1/5_players/state-c3f14c99caa9abfc.json"
+  },
+  {
+    "name": "map1_5p_early_mixed",
+    "map_num": 1,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 9,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      4,
+      3,
+      4,
+      4,
+      3
+    ],
+    "starting_development_by_seat": [
+      4,
+      3,
+      3,
+      3,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000035,
+    "save_file": "map1_5p_early_mixed/early_game/map_1/5_players/state-d83585c96b10375e.hansa",
+    "metadata_file": "map1_5p_early_mixed/early_game/map_1/5_players/state-d83585c96b10375e.json"
+  },
+  {
+    "name": "map2_3p_early_default",
+    "map_num": 2,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 10,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      1,
+      1,
+      0
+    ],
+    "starting_development_by_seat": [
+      2,
+      3,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000036,
+    "save_file": "map2_3p_early_default/early_game/map_2/3_players/state-af93268fc4b7ad5c.hansa",
+    "metadata_file": "map2_3p_early_default/early_game/map_2/3_players/state-af93268fc4b7ad5c.json"
+  },
+  {
+    "name": "map2_3p_early_all_promos",
+    "map_num": 2,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 11,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      3,
+      3,
+      3
+    ],
+    "starting_development_by_seat": [
+      4,
+      3,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000037,
+    "save_file": "map2_3p_early_all_promos/early_game/map_2/3_players/state-108ea316f7ba658f.hansa",
+    "metadata_file": "map2_3p_early_all_promos/early_game/map_2/3_players/state-108ea316f7ba658f.json"
+  },
+  {
+    "name": "map2_3p_early_mixed",
+    "map_num": 2,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 12,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      3,
+      2,
+      2
+    ],
+    "starting_development_by_seat": [
+      3,
+      4,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000038,
+    "save_file": "map2_3p_early_mixed/early_game/map_2/3_players/state-cdc279a63511405c.hansa",
+    "metadata_file": "map2_3p_early_mixed/early_game/map_2/3_players/state-cdc279a63511405c.json"
+  },
+  {
+    "name": "map2_4p_early_default",
+    "map_num": 2,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 9,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      4,
+      3,
+      4,
+      3
+    ],
+    "starting_development_by_seat": [
+      4,
+      3,
+      3,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000039,
+    "save_file": "map2_4p_early_default/early_game/map_2/4_players/state-b96452b6fd9887f1.hansa",
+    "metadata_file": "map2_4p_early_default/early_game/map_2/4_players/state-b96452b6fd9887f1.json"
+  },
+  {
+    "name": "map2_4p_early_all_promos",
+    "map_num": 2,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 10,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      1,
+      2,
+      1,
+      2
+    ],
+    "starting_development_by_seat": [
+      2,
+      4,
+      3,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000040,
+    "save_file": "map2_4p_early_all_promos/early_game/map_2/4_players/state-41b7f03b08ad0342.hansa",
+    "metadata_file": "map2_4p_early_all_promos/early_game/map_2/4_players/state-41b7f03b08ad0342.json"
+  },
+  {
+    "name": "map2_4p_early_mixed",
+    "map_num": 2,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 11,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      3,
+      3,
+      4,
+      4
+    ],
+    "starting_development_by_seat": [
+      3,
+      4,
+      4,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000041,
+    "save_file": "map2_4p_early_mixed/early_game/map_2/4_players/state-7d93270d674a10fa.hansa",
+    "metadata_file": "map2_4p_early_mixed/early_game/map_2/4_players/state-7d93270d674a10fa.json"
+  },
+  {
+    "name": "map2_5p_early_default",
+    "map_num": 2,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 12,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      4,
+      5,
+      4,
+      5,
+      5
+    ],
+    "starting_development_by_seat": [
+      3,
+      2,
+      2,
+      2,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000042,
+    "save_file": "map2_5p_early_default/early_game/map_2/5_players/state-7ce0744a49e36690.hansa",
+    "metadata_file": "map2_5p_early_default/early_game/map_2/5_players/state-7ce0744a49e36690.json"
+  },
+  {
+    "name": "map2_5p_early_all_promos",
+    "map_num": 2,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 9,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "starting_development_by_seat": [
+      4,
+      2,
+      2,
+      3,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000043,
+    "save_file": "map2_5p_early_all_promos/early_game/map_2/5_players/state-c6f910e4514f80b3.hansa",
+    "metadata_file": "map2_5p_early_all_promos/early_game/map_2/5_players/state-c6f910e4514f80b3.json"
+  },
+  {
+    "name": "map2_5p_early_mixed",
+    "map_num": 2,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 10,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      0,
+      1,
+      1,
+      1,
+      1
+    ],
+    "starting_development_by_seat": [
+      4,
+      3,
+      2,
+      4,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000044,
+    "save_file": "map2_5p_early_mixed/early_game/map_2/5_players/state-832059ccba89e31a.hansa",
+    "metadata_file": "map2_5p_early_mixed/early_game/map_2/5_players/state-832059ccba89e31a.json"
+  },
+  {
+    "name": "map3_3p_early_default",
+    "map_num": 3,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 11,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      2,
+      1,
+      1
+    ],
+    "starting_development_by_seat": [
+      4,
+      2,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000045,
+    "save_file": "map3_3p_early_default/early_game/map_3/3_players/state-d7a0066133f812ca.hansa",
+    "metadata_file": "map3_3p_early_default/early_game/map_3/3_players/state-d7a0066133f812ca.json"
+  },
+  {
+    "name": "map3_3p_early_all_promos",
+    "map_num": 3,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 12,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      5,
+      5,
+      4
+    ],
+    "starting_development_by_seat": [
+      4,
+      2,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000046,
+    "save_file": "map3_3p_early_all_promos/early_game/map_3/3_players/state-dae22f08a84fad14.hansa",
+    "metadata_file": "map3_3p_early_all_promos/early_game/map_3/3_players/state-dae22f08a84fad14.json"
+  },
+  {
+    "name": "map3_3p_early_mixed",
+    "map_num": 3,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 9,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      5,
+      5,
+      5
+    ],
+    "starting_development_by_seat": [
+      4,
+      2,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000047,
+    "save_file": "map3_3p_early_mixed/early_game/map_3/3_players/state-cfb00e8880107e9b.hansa",
+    "metadata_file": "map3_3p_early_mixed/early_game/map_3/3_players/state-cfb00e8880107e9b.json"
+  },
+  {
+    "name": "map3_4p_early_default",
+    "map_num": 3,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 10,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      5,
+      5,
+      4,
+      5
+    ],
+    "starting_development_by_seat": [
+      4,
+      2,
+      4,
+      4
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000048,
+    "save_file": "map3_4p_early_default/early_game/map_3/4_players/state-95c714adfcd39107.hansa",
+    "metadata_file": "map3_4p_early_default/early_game/map_3/4_players/state-95c714adfcd39107.json"
+  },
+  {
+    "name": "map3_4p_early_all_promos",
+    "map_num": 3,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 11,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      3,
+      4,
+      4,
+      4
+    ],
+    "starting_development_by_seat": [
+      2,
+      4,
+      3,
+      2
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000049,
+    "save_file": "map3_4p_early_all_promos/early_game/map_3/4_players/state-2e5d253f5fc90e5c.hansa",
+    "metadata_file": "map3_4p_early_all_promos/early_game/map_3/4_players/state-2e5d253f5fc90e5c.json"
+  },
+  {
+    "name": "map3_4p_early_mixed",
+    "map_num": 3,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 12,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      1,
+      2,
+      2,
+      1
+    ],
+    "starting_development_by_seat": [
+      2,
+      3,
+      2,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000050,
+    "save_file": "map3_4p_early_mixed/early_game/map_3/4_players/state-310fe521a1e1a1e4.hansa",
+    "metadata_file": "map3_4p_early_mixed/early_game/map_3/4_players/state-310fe521a1e1a1e4.json"
+  },
+  {
+    "name": "map3_5p_early_default",
+    "map_num": 3,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 9,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      1,
+      2,
+      2,
+      2,
+      2
+    ],
+    "starting_development_by_seat": [
+      3,
+      2,
+      4,
+      3,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000051,
+    "save_file": "map3_5p_early_default/early_game/map_3/5_players/state-4ac20f318ac77438.hansa",
+    "metadata_file": "map3_5p_early_default/early_game/map_3/5_players/state-4ac20f318ac77438.json"
+  },
+  {
+    "name": "map3_5p_early_all_promos",
+    "map_num": 3,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 10,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      3,
+      3,
+      2,
+      3,
+      2
+    ],
+    "starting_development_by_seat": [
+      3,
+      2,
+      2,
+      4,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000052,
+    "save_file": "map3_5p_early_all_promos/early_game/map_3/5_players/state-e588cb97397cefcf.hansa",
+    "metadata_file": "map3_5p_early_all_promos/early_game/map_3/5_players/state-e588cb97397cefcf.json"
+  },
+  {
+    "name": "map3_5p_early_mixed",
+    "map_num": 3,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      5
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 11,
+    "completed_cities_below_limit": 7,
+    "prepared_routes_one_short": true,
+    "development_range": [
+      2,
+      4
+    ],
+    "evaluation_set": "early",
+    "prepare_ending_condition": false,
+    "round_range": [
+      2,
+      5
+    ],
+    "mixed_development": false,
+    "suite_version": 8,
+    "scenario": "early_game",
+    "starting_score_by_seat": [
+      2,
+      2,
+      3,
+      3,
+      2
+    ],
+    "starting_development_by_seat": [
+      4,
+      3,
+      4,
+      4,
+      3
+    ],
+    "development_role_by_seat": [],
+    "seed": 1000000053,
+    "save_file": "map3_5p_early_mixed/early_game/map_3/5_players/state-7f6fb2fe35807927.hansa",
+    "metadata_file": "map3_5p_early_mixed/early_game/map_3/5_players/state-7f6fb2fe35807927.json"
+  },
+  {
+    "name": "map1_3p_mixed_development",
+    "map_num": 1,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      2,
+      6,
+      9
+    ],
+    "starting_development_by_seat": [
+      2,
+      6,
+      6
+    ],
+    "development_role_by_seat": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "seed": 1000000054,
+    "save_file": "map1_3p_mixed_development/mixed_development/map_1/3_players/state-a8e2eebdba228012.hansa",
+    "metadata_file": "map1_3p_mixed_development/mixed_development/map_1/3_players/state-a8e2eebdba228012.json"
+  },
+  {
+    "name": "map1_4p_mixed_development",
+    "map_num": 1,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      8,
+      3,
+      4,
+      11
+    ],
+    "starting_development_by_seat": [
+      6,
+      4,
+      3,
+      6
+    ],
+    "development_role_by_seat": [
+      "high_mid",
+      "low",
+      "low_mid",
+      "high"
+    ],
+    "seed": 1000000055,
+    "save_file": "map1_4p_mixed_development/mixed_development/map_1/4_players/state-160626259714ad78.hansa",
+    "metadata_file": "map1_4p_mixed_development/mixed_development/map_1/4_players/state-160626259714ad78.json"
+  },
+  {
+    "name": "map1_5p_mixed_development",
+    "map_num": 1,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      9,
+      9,
+      4,
+      3,
+      6
+    ],
+    "starting_development_by_seat": [
+      6,
+      7,
+      5,
+      3,
+      4
+    ],
+    "development_role_by_seat": [
+      "very_high",
+      "high",
+      "low",
+      "very_low",
+      "medium"
+    ],
+    "seed": 1000000056,
+    "save_file": "map1_5p_mixed_development/mixed_development/map_1/5_players/state-bbd8f5aed916f791.hansa",
+    "metadata_file": "map1_5p_mixed_development/mixed_development/map_1/5_players/state-bbd8f5aed916f791.json"
+  },
+  {
+    "name": "map2_3p_mixed_development",
+    "map_num": 2,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      3,
+      7,
+      11
+    ],
+    "starting_development_by_seat": [
+      2,
+      5,
+      6
+    ],
+    "development_role_by_seat": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "seed": 1000000057,
+    "save_file": "map2_3p_mixed_development/mixed_development/map_2/3_players/state-9ad45d62eae83fbc.hansa",
+    "metadata_file": "map2_3p_mixed_development/mixed_development/map_2/3_players/state-9ad45d62eae83fbc.json"
+  },
+  {
+    "name": "map2_4p_mixed_development",
+    "map_num": 2,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      9,
+      7,
+      6,
+      3
+    ],
+    "starting_development_by_seat": [
+      6,
+      5,
+      4,
+      2
+    ],
+    "development_role_by_seat": [
+      "high",
+      "high_mid",
+      "low_mid",
+      "low"
+    ],
+    "seed": 1000000058,
+    "save_file": "map2_4p_mixed_development/mixed_development/map_2/4_players/state-66a74d1e2643212a.hansa",
+    "metadata_file": "map2_4p_mixed_development/mixed_development/map_2/4_players/state-66a74d1e2643212a.json"
+  },
+  {
+    "name": "map2_5p_mixed_development",
+    "map_num": 2,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      3,
+      2,
+      5,
+      10,
+      9
+    ],
+    "starting_development_by_seat": [
+      3,
+      3,
+      5,
+      7,
+      5
+    ],
+    "development_role_by_seat": [
+      "low",
+      "very_low",
+      "medium",
+      "very_high",
+      "high"
+    ],
+    "seed": 1000000059,
+    "save_file": "map2_5p_mixed_development/mixed_development/map_2/5_players/state-5f886a45978e32f9.hansa",
+    "metadata_file": "map2_5p_mixed_development/mixed_development/map_2/5_players/state-5f886a45978e32f9.json"
+  },
+  {
+    "name": "map3_3p_mixed_development",
+    "map_num": 3,
+    "player_count": 3,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      11,
+      3,
+      6
+    ],
+    "starting_development_by_seat": [
+      8,
+      4,
+      4
+    ],
+    "development_role_by_seat": [
+      "high",
+      "low",
+      "medium"
+    ],
+    "seed": 1000000060,
+    "save_file": "map3_3p_mixed_development/mixed_development/map_3/3_players/state-662626f3bf0b98de.hansa",
+    "metadata_file": "map3_3p_mixed_development/mixed_development/map_3/3_players/state-662626f3bf0b98de.json"
+  },
+  {
+    "name": "map3_4p_mixed_development",
+    "map_num": 3,
+    "player_count": 4,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      4,
+      9,
+      8,
+      1
+    ],
+    "starting_development_by_seat": [
+      5,
+      6,
+      5,
+      4
+    ],
+    "development_role_by_seat": [
+      "low_mid",
+      "high",
+      "high_mid",
+      "low"
+    ],
+    "seed": 1000000061,
+    "save_file": "map3_4p_mixed_development/mixed_development/map_3/4_players/state-6b1db51b857a2408.hansa",
+    "metadata_file": "map3_4p_mixed_development/mixed_development/map_3/4_players/state-6b1db51b857a2408.json"
+  },
+  {
+    "name": "map3_5p_mixed_development",
+    "map_num": 3,
+    "player_count": 5,
+    "ending_condition": "near_score",
+    "score_range": [
+      0,
+      12
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 5,
+    "completed_cities_below_limit": 5,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      2,
+      8
+    ],
+    "evaluation_set": "mixed_development",
+    "prepare_ending_condition": false,
+    "round_range": [
+      6,
+      12
+    ],
+    "mixed_development": true,
+    "suite_version": 8,
+    "scenario": "mixed_development",
+    "starting_score_by_seat": [
+      9,
+      4,
+      5,
+      9,
+      2
+    ],
+    "starting_development_by_seat": [
+      5,
+      3,
+      4,
+      7,
+      3
+    ],
+    "development_role_by_seat": [
+      "high",
+      "low",
+      "medium",
+      "very_high",
+      "very_low"
+    ],
+    "seed": 1000000062,
+    "save_file": "map3_5p_mixed_development/mixed_development/map_3/5_players/state-24870150495e49ca.hansa",
+    "metadata_file": "map3_5p_mixed_development/mixed_development/map_3/5_players/state-24870150495e49ca.json"
   }
 ]
