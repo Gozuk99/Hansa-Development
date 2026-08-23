@@ -41,18 +41,25 @@ Every training and evaluation row also records paid-action movement diagnostics:
 Move count and ratio, pointless Move workflows, repeated-Move and all-Move-turn
 penalty counts, route-creating Moves, and immediate Move-to-Claim conversions.
 Rates remain blank when their denominator is zero. The dashboard aggregates the
-fixed evaluation games by batch and applies its existing map and player filters;
+fixed evaluation games by batch and applies its existing map and player filters.
+Early-game evaluation is reported separately from the established fixed suite;
 these values are diagnostics and do not add or change any reward.
 
 By default it runs five learning games followed by the complete fixed evaluation
 suite. Set the learning games per batch with `--iterations`; use `--batch` to
 repeat that entire learning-and-evaluation cycle.
 The model learns after every collected learning trajectory, including penalized
-no-replacement-route failures. Training uses one 256-decision update per started
-block of 256 trajectory decisions, up to four non-overlapping updates and 1,024
-sampled decisions per game. The final decision and the strongest immediate rewards
-or workflow-local penalties are retained across those samples, giving long
-looping games additional teaching weight. Normal Move and permanent Move Any 2
+no-replacement-route failures. Training uses one 256-decision update per sampled
+block: mid, late, end, and mixed games use at most four blocks (1,024 decisions),
+while generated early and early-mixed games use at most 4,096 decisions. CSV coverage columns record the
+trajectory decision count, sampled decision count, and sampled fraction. Early
+samples are spread across eight chronological sections, targeting 512 decisions
+from each section; eight additional CSV columns report the resulting per-section
+counts. Unused section capacity is redistributed without splitting movement
+workflows or exceeding 4,096 decisions. The final decision and the strongest
+immediate rewards or workflow-local penalties are retained across those samples.
+Normal
+Move and permanent Move Any 2
 pickups and placements are sampled together. An exact no-change workflow and the
 equivalent rearrangement within one non-maritime route receive a local negative
 target, as does the third consecutive normal Move. A turn that spends at least
@@ -62,7 +69,8 @@ only once per player and route until that route is claimed. Paid normal-Move
 workflows do not inherit terminal credit by default. When the next non-Move
 paid action claims a route completed by an uninterrupted same-turn Move chain,
 every Move in that chain that contributed to the claimed route regains terminal
-credit. Immediate movement rewards and penalties still apply, and permanent
+credit. Immediate movement rewards still apply; small normal-Move efficiency
+penalties adjust only their offending grouped workflow target. Permanent
 Move Any 2 is unaffected.
 `--batch-size` controls how many collected
 learning trajectories pass between disk saves. After each save group (five
@@ -75,35 +83,76 @@ exists; otherwise it starts from the current playable model.
 The command has no option that deletes or resets the checkpoint, playable model,
 or CSV history.
 
-Training currently uses a shuffled ten-game maturity cycle: two early-game,
-three mid-game, three late-game, and two end-game positions. This gives early
-games a 20% share without allowing them to dominate. The fresh-game profile
-remains commented out. The CSV records the maturity in the curriculum-stage
-label so results can be compared separately.
-Early positions retain nine bonus markers in supply, leaving only three markers
-collectively claimed by players while all three route markers remain in play.
-Their CSV scenario labels use `score_focus`, `bonus_marker_focus`, or
-`completed_city_focus`; `near_*` remains reserved for later maturity profiles.
-Generated learning positions prepare routes exactly one post short: one of two,
+Training uses an exact shuffled 160-game curriculum cycle: 64 mixed (40%), 48
+early-mixed (30%), 24 early (15%), nine mid, nine late, and six end positions.
+Mid, late, and end therefore total 15% while retaining their existing 3:3:2
+relative weighting. Mixed positions keep their established broad asymmetric
+development. Early-mixed positions use shuffled 2-6 point and 3-5 development
+roles, then place three or four conserved pieces per player across two or three
+random non-Britannia routes. Every selected route retains an open post; route
+selection may create contests but never creates a completed route or guaranteed
+Claim. Development roles are shuffled independently of policy tiers.
+The fresh-game profile remains commented out.
+The CSV records the maturity in the curriculum-stage label so results can be
+compared separately.
+Early positions retain nine to twelve bonus markers in supply while all three
+route markers remain in play.
+Early training uses two reproducible variants: 70% scaffold exactly two unique,
+randomly selected completed routes per player, while 30% keeps the original
+sparse early board. Scaffold selection is without replacement and does not
+prefer bonus-marker, upgrade, scoring, or otherwise valuable routes. All pieces
+come from the normal conserved player pools. CSV rows record the variant plus
+the selected route IDs and route lengths by seat. Fixed early evaluation boards
+remain unscaffolded.
+Across generated training positions, bonus-marker modules use the default
+supply 50% of the time, every promotional marker plus shuffled defaults 25% of
+the time, and a random mixture of default and promotional markers 25% of the
+time. Map 1 enables mission cards 40% of the time and leaves them disabled 60%
+of the time.
+Early-game rows use the single `early` label and early-mixed rows use
+`early_mixed`; neither prepares a score, bonus-marker, or completed-city ending
+condition. Existing mixed rows use `mixed`. Midgame rows use `score_focus`,
+`bonus_marker_focus`, or `completed_city_focus`; only late/end rows use `near_*`
+condition labels. Generated mid/late/end learning positions prepare routes
+exactly one post short: one of two,
 two of three, or three of four posts. Automatic training focuses do not add an
 opponent blocker to that final post, so the model must place the missing piece
 before it can claim the route.
-Evaluation suite version 4 contains one position for every combination of three
-maps, three supported player counts, and three end conditions: 27 positions total.
-Three positions test an immediate ending, one per end condition. The other 24
-begin farther from the end with prepared routes one post short. Every
-bonus-marker evaluation begins a normal turn with all three route markers in
-play and no pending replacements.
+Evaluation suite version 8 preserves the 27 established fixed positions and the
+27 deterministic early-game positions: one for every map, supported player
+count, and bonus-marker setup. The early set has low scores, modest development, zero completed cities,
+three active route markers, varied remaining marker supply, and deterministic
+optional modules. It contains no East-West, regional-control, immediate-finish,
+or fresh-game setup. CSV rows identify `mid_late_end` versus `early`, and the
+dashboard gives early evaluation its own filtered section and timeout reporting.
+Nine additional fixed mixed-development positions cover every map and player
+count. Their dashboard section compares policy tiers by shuffled starting role,
+including win, completion, timeout, final-score, score-gain, interaction, and
+movement results. Across all generated states, a positive starting score is
+accepted only when that player controls a city or occupies a spent special
+prestige/bonus-VP circle.
+Every map/player-count combination deliberately covers default,
+all-promotional, and mixed bonus-marker supplies. Map 1's nine early positions
+include four with mission cards and five without.
+The CSV `starting_position` column remains blank for early, early-mixed, mixed,
+mid, and late rows.
+End-relative labels such as `two_decisions_before`, `one_round_before`, and
+`immediate_finish` are reserved for end-focused training or fixed evaluation
+positions.
 
 For example, `--batch 10 --iterations 100` runs ten batches. Each batch contains
-100 learning games followed by the 27 fixed test-only games, for 1,000 learning
-games and 270 test-only games total.
+100 learning games followed by the 63 fixed test-only games, for 1,000 learning
+games and 630 test-only games total.
 
-The active late/end curriculum uses a 10,000-interaction limit at every
-maturity. Promotion considers invalid actions, unfinished games, fixed-state
-evaluation completion, Tier 1 performance, and rolling loss. Action-limit
-failures retain their accumulated training signal; diagnostic bundles are
-preserved under `training_data/failures/`.
+Generated early and early-mixed training games use a 15,000-interaction limit;
+mixed, mid, late, and end training games remain at 10,000. Every fixed evaluation game, including the
+early benchmark, remains capped at 10,000 so timeout rates stay comparable.
+Early training rows identify games that finished by 10,000, finished during the
+extra 5,000 interactions, or still timed out at 15,000. Promotion considers
+invalid actions, unfinished games, fixed-state evaluation completion, Tier 1
+performance, and rolling loss. Action-limit failures retain their accumulated
+training signal; diagnostic bundles are preserved under
+`training_data/failures/`.
 
 ## Training policy tiers
 

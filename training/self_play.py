@@ -40,6 +40,7 @@ TRAINING_CHECKPOINT_FORMAT = "hansa-shared-q-training"
 TRAINING_CHECKPOINT_VERSION = 5
 DEFAULT_LEARNING_RATE = 0.0001
 LEGACY_LEARNING_RATE = 0.00001
+LEGACY_EARLY_MAX_TRAINING_DECISIONS = 2_048
 PRESTIGE_REWARD_MULTIPLIER = 100
 END_GAME_WINNER_BONUS = 150
 NO_REPLACEMENT_ROUTE_PENALTY = -500
@@ -107,6 +108,8 @@ class TrainingConfig:
     seed: int = 124
     gamma: float = 0.99
     decision_batch_size: int = 256
+    normal_max_training_decisions: int = 1_024
+    early_max_training_decisions: int = 4_096
     full_validation_interval: int = 50
     income_penalty_scale: float = 100.0
     tier_top_k: tuple[int | None, ...] = DEFAULT_TIER_TOP_K
@@ -128,6 +131,10 @@ class TrainingConfig:
             raise ValueError("gamma must be between 0 and 1")
         if self.decision_batch_size < 1:
             raise ValueError("decision batch size must be positive")
+        if self.normal_max_training_decisions < 1:
+            raise ValueError("normal maximum training decisions must be positive")
+        if self.early_max_training_decisions < 1:
+            raise ValueError("early maximum training decisions must be positive")
         if self.full_validation_interval < 1:
             raise ValueError("full validation interval must be positive")
         if self.income_penalty_scale < 0:
@@ -186,6 +193,7 @@ class TrainingDecision:
     movement_workflow_id: int | None = None
     reward_to_go: float | None = None
     local_training_target: float | None = None
+    local_training_adjustment: float = 0.0
     equivalent_action_indices: tuple[int, ...] = ()
     receives_terminal_credit: bool = True
 
@@ -218,6 +226,21 @@ class CompletedTrajectory:
     moves_creating_claimable_route: int = 0
     move_claim_conversions: int = 0
     move_claim_conversion_rate: float | None = None
+
+
+@dataclass(frozen=True)
+class TrainingSampleCoverage:
+    """Decision coverage used by the most recent trajectory update."""
+
+    total_decisions: int
+    sampled_decisions: int
+    sampled_octiles: tuple[int, ...] = ()
+
+    @property
+    def sampled_fraction(self):
+        if not self.total_decisions:
+            return None
+        return self.sampled_decisions / self.total_decisions
 
 
 @dataclass
@@ -534,9 +557,21 @@ def assign_training_targets(decisions, terminal_rewards, gamma):
     return tuple(
         replace(decision, reward_to_go=decision.local_training_target)
         if decision.local_training_target is not None
+        else replace(
+            decision,
+            reward_to_go=decision.reward_to_go + decision.local_training_adjustment,
+        )
+        if decision.local_training_adjustment
         else decision
         for decision in completed
     )
+
+
+def _training_priority_value(decision):
+    """Preserve reward/local-mistake priority after local additive adjustments."""
+    if decision.local_training_target is not None:
+        return abs(decision.local_training_target)
+    return abs(decision.immediate_reward + decision.local_training_adjustment)
 
 
 def mark_movement_workflow_target(decisions, workflow_id, target):
@@ -551,6 +586,25 @@ def mark_movement_workflow_target(decisions, workflow_id, target):
             if decision.local_training_target is not None:
                 local_target = min(local_target, decision.local_training_target)
             decisions[index] = replace(decision, local_training_target=local_target)
+            found = True
+        elif found:
+            break
+    if not found:
+        raise ValueError(f"Movement workflow {workflow_id} has no recorded decisions")
+
+
+def add_movement_workflow_adjustment(decisions, workflow_id, adjustment):
+    """Add a local adjustment to one Move workflow without changing earlier returns."""
+    if workflow_id is None:
+        raise ValueError("A local movement adjustment requires a workflow ID")
+    found = False
+    for index in range(len(decisions) - 1, -1, -1):
+        decision = decisions[index]
+        if decision.movement_workflow_id == workflow_id:
+            decisions[index] = replace(
+                decision,
+                local_training_adjustment=(decision.local_training_adjustment + float(adjustment)),
+            )
             found = True
         elif found:
             break
@@ -593,6 +647,13 @@ def apply_all_move_turn_target(decisions, workflow_ids, spent_actions):
     for workflow_id in workflow_ids:
         mark_movement_workflow_target(decisions, workflow_id, ALL_MOVE_TURN_LOCAL_TARGET)
     return True
+
+
+def finalize_all_move_turn(decisions, movement_metrics, workflow_ids, spent_actions):
+    """Apply and record the all-Move target when the current turn closes."""
+    applied = apply_all_move_turn_target(decisions, workflow_ids, spent_actions)
+    movement_metrics.all_move_turn_penalties += int(applied)
+    return applied
 
 
 def calculate_terminal_rewards(game, winner_indices, game_end_trigger_player):
@@ -792,22 +853,6 @@ def intermediate_ability_upgrade_reward(values_before, values_after):
     return float(reward)
 
 
-def apply_movement_efficiency_penalty(
-    reward_deltas,
-    *,
-    acting_player_index,
-    movement_capacity,
-    pieces_moved,
-    normal_move_completed,
-):
-    """Apply a normal-Move penalty only when its final piece has been placed."""
-    if not normal_move_completed:
-        return tuple(reward_deltas)
-    adjusted = list(reward_deltas)
-    adjusted[acting_player_index] += movement_efficiency_penalty(pieces_moved, movement_capacity)
-    return tuple(adjusted)
-
-
 def apply_opponent_route_score_penalty(
     reward_deltas,
     *,
@@ -851,6 +896,7 @@ class SelfPlayTrainer:
         self.loss_total = 0.0
         self.source_state_sha256 = None
         self.curriculum_state = None
+        self.last_training_sample_coverage = ()
 
     def _tier(self, number):
         return PolicyTier(
@@ -1074,6 +1120,7 @@ class SelfPlayTrainer:
         failure_callback=None,
         evaluation=False,
         evaluation_tier_rotation=0,
+        capture_action_limit=False,
     ) -> CompletedTrajectory:
         """Play one exact starting state without changing model weights."""
         play_started = perf_counter()
@@ -1147,12 +1194,12 @@ class SelfPlayTrainer:
                 if game.game_end:
                     break
                 if game.turn_number != tracked_turn:
-                    all_move_penalty_applied = apply_all_move_turn_target(
+                    finalize_all_move_turn(
                         decisions,
+                        movement_metrics,
                         turn_move_workflow_ids,
                         turn_spent_actions,
                     )
-                    movement_metrics.all_move_turn_penalties += int(all_move_penalty_applied)
                     tracked_turn = game.turn_number
                     pending_move_claim_routes = [frozenset() for _player in game.players]
                     pending_terminal_move_workflows = []
@@ -1532,6 +1579,7 @@ class SelfPlayTrainer:
                 repeated_move_penalty = 0.0
                 no_change_penalty = 0.0
                 movement_local_target = None
+                movement_local_adjustment = 0.0
                 if normal_move_completed and action_was_spent:
                     next_consecutive_move = consecutive_move_actions + 1
                     repeated_move_penalty = consecutive_move_penalty(
@@ -1544,6 +1592,11 @@ class SelfPlayTrainer:
                     )
                     if next_consecutive_move >= 3 or no_change_penalty:
                         movement_local_target = repeated_move_penalty + no_change_penalty
+                    else:
+                        movement_local_adjustment = (
+                            repeated_move_penalty
+                            + movement_efficiency_penalty(pieces_moved, movement_capacity)
+                        )
                 elif permanent_move_completed:
                     no_change_penalty = pointless_movement_penalty(
                         move_origin_pieces,
@@ -1553,13 +1606,6 @@ class SelfPlayTrainer:
                     movement_local_target = no_change_penalty or None
                 movement_metrics.pointless_move_workflows += int(bool(no_change_penalty))
                 movement_metrics.repeated_move_penalties += int(bool(repeated_move_penalty))
-                player_reward_deltas = apply_movement_efficiency_penalty(
-                    player_reward_deltas,
-                    acting_player_index=observation.observer_index,
-                    movement_capacity=movement_capacity,
-                    pieces_moved=pieces_moved,
-                    normal_move_completed=normal_move_completed and movement_local_target is None,
-                )
                 if move_placement_route is not None:
                     move_destination_counts[move_placement_route] = (
                         move_destination_counts.get(move_placement_route, 0) + 1
@@ -1594,7 +1640,6 @@ class SelfPlayTrainer:
                         )
                         adjusted = list(player_reward_deltas)
                         if movement_local_target is None:
-                            adjusted[observation.observer_index] += repeated_move_penalty
                             if move_blocked_next_player:
                                 adjusted[observation.observer_index] += MOVE_BLOCK_REWARD
                             (
@@ -1715,6 +1760,12 @@ class SelfPlayTrainer:
                         movement_workflow_id,
                         movement_local_target,
                     )
+                elif movement_local_adjustment:
+                    add_movement_workflow_adjustment(
+                        decisions,
+                        movement_workflow_id,
+                        movement_local_adjustment,
+                    )
                 if normal_move_completed:
                     normal_move_workflow_id = None
                 if permanent_move_completed:
@@ -1724,13 +1775,19 @@ class SelfPlayTrainer:
                 if game_end_trigger_player is None and end_is_pending and not end_was_pending:
                     game_end_trigger_player = observation.observer_index
             else:
+                finalize_all_move_turn(
+                    decisions,
+                    movement_metrics,
+                    turn_move_workflow_ids,
+                    turn_spent_actions,
+                )
                 self.progress.game_completion_failures += 1
                 error = ActionLimitExceeded(
                     f"Game did not finish within {self.config.max_actions} actions"
                 )
                 if failure_callback is not None:
                     failure_callback(game, tuple(action_trace), seat_tiers, error)
-                if evaluation:
+                if evaluation and not capture_action_limit:
                     raise error
                 # A timeout is not a game loss. Keep every authoritative reward
                 # and penalty already earned, but add no invented terminal value.
@@ -1747,6 +1804,12 @@ class SelfPlayTrainer:
                     movement_metrics=movement_metrics,
                 )
 
+        finalize_all_move_turn(
+            decisions,
+            movement_metrics,
+            turn_move_workflow_ids,
+            turn_spent_actions,
+        )
         validation_started = perf_counter()
         validate_game(game)
         validation_seconds += perf_counter() - validation_started
@@ -1812,15 +1875,17 @@ class SelfPlayTrainer:
             }
         return metrics
 
-    def _training_batches(self, decisions):
+    def _training_batches(self, decisions, *, max_training_decisions=None):
         decisions = list(decisions)
         batch_size = self.config.decision_batch_size
-        if len(decisions) <= batch_size:
+        if max_training_decisions is None:
+            max_training_decisions = self.config.normal_max_training_decisions
+        if len(decisions) <= min(batch_size, max_training_decisions):
             self.rng.shuffle(decisions)
             return (decisions,)
 
-        batch_count = min(4, math.ceil(len(decisions) / batch_size))
-        sample_size = min(len(decisions), batch_size * batch_count)
+        sample_size = min(len(decisions), max_training_decisions)
+        batch_count = math.ceil(sample_size / batch_size)
         grouped = {}
         for index, decision in enumerate(decisions):
             key = (
@@ -1843,19 +1908,9 @@ class SelfPlayTrainer:
                 (key, group)
                 for key, group in grouped.items()
                 if key != final_key
-                and any(
-                    decision.immediate_reward or decision.local_training_target is not None
-                    for decision in group
-                )
+                and any(_training_priority_value(decision) for decision in group)
             ),
-            key=lambda item: max(
-                abs(
-                    decision.local_training_target
-                    if decision.local_training_target is not None
-                    else decision.immediate_reward
-                )
-                for decision in item[1]
-            ),
+            key=lambda item: max(_training_priority_value(decision) for decision in item[1]),
             reverse=True,
         )
         priority_budget = sample_size // 2
@@ -1887,15 +1942,197 @@ class SelfPlayTrainer:
             self.rng.shuffle(batch)
         return tuple(batch for batch in batches if batch)
 
-    def update_model(self, trajectories) -> float:
-        """Update from one to four representative batches per trajectory."""
+    def _early_training_batches(self, decisions):
+        """Sample an early trajectory evenly across eight chronological sections."""
+        decisions = list(decisions)
+        if not decisions:
+            return ()
+
+        section_count = 8
+        batch_size = self.config.decision_batch_size
+        sample_size = min(
+            len(decisions),
+            self.config.early_max_training_decisions,
+        )
+        section_budgets = [sample_size // section_count] * section_count
+        for section in range(sample_size % section_count):
+            section_budgets[section] += 1
+
+        grouped = {}
+        group_indices = {}
+        for index, decision in enumerate(decisions):
+            key = (
+                ("movement", decision.movement_workflow_id)
+                if decision.movement_workflow_id is not None
+                else ("decision", index)
+            )
+            grouped.setdefault(key, []).append(decision)
+            group_indices.setdefault(key, []).append(index)
+
+        sections = [[] for _ in range(section_count)]
+        for key, indices in group_indices.items():
+            midpoint = (indices[0] + indices[-1]) // 2
+            section = min(section_count - 1, midpoint * section_count // len(decisions))
+            sections[section].append(key)
+
+        final_key = (
+            ("movement", decisions[-1].movement_workflow_id)
+            if decisions[-1].movement_workflow_id is not None
+            else ("decision", len(decisions) - 1)
+        )
+        selected_by_section = [[] for _ in range(section_count)]
+        selected_counts = [0] * section_count
+        selected_keys = set()
+
+        priority_values = {
+            key: max((_training_priority_value(decision) for decision in group), default=0)
+            for key, group in grouped.items()
+        }
+
+        def priority_value(key):
+            return priority_values[key]
+
+        def add_to_section(key, section_index):
+            selected_keys.add(key)
+            selected_by_section[section_index].append(key)
+            selected_counts[section_index] += len(grouped[key])
+
+        for section, keys in enumerate(sections):
+            budget = section_budgets[section]
+            if (
+                final_key in keys
+                and len(grouped[final_key]) <= budget
+                and len(grouped[final_key]) <= batch_size
+            ):
+                add_to_section(final_key, section)
+
+            priority_keys = sorted(
+                (key for key in keys if key not in selected_keys and priority_value(key)),
+                key=priority_value,
+                reverse=True,
+            )
+            priority_budget = budget // 2
+            for key in priority_keys:
+                if (
+                    len(grouped[key]) <= batch_size
+                    and selected_counts[section] + len(grouped[key]) <= priority_budget
+                ):
+                    add_to_section(key, section)
+
+            remaining_keys = [key for key in keys if key not in selected_keys]
+            self.rng.shuffle(remaining_keys)
+            for key in remaining_keys:
+                if (
+                    len(grouped[key]) <= batch_size
+                    and selected_counts[section] + len(grouped[key]) <= budget
+                ):
+                    add_to_section(key, section)
+
+        remaining_capacity = sample_size - sum(selected_counts)
+        overflow_by_section = []
+        for keys in sections:
+            priority_keys = sorted(
+                (key for key in keys if key not in selected_keys and priority_value(key)),
+                key=priority_value,
+                reverse=True,
+            )
+            random_keys = [
+                key for key in keys if key not in selected_keys and not priority_value(key)
+            ]
+            self.rng.shuffle(random_keys)
+            overflow_by_section.append(priority_keys + random_keys)
+
+        while remaining_capacity:
+            added = False
+            for candidates in overflow_by_section:
+                fitting_position = next(
+                    (
+                        position
+                        for position, key in enumerate(candidates)
+                        if len(grouped[key]) <= remaining_capacity
+                        and len(grouped[key]) <= batch_size
+                    ),
+                    None,
+                )
+                if fitting_position is None:
+                    continue
+                key = candidates.pop(fitting_position)
+                section = min(
+                    section_count - 1,
+                    group_indices[key][0] * section_count // len(decisions),
+                )
+                add_to_section(key, section)
+                remaining_capacity -= len(grouped[key])
+                added = True
+                if not remaining_capacity:
+                    break
+            if not added:
+                break
+
+        batches = []
+        for keys in selected_by_section:
+            for key in keys:
+                group = grouped[key]
+                if not batches or len(batches[-1]) + len(group) > batch_size:
+                    batches.append([])
+                batches[-1].extend(group)
+        for batch in batches:
+            self.rng.shuffle(batch)
+        return tuple(batch for batch in batches if batch)
+
+    @staticmethod
+    def _sampled_octiles(decisions, batches):
+        decisions = tuple(decisions)
+        if not decisions:
+            return ()
+        positions = {id(decision): index for index, decision in enumerate(decisions)}
+        counts = [0] * 8
+        for decision in (decision for batch in batches for decision in batch):
+            section = min(7, positions[id(decision)] * 8 // len(decisions))
+            counts[section] += 1
+        return tuple(counts)
+
+    def _trajectory_training_decision_cap(self, curriculum_maturity):
+        return (
+            self.config.early_max_training_decisions
+            if curriculum_maturity in {"early", "early_mixed"}
+            else self.config.normal_max_training_decisions
+        )
+
+    def update_model(self, trajectories, *, curriculum_maturities=None) -> float:
+        """Update from representative batches within each trajectory's configured cap."""
         trajectories = tuple(trajectories)
         if not trajectories or any(not trajectory.decisions for trajectory in trajectories):
             raise TrainingRunError("Cannot train from an empty trajectory batch")
+        if curriculum_maturities is None:
+            curriculum_maturities = (None,) * len(trajectories)
+        else:
+            curriculum_maturities = tuple(curriculum_maturities)
+            if len(curriculum_maturities) != len(trajectories):
+                raise TrainingRunError("Each trajectory must have one curriculum maturity")
         self.model.train()
         losses = []
-        for trajectory in trajectories:
-            for batch in self._training_batches(trajectory.decisions):
+        coverage = []
+        for trajectory, curriculum_maturity in zip(trajectories, curriculum_maturities):
+            if curriculum_maturity in {"early", "early_mixed"}:
+                batches = self._early_training_batches(trajectory.decisions)
+                sampled_octiles = self._sampled_octiles(trajectory.decisions, batches)
+            else:
+                batches = self._training_batches(
+                    trajectory.decisions,
+                    max_training_decisions=self._trajectory_training_decision_cap(
+                        curriculum_maturity
+                    ),
+                )
+                sampled_octiles = ()
+            coverage.append(
+                TrainingSampleCoverage(
+                    total_decisions=len(trajectory.decisions),
+                    sampled_decisions=sum(map(len, batches)),
+                    sampled_octiles=sampled_octiles,
+                )
+            )
+            for batch in batches:
                 observations = (
                     torch.stack([sample.observation for sample in batch]).float().to(device)
                 )
@@ -1930,6 +2167,7 @@ class SelfPlayTrainer:
                 self.optimizer.step()
                 losses.append(float(loss.detach().cpu()))
                 self.progress.training_updates += 1
+        self.last_training_sample_coverage = tuple(coverage)
         self.model.eval()
 
         value = sum(losses) / len(losses)
@@ -2052,6 +2290,8 @@ class SelfPlayTrainer:
             config_values["tier_top_k"] = DEFAULT_TIER_TOP_K
         if tuple(config_values.get("tier_epsilons", ())) == LEGACY_TIER_EPSILONS:
             config_values["tier_epsilons"] = DEFAULT_TIER_EPSILONS
+        if config_values.get("early_max_training_decisions") == LEGACY_EARLY_MAX_TRAINING_DECISIONS:
+            config_values["early_max_training_decisions"] = 4_096
         config = TrainingConfig(**config_values)
         trainer = cls(config=config)
         trainer.model.load_state_dict(checkpoint["state_dict"])

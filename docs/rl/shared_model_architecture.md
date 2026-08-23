@@ -8,7 +8,7 @@ Use one shared Hansa model for every AI-controlled seat. Each decision and rewar
 
 `HansaNN` accepts the fixed player-visible observation and produces one value for each entry in the 768-action schema. `GameConfiguration` loads at most one shared inference model. Human-only games do not load PyTorch models.
 
-Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. Training performs one update per started block of 256 trajectory decisions, capped at four non-overlapping representative updates and 1,024 sampled decisions per game. Penalized no-replacement-route failures and action-limit trajectories also train before the next game begins. Action-limit trajectories retain genuine rewards and penalties but receive no invented terminal reward; evaluation games never update the model.
+Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. Training performs one update per sampled block of 256 trajectory decisions. Mixed, mid, late, and end games are capped at four non-overlapping representative blocks and 1,024 sampled decisions; generated early and early-mixed games are capped at 4,096 sampled decisions. Early sampling targets 512 decisions from each chronological eighth of the complete trajectory, then redistributes unused capacity without splitting movement workflows. Penalized no-replacement-route failures and action-limit trajectories also train before the next game begins. Action-limit trajectories retain genuine rewards and penalties but receive no invented terminal reward; evaluation games never update the model.
 
 ## Player-Visible Decisions
 
@@ -38,7 +38,8 @@ The engine owns legality through `Game.get_legal_actions()`. The central codec m
 - every player's projected-score delta caused by the interaction;
 - the acting player's immediate reward; and
 - the acting player's discounted reward-to-go; and
-- an optional local target for an objectively pointless grouped movement workflow; and
+- an optional hard local target for an objectively pointless grouped movement workflow;
+- an optional additive local adjustment for a completed Move's small efficiency penalty; and
 - whether the decision may inherit terminal credit. Paid normal-Move workflows
   gain that credit only through an immediate claim of a route they helped complete.
 
@@ -93,10 +94,11 @@ checkpoints are not silently migrated.
 
 ## Remaining Work
 
-1. Reintroduce fresh-game positions after the active early/mid/late/end
+1. Reintroduce fresh-game positions after the active early/early-mixed/mid/late/end/mixed-development
    curriculum remains stable.
-2. Use the fixed evaluation suite and dashboard to measure changes before
-   adjusting exploration, rewards, discounting, or the network.
+2. Use the separately reported fixed early-game, mixed-development, and mid/late/end evaluation
+   sets to measure changes before adjusting exploration, rewards, discounting,
+   or the network.
 3. Expand evaluation coverage when a new strategic focus is added, while
    retaining old fixed positions for historical comparison.
 

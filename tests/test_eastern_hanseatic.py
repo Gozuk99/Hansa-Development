@@ -7,6 +7,7 @@ from tests.action_helpers import legal_action_mask
 from game.game_actions import handle_bonus_marker
 from game.game_runner import create_headless_game
 from game.invariants import validate_game
+from map_data.map_attributes import BonusMarker
 from map_data.constants import DARK_GREEN
 
 
@@ -118,6 +119,29 @@ class EasternHanseaticTests(unittest.TestCase):
         self.assertIs(green_city.offices[1].controller, player)
         self.assertEqual(green_city.offices[1].shape, "circle")
         self.assertIsNotNone(route.permanent_bonus_marker)
+
+    def test_additional_office_does_not_remove_occupied_green_city_office(self):
+        game = self.game()
+        player, opponent = game.players[:2]
+        city = next(
+            candidate for candidate in game.selected_map.cities if candidate.name == "Belgard"
+        )
+        occupied_office = city.offices[-1]
+        occupied_office.controller = opponent
+        occupied_office.owner_piece_shape = "square"
+        occupied_office.color = opponent.color
+        opponent.personal_supply_squares -= 1
+        marker = BonusMarker("PlaceAdjacent", owner=player)
+        player.bonus_markers.append(marker)
+        player.personal_supply_squares -= 1
+
+        city.claim_office_with_bonus_marker(player)
+
+        self.assertEqual(len(city.offices), 6)
+        self.assertIn(occupied_office, city.offices)
+        self.assertIs(occupied_office.controller, opponent)
+        self.assertIs(city.offices[0].controller, player)
+        validate_game(game)
 
     def test_move_any_two_moves_own_and_opponent_pieces_and_may_finish_early(self):
         game = self.game()

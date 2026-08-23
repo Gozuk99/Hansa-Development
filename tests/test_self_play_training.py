@@ -28,9 +28,9 @@ from training.self_play import (
     TrainingDecision,
     _is_normal_move_in_progress,
     action_phase_selection_groups,
+    add_movement_workflow_adjustment,
     apply_all_move_turn_target,
     apply_income_efficiency_penalty,
-    apply_movement_efficiency_penalty,
     apply_opponent_route_score_penalty,
     apply_route_completion_reward,
     assign_reward_to_go,
@@ -40,6 +40,7 @@ from training.self_play import (
     completed_route_move_reward,
     consecutive_move_penalty,
     credited_movement_workflows,
+    finalize_all_move_turn,
     grant_movement_workflow_terminal_credit,
     income_efficiency_penalty,
     inverse_sqrt_rank_weights,
@@ -641,29 +642,6 @@ class SelfPlayTrainingTests(unittest.TestCase):
         after = ("WHITE", 2, 2, 3)
         self.assertEqual(intermediate_ability_upgrade_reward(before, after), 250)
 
-    def test_move_penalty_is_applied_only_when_normal_move_finishes(self):
-        original = (10.0, 20.0, 30.0)
-        self.assertEqual(
-            apply_movement_efficiency_penalty(
-                original,
-                acting_player_index=1,
-                movement_capacity=4,
-                pieces_moved=2,
-                normal_move_completed=True,
-            ),
-            (10.0, -80.0, 30.0),
-        )
-        self.assertEqual(
-            apply_movement_efficiency_penalty(
-                original,
-                acting_player_index=1,
-                movement_capacity=4,
-                pieces_moved=1,
-                normal_move_completed=False,
-            ),
-            original,
-        )
-
     def test_no_replacement_route_penalizes_only_responsible_player(self):
         game = load_game(STATE)
         responsible_player = game.current_player
@@ -770,8 +748,24 @@ class SelfPlayTrainingTests(unittest.TestCase):
 
     def test_long_game_receives_four_bounded_updates(self):
         trainer = self.trainer()
-        trainer.config = replace(trainer.config, decision_batch_size=10)
+        trainer.config = replace(
+            trainer.config,
+            decision_batch_size=10,
+            normal_max_training_decisions=40,
+            early_max_training_decisions=80,
+        )
         trajectory = trainer.collect_game(STATE)
+        trajectory = replace(
+            trajectory,
+            decisions=tuple(
+                replace(
+                    trajectory.decisions[index % len(trajectory.decisions)],
+                    action_index=index,
+                    movement_workflow_id=None,
+                )
+                for index in range(40)
+            ),
+        )
 
         trainer.update_model((trajectory,))
 
@@ -806,7 +800,9 @@ class SelfPlayTrainingTests(unittest.TestCase):
 
     def test_very_long_game_uses_four_bounded_updates(self):
         trainer = self.trainer()
-        trainer.config = replace(trainer.config, decision_batch_size=4)
+        trainer.config = replace(
+            trainer.config, decision_batch_size=4, normal_max_training_decisions=16
+        )
         decisions = tuple(training_decision(index, 0, (0,), 0) for index in range(20))
 
         batches = trainer._training_batches(decisions)
@@ -814,6 +810,147 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(len(batches), 4)
         self.assertEqual(sum(map(len, batches)), 16)
         self.assertTrue(all(len(batch) <= 4 for batch in batches))
+
+    def test_training_decision_caps_are_selected_from_curriculum_maturity(self):
+        trainer = self.trainer()
+
+        self.assertEqual(
+            trainer._trajectory_training_decision_cap("mid"),
+            1_024,
+        )
+        self.assertEqual(
+            trainer._trajectory_training_decision_cap("early"),
+            4_096,
+        )
+        self.assertEqual(
+            trainer._trajectory_training_decision_cap("early_mixed"),
+            4_096,
+        )
+
+    def test_normal_long_trajectory_samples_at_most_1024_decisions(self):
+        trainer = self.trainer()
+        decisions = tuple(training_decision(index, 0, (0,), 0) for index in range(2_500))
+
+        batches = trainer._training_batches(
+            decisions,
+            max_training_decisions=trainer.config.normal_max_training_decisions,
+        )
+
+        self.assertEqual(len(batches), 4)
+        self.assertEqual(sum(map(len, batches)), 1_024)
+
+    def test_early_long_trajectory_samples_at_most_4096_decisions(self):
+        trainer = self.trainer()
+        decisions = tuple(training_decision(index, 0, (0,), 0) for index in range(5_000))
+
+        batches = trainer._early_training_batches(decisions)
+        sampled_octiles = trainer._sampled_octiles(decisions, batches)
+
+        self.assertEqual(len(batches), 16)
+        self.assertEqual(sum(map(len, batches)), 4_096)
+        self.assertEqual(sampled_octiles, (512,) * 8)
+
+    def test_early_chronological_sampling_has_no_duplicates(self):
+        trainer = self.trainer()
+        decisions = tuple(training_decision(index, 0, (0,), 0) for index in range(5_000))
+
+        batches = trainer._early_training_batches(decisions)
+        selected = [id(decision) for batch in batches for decision in batch]
+
+        self.assertEqual(len(selected), 4_096)
+        self.assertEqual(len(selected), len(set(selected)))
+
+    def test_early_sampling_redistributes_capacity_around_cross_section_workflow(self):
+        trainer = self.trainer()
+        decisions = [training_decision(index, 0, (0,), 0) for index in range(4_800)]
+        for index in range(500, 701):
+            decisions[index] = replace(decisions[index], movement_workflow_id=7)
+
+        batches = trainer._early_training_batches(decisions)
+
+        self.assertEqual(sum(map(len, batches)), 4_096)
+        self.assertLessEqual(max(map(len, batches)), trainer.config.decision_batch_size)
+
+    def test_early_sampling_keeps_cross_boundary_movement_workflow_together(self):
+        trainer = self.trainer()
+        decisions = [training_decision(index, 0, (0,), 0) for index in range(5_000)]
+        for index in range(622, 629):
+            decisions[index] = replace(
+                decisions[index],
+                movement_workflow_id=11,
+                local_training_target=-1_500,
+                reward_to_go=-1_500,
+            )
+
+        batches = trainer._early_training_batches(decisions)
+        workflow_batches = [
+            batch
+            for batch in batches
+            if any(decision.movement_workflow_id == 11 for decision in batch)
+        ]
+
+        self.assertEqual(len(workflow_batches), 1)
+        self.assertEqual(
+            sum(decision.movement_workflow_id == 11 for decision in workflow_batches[0]),
+            7,
+        )
+
+    def test_early_sampling_does_not_change_reward_targets(self):
+        trainer = self.trainer()
+        decisions = [
+            replace(
+                training_decision(index, 0, (0,), 0),
+                reward_to_go=float(index + 100),
+            )
+            for index in range(5_000)
+        ]
+        targets_before = tuple(decision.reward_to_go for decision in decisions)
+
+        trainer._early_training_batches(decisions)
+
+        self.assertEqual(
+            tuple(decision.reward_to_go for decision in decisions),
+            targets_before,
+        )
+
+    def test_trajectory_shorter_than_early_cap_uses_every_decision(self):
+        trainer = self.trainer()
+        decisions = tuple(training_decision(index, 0, (0,), 0) for index in range(700))
+
+        batches = trainer._early_training_batches(decisions)
+
+        self.assertEqual(sum(map(len, batches)), len(decisions))
+
+    def test_configured_cap_is_honored_below_batch_size(self):
+        trainer = self.trainer()
+        decisions = tuple(training_decision(index, 0, (0,), 0) for index in range(200))
+
+        batches = trainer._training_batches(decisions, max_training_decisions=100)
+
+        self.assertEqual(sum(map(len, batches)), 100)
+
+    def test_sampling_retains_priority_and_final_groups_without_changing_targets(self):
+        trainer = self.trainer()
+        trainer.config = replace(trainer.config, decision_batch_size=4)
+        decisions = [training_decision(index, 0, (0,), 0) for index in range(20)]
+        decisions[5] = replace(decisions[5], immediate_reward=500.0, reward_to_go=123.0)
+        decisions[6] = replace(decisions[6], local_training_target=-1500.0, reward_to_go=-1500.0)
+        targets_before = tuple(
+            (decision.immediate_reward, decision.reward_to_go, decision.local_training_target)
+            for decision in decisions
+        )
+
+        batches = trainer._training_batches(decisions, max_training_decisions=8)
+        selected_actions = {decision.action_index for batch in batches for decision in batch}
+
+        self.assertTrue({5, 6, 19}.issubset(selected_actions))
+        self.assertEqual(
+            tuple(
+                (decision.immediate_reward, decision.reward_to_go, decision.local_training_target)
+                for decision in decisions
+            ),
+            targets_before,
+        )
 
     def test_epsilon_explores_all_legal_actions(self):
         trainer = self.trainer()
@@ -919,12 +1056,32 @@ class SelfPlayTrainingTests(unittest.TestCase):
         trainer = self.trainer()
         trainer.config = replace(trainer.config, max_actions=1)
 
-        trajectory = trainer.collect_game(STATE)
+        with mock.patch(
+            "training.self_play.finalize_all_move_turn",
+            wraps=finalize_all_move_turn,
+        ) as finalize_turn:
+            trajectory = trainer.collect_game(STATE)
 
+        finalize_turn.assert_called_once()
         self.assertEqual(trajectory.completion_reason, "action_limit")
         self.assertEqual(trajectory.terminal_rewards, (0.0, 0.0, 0.0))
         self.assertEqual(len(trajectory.decisions), 1)
         self.assertEqual(trainer.progress.completed_games, 0)
+
+    def test_completed_trajectory_after_ten_thousand_interactions_keeps_terminal_reward(self):
+        trainer = self.trainer()
+        trajectory = trainer._complete_trajectory(
+            (training_decision(1, 0, (0,), 0),),
+            (5_000.0,),
+            (50,),
+            (0,),
+            tuple(range(10_001)),
+            (PolicyTier(1, 2, 0.05),),
+        )
+
+        self.assertEqual(trajectory.terminal_rewards, (5_000.0,))
+        self.assertEqual(trajectory.decisions[0].reward_to_go, 5_000.0)
+        self.assertEqual(len(trajectory.action_trace), 10_001)
 
     def test_workflow_selection_uses_weighted_top_three_and_random_exploration(self):
         trainer = self.trainer()
@@ -1206,6 +1363,17 @@ class SelfPlayTrainingTests(unittest.TestCase):
             [(1, 3, 5), (3, 5, 1), (5, 1, 3)],
         )
         self.assertTrue(all(tier.epsilon == 0 for assignment in assignments for tier in assignment))
+        for player_count in (3, 4, 5):
+            rotations = [
+                trainer._assign_evaluation_tiers(player_count, rotation)
+                for rotation in range(player_count)
+            ]
+            tiers = {tier.number for tier in rotations[0]}
+            for seat in range(player_count):
+                self.assertEqual(
+                    {assignment[seat].number for assignment in rotations},
+                    tiers,
+                )
 
     def test_fixed_seed_reproduces_trajectory(self):
         first = self.trainer(seed=99).collect_game(STATE)
@@ -1274,6 +1442,69 @@ class SelfPlayTrainingTests(unittest.TestCase):
             [5000, -1500, -1500, 5000],
         )
         self.assertEqual([decision.immediate_reward for decision in completed], [0, 0, 0, 0])
+
+    def test_small_move_penalties_are_additive_only_to_the_offending_workflow(self):
+        penalties = {
+            "one piece": movement_efficiency_penalty(1, 4),
+            "inefficient two pieces": movement_efficiency_penalty(2, 4),
+            "second consecutive": consecutive_move_penalty(4, 2),
+        }
+        for name, penalty in penalties.items():
+            with self.subTest(name=name):
+                decisions = [
+                    training_decision(1, 0, (0,), 0, turn=1),
+                    training_decision(2, 0, (0,), 0, turn=2, movement_workflow_id=7),
+                    training_decision(3, 0, (0,), 0, turn=2, movement_workflow_id=7),
+                    training_decision(4, 0, (300,), 300, turn=3),
+                ]
+                add_movement_workflow_adjustment(decisions, 7, penalty)
+
+                completed = assign_training_targets(decisions, (0,), gamma=1.0)
+
+                self.assertEqual(completed[0].reward_to_go, 300)
+                self.assertEqual(completed[1].reward_to_go, 300 + penalty)
+                self.assertEqual(completed[2].reward_to_go, 300 + penalty)
+                self.assertEqual(completed[3].reward_to_go, 300)
+                self.assertEqual(
+                    [decision.player_reward_deltas for decision in completed],
+                    [(0,), (0,), (0,), (300,)],
+                )
+
+    def test_hard_move_targets_override_additive_adjustments_without_weakening(self):
+        for hard_target in (-500, -1000, -1500, -1200, -2500):
+            with self.subTest(hard_target=hard_target):
+                decisions = [
+                    training_decision(1, 0, (0,), 0, movement_workflow_id=7),
+                    training_decision(2, 0, (0,), 0, movement_workflow_id=7),
+                ]
+                add_movement_workflow_adjustment(decisions, 7, -200)
+                mark_movement_workflow_target(decisions, 7, hard_target)
+
+                completed = assign_training_targets(decisions, (5000,), gamma=0.99)
+
+                self.assertEqual(
+                    [decision.reward_to_go for decision in completed],
+                    [hard_target, hard_target],
+                )
+
+    def test_local_move_adjustment_preserves_terminal_filtering_and_timeout_semantics(self):
+        uncredited = [
+            training_decision(
+                1,
+                0,
+                (0,),
+                0,
+                movement_workflow_id=7,
+                receives_terminal_credit=False,
+            )
+        ]
+        add_movement_workflow_adjustment(uncredited, 7, -200)
+
+        completed = assign_training_targets(uncredited, (5000,), gamma=0.99)
+        timed_out = assign_training_targets(uncredited, (0,), gamma=0.99)
+
+        self.assertEqual(completed[0].reward_to_go, -200)
+        self.assertEqual(timed_out[0].reward_to_go, -200)
 
     def test_normal_move_without_claim_keeps_rewards_but_not_terminal_credit(self):
         decisions = (
@@ -1385,6 +1616,33 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(decisions[0].local_training_target, -1500)
         self.assertEqual(decisions[1].local_training_target, ALL_MOVE_TURN_LOCAL_TARGET)
 
+    def test_final_all_move_turn_targets_are_applied_before_trajectory_completion(self):
+        trainer = self.trainer()
+        decisions = [
+            training_decision(1, 0, (0,), 0, turn=1, movement_workflow_id=7),
+            training_decision(2, 0, (0,), 0, turn=1, movement_workflow_id=7),
+            training_decision(3, 0, (0,), 0, turn=1, movement_workflow_id=8),
+        ]
+        metrics = MovementBehaviorMetrics()
+
+        applied = finalize_all_move_turn(decisions, metrics, (7, 8), spent_actions=2)
+        trajectory = trainer._complete_trajectory(
+            decisions,
+            (5_000.0,),
+            (50,),
+            (0,),
+            (1, 2, 3),
+            (PolicyTier(1, 2, 0.05),),
+            movement_metrics=metrics,
+        )
+
+        self.assertTrue(applied)
+        self.assertEqual(metrics.all_move_turn_penalties, 1)
+        self.assertEqual(
+            [decision.reward_to_go for decision in trajectory.decisions],
+            [ALL_MOVE_TURN_LOCAL_TARGET] * 3,
+        )
+
     def test_terminal_reward_is_winner_only_and_trigger_bonus_requires_winner(self):
         game = mock.Mock()
         game.players = [mock.Mock(final_score=40), mock.Mock(final_score=35)]
@@ -1414,6 +1672,7 @@ class SelfPlayTrainingTests(unittest.TestCase):
             self.assertEqual(restored.config.learning_rate, 0.0001)
             self.assertTrue(all(group["lr"] == 0.0001 for group in restored.optimizer.param_groups))
             self.assertEqual(restored.config.income_penalty_scale, 100)
+            self.assertEqual(restored.config.early_max_training_decisions, 4_096)
             self.assertEqual(restored.config.tier_top_k, (2, 5, 10, 15, 20))
             self.assertEqual(restored.config.tier_epsilons, (0.05, 0.10, 0.20, 0.35, 0.35))
             self.assertEqual(restored.config.three_player_tiers, (1, 3, 5))

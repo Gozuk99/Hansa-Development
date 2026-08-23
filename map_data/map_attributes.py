@@ -269,10 +269,15 @@ class City:
         new_office.place_adjacent_office = True
 
         if self.color == DARK_GREEN:
-            # Check the number of owned offices and remove the last one if there are less than 6
+            # Keep the printed six-slot city size while preserving every occupied office.
             num_owned_offices = sum(1 for office in self.offices if office.controller is not None)
             if num_owned_offices < 6:
-                self.offices.pop()
+                empty_office = next(
+                    office
+                    for office in reversed(self.offices)
+                    if office.controller is None
+                )
+                self.offices.remove(empty_office)
 
         self.update_city_size_based_on_offices()
 

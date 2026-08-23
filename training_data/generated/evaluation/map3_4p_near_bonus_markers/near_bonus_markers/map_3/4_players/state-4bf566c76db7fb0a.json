@@ -1,0 +1,53 @@
+{
+  "generator_version": 6,
+  "seed": 1000000022,
+  "attempt_seed": 1000000022,
+  "map_num": 3,
+  "player_count": 4,
+  "ending_condition": "near_bonus_markers",
+  "score_range": [
+    15,
+    16
+  ],
+  "strategic_focus": "none",
+  "bonus_markers_remaining": 2,
+  "completed_cities_below_limit": 2,
+  "starting_position": "one_round_before",
+  "prepared_routes_one_short": true,
+  "development_range": [
+    11,
+    13
+  ],
+  "prepare_ending_condition": true,
+  "round_range": [
+    8,
+    20
+  ],
+  "mixed_development": false,
+  "bonus_marker_setup": "default",
+  "regional_focus": "britannia_isle_of_man",
+  "options": [
+    false,
+    true,
+    "default"
+  ],
+  "state_id": "state-4bf566c76db7fb0a",
+  "strategic_focuses": [
+    "britannia_isle_of_man:Wales+Scotland"
+  ],
+  "prepared_player_index": 2,
+  "starting_score_by_seat": [
+    19,
+    0,
+    5,
+    19
+  ],
+  "starting_development_by_seat": [
+    11,
+    13,
+    13,
+    11
+  ],
+  "development_role_by_seat": [],
+  "save_file": "state-4bf566c76db7fb0a.hansa"
+}

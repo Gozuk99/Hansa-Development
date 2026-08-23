@@ -29,8 +29,15 @@ CSV_FIELDS = (
     "curriculum_stage",
     "starting_position",
     "run_type",
+    "evaluation_set",
     "map",
     "player_count",
+    "starting_score_by_seat",
+    "starting_development_by_seat",
+    "development_role_by_seat",
+    "early_route_scaffold",
+    "scaffolded_route_ids_by_seat",
+    "scaffolded_route_lengths_by_seat",
     "state_seed",
     "action_seed",
     "winner_player",
@@ -39,6 +46,18 @@ CSV_FIELDS = (
     "final_player_scores",
     "completion_reason",
     "action_count",
+    "early_training_action_limit_outcome",
+    "trajectory_decision_count",
+    "sampled_training_decision_count",
+    "sampled_training_fraction",
+    "sampled_octile_1",
+    "sampled_octile_2",
+    "sampled_octile_3",
+    "sampled_octile_4",
+    "sampled_octile_5",
+    "sampled_octile_6",
+    "sampled_octile_7",
+    "sampled_octile_8",
     "move_action_count",
     "spent_action_count",
     "move_ratio",
@@ -147,6 +166,13 @@ class StateDescriptor:
     seed: int
     scenario: str | None = None
     starting_position: str = "full_game"
+    evaluation_set: str | None = None
+    starting_scores_by_seat: tuple[int, ...] = ()
+    starting_development_by_seat: tuple[int, ...] = ()
+    development_roles_by_seat: tuple[str, ...] = ()
+    early_route_scaffold: bool | None = None
+    scaffolded_route_ids_by_seat: tuple[tuple[int, ...], ...] = ()
+    scaffolded_route_lengths_by_seat: tuple[tuple[int, ...], ...] = ()
 
     @property
     def action_seed(self):
@@ -349,6 +375,12 @@ class CurriculumRunner:
     def _stage_action_limit(stage):
         return stage.action_limit
 
+    def _training_action_limit(self, stage, _descriptor):
+        return self._stage_action_limit(stage)
+
+    def _evaluation_action_limit(self, stage, _descriptor):
+        return self._stage_action_limit(stage)
+
     def _failure_callback(self, stage, descriptor, retry_count, run_type):
         def capture(game, action_trace, seat_tiers, error):
             directory = self._save_failure(
@@ -399,6 +431,7 @@ class CurriculumRunner:
             "curriculum_stage": descriptor.scenario or stage.name,
             "starting_position": descriptor.starting_position,
             "run_type": run_type,
+            "evaluation_set": None if descriptor is None else descriptor.evaluation_set,
             "state_seed": None if descriptor is None else descriptor.seed,
             "action_seed": None if descriptor is None else descriptor.action_seed,
             "map": None if descriptor is None else descriptor.map_num,
@@ -434,6 +467,7 @@ class CurriculumRunner:
         action_seed=None,
         evaluation_suite_size=None,
         evaluation_suite_version=None,
+        training_sample_coverage=None,
     ):
         winner_players = [index + 1 for index in trajectory.winner_indices]
         winner_tiers = [trajectory.seat_tiers[index] for index in trajectory.winner_indices]
@@ -447,22 +481,70 @@ class CurriculumRunner:
         move_claim_conversion_rate = getattr(trajectory, "move_claim_conversion_rate", None)
         if move_claim_conversion_rate is None and moves_creating_claimable_route:
             move_claim_conversion_rate = move_claim_conversions / moves_creating_claimable_route
+        action_count = len(trajectory.action_trace)
+        completion_reason = getattr(trajectory, "completion_reason", "normal")
+        maturity = (descriptor.scenario or stage.name).partition("+")[0]
+        early_training_action_limit_outcome = None
+        if run_type in {"training", "training_timeout"} and maturity in {
+            "early",
+            "early_mixed",
+        }:
+            if completion_reason == "action_limit":
+                early_training_action_limit_outcome = "timed_out_at_15000"
+            elif action_count <= 10_000:
+                early_training_action_limit_outcome = "finished_by_10000"
+            else:
+                early_training_action_limit_outcome = "finished_10001_to_15000"
+        sampled_octiles = (
+            getattr(training_sample_coverage, "sampled_octiles", ())
+            if training_sample_coverage
+            else ()
+        )
         return {
             "game#": game_number,
             "batch#": self.report_batch_number,
             "curriculum_stage": descriptor.scenario or stage.name,
             "starting_position": descriptor.starting_position,
             "run_type": run_type,
+            "evaluation_set": descriptor.evaluation_set,
             "map": descriptor.map_num,
             "player_count": descriptor.player_count,
+            "starting_score_by_seat": json.dumps(descriptor.starting_scores_by_seat),
+            "starting_development_by_seat": json.dumps(descriptor.starting_development_by_seat),
+            "development_role_by_seat": json.dumps(descriptor.development_roles_by_seat),
+            "early_route_scaffold": (
+                str(descriptor.early_route_scaffold).lower()
+                if descriptor.early_route_scaffold is not None
+                else None
+            ),
+            "scaffolded_route_ids_by_seat": json.dumps(descriptor.scaffolded_route_ids_by_seat),
+            "scaffolded_route_lengths_by_seat": json.dumps(
+                descriptor.scaffolded_route_lengths_by_seat
+            ),
             "state_seed": descriptor.seed,
             "action_seed": descriptor.action_seed if action_seed is None else action_seed,
             "winner_player": json.dumps(winner_players),
             "winner_tier": json.dumps(winner_tiers),
             "tier_to_seat_assignments": json.dumps(trajectory.seat_tiers),
             "final_player_scores": json.dumps(trajectory.final_scores),
-            "completion_reason": getattr(trajectory, "completion_reason", "normal"),
-            "action_count": len(trajectory.action_trace),
+            "completion_reason": completion_reason,
+            "action_count": action_count,
+            "early_training_action_limit_outcome": early_training_action_limit_outcome,
+            "trajectory_decision_count": (
+                training_sample_coverage.total_decisions if training_sample_coverage else None
+            ),
+            "sampled_training_decision_count": (
+                training_sample_coverage.sampled_decisions if training_sample_coverage else None
+            ),
+            "sampled_training_fraction": (
+                training_sample_coverage.sampled_fraction if training_sample_coverage else None
+            ),
+            **{
+                f"sampled_octile_{index + 1}": (
+                    sampled_octiles[index] if len(sampled_octiles) == 8 else None
+                )
+                for index in range(8)
+            },
             "move_action_count": move_action_count,
             "spent_action_count": spent_action_count,
             "move_ratio": move_ratio,
@@ -575,6 +657,10 @@ class CurriculumRunner:
                     continue
                 generation_seconds = perf_counter() - generation_started
                 self.trainer.rng.seed(descriptor.action_seed)
+                self.trainer.config = replace(
+                    self.trainer.config,
+                    max_actions=self._training_action_limit(stage, descriptor),
+                )
                 try:
                     trajectory = self.trainer.collect_game(
                         descriptor.path,
@@ -602,11 +688,14 @@ class CurriculumRunner:
                     )
                     continue
                 game_loss = self.trainer.trajectory_loss(trajectory)
+                maturity = (descriptor.scenario or stage.name).partition("+")[0]
                 result = getattr(trajectory, "completion_reason", "normal")
                 descriptors.append(descriptor)
                 learning_started = perf_counter()
-                self.trainer.update_model((trajectory,))
+                self.trainer.update_model((trajectory,), curriculum_maturities=(maturity,))
                 learning_seconds = perf_counter() - learning_started
+                sample_coverage = getattr(self.trainer, "last_training_sample_coverage", ())
+                training_sample_coverage = sample_coverage[0] if sample_coverage else None
                 loss = f"; loss {game_loss:.2f}" if game_loss is not None else ""
                 slow_timings = _play_timing_breakdown(trajectory)
                 timing = f" ({slow_timings})" if slow_timings else ""
@@ -639,6 +728,7 @@ class CurriculumRunner:
                                 self.report_game_number,
                                 generation_seconds=generation_seconds,
                                 learning_seconds=learning_seconds,
+                                training_sample_coverage=training_sample_coverage,
                             )
                         )
                         if len(pending_update) == self.config.update_batch_size:
@@ -677,6 +767,7 @@ class CurriculumRunner:
                     self.report_game_number,
                     generation_seconds=generation_seconds,
                     learning_seconds=learning_seconds,
+                    training_sample_coverage=training_sample_coverage,
                 )
                 rows.append(row)
                 pending_rows.append(row)
@@ -698,6 +789,12 @@ class CurriculumRunner:
             manifest_path = self.evaluation_suite_directory / "manifest.json"
             if manifest_path.is_file():
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                evaluation_set_sizes = {}
+                for item in manifest:
+                    evaluation_set = item.get("evaluation_set", "mid_late_end")
+                    evaluation_set_sizes[evaluation_set] = (
+                        evaluation_set_sizes.get(evaluation_set, 0) + 1
+                    )
                 evaluation_suite_version = max(
                     (int(item.get("suite_version", 1)) for item in manifest), default=1
                 )
@@ -710,15 +807,31 @@ class CurriculumRunner:
                         item["seed"],
                         item.get("scenario"),
                         (
-                            "immediate_finish"
+                            ""
+                            if item.get("evaluation_set") in {"early", "mixed_development"}
+                            else "immediate_finish"
                             if item.get("immediate_finish", False)
                             else "one_round_before"
+                        ),
+                        item.get("evaluation_set", "mid_late_end"),
+                        tuple(item.get("starting_score_by_seat", ())),
+                        tuple(item.get("starting_development_by_seat", ())),
+                        tuple(item.get("development_role_by_seat", ())),
+                        item.get("early_route_scaffold"),
+                        tuple(
+                            tuple(route_ids)
+                            for route_ids in item.get("scaffolded_route_ids_by_seat", ())
+                        ),
+                        tuple(
+                            tuple(lengths)
+                            for lengths in item.get("scaffolded_route_lengths_by_seat", ())
                         ),
                     )
                     for item in manifest
                 ]
             else:
                 evaluation_states = []
+                evaluation_set_sizes = {"mid_late_end": self.config.evaluation_games_per_batch}
                 evaluation_suite_version = 0
                 total_games = self.config.evaluation_games_per_batch
                 for index in range(total_games):
@@ -747,6 +860,10 @@ class CurriculumRunner:
                     self._report(f"Evaluation game {index + 1}/{total_games}{retry}...")
                     action_seed = descriptor.action_seed + retry_count
                     self.trainer.rng.seed(action_seed)
+                    self.trainer.config = replace(
+                        self.trainer.config,
+                        max_actions=self._evaluation_action_limit(stage, descriptor),
+                    )
                     try:
                         candidate = self.trainer.collect_game(
                             descriptor.path,
@@ -755,6 +872,8 @@ class CurriculumRunner:
                             ),
                             evaluation=True,
                             evaluation_tier_rotation=self.batch_number - 1,
+                            capture_action_limit=descriptor.evaluation_set
+                            in {"early", "mixed_development"},
                         )
                     except ActionLimitExceeded:
                         failure_reason = "action_limit"
@@ -771,7 +890,10 @@ class CurriculumRunner:
                         )
                         continue
 
-                    if getattr(candidate, "completion_reason", "normal") != "no_replacement_route":
+                    candidate_reason = getattr(candidate, "completion_reason", "normal")
+                    if candidate_reason == "action_limit":
+                        incomplete += 1
+                    if candidate_reason != "no_replacement_route":
                         trajectory = candidate
                         break
                     failure_reason = "no_replacement_route"
@@ -809,7 +931,9 @@ class CurriculumRunner:
                         None,
                         self.report_game_number,
                         action_seed=action_seed,
-                        evaluation_suite_size=total_games,
+                        evaluation_suite_size=evaluation_set_sizes.get(
+                            descriptor.evaluation_set or "mid_late_end", total_games
+                        ),
                         evaluation_suite_version=evaluation_suite_version,
                     )
                 )

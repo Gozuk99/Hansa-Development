@@ -94,12 +94,26 @@ class FakeTrainer:
             self.evaluation_rotations = getattr(self, "evaluation_rotations", []) + [
                 _kwargs.get("evaluation_tier_rotation")
             ]
+            self.capture_action_limits = getattr(self, "capture_action_limits", []) + [
+                _kwargs.get("capture_action_limit")
+            ]
         self.rng.random()
         self.progress.completed_games += 1
         return completed_trajectory()
 
-    def update_model(self, _trajectories):
+    def update_model(self, trajectories, *, curriculum_maturities=None):
         self.update_calls += 1
+        self.curriculum_maturities = getattr(self, "curriculum_maturities", []) + list(
+            curriculum_maturities or ()
+        )
+        decision_count = len(trajectories[0].decisions)
+        self.last_training_sample_coverage = (
+            SimpleNamespace(
+                total_decisions=decision_count,
+                sampled_decisions=decision_count,
+                sampled_fraction=1.0,
+            ),
+        )
         self.progress.training_updates += 1
         self.progress.last_loss = 12.5
         self.progress.mean_loss = 12.5
@@ -163,6 +177,114 @@ class CurriculumTrainingTests(unittest.TestCase):
             runner.run()
 
             self.assertEqual(trainer.evaluation_rotations, [0, 1])
+
+    def test_early_fixed_evaluation_is_distinct_and_never_updates_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evaluation = root / "evaluation"
+            evaluation.mkdir()
+            manifest = [
+                {
+                    "save_file": "standard.hansa",
+                    "metadata_file": "standard.json",
+                    "map_num": 1,
+                    "player_count": 3,
+                    "seed": 100,
+                    "scenario": "near_score",
+                    "suite_version": 5,
+                    "evaluation_set": "mid_late_end",
+                },
+                {
+                    "save_file": "early.hansa",
+                    "metadata_file": "early.json",
+                    "map_num": 2,
+                    "player_count": 5,
+                    "seed": 200,
+                    "scenario": "early_game",
+                    "suite_version": 5,
+                    "evaluation_set": "early",
+                },
+                {
+                    "save_file": "mixed.hansa",
+                    "metadata_file": "mixed.json",
+                    "map_num": 3,
+                    "player_count": 3,
+                    "seed": 300,
+                    "scenario": "mixed_development",
+                    "suite_version": 5,
+                    "evaluation_set": "mixed_development",
+                    "starting_score_by_seat": [2, 6, 10],
+                    "starting_development_by_seat": [3, 5, 7],
+                    "development_role_by_seat": ["low", "medium", "high"],
+                },
+            ]
+            (evaluation / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            trainer = FakeTrainer()
+            runner = self.runner(root, trainer)
+
+            runner.run()
+
+            self.assertEqual(trainer.update_calls, 1)
+            self.assertEqual(trainer.evaluation_calls, [False, True, True, True])
+            self.assertEqual(trainer.capture_action_limits, [False, True, True])
+            with (root / "results.csv").open(newline="", encoding="utf-8") as source:
+                rows = list(csv.DictReader(source))
+            evaluation_rows = [row for row in rows if row["run_type"] == "evaluation"]
+            self.assertEqual(
+                [row["evaluation_set"] for row in evaluation_rows],
+                ["mid_late_end", "early", "mixed_development"],
+            )
+            self.assertEqual(
+                [row["starting_position"] for row in evaluation_rows],
+                ["one_round_before", "", ""],
+            )
+            self.assertEqual(
+                [row["evaluation_suite_size"] for row in evaluation_rows], ["1", "1", "1"]
+            )
+            self.assertEqual(evaluation_rows[-1]["starting_score_by_seat"], "[2, 6, 10]")
+            self.assertEqual(
+                evaluation_rows[-1]["development_role_by_seat"],
+                '["low", "medium", "high"]',
+            )
+
+    def test_early_evaluation_timeout_is_recorded_without_training(self):
+        class EarlyTimeoutTrainer(FakeTrainer):
+            def collect_game(self, path, *, failure_callback=None, evaluation=False, **kwargs):
+                trajectory = super().collect_game(
+                    path,
+                    failure_callback=failure_callback,
+                    evaluation=evaluation,
+                    **kwargs,
+                )
+                return action_limited_trajectory() if evaluation else trajectory
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evaluation = root / "evaluation"
+            evaluation.mkdir()
+            manifest = [
+                {
+                    "save_file": "early.hansa",
+                    "metadata_file": "early.json",
+                    "map_num": 3,
+                    "player_count": 4,
+                    "seed": 300,
+                    "scenario": "early_game",
+                    "suite_version": 5,
+                    "evaluation_set": "early",
+                }
+            ]
+            (evaluation / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            trainer = EarlyTimeoutTrainer()
+            self.runner(root, trainer).run()
+
+            self.assertEqual(trainer.update_calls, 1)
+            with (root / "results.csv").open(newline="", encoding="utf-8") as source:
+                rows = list(csv.DictReader(source))
+            early = next(row for row in rows if row["run_type"] == "evaluation")
+            self.assertEqual(early["evaluation_set"], "early")
+            self.assertEqual(early["completion_reason"], "action_limit")
+            self.assertNotIn("timeout", early)
 
     def test_existing_windows_utf8_csv_header_loads(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -269,6 +391,119 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertIsNone(row["move_ratio"])
             self.assertIsNone(row["move_claim_conversion_rate"])
 
+    def test_early_route_scaffold_diagnostics_are_written_to_csv_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner(Path(directory))
+            descriptor = StateDescriptor(
+                VALIDATION_STATE,
+                None,
+                1,
+                3,
+                1,
+                "early",
+                "",
+                None,
+                (),
+                (),
+                (),
+                True,
+                ((4, 17), (2, 21), (8, 11)),
+                ((3, 4), (2, 3), (4, 2)),
+            )
+
+            row = runner._trajectory_row(
+                completed_trajectory(),
+                descriptor,
+                runner.config.stages[0],
+                "training",
+                0,
+                None,
+                None,
+                1,
+            )
+
+            self.assertEqual(row["early_route_scaffold"], "true")
+            self.assertEqual(row["scaffolded_route_ids_by_seat"], "[[4, 17], [2, 21], [8, 11]]")
+            self.assertEqual(
+                row["scaffolded_route_lengths_by_seat"],
+                "[[3, 4], [2, 3], [4, 2]]",
+            )
+
+    def test_early_training_action_limit_outcomes_are_recorded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner(Path(directory))
+            completed_before_limit = completed_trajectory()
+            completed_before_limit.action_trace = tuple(range(10_000))
+            completed_after_old_limit = completed_trajectory()
+            completed_after_old_limit.action_trace = tuple(range(10_001))
+            timed_out = action_limited_trajectory()
+            timed_out.action_trace = tuple(range(15_000))
+
+            for scenario in ("early", "early_mixed"):
+                with self.subTest(scenario=scenario):
+                    descriptor = StateDescriptor(
+                        VALIDATION_STATE,
+                        None,
+                        1,
+                        3,
+                        1,
+                        scenario,
+                        "",
+                    )
+                    outcomes = [
+                        runner._trajectory_row(
+                            trajectory,
+                            descriptor,
+                            runner.config.stages[0],
+                            "training_timeout" if trajectory is timed_out else "training",
+                            0,
+                            None,
+                            None,
+                            index,
+                        )["early_training_action_limit_outcome"]
+                        for index, trajectory in enumerate(
+                            (completed_before_limit, completed_after_old_limit, timed_out),
+                            start=1,
+                        )
+                    ]
+
+                    self.assertEqual(
+                        outcomes,
+                        [
+                            "finished_by_10000",
+                            "finished_10001_to_15000",
+                            "timed_out_at_15000",
+                        ],
+                    )
+
+    def test_early_training_sample_octiles_are_recorded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner(Path(directory))
+            coverage = SimpleNamespace(
+                total_decisions=5_000,
+                sampled_decisions=4_096,
+                sampled_fraction=4_096 / 5_000,
+                sampled_octiles=(512,) * 8,
+            )
+
+            row = runner._trajectory_row(
+                completed_trajectory(),
+                StateDescriptor(VALIDATION_STATE, None, 1, 3, 1, "early", ""),
+                runner.config.stages[0],
+                "training",
+                0,
+                None,
+                None,
+                1,
+                training_sample_coverage=coverage,
+            )
+
+            self.assertEqual(row["sampled_training_decision_count"], 4_096)
+            self.assertEqual(
+                tuple(row[f"sampled_octile_{index}"] for index in range(1, 9)),
+                (512,) * 8,
+            )
+
     def runner(self, root, trainer=None, **config_changes):
         return TestRunner(
             trainer or FakeTrainer(),
@@ -306,6 +541,10 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual([row["game#"] for row in rows], ["1", "2"])
             self.assertEqual(rows[0]["latest_loss"], "10.0")
             self.assertEqual(rows[0]["rolling_mean_loss"], "10.0")
+            self.assertEqual(rows[0]["trajectory_decision_count"], "1")
+            self.assertEqual(rows[0]["sampled_training_decision_count"], "1")
+            self.assertEqual(rows[0]["sampled_training_fraction"], "1.0")
+            self.assertEqual(trainer.curriculum_maturities, ["test"])
             self.assertEqual(rows[1]["latest_loss"], "20.0")
             self.assertEqual(rows[1]["rolling_mean_loss"], "")
             self.assertEqual(rows[1]["evaluation_suite_size"], "1")

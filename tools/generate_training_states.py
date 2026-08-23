@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 from training.balanced_state_generator import (  # noqa: E402
     BalancedGenerationRequest,
+    BonusMarkerSetup,
     EndingCondition,
     RegionalFocus,
     StartingPosition,
@@ -50,13 +51,19 @@ class EvaluationSpec:
     mission_cards: bool = False
     emperors_favour: bool = False
     promo_markers: bool = False
+    bonus_marker_setup: BonusMarkerSetup | None = None
     immediate_finish: bool = False
     bonus_markers_remaining: int = 2
     completed_cities_below_limit: int = 2
     prepared_routes_one_short: bool = True
+    development_range: tuple[int, int] | None = None
+    evaluation_set: str = "mid_late_end"
+    prepare_ending_condition: bool = True
+    round_range: tuple[int, int] = (8, 20)
+    mixed_development: bool = False
 
 
-EVALUATION_SUITE_VERSION = 4
+EVALUATION_SUITE_VERSION = 8
 
 
 def _regional_focus(player_count, ending_index):
@@ -106,10 +113,92 @@ def _evaluation_specs():
                         prepared_routes_one_short=not immediate_finish,
                     )
                 )
+    # Early evaluation is deliberately ordinary development, not a disguised
+    # near-end puzzle. Each supported map/player combination has one position
+    # for every bonus-marker setup so optional modules are not confounded with
+    # map or player count.
+    for map_num in (1, 2, 3):
+        for players in (3, 4, 5):
+            for setup_index, marker_setup in enumerate(BonusMarkerSetup):
+                configuration_index = (map_num - 1) * 9 + (players - 3) * 3 + setup_index
+                specs.append(
+                    EvaluationSpec(
+                        f"map{map_num}_{players}p_early_{marker_setup.value}",
+                        map_num,
+                        players,
+                        EndingCondition.NEAR_SCORE,
+                        score_range=(0, 5),
+                        mission_cards=(map_num == 1 and configuration_index in {1, 3, 6, 8}),
+                        emperors_favour=configuration_index % 2 == 0,
+                        promo_markers=marker_setup is not BonusMarkerSetup.DEFAULT,
+                        bonus_marker_setup=marker_setup,
+                        bonus_markers_remaining=9 + configuration_index % 4,
+                        completed_cities_below_limit=7,
+                        prepared_routes_one_short=True,
+                        development_range=(2, 4),
+                        evaluation_set="early",
+                        prepare_ending_condition=False,
+                        round_range=(2, 5),
+                    )
+                )
+    for map_num in (1, 2, 3):
+        for players in (3, 4, 5):
+            specs.append(
+                EvaluationSpec(
+                    f"map{map_num}_{players}p_mixed_development",
+                    map_num,
+                    players,
+                    EndingCondition.NEAR_SCORE,
+                    score_range=(0, 12),
+                    mission_cards=map_num == 1 and players != 4,
+                    emperors_favour=(map_num + players) % 2 == 0,
+                    bonus_marker_setup=(
+                        BonusMarkerSetup.MIXED
+                        if (map_num + players) % 2
+                        else BonusMarkerSetup.DEFAULT
+                    ),
+                    bonus_markers_remaining=5,
+                    completed_cities_below_limit=5,
+                    prepared_routes_one_short=False,
+                    development_range=(2, 8),
+                    evaluation_set="mixed_development",
+                    prepare_ending_condition=False,
+                    round_range=(6, 12),
+                    mixed_development=True,
+                )
+            )
     return tuple(specs)
 
 
 EVALUATION_SPECS = _evaluation_specs()
+
+
+def evaluation_request(spec, seed):
+    return BalancedGenerationRequest(
+        seed=seed,
+        map_num=spec.map_num,
+        player_count=spec.player_count,
+        ending_condition=spec.ending_condition,
+        score_range=spec.score_range,
+        strategic_focus=(StrategicFocus.EAST_WEST if spec.east_west else StrategicFocus.NONE),
+        regional_focus=spec.regional_focus,
+        use_mission_cards=spec.mission_cards,
+        use_emperors_favour=spec.emperors_favour,
+        use_promo_markers=spec.promo_markers,
+        bonus_marker_setup=spec.bonus_marker_setup,
+        bonus_markers_remaining=spec.bonus_markers_remaining,
+        completed_cities_below_limit=spec.completed_cities_below_limit,
+        prepared_routes_one_short=spec.prepared_routes_one_short,
+        development_range=spec.development_range,
+        prepare_ending_condition=spec.prepare_ending_condition,
+        round_range=spec.round_range,
+        mixed_development=spec.mixed_development,
+        starting_position=(
+            StartingPosition.IMMEDIATE_FINISH
+            if spec.immediate_finish
+            else StartingPosition.ONE_ROUND_BEFORE
+        ),
+    )
 
 
 def parse_args(argv=None):
@@ -162,30 +251,19 @@ def _generate_evaluation_suite(args):
     manifest = []
     for index, spec in enumerate(EVALUATION_SPECS):
         generated = generate_balanced_state(
-            BalancedGenerationRequest(
-                seed=args.seed + index,
-                map_num=spec.map_num,
-                player_count=spec.player_count,
-                ending_condition=spec.ending_condition,
-                score_range=spec.score_range,
-                strategic_focus=(
-                    StrategicFocus.EAST_WEST if spec.east_west else StrategicFocus.NONE
-                ),
-                regional_focus=spec.regional_focus,
-                use_mission_cards=spec.mission_cards,
-                use_emperors_favour=spec.emperors_favour,
-                use_promo_markers=spec.promo_markers,
-                bonus_markers_remaining=spec.bonus_markers_remaining,
-                completed_cities_below_limit=spec.completed_cities_below_limit,
-                prepared_routes_one_short=spec.prepared_routes_one_short,
-                starting_position=(
-                    StartingPosition.IMMEDIATE_FINISH
-                    if spec.immediate_finish
-                    else StartingPosition.ONE_ROUND_BEFORE
-                ),
-            )
+            evaluation_request(spec, args.seed + index), max_attempts=10_000
         )
-        save_path, metadata_path = save_balanced_state(generated, evaluation_directory / spec.name)
+        save_path, metadata_path = save_balanced_state(
+            generated,
+            evaluation_directory / spec.name,
+            scenario_directory=(
+                "early_game"
+                if spec.evaluation_set == "early"
+                else "mixed_development"
+                if spec.evaluation_set == "mixed_development"
+                else None
+            ),
+        )
         focuses = ["east_west"] if spec.east_west else []
         if spec.regional_focus is not None:
             focuses.append(spec.regional_focus.value)
@@ -193,11 +271,20 @@ def _generate_evaluation_suite(args):
             {
                 **asdict(spec),
                 "suite_version": EVALUATION_SUITE_VERSION,
-                "scenario": "+".join((spec.ending_condition.value, *focuses)),
+                "scenario": (
+                    "early_game"
+                    if spec.evaluation_set == "early"
+                    else "mixed_development"
+                    if spec.evaluation_set == "mixed_development"
+                    else "+".join((spec.ending_condition.value, *focuses))
+                ),
                 "ending_condition": spec.ending_condition.value,
                 "regional_focus": (
                     None if spec.regional_focus is None else spec.regional_focus.value
                 ),
+                "starting_score_by_seat": generated.starting_scores_by_seat,
+                "starting_development_by_seat": generated.starting_development_by_seat,
+                "development_role_by_seat": generated.development_roles_by_seat,
                 "seed": args.seed + index,
                 "save_file": save_path.relative_to(evaluation_directory).as_posix(),
                 "metadata_file": metadata_path.relative_to(evaluation_directory).as_posix(),
