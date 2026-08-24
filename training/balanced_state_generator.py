@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import hashlib
-from itertools import combinations
 import json
 from pathlib import Path
 import random
@@ -43,42 +42,7 @@ from training.targeted_state_generator import (
 )
 
 
-GENERATOR_VERSION = 7
-
-
-MIXED_DEVELOPMENT_ROLES = {
-    3: (("low", 2, 3), ("medium", 6, 5), ("high", 10, 7)),
-    4: (
-        ("low", 2, 3),
-        ("low_mid", 5, 4),
-        ("high_mid", 7, 6),
-        ("high", 10, 7),
-    ),
-    5: (
-        ("very_low", 2, 3),
-        ("low", 4, 4),
-        ("medium", 6, 5),
-        ("high", 8, 6),
-        ("very_high", 10, 7),
-    ),
-}
-
-EARLY_MIXED_DEVELOPMENT_ROLES = {
-    3: (("low", 2, 3), ("medium", 4, 4), ("high", 6, 5)),
-    4: (
-        ("low", 2, 3),
-        ("low_mid", 3, 3),
-        ("high_mid", 5, 4),
-        ("high", 6, 5),
-    ),
-    5: (
-        ("low", 2, 3),
-        ("low_mid", 3, 3),
-        ("medium", 4, 4),
-        ("high_mid", 5, 4),
-        ("high", 6, 5),
-    ),
-}
+GENERATOR_VERSION = 8
 
 
 class EndingCondition(str, Enum):
@@ -173,9 +137,6 @@ class BalancedGenerationRequest:
     development_range: tuple[int, int] | None = None
     prepare_ending_condition: bool = True
     round_range: tuple[int, int] = (8, 20)
-    mixed_development: bool = False
-    early_mixed_development: bool = False
-    early_route_scaffold: bool = False
 
 
 @dataclass(frozen=True)
@@ -188,10 +149,6 @@ class BalancedGeneratedState:
     focus_variants: tuple[str, ...]
     starting_scores_by_seat: tuple[int, ...]
     starting_development_by_seat: tuple[int, ...]
-    development_roles_by_seat: tuple[str, ...] = ()
-    early_route_scaffold: bool = False
-    scaffolded_route_ids_by_seat: tuple[tuple[int, ...], ...] = ()
-    scaffolded_route_lengths_by_seat: tuple[tuple[int, ...], ...] = ()
 
 
 @dataclass
@@ -237,22 +194,6 @@ def _validate_request(request):
     minimum_round, maximum_round = request.round_range
     if minimum_round < 1 or maximum_round < minimum_round:
         raise ValueError("round_range must contain positive increasing rounds")
-    if request.mixed_development and request.early_mixed_development:
-        raise ValueError("mixed and early-mixed development are mutually exclusive")
-    if (request.mixed_development or request.early_mixed_development) and (
-        request.prepare_ending_condition
-        or request.strategic_focus is not StrategicFocus.NONE
-        or request.regional_focus is not None
-    ):
-        raise ValueError("mixed development cannot prepare an ending or strategic focus")
-    if request.early_route_scaffold and (
-        request.prepare_ending_condition
-        or request.mixed_development
-        or request.early_mixed_development
-        or request.strategic_focus is not StrategicFocus.NONE
-        or request.regional_focus is not None
-    ):
-        raise ValueError("early route scaffolding requires an ordinary non-ending state")
 
 
 def _resolved_bonus_marker_setup(request):
@@ -590,67 +531,6 @@ def starting_scores_have_valid_sources(game):
     )
 
 
-def _asymmetric_targets(
-    role_definitions,
-    rng,
-    *,
-    score_bounds,
-    development_bounds,
-    maximum_score_gap,
-    maximum_development_gap,
-):
-    roles = list(role_definitions)
-    rng.shuffle(roles)
-    for _attempt in range(100):
-        scores = [
-            max(score_bounds[0], min(score_bounds[1], score + rng.randint(-1, 1)))
-            for _role, score, _dev in roles
-        ]
-        development = [
-            max(
-                development_bounds[0],
-                min(development_bounds[1], target + rng.randint(-1, 1)),
-            )
-            for _role, _score, target in roles
-        ]
-        if (
-            max(scores) - min(scores) <= maximum_score_gap
-            and max(development) - min(development) <= maximum_development_gap
-        ):
-            return (
-                tuple(role for role, _score, _dev in roles),
-                tuple(scores),
-                tuple(development),
-            )
-    return (
-        tuple(role for role, _score, _dev in roles),
-        tuple(score for _role, score, _dev in roles),
-        tuple(development for _role, _score, development in roles),
-    )
-
-
-def _mixed_targets(player_count, rng):
-    return _asymmetric_targets(
-        MIXED_DEVELOPMENT_ROLES[player_count],
-        rng,
-        score_bounds=(0, 12),
-        development_bounds=(2, 8),
-        maximum_score_gap=8,
-        maximum_development_gap=4,
-    )
-
-
-def _early_mixed_targets(player_count, rng):
-    return _asymmetric_targets(
-        EARLY_MIXED_DEVELOPMENT_ROLES[player_count],
-        rng,
-        score_bounds=(2, 6),
-        development_bounds=(3, 5),
-        maximum_score_gap=4,
-        maximum_development_gap=2,
-    )
-
-
 def _ensure_player_controls_city(game, player, pools, rng):
     if player_has_starting_score_source(game, player):
         return True
@@ -667,165 +547,8 @@ def _ensure_player_controls_city(game, player, pools, rng):
     return False
 
 
-def _complete_mixed_development(game, pools, rng, targets, positive_scores):
-    for player, score in zip(game.players, positive_scores):
-        if score > 0 and not _ensure_player_controls_city(game, player, pools, rng):
-            return False
-
-    completed = {player: _development_total(game, player) for player in game.players}
-    if any(completed[player] > target for player, target in zip(game.players, targets)):
-        return False
-    while any(completed[player] < target for player, target in zip(game.players, targets)):
-        order = list(range(len(game.players)))
-        rng.shuffle(order)
-        for index in order:
-            player = game.players[index]
-            if completed[player] >= targets[index]:
-                continue
-            upgrades = _upgrade_choices(player)
-            office_choices = []
-            for city in game.selected_map.cities:
-                if sum(office.controller is None for office in city.offices) <= 1:
-                    continue
-                for office in city.offices:
-                    if (
-                        office.controller is None
-                        and pools[player][office.shape]
-                        and _can_claim_office(player, office)
-                    ):
-                        office_choices.append(office)
-            categories = (["office"] if office_choices else []) + (["upgrade"] if upgrades else [])
-            if not categories:
-                return False
-            if rng.choice(categories) == "office":
-                if not _place_office(rng.choice(office_choices), player, pools):
-                    return False
-            else:
-                _apply_upgrade(player, pools, rng.choice(upgrades))
-            completed[player] += 1
-    return True
-
-
-def _scaffold_early_routes(game, pools, rng):
-    """Fill two uniformly sampled, unique routes for every player."""
-    route_count = len(game.players) * 2
-    eligible_routes = [
-        route
-        for route in game.selected_map.routes
-        if route.posts and not any(post.is_owned() for post in route.posts)
-    ]
-    if len(eligible_routes) < route_count:
-        return None
-
-    selected_routes = rng.sample(eligible_routes, route_count)
-    assignments = list(enumerate(game.players))
-    rng.shuffle(assignments)
-    route_ids_by_seat = [[] for _player in game.players]
-    route_lengths_by_seat = [[] for _player in game.players]
-    route_ids = {route: index for index, route in enumerate(game.selected_map.routes)}
-
-    for assignment_index, (seat_index, player) in enumerate(assignments):
-        player_routes = selected_routes[assignment_index * 2 : assignment_index * 2 + 2]
-        posts = [post for route in player_routes for post in route.posts]
-        required_squares = sum(post.required_shape == "square" for post in posts)
-        required_circles = sum(post.required_shape == "circle" for post in posts)
-        unrestricted = [post for post in posts if post.required_shape is None]
-        available_squares = pools[player]["square"] - required_squares
-        available_circles = pools[player]["circle"] - required_circles
-        if available_squares < 0 or available_circles < 0:
-            return None
-        minimum_circles = max(0, len(unrestricted) - available_squares)
-        maximum_circles = min(len(unrestricted), available_circles)
-        if minimum_circles > maximum_circles:
-            return None
-        circle_posts = set(
-            rng.sample(
-                unrestricted,
-                rng.randint(minimum_circles, maximum_circles),
-            )
-        )
-        for route in player_routes:
-            for post in route.posts:
-                shape = post.required_shape or ("circle" if post in circle_posts else "square")
-                post.owner = player
-                post.owner_piece_shape = shape
-                pools[player][shape] -= 1
-            route_ids_by_seat[seat_index].append(route_ids[route])
-            route_lengths_by_seat[seat_index].append(len(route.posts))
-
-    return (
-        tuple(tuple(route_ids) for route_ids in route_ids_by_seat),
-        tuple(tuple(lengths) for lengths in route_lengths_by_seat),
-    )
-
-
-def _place_partial_route_pieces(route, player, pool, count, rng):
-    empty_posts = [post for post in route.posts if not post.is_owned()]
-    if len(empty_posts) <= count:
-        return False
-    post_groups = list(combinations(empty_posts, count))
-    rng.shuffle(post_groups)
-    for posts in post_groups:
-        required_circles = sum(post.required_shape == "circle" for post in posts)
-        unrestricted = [post for post in posts if post.required_shape is None]
-        available_circles = pool["circle"] - required_circles
-        if available_circles < 0:
-            continue
-        minimum_extra_circles = max(0, len(unrestricted) - pool["square"])
-        maximum_extra_circles = min(len(unrestricted), available_circles)
-        if minimum_extra_circles > maximum_extra_circles:
-            continue
-        extra_circle_count = rng.randint(minimum_extra_circles, maximum_extra_circles)
-        circle_posts = set(rng.sample(unrestricted, extra_circle_count))
-        for post in posts:
-            shape = post.required_shape or ("circle" if post in circle_posts else "square")
-            post.owner = player
-            post.owner_piece_shape = shape
-            pool[shape] -= 1
-        return True
-    return False
-
-
-def _scaffold_early_mixed_routes(game, pools, rng):
-    """Add varied partial-route structure without completing any route."""
-    players = list(game.players)
-    rng.shuffle(players)
-    for player in players:
-        selected_routes = []
-        piece_targets = [2, 1] + ([1] if rng.random() < 0.5 else [])
-        for count in piece_targets:
-            candidates = [
-                route
-                for route in game.selected_map.routes
-                if route not in selected_routes
-                and route.region is None
-                and sum(not post.is_owned() for post in route.posts) > count
-            ]
-            if not candidates:
-                return False
-            rng.shuffle(candidates)
-            contested = [route for route in candidates if route.has_tradesmen()]
-            if contested and rng.random() < 0.5:
-                candidates = contested
-            route = next(
-                (
-                    candidate
-                    for candidate in candidates
-                    if _place_partial_route_pieces(candidate, player, pools[player], count, rng)
-                ),
-                None,
-            )
-            if route is None:
-                return False
-            selected_routes.append(route)
-    return True
-
-
 def _is_valid_generated_state(game, request):
-    if (
-        not (request.mixed_development or request.early_mixed_development)
-        and max(game.projected_scores()) - min(game.projected_scores()) > 3
-    ):
+    if max(game.projected_scores()) - min(game.projected_scores()) > 3:
         return False
     if not starting_scores_have_valid_sources(game):
         return False
@@ -876,22 +599,6 @@ def _build_once(request, attempt_seed):
     game = configuration.create_game()
     pools = {player: _configure_player(player) for player in game.players}
     development_range = request.development_range or rng.choice(DEVELOPMENT_RANGES)
-    development_roles = ()
-    mixed_scores = ()
-    mixed_development = ()
-    scaffolded_route_ids = ()
-    scaffolded_route_lengths = ()
-    if request.mixed_development:
-        development_roles, mixed_scores, mixed_development = _mixed_targets(
-            request.player_count, rng
-        )
-        development_range = (min(mixed_development), max(mixed_development))
-    elif request.early_mixed_development:
-        development_roles, mixed_scores, mixed_development = _early_mixed_targets(
-            request.player_count, rng
-        )
-        development_range = (min(mixed_development), max(mixed_development))
-    asymmetric_development = request.mixed_development or request.early_mixed_development
     complicated_focus = (
         request.strategic_focus in DUAL_EAST_WEST_FOCUSES
         or request.strategic_focus in (StrategicFocus.SPECIAL_PRESTIGE, StrategicFocus.NETWORK_KEYS)
@@ -903,24 +610,16 @@ def _build_once(request, attempt_seed):
         initial_range = (0, 1) if complicated_focus else (3, 5)
     if _complete_balanced_development(game, pools, rng, initial_range, allow_offices=True) is None:
         return None
-    if (
-        not asymmetric_development
-        and request.strategic_focus is not StrategicFocus.NETWORK_KEYS
-        and any(
-            not _ensure_player_controls_city(game, player, pools, rng) for player in game.players
-        )
+    if request.strategic_focus is not StrategicFocus.NETWORK_KEYS and any(
+        not _ensure_player_controls_city(game, player, pools, rng) for player in game.players
     ):
         return None
 
     focus = _prepare_strategic_focus(game, pools, rng, request, development_range)
     if focus is None:
         return None
-    if (
-        not asymmetric_development
-        and request.strategic_focus is StrategicFocus.NETWORK_KEYS
-        and any(
-            not _ensure_player_controls_city(game, player, pools, rng) for player in game.players
-        )
+    if request.strategic_focus is StrategicFocus.NETWORK_KEYS and any(
+        not _ensure_player_controls_city(game, player, pools, rng) for player in game.players
     ):
         return None
 
@@ -936,32 +635,13 @@ def _build_once(request, attempt_seed):
         if opened_piece is not None:
             focus.required_pieces.append(opened_piece)
 
-    if asymmetric_development:
-        if not _complete_mixed_development(
-            game,
-            pools,
-            rng,
-            mixed_development,
-            mixed_scores,
-        ):
-            return None
-    elif request.strategic_focus is not StrategicFocus.NETWORK_KEYS:
+    if request.strategic_focus is not StrategicFocus.NETWORK_KEYS:
         if _complete_balanced_development(game, pools, rng, development_range) is None:
             return None
-    if request.early_route_scaffold:
-        scaffold = _scaffold_early_routes(game, pools, rng)
-        if scaffold is None:
-            return None
-        scaffolded_route_ids, scaffolded_route_lengths = scaffold
-    if request.early_mixed_development and not _scaffold_early_mixed_routes(game, pools, rng):
-        return None
     if not _finish_supply_setup(game, pools, rng, focus):
         return None
 
-    if asymmetric_development:
-        for player, score in zip(game.players, mixed_scores):
-            player.score = score
-    elif request.prepare_ending_condition:
+    if request.prepare_ending_condition:
         if not _apply_starting_scores(game, rng, request, prepared_player, focus):
             return None
     else:
@@ -994,10 +674,6 @@ def _build_once(request, attempt_seed):
         tuple(focus.variants),
         tuple(player.score for player in game.players),
         tuple(_development_total(game, player) for player in game.players),
-        development_roles,
-        request.early_route_scaffold,
-        scaffolded_route_ids,
-        scaffolded_route_lengths,
     )
 
 
@@ -1037,9 +713,6 @@ def save_balanced_state(generated, output_directory, *, scenario_directory=None)
         "development_range": request.development_range,
         "prepare_ending_condition": request.prepare_ending_condition,
         "round_range": request.round_range,
-        "mixed_development": request.mixed_development,
-        **({"early_mixed_development": True} if request.early_mixed_development else {}),
-        "early_route_scaffold": request.early_route_scaffold,
         "bonus_marker_setup": _resolved_bonus_marker_setup(request),
         "regional_focus": request.regional_focus,
         "options": (
@@ -1067,10 +740,6 @@ def save_balanced_state(generated, output_directory, *, scenario_directory=None)
         "prepared_player_index": generated.prepared_player_index,
         "starting_score_by_seat": generated.starting_scores_by_seat,
         "starting_development_by_seat": generated.starting_development_by_seat,
-        "development_role_by_seat": generated.development_roles_by_seat,
-        "early_route_scaffold": generated.early_route_scaffold,
-        "scaffolded_route_ids_by_seat": generated.scaffolded_route_ids_by_seat,
-        "scaffolded_route_lengths_by_seat": generated.scaffolded_route_lengths_by_seat,
         "starting_position": request.starting_position.value,
         "save_file": save_path.name,
     }

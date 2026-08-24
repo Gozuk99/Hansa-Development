@@ -8,16 +8,16 @@ from unittest import mock
 
 from game.invariants import validate_game
 from game.loaded_state_validation import validate_loaded_game
+from game.persistence import load_game
 from training.balanced_curriculum import (
     CONFIGURATIONS,
-    EARLY_ROUTE_SCAFFOLD_RATE,
     MATURITY_CYCLE,
     MATURITY_PROFILES,
     BalancedCurriculumRunner,
     _scenario_condition_label,
     _select_focus,
+    _select_fresh_optional_modules,
     _select_optional_modules,
-    _uses_early_route_scaffold,
 )
 from training.balanced_state_generator import (
     BalancedGenerationRequest,
@@ -26,7 +26,6 @@ from training.balanced_state_generator import (
     RegionalFocus,
     StartingPosition,
     StrategicFocus,
-    _scaffold_early_routes,
     generate_balanced_state,
     player_has_starting_score_source,
     starting_scores_have_valid_sources,
@@ -40,7 +39,8 @@ class BalancedCurriculumTests(unittest.TestCase):
     @staticmethod
     def _runner(training_generation_number=0):
         runner = object.__new__(BalancedCurriculumRunner)
-        runner.config = SimpleNamespace(seed=124)
+        runner.config = SimpleNamespace(seed=124, zero_epsilon_training_fraction=0.05)
+        runner.game_number = training_generation_number
         runner.training_generation_number = training_generation_number
         return runner
 
@@ -227,275 +227,161 @@ class BalancedCurriculumTests(unittest.TestCase):
         self.assertEqual(
             observed,
             {
-                "mixed": 64,
-                "early_mixed": 48,
-                "early": 24,
-                "mid": 9,
-                "late": 9,
-                "end": 6,
+                "fresh": 10,
+                "early": 5,
+                "mid": 2,
+                "late": 2,
+                "end": 1,
             },
         )
         total = sum(profile.weight for profile in MATURITY_PROFILES)
-        self.assertEqual(total, 160)
-        self.assertEqual(observed["mixed"] / total, 0.40)
-        self.assertEqual(observed["early_mixed"] / total, 0.30)
-        self.assertEqual(observed["early"] / total, 0.15)
-        self.assertEqual((observed["mid"] + observed["late"] + observed["end"]) / total, 0.15)
+        self.assertEqual(total, 20)
+        self.assertEqual(observed["fresh"] / total, 0.50)
+        self.assertEqual(observed["early"] / total, 0.25)
+        self.assertEqual(observed["mid"] / total, 0.10)
+        self.assertEqual(observed["late"] / total, 0.10)
+        self.assertEqual(observed["end"] / total, 0.05)
         self.assertEqual(
             (observed["mid"], observed["late"], observed["end"]),
-            (9, 9, 6),
+            (2, 2, 1),
         )
         self.assertEqual(
             runner._stage_label(None),
-            "early_early_mixed_mid_late_end_mixed_game",
+            "fresh_early_mid_late_end_game",
         )
 
-    def test_early_route_scaffold_split_is_reproducible_and_near_seventy_percent(self):
-        first = [_uses_early_route_scaffold(seed) for seed in range(10_000)]
-        second = [_uses_early_route_scaffold(seed) for seed in range(10_000)]
+    def test_zero_epsilon_selection_is_deterministic_and_independent_of_maturity(self):
+        runner = self._runner()
+        first = [runner._training_exploration_mode(game) for game in range(10_000)]
+        second = [self._runner()._training_exploration_mode(game) for game in range(10_000)]
 
         self.assertEqual(first, second)
-        self.assertAlmostEqual(sum(first) / len(first), EARLY_ROUTE_SCAFFOLD_RATE, delta=0.02)
-
-    def test_scaffolded_early_states_fill_two_unique_legal_routes_per_player(self):
-        for map_num, players in ((1, 3), (2, 4), (3, 5)):
-            with self.subTest(map_num=map_num, players=players):
-                generated = generate_balanced_state(
-                    BalancedGenerationRequest(
-                        seed=9_000 + map_num * 10 + players,
-                        map_num=map_num,
-                        player_count=players,
-                        ending_condition=EndingCondition.NEAR_SCORE,
-                        score_range=(0, 5),
-                        bonus_markers_remaining=9,
-                        completed_cities_below_limit=7,
-                        development_range=(2, 4),
-                        prepare_ending_condition=False,
-                        round_range=(2, 5),
-                        early_route_scaffold=True,
-                    )
-                )
-                game = generated.game
-                route_ids = generated.scaffolded_route_ids_by_seat
-                route_lengths = generated.scaffolded_route_lengths_by_seat
-                flattened = [route_id for player_routes in route_ids for route_id in player_routes]
-
-                self.assertTrue(generated.early_route_scaffold)
-                self.assertEqual(len(flattened), players * 2)
-                self.assertEqual(len(set(flattened)), players * 2)
-                for seat, player in enumerate(game.players):
-                    self.assertEqual(len(route_ids[seat]), 2)
-                    self.assertEqual(len(route_lengths[seat]), 2)
-                    self.assertEqual(
-                        sum(route.is_controlled_by(player) for route in game.selected_map.routes),
-                        2,
-                    )
-                    for route_id, route_length in zip(route_ids[seat], route_lengths[seat]):
-                        route = game.selected_map.routes[route_id]
-                        self.assertEqual(len(route.posts), route_length)
-                        self.assertTrue(route.is_controlled_by(player))
-                        self.assertTrue(
-                            all(
-                                post.required_shape in (None, post.owner_piece_shape)
-                                for post in route.posts
-                            )
-                        )
-                validate_game(game)
-                self.assertTrue(validate_loaded_game(game))
-
-    def test_unscaffolded_early_state_keeps_routes_sparse(self):
-        generated = generate_balanced_state(
-            BalancedGenerationRequest(
-                seed=9_100,
-                map_num=1,
-                player_count=3,
-                ending_condition=EndingCondition.NEAR_SCORE,
-                score_range=(0, 5),
-                bonus_markers_remaining=9,
-                completed_cities_below_limit=7,
-                development_range=(2, 4),
-                prepare_ending_condition=False,
-                round_range=(2, 5),
-                early_route_scaffold=False,
-            )
-        )
-
-        self.assertFalse(generated.early_route_scaffold)
-        self.assertEqual(generated.scaffolded_route_ids_by_seat, ())
-        self.assertFalse(
-            any(
-                route.is_controlled_by(player)
-                for player in generated.game.players
-                for route in generated.game.selected_map.routes
-            )
-        )
-
-    def test_scaffold_route_sampling_considers_all_empty_routes_without_quality_filtering(self):
-        players = [object() for _index in range(3)]
-        routes = []
-        for index in range(12):
-            posts = []
-            for _post_index in range(2 + index % 3):
-                post = mock.Mock(required_shape=None, owner=None, owner_piece_shape=None)
-                post.is_owned.return_value = False
-                posts.append(post)
-            route = mock.Mock(
-                posts=posts,
-                bonus_marker=(object() if index % 2 else None),
-                has_bonus_marker=bool(index % 2),
-            )
-            routes.append(route)
-        game = SimpleNamespace(
-            players=players,
-            selected_map=SimpleNamespace(routes=routes),
-        )
-        pools = {player: {"square": 26, "circle": 4} for player in players}
-        rng = mock.Mock(wraps=random.Random(99))
-
-        result = _scaffold_early_routes(game, pools, rng)
-
-        self.assertIsNotNone(result)
-        sampled_population, sampled_count = rng.sample.call_args_list[0].args
-        self.assertEqual(sampled_population, routes)
-        self.assertEqual(sampled_count, 6)
-
-    def test_mixed_development_uses_shuffled_legal_role_targets(self):
-        role_targets = {
-            3: {"low": (2, 3), "medium": (6, 5), "high": (10, 7)},
-            4: {"low": (2, 3), "low_mid": (5, 4), "high_mid": (7, 6), "high": (10, 7)},
-            5: {
-                "very_low": (2, 3),
-                "low": (4, 4),
-                "medium": (6, 5),
-                "high": (8, 6),
-                "very_high": (10, 7),
-            },
+        zero_rate = first.count("zero_epsilon") / len(first)
+        self.assertGreater(zero_rate, 0.04)
+        self.assertLess(zero_rate, 0.06)
+        by_maturity = {
+            maturity: [
+                first[game]
+                for game in range(len(first))
+                if runner._maturity_for_game(game).name == maturity
+            ]
+            for maturity in ("fresh", "early", "mid", "late", "end")
         }
-        observed_orders = set()
-        for players in (3, 4, 5):
-            generated = generate_balanced_state(
-                BalancedGenerationRequest(
-                    seed=4_000 + players,
-                    map_num=1,
-                    player_count=players,
-                    ending_condition=EndingCondition.NEAR_SCORE,
-                    score_range=(0, 12),
-                    development_range=(2, 8),
-                    prepare_ending_condition=False,
-                    mixed_development=True,
-                    round_range=(6, 12),
-                )
+        for modes in by_maturity.values():
+            stage_rate = modes.count("zero_epsilon") / len(modes)
+            self.assertGreater(stage_rate, 0.03)
+            self.assertLess(stage_rate, 0.07)
+
+    def test_fallback_evaluation_maturity_distribution_remains_unchanged(self):
+        runner = self._runner()
+        observed = Counter(
+            runner._evaluation_maturity_for_seed(seed).name for seed in range(10_000)
+        )
+
+        self.assertEqual(set(observed), {"early", "mid", "late", "end"})
+        self.assertEqual(observed, {"early": 4_000, "mid": 3_000, "late": 2_000, "end": 1_000})
+
+    def test_fresh_optional_modules_have_requested_seeded_distribution(self):
+        selections = [
+            _select_fresh_optional_modules(random.Random(seed), 1) for seed in range(12_000)
+        ]
+        mission_rate = sum(missions for missions, _favour, _markers in selections) / len(selections)
+        favour_rate = sum(favour for _missions, favour, _markers in selections) / len(selections)
+        marker_counts = Counter(markers for _missions, _favour, markers in selections)
+
+        self.assertTrue(0.48 < mission_rate < 0.52)
+        self.assertTrue(0.48 < favour_rate < 0.52)
+        for marker_setup in BonusMarkerSetup:
+            self.assertTrue(0.31 < marker_counts[marker_setup] / len(selections) < 0.35)
+        self.assertTrue(
+            all(
+                not _select_fresh_optional_modules(random.Random(seed), map_num)[0]
+                for map_num in (2, 3)
+                for seed in range(100)
             )
-            roles = generated.development_roles_by_seat
-            scores = generated.starting_scores_by_seat
-            development = generated.starting_development_by_seat
-            observed_orders.add(roles)
-            self.assertEqual(set(roles), set(role_targets[players]))
-            self.assertLessEqual(max(scores) - min(scores), 8)
-            self.assertLessEqual(max(development) - min(development), 4)
-            for role, score, developed in zip(roles, scores, development):
-                target_score, target_development = role_targets[players][role]
-                self.assertLessEqual(abs(score - target_score), 1)
-                self.assertLessEqual(abs(developed - target_development), 1)
-            self.assertTrue(starting_scores_have_valid_sources(generated.game))
-        self.assertGreater(len(observed_orders), 1)
+        )
 
-    def test_early_mixed_uses_modest_shuffled_development_and_partial_routes(self):
-        observed_high_seats = set()
-        for map_num, players in ((1, 3), (2, 4), (3, 5)):
-            with self.subTest(map_num=map_num, players=players):
-                generated = generate_balanced_state(
-                    BalancedGenerationRequest(
-                        seed=6_000 + map_num * 10 + players,
-                        map_num=map_num,
-                        player_count=players,
-                        ending_condition=EndingCondition.NEAR_SCORE,
-                        score_range=(2, 6),
-                        development_range=(3, 5),
-                        bonus_markers_remaining=7,
-                        completed_cities_below_limit=6,
-                        prepare_ending_condition=False,
-                        round_range=(3, 6),
-                        early_mixed_development=True,
+    def test_fresh_curriculum_uses_canonical_untouched_setup_for_every_configuration(self):
+        fresh_number = next(
+            number
+            for number in range(len(MATURITY_CYCLE))
+            if self._runner()._maturity_for_game(number).name == "fresh"
+        )
+        observed_marker_routes = set()
+        for map_num, player_count in CONFIGURATIONS:
+            with self.subTest(map_num=map_num, player_count=player_count):
+                runner = self._runner(fresh_number)
+                runner._latest_descriptor = None
+                with (
+                    tempfile.TemporaryDirectory() as directory,
+                    mock.patch.object(
+                        runner,
+                        "_configuration_for_game",
+                        return_value=(map_num, player_count),
+                    ),
+                ):
+                    descriptor = runner._generate_state(
+                        SimpleNamespace(full_game=False),
+                        20_000 + map_num * 100 + player_count,
+                        Path(directory),
                     )
-                )
-                game = generated.game
-                scores = generated.starting_scores_by_seat
-                development = generated.starting_development_by_seat
-                roles = generated.development_roles_by_seat
-                observed_high_seats.add(roles.index("high"))
+                    game = load_game(descriptor.path)
 
-                self.assertTrue(all(2 <= score <= 6 for score in scores))
-                self.assertTrue(all(3 <= value <= 5 for value in development))
-                self.assertLessEqual(max(scores) - min(scores), 4)
-                self.assertLessEqual(max(development) - min(development), 2)
-                self.assertTrue(starting_scores_have_valid_sources(game))
-                self.assertFalse(generated.early_route_scaffold)
-                self.assertEqual(generated.scaffolded_route_ids_by_seat, ())
+                self.assertEqual(descriptor.scenario, "fresh")
+                self.assertEqual(descriptor.starting_position, "")
+                self.assertEqual(game.turn_number, 1)
+                self.assertEqual(game.round_number, 1)
+                self.assertEqual(game.current_player_index, 0)
+                self.assertFalse(game.game_end)
+                self.assertTrue(all(player.score == 0 for player in game.players))
                 self.assertTrue(
                     all(
-                        any(not post.is_owned() for post in route.posts)
-                        for route in game.selected_map.routes
+                        (
+                            player.keys,
+                            player.privilege,
+                            player.book,
+                            player.actions,
+                            player.bank,
+                        )
+                        == (1, "WHITE", 2, 2, 3)
+                        for player in game.players
                     )
                 )
-                for player in game.players:
-                    occupied_routes = [
-                        route
-                        for route in game.selected_map.routes
-                        if any(post.owner is player for post in route.posts)
-                    ]
-                    self.assertGreaterEqual(len(occupied_routes), 2)
-                    self.assertTrue(
-                        any(
-                            sum(post.owner is player for post in route.posts) >= 2
-                            for route in occupied_routes
-                        )
+                self.assertTrue(
+                    all(
+                        office.controller is None
+                        for city in game.selected_map.cities
+                        for office in city.offices
                     )
-                validate_game(game)
+                )
+                self.assertFalse(any(route.has_tradesmen() for route in game.selected_map.routes))
+                self.assertTrue(
+                    all(
+                        not player.bonus_markers and not player.used_bonus_markers
+                        for player in game.players
+                    )
+                )
+                self.assertEqual(len(game.selected_map.bonus_marker_pool), 12)
+                self.assertEqual(
+                    {
+                        route.bonus_marker.type
+                        for route in game.selected_map.routes
+                        if route.bonus_marker is not None
+                    },
+                    {"Move3", "SwapOffice", "PlaceAdjacent"},
+                )
+                self.assertEqual(descriptor.mission_cards_enabled, game.use_mission_cards)
+                self.assertEqual(descriptor.emperors_favour_enabled, game.use_emperors_favour)
+                self.assertEqual(descriptor.emperors_favour_tiles, tuple(game.tile_pool))
+                self.assertEqual(
+                    descriptor.bonus_marker_draw_supply,
+                    tuple(game.selected_map.bonus_marker_pool),
+                )
+                self.assertTrue(validate_game(game))
                 self.assertTrue(validate_loaded_game(game))
+                observed_marker_routes.add(descriptor.starting_bonus_marker_routes)
 
-        self.assertGreater(len(observed_high_seats), 1)
-
-    def test_early_mixed_is_weaker_than_existing_mixed_development(self):
-        early_mixed = generate_balanced_state(
-            BalancedGenerationRequest(
-                seed=6_100,
-                map_num=1,
-                player_count=5,
-                ending_condition=EndingCondition.NEAR_SCORE,
-                score_range=(2, 6),
-                development_range=(3, 5),
-                bonus_markers_remaining=7,
-                completed_cities_below_limit=6,
-                prepare_ending_condition=False,
-                round_range=(3, 6),
-                early_mixed_development=True,
-            )
-        )
-        mixed = generate_balanced_state(
-            BalancedGenerationRequest(
-                seed=6_100,
-                map_num=1,
-                player_count=5,
-                ending_condition=EndingCondition.NEAR_SCORE,
-                score_range=(0, 12),
-                development_range=(2, 8),
-                bonus_markers_remaining=5,
-                completed_cities_below_limit=5,
-                prepare_ending_condition=False,
-                round_range=(6, 12),
-                mixed_development=True,
-            )
-        )
-
-        self.assertLess(
-            sum(early_mixed.starting_scores_by_seat),
-            sum(mixed.starting_scores_by_seat),
-        )
-        self.assertLess(
-            sum(early_mixed.starting_development_by_seat),
-            sum(mixed.starting_development_by_seat),
-        )
+        self.assertGreater(len(observed_marker_routes), 1)
 
     def test_positive_starting_score_requires_city_control_or_spent_prestige_circle(self):
         generated = generate_balanced_state(
@@ -541,7 +427,7 @@ class BalancedCurriculumTests(unittest.TestCase):
         self.assertTrue(player_has_starting_score_source(game, player))
         self.assertTrue(starting_scores_have_valid_sources(game))
 
-    def test_early_and_early_mixed_training_receive_the_extended_action_limit(self):
+    def test_only_early_training_receives_the_extended_action_limit(self):
         runner = self._runner()
         stage = SimpleNamespace(name="mixed", action_limit=10_000)
 
@@ -549,11 +435,7 @@ class BalancedCurriculumTests(unittest.TestCase):
             runner._training_action_limit(stage, SimpleNamespace(scenario="early")),
             15_000,
         )
-        self.assertEqual(
-            runner._training_action_limit(stage, SimpleNamespace(scenario="early_mixed")),
-            15_000,
-        )
-        for maturity in ("mixed", "mid", "late", "end"):
+        for maturity in ("fresh", "mid", "late", "end"):
             self.assertEqual(
                 runner._training_action_limit(stage, SimpleNamespace(scenario=maturity)),
                 10_000,
@@ -628,27 +510,12 @@ class BalancedCurriculumTests(unittest.TestCase):
 
     def test_early_scenario_has_no_end_condition_label(self):
         early = next(profile for profile in MATURITY_PROFILES if profile.name == "early")
-        early_mixed = next(
-            profile for profile in MATURITY_PROFILES if profile.name == "early_mixed"
-        )
-        mixed = next(profile for profile in MATURITY_PROFILES if profile.name == "mixed")
         mid = next(profile for profile in MATURITY_PROFILES if profile.name == "mid")
         late = next(profile for profile in MATURITY_PROFILES if profile.name == "late")
 
         self.assertTrue(
             all(
                 _scenario_condition_label(early, condition) is None for condition in EndingCondition
-            )
-        )
-        self.assertTrue(
-            all(
-                _scenario_condition_label(early_mixed, condition) is None
-                for condition in EndingCondition
-            )
-        )
-        self.assertTrue(
-            all(
-                _scenario_condition_label(mixed, condition) is None for condition in EndingCondition
             )
         )
         self.assertEqual(
@@ -703,7 +570,10 @@ class BalancedCurriculumTests(unittest.TestCase):
     def test_maturity_profiles_progress_from_fresh_to_end_game(self):
         profiles = {profile.name: profile for profile in MATURITY_PROFILES}
 
-        self.assertEqual(set(profiles), {"early", "early_mixed", "mid", "late", "end", "mixed"})
+        self.assertEqual(set(profiles), {"fresh", "early", "mid", "late", "end"})
+        self.assertTrue(profiles["fresh"].fresh)
+        self.assertEqual(profiles["fresh"].round_range, (1, 1))
+        self.assertEqual(profiles["fresh"].starting_position_label, "")
         self.assertEqual(profiles["early"].score_range, (0, 5))
         self.assertEqual(profiles["early"].development_range, (2, 4))
         self.assertEqual(profiles["early"].bonus_markers_remaining, 9)
@@ -726,14 +596,6 @@ class BalancedCurriculumTests(unittest.TestCase):
             profiles["end"].starting_position_label,
             "two_decisions_before",
         )
-        self.assertEqual(profiles["early_mixed"].score_range, (2, 6))
-        self.assertEqual(profiles["early_mixed"].development_range, (3, 5))
-        self.assertEqual(profiles["early_mixed"].bonus_markers_remaining, 7)
-        self.assertEqual(profiles["early_mixed"].round_range, (3, 6))
-        self.assertEqual(profiles["early_mixed"].starting_position_label, "")
-        self.assertEqual(profiles["mixed"].score_range, (0, 12))
-        self.assertEqual(profiles["mixed"].development_range, (2, 8))
-        self.assertEqual(profiles["mixed"].starting_position_label, "")
 
     def test_early_state_applies_early_scores_and_development(self):
         with mock.patch(
@@ -765,6 +627,7 @@ class BalancedCurriculumTests(unittest.TestCase):
         minimum, maximum = generated.development_range
         self.assertEqual((minimum, maximum), (2, 4))
         self.assertEqual(generated.game.current_full_cities_count, 0)
+        self.assertFalse(any(route.has_tradesmen() for route in generated.game.selected_map.routes))
         self.assertTrue(validate_game(generated.game))
         self.assertTrue(validate_loaded_game(generated.game))
         self.assertTrue(2 <= generated.game.round_number <= 5)
@@ -808,59 +671,9 @@ class BalancedCurriculumTests(unittest.TestCase):
         self.assertEqual(request.round_range, (2, 5))
         self.assertEqual(request.strategic_focus, StrategicFocus.NONE)
         self.assertIsNone(request.regional_focus)
-        self.assertEqual(request.early_route_scaffold, _uses_early_route_scaffold(123))
-        self.assertEqual(descriptor.early_route_scaffold, request.early_route_scaffold)
         self.assertEqual(descriptor.scenario, "early")
         self.assertEqual(descriptor.starting_position, "")
         self.assertEqual(save.call_args.kwargs["scenario_directory"], "early")
-
-    def test_curriculum_early_mixed_request_is_distinct_and_unprepared(self):
-        generation_number = next(
-            game_number
-            for game_number in range(len(MATURITY_CYCLE))
-            if self._runner()._maturity_for_game(game_number).name == "early_mixed"
-        )
-        runner = self._runner(generation_number)
-        runner._latest_descriptor = None
-        generated = SimpleNamespace(
-            starting_scores_by_seat=(2, 4, 6),
-            starting_development_by_seat=(3, 4, 5),
-            development_roles_by_seat=("low", "medium", "high"),
-        )
-
-        with tempfile.TemporaryDirectory() as directory:
-            state_path = Path(directory) / "state.hansa"
-            metadata_path = Path(directory) / "state.json"
-            with (
-                mock.patch(
-                    "training.balanced_curriculum.generate_balanced_state",
-                    return_value=generated,
-                ) as generate,
-                mock.patch(
-                    "training.balanced_curriculum.save_balanced_state",
-                    return_value=(state_path, metadata_path),
-                ) as save,
-            ):
-                descriptor = runner._generate_state(
-                    SimpleNamespace(full_game=False),
-                    123,
-                    Path(directory),
-                )
-
-        request = generate.call_args.args[0]
-        self.assertTrue(request.early_mixed_development)
-        self.assertFalse(request.mixed_development)
-        self.assertFalse(request.prepare_ending_condition)
-        self.assertFalse(request.prepared_routes_one_short)
-        self.assertFalse(request.early_route_scaffold)
-        self.assertEqual(request.score_range, (2, 6))
-        self.assertEqual(request.development_range, (3, 5))
-        self.assertEqual(request.round_range, (3, 6))
-        self.assertEqual(descriptor.scenario, "early_mixed")
-        self.assertEqual(descriptor.starting_scores_by_seat, (2, 4, 6))
-        self.assertEqual(descriptor.starting_development_by_seat, (3, 4, 5))
-        self.assertEqual(descriptor.development_roles_by_seat, ("low", "medium", "high"))
-        self.assertEqual(save.call_args.kwargs["scenario_directory"], "early_mixed")
 
     def test_non_early_curriculum_requests_keep_ending_preparation(self):
         for maturity_name in ("mid", "late", "end"):
@@ -889,7 +702,6 @@ class BalancedCurriculumTests(unittest.TestCase):
             self.assertTrue(request.prepare_ending_condition)
             self.assertTrue(request.prepared_routes_one_short)
             self.assertEqual(request.round_range, profile.round_range)
-            self.assertFalse(request.early_route_scaffold)
 
     def test_east_west_and_isle_of_man_can_be_generated_together(self):
         generated = generate_balanced_state(

@@ -32,15 +32,15 @@ batches. It uses the same top-2, top-5, top-10, top-15, and
 top-20 tiers as training, but disables epsilon exploration so the benchmark
 measures the model without extra exploratory moves.
 
-Each learning row records that game's loss before its per-game update and the
-rolling average of the latest five learning-game losses. Evaluation rows record
-their measured loss in `latest_loss` but leave `rolling_mean_loss` blank because
-evaluation never updates the model.
+Each learning and evaluation row records its raw measured loss in `latest_loss`.
+The dashboard calculates rolling loss statistics from that history instead of
+storing a derived value in every row.
 
-Every training and evaluation row also records paid-action movement diagnostics:
-Move count and ratio, pointless Move workflows, repeated-Move and all-Move-turn
-penalty counts, route-creating Moves, and immediate Move-to-Claim conversions.
-Rates remain blank when their denominator is zero. The dashboard aggregates the
+Every training and evaluation row also records the raw paid-action movement
+counters: Move and spent-action counts, pointless Move workflows, repeated-Move
+and all-Move-turn penalty counts, route-creating Moves, and immediate
+Move-to-Claim conversions. The dashboard derives ratios safely from those raw
+counters. It aggregates the
 fixed evaluation games by batch and applies its existing map and player filters.
 Early-game evaluation is reported separately from the established fixed suite;
 these values are diagnostics and do not add or change any reward.
@@ -50,12 +50,11 @@ suite. Set the learning games per batch with `--iterations`; use `--batch` to
 repeat that entire learning-and-evaluation cycle.
 The model learns after every collected learning trajectory, including penalized
 no-replacement-route failures. Training uses one 256-decision update per sampled
-block: mid, late, end, and mixed games use at most four blocks (1,024 decisions),
-while generated early and early-mixed games use at most 4,096 decisions. CSV coverage columns record the
-trajectory decision count, sampled decision count, and sampled fraction. Early
+block: mid, late, and end games use at most four blocks (1,024 decisions),
+while generated early games use at most 4,096 decisions. CSV coverage columns record the
+trajectory and sampled decision counts. Early
 samples are spread across eight chronological sections, targeting 512 decisions
-from each section; eight additional CSV columns report the resulting per-section
-counts. Unused section capacity is redistributed without splitting movement
+from each section. Unused section capacity is redistributed without splitting movement
 workflows or exceeding 4,096 decisions. The final decision and the strongest
 immediate rewards or workflow-local penalties are retained across those samples.
 Normal
@@ -83,76 +82,66 @@ exists; otherwise it starts from the current playable model.
 The command has no option that deletes or resets the checkpoint, playable model,
 or CSV history.
 
-Training uses an exact shuffled 160-game curriculum cycle: 64 mixed (40%), 48
-early-mixed (30%), 24 early (15%), nine mid, nine late, and six end positions.
-Mid, late, and end therefore total 15% while retaining their existing 3:3:2
-relative weighting. Mixed positions keep their established broad asymmetric
-development. Early-mixed positions use shuffled 2-6 point and 3-5 development
-roles, then place three or four conserved pieces per player across two or three
-random non-Britannia routes. Every selected route retains an open post; route
-selection may create contests but never creates a completed route or guaranteed
-Claim. Development roles are shuffled independently of policy tiers.
-The fresh-game profile remains commented out.
-The CSV records the maturity in the curriculum-stage label so results can be
-compared separately.
+Training uses an exact shuffled twenty-game curriculum cycle: ten fresh (50%),
+five early (25%), two mid (10%), two late (10%), and one end position (5%). Independently,
+5% of training games disable only the broad epsilon-random branch for every
+seat; each tier retains its configured Top-K and `1 / sqrt(rank)` weighting.
+The zero-epsilon percentage is configurable from the curriculum runner CLI.
+Fresh positions use canonical new-game setup, including seeded optional modules,
+marker supplies, and randomized legal locations for the three fixed starter-marker
+types. The CSV records each maturity so results can be compared separately.
+Its `run_mode` identifies normal or zero-epsilon training and the active fixed
+evaluation set without mutually exclusive columns.
 Early positions retain nine to twelve bonus markers in supply while all three
 route markers remain in play.
-Early training uses two reproducible variants: 70% scaffold exactly two unique,
-randomly selected completed routes per player, while 30% keeps the original
-sparse early board. Scaffold selection is without replacement and does not
-prefer bonus-marker, upgrade, scoring, or otherwise valuable routes. All pieces
-come from the normal conserved player pools. CSV rows record the variant plus
-the selected route IDs and route lengths by seat. Fixed early evaluation boards
-remain unscaffolded.
-Across generated training positions, bonus-marker modules use the default
-supply 50% of the time, every promotional marker plus shuffled defaults 25% of
-the time, and a random mixture of default and promotional markers 25% of the
-time. Map 1 enables mission cards 40% of the time and leaves them disabled 60%
-of the time.
-Early-game rows use the single `early` label and early-mixed rows use
-`early_mixed`; neither prepares a score, bonus-marker, or completed-city ending
-condition. Existing mixed rows use `mixed`. Midgame rows use `score_focus`,
+Fresh positions choose standard, full-promo, and random-mix draw supplies with
+equal probability. Fresh Map 1 positions enable mission cards 50% of the time,
+and every fresh position independently enables Emperor's Favour 50% of the time.
+Developed positions retain their existing 50/25/25 marker-supply split and Map 1
+40/60 mission-card split.
+Early-game rows use the single `early` label and do not prepare a score,
+bonus-marker, or completed-city ending condition. Midgame rows use `score_focus`,
 `bonus_marker_focus`, or `completed_city_focus`; only late/end rows use `near_*`
 condition labels. Generated mid/late/end learning positions prepare routes
 exactly one post short: one of two,
 two of three, or three of four posts. Automatic training focuses do not add an
 opponent blocker to that final post, so the model must place the missing piece
 before it can claim the route.
-Evaluation suite version 8 preserves the 27 established fixed positions and the
+Evaluation suite version 9 preserves the 27 established fixed positions and the
 27 deterministic early-game positions: one for every map, supported player
 count, and bonus-marker setup. The early set has low scores, modest development, zero completed cities,
 three active route markers, varied remaining marker supply, and deterministic
 optional modules. It contains no East-West, regional-control, immediate-finish,
-or fresh-game setup. CSV rows identify `mid_late_end` versus `early`, and the
+or fresh-game setup. CSV `run_mode` values identify `evaluation_mid_late_end`
+versus `evaluation_early`, and the
 dashboard gives early evaluation its own filtered section and timeout reporting.
-Nine additional fixed mixed-development positions cover every map and player
-count. Their dashboard section compares policy tiers by shuffled starting role,
-including win, completion, timeout, final-score, score-gain, interaction, and
-movement results. Across all generated states, a positive starting score is
+Across all generated states, a positive starting score is
 accepted only when that player controls a city or occupies a spent special
 prestige/bonus-VP circle.
 Every map/player-count combination deliberately covers default,
 all-promotional, and mixed bonus-marker supplies. Map 1's nine early positions
 include four with mission cards and five without.
-The CSV `starting_position` column remains blank for early, early-mixed, mixed,
-mid, and late rows.
 End-relative labels such as `two_decisions_before`, `one_round_before`, and
 `immediate_finish` are reserved for end-focused training or fixed evaluation
 positions.
 
 For example, `--batch 10 --iterations 100` runs ten batches. Each batch contains
-100 learning games followed by the 63 fixed test-only games, for 1,000 learning
-games and 630 test-only games total.
+100 learning games followed by the 54 fixed test-only games, for 1,000 learning
+games and 540 test-only games total.
 
-Generated early and early-mixed training games use a 15,000-interaction limit;
-mixed, mid, late, and end training games remain at 10,000. Every fixed evaluation game, including the
+Generated early training games use a 15,000-interaction limit; mid, late, and
+end training games remain at 10,000. Every fixed evaluation game, including the
 early benchmark, remains capped at 10,000 so timeout rates stay comparable.
-Early training rows identify games that finished by 10,000, finished during the
-extra 5,000 interactions, or still timed out at 15,000. Promotion considers
+Action counts and completion reasons show whether an early game finished during
+the extra 5,000 interactions or still timed out at 15,000. Promotion considers
 invalid actions, unfinished games, fixed-state evaluation completion, Tier 1
 performance, and rolling loss. Action-limit failures retain their accumulated
 training signal; diagnostic bundles are preserved under
 `training_data/failures/`.
+
+Normal runs retain only high-level generation, play, and learning timers. Pass
+`--detailed-profiling` to collect and write the nine fine-grained hot-loop timing
+metrics for a diagnostic run; detailed profiling is disabled by default.
 
 ## Training policy tiers
 
@@ -168,10 +157,12 @@ action rankings.
 | 4 | 15 | 0.35 |
 | 5 | 20 | 0.35 |
 
-Three-player games use tiers 1, 3, and 5. Four-player games use tiers 1, 2, 4,
-and 5. Five-player games use all five tiers. The seats are reshuffled for every
-game, so no color, player number, or turn position permanently receives a
-stronger or weaker policy.
+Three-player training games use tiers 1 and 2 plus one uniformly selected tier
+from 3, 4, and 5. Four-player training games use tiers 1, 2, 4, and 5.
+Five-player training games use all five tiers. The selected roster is reshuffled
+across seats for every game, so no color, player number, or turn position
+permanently receives a stronger or weaker policy. Fixed evaluation retains its
+historical three-player 1/3/5 roster.
 
 An epsilon choice is uniform across every legal interaction. Otherwise, the tier's
 Top-K semantic choices are sampled by model rank with normalized `1 / sqrt(rank)`

@@ -60,10 +60,9 @@ class EvaluationSpec:
     evaluation_set: str = "mid_late_end"
     prepare_ending_condition: bool = True
     round_range: tuple[int, int] = (8, 20)
-    mixed_development: bool = False
 
 
-EVALUATION_SUITE_VERSION = 8
+EVALUATION_SUITE_VERSION = 9
 
 
 def _regional_focus(player_count, ending_index):
@@ -141,32 +140,6 @@ def _evaluation_specs():
                         round_range=(2, 5),
                     )
                 )
-    for map_num in (1, 2, 3):
-        for players in (3, 4, 5):
-            specs.append(
-                EvaluationSpec(
-                    f"map{map_num}_{players}p_mixed_development",
-                    map_num,
-                    players,
-                    EndingCondition.NEAR_SCORE,
-                    score_range=(0, 12),
-                    mission_cards=map_num == 1 and players != 4,
-                    emperors_favour=(map_num + players) % 2 == 0,
-                    bonus_marker_setup=(
-                        BonusMarkerSetup.MIXED
-                        if (map_num + players) % 2
-                        else BonusMarkerSetup.DEFAULT
-                    ),
-                    bonus_markers_remaining=5,
-                    completed_cities_below_limit=5,
-                    prepared_routes_one_short=False,
-                    development_range=(2, 8),
-                    evaluation_set="mixed_development",
-                    prepare_ending_condition=False,
-                    round_range=(6, 12),
-                    mixed_development=True,
-                )
-            )
     return tuple(specs)
 
 
@@ -192,7 +165,6 @@ def evaluation_request(spec, seed):
         development_range=spec.development_range,
         prepare_ending_condition=spec.prepare_ending_condition,
         round_range=spec.round_range,
-        mixed_development=spec.mixed_development,
         starting_position=(
             StartingPosition.IMMEDIATE_FINISH
             if spec.immediate_finish
@@ -256,13 +228,7 @@ def _generate_evaluation_suite(args):
         save_path, metadata_path = save_balanced_state(
             generated,
             evaluation_directory / spec.name,
-            scenario_directory=(
-                "early_game"
-                if spec.evaluation_set == "early"
-                else "mixed_development"
-                if spec.evaluation_set == "mixed_development"
-                else None
-            ),
+            scenario_directory="early_game" if spec.evaluation_set == "early" else None,
         )
         focuses = ["east_west"] if spec.east_west else []
         if spec.regional_focus is not None:
@@ -274,8 +240,6 @@ def _generate_evaluation_suite(args):
                 "scenario": (
                     "early_game"
                     if spec.evaluation_set == "early"
-                    else "mixed_development"
-                    if spec.evaluation_set == "mixed_development"
                     else "+".join((spec.ending_condition.value, *focuses))
                 ),
                 "ending_condition": spec.ending_condition.value,
@@ -284,7 +248,6 @@ def _generate_evaluation_suite(args):
                 ),
                 "starting_score_by_seat": generated.starting_scores_by_seat,
                 "starting_development_by_seat": generated.starting_development_by_seat,
-                "development_role_by_seat": generated.development_roles_by_seat,
                 "seed": args.seed + index,
                 "save_file": save_path.relative_to(evaluation_directory).as_posix(),
                 "metadata_file": metadata_path.relative_to(evaluation_directory).as_posix(),

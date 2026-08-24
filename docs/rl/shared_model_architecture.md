@@ -8,7 +8,7 @@ Use one shared Hansa model for every AI-controlled seat. Each decision and rewar
 
 `HansaNN` accepts the fixed player-visible observation and produces one value for each entry in the 768-action schema. `GameConfiguration` loads at most one shared inference model. Human-only games do not load PyTorch models.
 
-Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. Training performs one update per sampled block of 256 trajectory decisions. Mixed, mid, late, and end games are capped at four non-overlapping representative blocks and 1,024 sampled decisions; generated early and early-mixed games are capped at 4,096 sampled decisions. Early sampling targets 512 decisions from each chronological eighth of the complete trajectory, then redistributes unused capacity without splitting movement workflows. Penalized no-replacement-route failures and action-limit trajectories also train before the next game begins. Action-limit trajectories retain genuine rewards and penalties but receive no invented terminal reward; evaluation games never update the model.
+Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. Training performs one update per sampled block of 256 trajectory decisions. Mid, late, and end games are capped at four non-overlapping representative blocks and 1,024 sampled decisions; generated early games are capped at 4,096 sampled decisions. Early sampling targets 512 decisions from each chronological eighth of the complete trajectory, then redistributes unused capacity without splitting movement workflows. Penalized no-replacement-route failures and action-limit trajectories also train before the next game begins. Action-limit trajectories retain genuine rewards and penalties but receive no invented terminal reward; evaluation games never update the model.
 
 ## Player-Visible Decisions
 
@@ -57,11 +57,22 @@ After a game, samples from all seats may be combined because ownership is alread
 
 Training assigns policy tiers randomly to seats for each game. The tiers do not
 own separate models: each one samples differently from the legal rankings of the
-same frozen `HansaNN`. Three-player games use tiers 1/3/5, four-player games use
-1/2/4/5, and five-player games use 1/2/3/4/5.
+same frozen `HansaNN`. Three-player training uses tiers 1/2 plus one uniformly
+selected tier from 3/4/5. Four-player training uses 1/2/4/5, and five-player
+training uses 1/2/3/4/5. Fixed three-player evaluation retains 1/3/5 for historical
+comparability.
 Outside epsilon exploration, each tier samples its Top-K semantic choices using
 normalized `1 / sqrt(rank)` weights. Staged workflow selection keeps its separate
 bounded-exploration policy.
+
+Training selects one exploration mode per game independently of its curriculum
+maturity. By default, 95% of games use each tier's configured epsilon and 5%
+override every participating tier's effective epsilon to zero. Zero-epsilon
+games still sample within the tier's normal Top-K using the same rank weights;
+they are neither greedy Top-1 games nor evaluation games.
+
+The maturity schedule is 50% fresh, 25% early, 10% mid, 10% late, and 5% end.
+Fresh trajectories begin from the canonical untouched new-game setup.
 
 Each decision records its tier, epsilon, top-k setting, selection method, model
 rank, and legal-action count. Training progress aggregates wins, games,
@@ -94,12 +105,10 @@ checkpoints are not silently migrated.
 
 ## Remaining Work
 
-1. Reintroduce fresh-game positions after the active early/early-mixed/mid/late/end/mixed-development
-   curriculum remains stable.
-2. Use the separately reported fixed early-game, mixed-development, and mid/late/end evaluation
+1. Use the separately reported fixed early-game and mid/late/end evaluation
    sets to measure changes before adjusting exploration, rewards, discounting,
    or the network.
-3. Expand evaluation coverage when a new strategic focus is added, while
+2. Expand evaluation coverage when a new strategic focus is added, while
    retaining old fixed positions for historical comparison.
 
 

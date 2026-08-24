@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 import shutil
 import sys
@@ -57,6 +58,17 @@ def parse_args(argv=None):
     parser.add_argument("--minimum-evaluation-completion", type=float, default=0.95)
     parser.add_argument("--loss-tolerance", type=float, default=0.10)
     parser.add_argument("--rolling-loss-window", type=int, default=5)
+    parser.add_argument(
+        "--zero-epsilon-training-percentage",
+        type=float,
+        default=5.0,
+        help="Percentage of training games that disable only the broad epsilon branch",
+    )
+    parser.add_argument(
+        "--detailed-profiling",
+        action="store_true",
+        help="Collect fine-grained action-loop timings (disabled by default)",
+    )
     parser.add_argument("--skip-tier-one-promotion-check", action="store_true")
     return parser.parse_args(argv)
 
@@ -68,10 +80,17 @@ def main(argv=None):
         shutil.rmtree(stale_states)
     if args.checkpoint.exists():
         trainer = SelfPlayTrainer.from_checkpoint(args.checkpoint)
+        trainer.config = replace(
+            trainer.config,
+            detailed_profiling=args.detailed_profiling,
+        )
     else:
         trainer = SelfPlayTrainer(
             model=HansaNN(model_file=args.playable_model),
-            config=TrainingConfig(seed=args.seed),
+            config=TrainingConfig(
+                seed=args.seed,
+                detailed_profiling=args.detailed_profiling,
+            ),
         )
 
     config = CurriculumConfig(
@@ -81,6 +100,7 @@ def main(argv=None):
         update_batch_size=args.batch_size,
         retry_limit=args.retry_limit,
         seed=args.seed,
+        zero_epsilon_training_fraction=args.zero_epsilon_training_percentage / 100,
         promotion=PromotionCriteria(
             maximum_unfinished_rate=args.maximum_unfinished_rate,
             minimum_evaluation_completion_rate=args.minimum_evaluation_completion,
@@ -103,7 +123,8 @@ def main(argv=None):
         f"Training complete: {args.batch} batch(es), "
         f"{args.batch * args.iterations} learning game(s), and "
         f"evaluation suite after each batch.\n"
-        "Training mix: late/end focus (four late games per end game).\n"
+        "Training mix: 50% fresh, 25% early, 10% mid, 10% late, 5% end; "
+        f"{args.zero_epsilon_training_percentage:g}% zero-epsilon.\n"
         f"Latest loss: {trainer.progress.last_loss}.\n"
         f"Replacement-route deadlocks: {trainer.progress.replacement_route_deadlocks}.\n"
         f"Playable model: {args.playable_model}.\n"
