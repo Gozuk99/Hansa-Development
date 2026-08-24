@@ -7,14 +7,55 @@ from tools.chart_training_results import (
     DASHBOARD_SCRIPT,
     Series,
     _chart_ceiling,
-    _evaluation_chart,
+    _derived_ratio,
+    _evaluation_dashboard,
+    _evaluation_set,
+    _run_mode,
     _statistics,
     _tier_player_count_charts,
+    build_dashboard,
     read_results,
 )
 
 
 class TrainingResultsChartTests(unittest.TestCase):
+    def test_current_and_legacy_run_modes_and_derived_metrics(self):
+        current = {"run_type": "evaluation", "run_mode": "evaluation_early"}
+        legacy = {
+            "run_type": "training",
+            "training_exploration_mode": "zero_epsilon",
+        }
+        counters = {
+            "move_action_count": "3",
+            "spent_action_count": "12",
+            "move_claim_conversions": "2",
+            "moves_creating_claimable_route": "4",
+            "sampled_training_decision_count": "1024",
+            "trajectory_decision_count": "4096",
+        }
+
+        self.assertEqual(_run_mode(current), "evaluation_early")
+        self.assertEqual(_evaluation_set(current), "early")
+        self.assertEqual(_run_mode(legacy), "training_zero_epsilon")
+        self.assertEqual(_derived_ratio(counters, "move_action_count", "spent_action_count"), 0.25)
+        self.assertEqual(
+            _derived_ratio(
+                counters,
+                "move_claim_conversions",
+                "moves_creating_claimable_route",
+            ),
+            0.5,
+        )
+        self.assertEqual(
+            _derived_ratio(
+                counters,
+                "sampled_training_decision_count",
+                "trajectory_decision_count",
+            ),
+            0.25,
+        )
+        self.assertIsNone(_derived_ratio({}, "move_action_count", "spent_action_count"))
+
     def test_loss_statistics_use_whole_numbers_except_percentage_change(self):
         summary = _statistics(((1, 1000.25), (2, 2000.75)))
 
@@ -130,33 +171,29 @@ class TrainingResultsChartTests(unittest.TestCase):
                 )
 
             _rows, _series, counts = read_results(path, 100)
-            chart = _evaluation_chart(
-                counts["evaluation_batches"],
-                counts["evaluation_map_batches"],
-                counts["evaluation_player_batches"],
-                counts["evaluation_map_player_batches"],
-            )
+            chart = _evaluation_dashboard(counts)
 
-            self.assertIn("Evaluation results", chart)
-            self.assertIn("Evaluation loss by batch", chart)
-            self.assertIn("Five-batch average", chart)
-            self.assertIn("2/2 boards completed", chart)
-            self.assertIn("Win rate by tier", chart)
-            self.assertIn("Average final score by tier", chart)
-            self.assertIn("Average completed-game length", chart)
+            self.assertIn("Evaluation — Standard", chart)
+            self.assertIn("Evaluation loss by batch", DASHBOARD_SCRIPT)
+            self.assertIn("Five-batch average", DASHBOARD_SCRIPT)
+            self.assertIn("Win rate by tier", DASHBOARD_SCRIPT)
+            self.assertIn("Average final score by tier", DASHBOARD_SCRIPT)
+            self.assertIn("Average completed-game length", DASHBOARD_SCRIPT)
             self.assertIn("All maps", chart)
             self.assertIn("Map 1", chart)
             self.assertIn("All players", chart)
             self.assertIn("3 players", chart)
-            self.assertIn('data-players="3"', chart)
-            self.assertIn("Higher is better", chart)
-            self.assertIn("Lower is generally better", chart)
-            self.assertIn("Completed", chart)
-            self.assertIn("Random-win baseline", chart)
-            self.assertIn('class="svg-x-grid"', chart)
-            self.assertIn("All latest evaluation games completed normally", chart)
+            self.assertIn('"players":"3"', chart)
+            self.assertIn("Higher is better", DASHBOARD_SCRIPT)
+            self.assertIn("Lower is generally better", DASHBOARD_SCRIPT)
+            self.assertIn("Completed", DASHBOARD_SCRIPT)
+            self.assertIn("Random-win baseline", DASHBOARD_SCRIPT)
+            self.assertIn('class="svg-x-grid"', DASHBOARD_SCRIPT)
+            self.assertIn("All latest evaluation games completed normally", DASHBOARD_SCRIPT)
             self.assertNotIn("Completion rate", chart)
-            self.assertNotIn("data-evaluation-select", chart)
+            self.assertIn("data-evaluation-type", chart)
+            self.assertEqual(chart.count("data-evaluation-panel"), 1)
+            self.assertNotIn("data-map=", chart)
 
             tier_chart = _tier_player_count_charts(counts)
             self.assertIn("Tier performance by player count", tier_chart)
@@ -234,30 +271,27 @@ class TrainingResultsChartTests(unittest.TestCase):
                 )
 
             _rows, _series, counts = read_results(path, 100)
-            chart = _evaluation_chart(
-                counts["evaluation_batches"],
-                counts["evaluation_map_batches"],
-                counts["evaluation_player_batches"],
-                counts["evaluation_map_player_batches"],
-            )
-            self.assertIn("Move % of paid actions", chart)
-            self.assertIn("Pointless Move workflows per game", chart)
-            self.assertIn("Repeated-Move penalties per game", chart)
-            self.assertIn("All-Move-turn penalties per game", chart)
-            self.assertIn("Move &rarr; Claim conversion rate", chart)
-            self.assertIn("<strong>Move %</strong><span>20.0%</span>", chart)
-            self.assertIn("<strong>Pointless Moves/game</strong><span>1.50</span>", chart)
-            self.assertIn("<strong>Move &rarr; Claim rate</strong><span>50.0%</span>", chart)
-            self.assertIn('data-map="2" data-players="3"', chart)
+            chart = _evaluation_dashboard(counts)
+            self.assertIn("Move % of paid actions", DASHBOARD_SCRIPT)
+            self.assertIn("Movement pathology", DASHBOARD_SCRIPT)
+            self.assertIn("Pointless Moves/game", DASHBOARD_SCRIPT)
+            self.assertIn("Repeated-Move penalties/game", DASHBOARD_SCRIPT)
+            self.assertIn("All-Move-turn penalties/game", DASHBOARD_SCRIPT)
+            self.assertIn("Move → Claim conversion rate", DASHBOARD_SCRIPT)
+            self.assertNotIn("Pointless Move workflows per game", chart)
+            self.assertEqual(chart.count("data-evaluation-panel"), 1)
+            self.assertIn('"move_action_count":30.0', chart)
+            self.assertIn('"pointless_move_workflows":3.0', chart)
+            self.assertIn('"map":"2","players":"3"', chart)
 
-    def test_early_evaluation_has_a_separate_filtered_dashboard_section(self):
+    def test_evaluation_types_share_one_filterable_dashboard_section(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "results.csv"
             fieldnames = (
                 "game#",
                 "batch#",
                 "run_type",
-                "evaluation_set",
+                "run_mode",
                 "evaluation_suite_version",
                 "evaluation_suite_size",
                 "map",
@@ -284,7 +318,7 @@ class TrainingResultsChartTests(unittest.TestCase):
                             "game#": 1,
                             "batch#": 2,
                             "run_type": "evaluation",
-                            "evaluation_set": "mid_late_end",
+                            "run_mode": "evaluation_mid_late_end",
                             "evaluation_suite_version": 5,
                             "evaluation_suite_size": 1,
                             "map": 1,
@@ -299,7 +333,7 @@ class TrainingResultsChartTests(unittest.TestCase):
                             "game#": 2,
                             "batch#": 2,
                             "run_type": "evaluation",
-                            "evaluation_set": "early",
+                            "run_mode": "evaluation_early",
                             "evaluation_suite_version": 5,
                             "evaluation_suite_size": 1,
                             "map": 2,
@@ -321,102 +355,66 @@ class TrainingResultsChartTests(unittest.TestCase):
                 )
 
             _rows, _series, counts = read_results(path, 100)
-            standard = _evaluation_chart(
-                counts["evaluation_batches"],
-                counts["evaluation_map_batches"],
-                counts["evaluation_player_batches"],
-                counts["evaluation_map_player_batches"],
-                counts["current_evaluation_suite_version"],
-            )
-            early = _evaluation_chart(
-                counts["early_evaluation_batches"],
-                counts["early_evaluation_map_batches"],
-                counts["early_evaluation_player_batches"],
-                counts["early_evaluation_map_player_batches"],
-                counts["current_early_evaluation_suite_version"],
-                early_game=True,
-            )
+            dashboard = _evaluation_dashboard(counts)
 
-            self.assertIn("Evaluation results", standard)
-            self.assertNotIn("Early Game Evaluation", standard)
-            self.assertIn("Early Game Evaluation", early)
-            self.assertIn("Tier 1 win rate by player count", early)
-            self.assertIn("Average interactions per early-game evaluation", early)
-            self.assertIn("Early-game timeout rate", early)
-            self.assertIn("Move % of paid actions", early)
-            self.assertIn("Move &rarr; Claim conversion rate", early)
-            self.assertIn("100.0%", early)
-            self.assertNotIn("Average final score by tier", early)
+            self.assertIn("Evaluation — Standard", dashboard)
+            self.assertEqual(dashboard.count('class="card evaluation-performance"'), 1)
+            self.assertEqual(dashboard.count("data-evaluation-panel"), 1)
+            self.assertEqual(dashboard.count("data-evaluation-data"), 1)
+            self.assertIn('<option value="standard">Standard</option>', dashboard)
+            self.assertIn('<option value="early">Early</option>', dashboard)
+            self.assertNotIn("Mixed Development", dashboard)
+            self.assertIn("data-evaluation-map", dashboard)
+            self.assertIn("data-evaluation-players", dashboard)
+            self.assertIn("datasets[mode]", DASHBOARD_SCRIPT)
+            self.assertIn("data-evaluation-title", DASHBOARD_SCRIPT)
+            self.assertIn("Tier 1 win rate by player count", DASHBOARD_SCRIPT)
+            self.assertIn("Average interactions per early-game evaluation", DASHBOARD_SCRIPT)
+            self.assertIn("Early-game timeout rate", DASHBOARD_SCRIPT)
+            self.assertIn("Move % of paid actions", DASHBOARD_SCRIPT)
+            self.assertIn("Move → Claim conversion rate", DASHBOARD_SCRIPT)
+            self.assertIn('"standard":', dashboard)
+            self.assertIn('"early":', dashboard)
+            self.assertIn('"map":"2","players":"5"', dashboard)
 
-    def test_mixed_evaluation_reports_tiers_by_starting_role(self):
+            self.assertIn("Move → Claim conversion rate", DASHBOARD_SCRIPT)
+
+    def test_dashboard_uses_one_loss_chart_and_compact_game_summary(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "results.csv"
-            fieldnames = (
-                "game#",
-                "batch#",
-                "run_type",
-                "evaluation_set",
-                "evaluation_suite_version",
-                "evaluation_suite_size",
-                "map",
-                "player_count",
-                "winner_tier",
-                "tier_to_seat_assignments",
-                "starting_score_by_seat",
-                "development_role_by_seat",
-                "final_player_scores",
-                "completion_reason",
-                "action_count",
-                "move_action_count",
-                "spent_action_count",
-                "moves_creating_claimable_route",
-                "move_claim_conversions",
-            )
             with path.open("w", newline="", encoding="utf-8") as output:
-                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer = csv.DictWriter(
+                    output,
+                    fieldnames=("game#", "run_type", "completion_reason", "latest_loss"),
+                )
                 writer.writeheader()
-                writer.writerow(
-                    {
-                        "game#": 1,
-                        "batch#": 3,
-                        "run_type": "evaluation",
-                        "evaluation_set": "mixed_development",
-                        "evaluation_suite_version": 8,
-                        "evaluation_suite_size": 1,
-                        "map": 3,
-                        "player_count": 3,
-                        "winner_tier": "[1]",
-                        "tier_to_seat_assignments": "[1, 3, 5]",
-                        "starting_score_by_seat": "[2, 6, 10]",
-                        "development_role_by_seat": '["low", "medium", "high"]',
-                        "final_player_scores": "[30, 22, 25]",
-                        "completion_reason": "20_points",
-                        "action_count": 500,
-                        "move_action_count": 20,
-                        "spent_action_count": 100,
-                        "moves_creating_claimable_route": 4,
-                        "move_claim_conversions": 2,
-                    }
+                writer.writerows(
+                    (
+                        {
+                            "game#": 1,
+                            "run_type": "training",
+                            "completion_reason": "20_points",
+                            "latest_loss": 100,
+                        },
+                        {
+                            "game#": 2,
+                            "run_type": "training",
+                            "completion_reason": "action_limit",
+                            "latest_loss": 200,
+                        },
+                    )
                 )
 
-            _rows, _series, counts = read_results(path, 100)
-            mixed = _evaluation_chart(
-                counts["mixed_evaluation_batches"],
-                counts["mixed_evaluation_map_batches"],
-                counts["mixed_evaluation_player_batches"],
-                counts["mixed_evaluation_map_player_batches"],
-                counts["current_mixed_evaluation_suite_version"],
-                mixed_development=True,
-            )
+            rows, series, counts = read_results(path, 100)
+            dashboard = build_dashboard(rows, series, counts, path)
 
-            self.assertIn("Mixed Development Evaluation", mixed)
-            self.assertIn("Performance by starting development role", mixed)
-            self.assertIn("Tier 1", mixed)
-            self.assertIn("Low", mixed)
-            self.assertIn("+28.0", mixed)
-            self.assertIn("Average interactions per mixed-development evaluation", mixed)
-            self.assertIn("Move % of paid actions", mixed)
-            self.assertIn("Move &rarr; Claim conversion rate", mixed)
+            self.assertEqual(dashboard.count("Latest training loss"), 2)
+            self.assertNotIn("Rolling mean loss", dashboard)
+            self.assertIn("Training games</strong><span>2", dashboard)
+            self.assertIn("Evaluation games</strong><span>0", dashboard)
+            self.assertIn("Timeouts</strong><span>1", dashboard)
+            self.assertNotIn("Completion results", dashboard)
+            self.assertNotIn("Game types", dashboard)
 
 
 if __name__ == "__main__":

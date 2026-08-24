@@ -80,11 +80,9 @@ class TargetedStateGeneratorTests(unittest.TestCase):
     def test_evaluation_suite_covers_maps_players_endings_and_optional_rules(self):
         standard = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "mid_late_end"]
         early = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "early"]
-        mixed = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "mixed_development"]
-        self.assertEqual(len(EVALUATION_SPECS), 63)
+        self.assertEqual(len(EVALUATION_SPECS), 54)
         self.assertEqual(len(standard), 27)
         self.assertEqual(len(early), 27)
-        self.assertEqual(len(mixed), 9)
         configurations = Counter((spec.map_num, spec.player_count) for spec in standard)
         self.assertEqual(set(configurations.values()), {3})
         self.assertEqual(Counter(spec.map_num for spec in standard), {1: 9, 2: 9, 3: 9})
@@ -145,14 +143,6 @@ class TargetedStateGeneratorTests(unittest.TestCase):
             sum(spec.mission_cards for spec in early if spec.map_num == 1),
             4,
         )
-        self.assertEqual(
-            {(spec.map_num, spec.player_count) for spec in mixed},
-            {(map_num, players) for map_num in (1, 2, 3) for players in (3, 4, 5)},
-        )
-        self.assertTrue(all(spec.mixed_development for spec in mixed))
-        self.assertTrue(all(not spec.prepare_ending_condition for spec in mixed))
-        self.assertTrue(all(spec.score_range == (0, 12) for spec in mixed))
-        self.assertTrue(all(spec.development_range == (2, 8) for spec in mixed))
         manifest = json.loads(
             Path("training_data/generated/evaluation/manifest.json").read_text(encoding="utf-8")
         )
@@ -168,7 +158,7 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         )
         self.assertEqual(
             Counter(entry["evaluation_set"] for entry in manifest),
-            {"mid_late_end": 27, "early": 27, "mixed_development": 9},
+            {"mid_late_end": 27, "early": 27},
         )
         self.assertEqual(
             [entry["seed"] for entry in manifest],
@@ -192,25 +182,6 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         )
         self.assertTrue(parse_args(["--eval"]).eval)
 
-    def test_mixed_evaluation_is_deterministic_and_records_role_arrays(self):
-        spec = next(spec for spec in EVALUATION_SPECS if spec.evaluation_set == "mixed_development")
-        first = generate_balanced_state(evaluation_request(spec, 8_001))
-        second = generate_balanced_state(evaluation_request(spec, 8_001))
-
-        self.assertEqual(state_fingerprint(first.game), state_fingerprint(second.game))
-        self.assertEqual(first.development_roles_by_seat, second.development_roles_by_seat)
-        self.assertEqual(len(first.starting_scores_by_seat), spec.player_count)
-        self.assertEqual(len(first.starting_development_by_seat), spec.player_count)
-        self.assertLessEqual(
-            max(first.starting_scores_by_seat) - min(first.starting_scores_by_seat), 8
-        )
-        self.assertLessEqual(
-            max(first.starting_development_by_seat) - min(first.starting_development_by_seat),
-            4,
-        )
-        validate_game(first.game)
-        validate_action_state(first.game)
-
     def test_early_evaluation_request_does_not_prepare_ending_and_uses_early_rounds(self):
         spec = next(spec for spec in EVALUATION_SPECS if spec.evaluation_set == "early")
 
@@ -222,7 +193,6 @@ class TargetedStateGeneratorTests(unittest.TestCase):
             generated = generate_balanced_state(request)
 
         self.assertFalse(request.prepare_ending_condition)
-        self.assertFalse(request.early_route_scaffold)
         self.assertTrue(2 <= generated.game.round_number <= 5)
         self.assertEqual(
             generated.game.turn_number,

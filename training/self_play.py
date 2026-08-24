@@ -62,6 +62,8 @@ POINTLESS_MOVEMENT_LOCAL_TARGET = -1000
 _CURRICULUM_STATE_UNSET = object()
 DEFAULT_TIER_TOP_K = (2, 5, 10, 15, 20)
 DEFAULT_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 0.35)
+NORMAL_EXPLORATION_MODE = "normal"
+ZERO_EPSILON_EXPLORATION_MODE = "zero_epsilon"
 LEGACY_TIER_TOP_K = (2, 5, 10, 15, None)
 LEGACY_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 1.00)
 _ACTIONS_BY_INDEX = tuple(
@@ -111,6 +113,7 @@ class TrainingConfig:
     normal_max_training_decisions: int = 1_024
     early_max_training_decisions: int = 4_096
     full_validation_interval: int = 50
+    detailed_profiling: bool = False
     income_penalty_scale: float = 100.0
     tier_top_k: tuple[int | None, ...] = DEFAULT_TIER_TOP_K
     tier_epsilons: tuple[float, ...] = DEFAULT_TIER_EPSILONS
@@ -226,6 +229,7 @@ class CompletedTrajectory:
     moves_creating_claimable_route: int = 0
     move_claim_conversions: int = 0
     move_claim_conversion_rate: float | None = None
+    training_exploration_mode: str = NORMAL_EXPLORATION_MODE
 
 
 @dataclass(frozen=True)
@@ -915,6 +919,17 @@ class SelfPlayTrainer:
         self.rng.shuffle(numbers)
         return tuple(self._tier(number) for number in numbers)
 
+    def _assign_training_tiers(self, player_count, *, zero_epsilon=False):
+        if player_count == 3:
+            numbers = [1, 2, self.rng.choice((3, 4, 5))]
+            self.rng.shuffle(numbers)
+            tiers = tuple(self._tier(number) for number in numbers)
+        else:
+            tiers = self._assign_tiers(player_count)
+        if not zero_epsilon:
+            return tiers
+        return tuple(replace(tier, epsilon=0.0) for tier in tiers)
+
     def _assign_evaluation_tiers(self, player_count, rotation):
         try:
             numbers = list(self.config.tier_subsets()[player_count])
@@ -1085,6 +1100,7 @@ class SelfPlayTrainer:
         completed=True,
         timings=None,
         movement_metrics=None,
+        training_exploration_mode=NORMAL_EXPLORATION_MODE,
     ):
         movement_metrics = movement_metrics or MovementBehaviorMetrics()
         trajectory = CompletedTrajectory(
@@ -1105,6 +1121,7 @@ class SelfPlayTrainer:
             movement_metrics.moves_creating_claimable_route,
             movement_metrics.move_claim_conversions,
             movement_metrics.move_claim_conversion_rate,
+            training_exploration_mode,
         )
         if completed:
             self.progress.completed_games += 1
@@ -1121,9 +1138,11 @@ class SelfPlayTrainer:
         evaluation=False,
         evaluation_tier_rotation=0,
         capture_action_limit=False,
+        zero_epsilon=False,
     ) -> CompletedTrajectory:
         """Play one exact starting state without changing model weights."""
         play_started = perf_counter()
+        detailed_profiling = self.config.detailed_profiling
         inference_seconds = 0.0
         scoring_seconds = 0.0
         execution_seconds = 0.0
@@ -1156,7 +1175,12 @@ class SelfPlayTrainer:
         seat_tiers = (
             self._assign_evaluation_tiers(len(game.players), evaluation_tier_rotation)
             if evaluation
-            else self._assign_tiers(len(game.players))
+            else self._assign_training_tiers(len(game.players), zero_epsilon=zero_epsilon)
+        )
+        training_exploration_mode = (
+            ZERO_EPSILON_EXPLORATION_MODE
+            if zero_epsilon and not evaluation
+            else NORMAL_EXPLORATION_MODE
         )
         decisions = []
         action_trace = []
@@ -1184,9 +1208,11 @@ class SelfPlayTrainer:
         normal_move_workflow_id = None
         permanent_move_workflow_id = None
         output = redirect_stdout(io.StringIO()) if quiet else nullcontext()
-        scoring_started = perf_counter()
+        if detailed_profiling:
+            scoring_started = perf_counter()
         projected_before = game.projected_scores()
-        scoring_seconds += perf_counter() - scoring_started
+        if detailed_profiling:
+            scoring_seconds += perf_counter() - scoring_started
 
         self.model.eval()
         with output, torch.inference_mode():
@@ -1220,10 +1246,12 @@ class SelfPlayTrainer:
                     permanent_move_workflow_id = None
                 action_attempted = False
                 try:
-                    observation_started = perf_counter()
+                    if detailed_profiling:
+                        observation_started = perf_counter()
                     observation = self.encoder.build(game)
-                    observation_seconds += perf_counter() - observation_started
-                    legality_started = perf_counter()
+                    if detailed_profiling:
+                        observation_seconds += perf_counter() - observation_started
+                        legality_started = perf_counter()
                     mask = training_action_mask(
                         game,
                         disable_move_action=self.config.disable_move_action,
@@ -1232,7 +1260,8 @@ class SelfPlayTrainer:
                         post_contexts=post_contexts,
                     )
                     legal_indices = mask.nonzero(as_tuple=False).flatten()
-                    legality_seconds += perf_counter() - legality_started
+                    if detailed_profiling:
+                        legality_seconds += perf_counter() - legality_started
                     if legal_indices.numel() == 0:
                         self.progress.game_completion_failures += 1
                         if (
@@ -1260,6 +1289,7 @@ class SelfPlayTrainer:
                                 completed=False,
                                 timings=timings(),
                                 movement_metrics=movement_metrics,
+                                training_exploration_mode=training_exploration_mode,
                             )
                         error = IncompleteGameError(
                             "The game has no legal interaction at "
@@ -1267,10 +1297,12 @@ class SelfPlayTrainer:
                         )
                         raise error
                     legal_action_indices = _action_index_tuple(legal_indices)
-                    inference_started = perf_counter()
+                    if detailed_profiling:
+                        inference_started = perf_counter()
                     scores = self.model(observation.features.float().unsqueeze(0).to(device))[0]
-                    inference_seconds += perf_counter() - inference_started
-                    selection_started = perf_counter()
+                    if detailed_profiling:
+                        inference_seconds += perf_counter() - inference_started
+                        selection_started = perf_counter()
                     tier = seat_tiers[observation.observer_index]
                     if game.turn_phase is TurnPhase.ACTIONS:
                         selection = self._select_action(
@@ -1309,8 +1341,9 @@ class SelfPlayTrainer:
                         )
                     action_index = selection.action_index
                     action = _ACTIONS_BY_INDEX[action_index]
-                    selection_seconds += perf_counter() - selection_started
-                    context_started = perf_counter()
+                    if detailed_profiling:
+                        selection_seconds += perf_counter() - selection_started
+                        context_started = perf_counter()
                     action_phase = game.turn_phase
                     acting_player = game.players[observation.observer_index]
                     context = (
@@ -1476,12 +1509,14 @@ class SelfPlayTrainer:
                         else getattr(acting_player, ability)
                         for ability in INTERMEDIATE_REWARDED_ABILITIES
                     )
-                    context_seconds += perf_counter() - context_started
+                    if detailed_profiling:
+                        context_seconds += perf_counter() - context_started
                     end_was_pending = game.game_end or game.game_end_pending_immediate_resolution
                     turn_before = game.turn_number
                     action_trace.append(action_index)
                     action_attempted = True
-                    execution_started = perf_counter()
+                    if detailed_profiling:
+                        execution_started = perf_counter()
                     game.apply_ai_action(action_index)
                     if move_tracking_active:
                         move_pieces_picked_up = max(
@@ -1489,7 +1524,8 @@ class SelfPlayTrainer:
                         )
                     if move_placement_post is not None and move_placement_post.is_owned():
                         move_destination_posts.append(move_placement_post)
-                    execution_seconds += perf_counter() - execution_started
+                    if detailed_profiling:
+                        execution_seconds += perf_counter() - execution_started
                     if should_fully_validate(
                         action_number,
                         self.config.full_validation_interval,
@@ -1497,19 +1533,23 @@ class SelfPlayTrainer:
                         action_phase,
                         game,
                     ):
-                        validation_started = perf_counter()
+                        if detailed_profiling:
+                            validation_started = perf_counter()
                         validate_game(game)
-                        validation_seconds += perf_counter() - validation_started
+                        if detailed_profiling:
+                            validation_seconds += perf_counter() - validation_started
                 except Exception as error:
                     if action_attempted:
                         self.progress.invalid_action_attempts += 1
                     if failure_callback is not None:
                         failure_callback(game, tuple(action_trace), seat_tiers, error)
                     raise
-                scoring_started = perf_counter()
+                if detailed_profiling:
+                    scoring_started = perf_counter()
                 projected_after = game.projected_scores()
-                scoring_seconds += perf_counter() - scoring_started
-                reward_started = perf_counter()
+                if detailed_profiling:
+                    scoring_seconds += perf_counter() - scoring_started
+                    reward_started = perf_counter()
                 score_reward_deltas = tuple(
                     float(PRESTIGE_REWARD_MULTIPLIER * (after - before))
                     for before, after in zip(projected_before, projected_after)
@@ -1770,7 +1810,8 @@ class SelfPlayTrainer:
                     normal_move_workflow_id = None
                 if permanent_move_completed:
                     permanent_move_workflow_id = None
-                reward_seconds += perf_counter() - reward_started
+                if detailed_profiling:
+                    reward_seconds += perf_counter() - reward_started
                 end_is_pending = game.game_end or game.game_end_pending_immediate_resolution
                 if game_end_trigger_player is None and end_is_pending and not end_was_pending:
                     game_end_trigger_player = observation.observer_index
@@ -1802,6 +1843,7 @@ class SelfPlayTrainer:
                     completed=False,
                     timings=timings(),
                     movement_metrics=movement_metrics,
+                    training_exploration_mode=training_exploration_mode,
                 )
 
         finalize_all_move_turn(
@@ -1810,9 +1852,11 @@ class SelfPlayTrainer:
             turn_move_workflow_ids,
             turn_spent_actions,
         )
-        validation_started = perf_counter()
+        if detailed_profiling:
+            validation_started = perf_counter()
         validate_game(game)
-        validation_seconds += perf_counter() - validation_started
+        if detailed_profiling:
+            validation_seconds += perf_counter() - validation_started
         winners = tuple(player.order - 1 for player in game.end_the_game())
         terminal_rewards = calculate_terminal_rewards(game, winners, game_end_trigger_player)
         return self._complete_trajectory(
@@ -1825,6 +1869,7 @@ class SelfPlayTrainer:
             reason=completed_game_reason(game),
             timings=timings(),
             movement_metrics=movement_metrics,
+            training_exploration_mode=training_exploration_mode,
         )
 
     @staticmethod
@@ -2095,7 +2140,7 @@ class SelfPlayTrainer:
     def _trajectory_training_decision_cap(self, curriculum_maturity):
         return (
             self.config.early_max_training_decisions
-            if curriculum_maturity in {"early", "early_mixed"}
+            if curriculum_maturity == "early"
             else self.config.normal_max_training_decisions
         )
 
@@ -2114,7 +2159,7 @@ class SelfPlayTrainer:
         losses = []
         coverage = []
         for trajectory, curriculum_maturity in zip(trajectories, curriculum_maturities):
-            if curriculum_maturity in {"early", "early_mixed"}:
+            if curriculum_maturity == "early":
                 batches = self._early_training_batches(trajectory.decisions)
                 sampled_octiles = self._sampled_octiles(trajectory.decisions, batches)
             else:

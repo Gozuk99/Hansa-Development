@@ -1,6 +1,7 @@
 import random
 import unittest
 
+from game.game_config import GameConfiguration, human_players
 from game.game_runner import create_headless_game
 from game.setup import starting_inventory
 from map_data.constants import BANK_MAX_VALUES
@@ -162,6 +163,31 @@ class GameSetupTests(unittest.TestCase):
                     self.assertTrue(route.has_bonus_marker)
                     self.assertIsNone(route.permanent_bonus_marker)
                     self.assertIsNone(route.region)
+
+    def test_canonical_setup_can_seed_random_legal_starter_marker_routes(self):
+        def marker_layout(seed):
+            game = GameConfiguration(
+                map_num=3,
+                player_count=5,
+                player_controls=human_players(5),
+                randomize_starting_bonus_marker_locations=True,
+                seed=seed,
+            ).create_game()
+            routes = tuple(
+                (tuple(city.name for city in route.cities), route.bonus_marker.type)
+                for route in game.selected_map.routes
+                if route.bonus_marker is not None
+            )
+            for route in game.selected_map.routes:
+                if route.bonus_marker is not None:
+                    self.assertIsNone(route.permanent_bonus_marker)
+                    self.assertNotIn(route.region, ("Wales", "Scotland"))
+                    self.assertFalse(route.has_tradesmen())
+                    self.assertTrue(route.has_empty_office_in_cities())
+            return routes
+
+        self.assertEqual(marker_layout(500), marker_layout(500))
+        self.assertGreater(len({marker_layout(seed) for seed in range(500, 510)}), 1)
 
     def test_tile_pool_matches_player_count_without_duplicates(self):
         expected_tiles = {

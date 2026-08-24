@@ -59,6 +59,7 @@ class GameConfiguration:
     use_promo_markers: bool = False
     promo_marker_mode: str = "random"
     promo_markers: tuple[str, ...] = ()
+    randomize_starting_bonus_marker_locations: bool = False
     seed: int | None = None
     difficulty_top_k: tuple[tuple[PlayerControl, int], ...] = field(
         default_factory=lambda: tuple(AI_DIFFICULTY_TOP_K.items())
@@ -203,6 +204,9 @@ class GameConfiguration:
             use_mission_cards=self.use_mission_cards,
             use_emperors_favour=self.use_emperors_favour,
             bonus_marker_supply=self.resolved_bonus_marker_supply(),
+            randomize_starting_bonus_marker_locations=(
+                self.randomize_starting_bonus_marker_locations
+            ),
         )
         if self.use_emperors_favour and self.emperor_tile_mode == "manual":
             game.tile_pool = list(self.emperor_tiles)

@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import replace
 import math
 from pathlib import Path
@@ -26,6 +27,7 @@ from training.self_play import (
     SelfPlayTrainer,
     TrainingConfig,
     TrainingDecision,
+    ZERO_EPSILON_EXPLORATION_MODE,
     _is_normal_move_in_progress,
     action_phase_selection_groups,
     add_movement_workflow_adjustment,
@@ -729,6 +731,55 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertTrue(all(tier.epsilon == 0 for tier in selected_tiers))
         self.assertTrue(all(tier.top_k in (2, 5, 10, 15, 20) for tier in selected_tiers))
 
+    def test_zero_epsilon_training_overrides_every_tier_without_changing_top_k(self):
+        trainer = self.trainer(seed=314)
+        normal = trainer._assign_training_tiers(3)
+        trainer = self.trainer(seed=314)
+        zero_epsilon = trainer._assign_training_tiers(3, zero_epsilon=True)
+
+        self.assertEqual(
+            [(tier.number, tier.top_k) for tier in zero_epsilon],
+            [(tier.number, tier.top_k) for tier in normal],
+        )
+        self.assertTrue({1, 2}.issubset(tier.number for tier in normal))
+        self.assertEqual(
+            len({tier.number for tier in normal} & {3, 4, 5}),
+            1,
+        )
+        self.assertEqual(
+            [tier.epsilon for tier in normal],
+            [trainer.config.tier_epsilons[tier.number - 1] for tier in normal],
+        )
+        self.assertTrue(all(tier.epsilon == 0 for tier in zero_epsilon))
+
+    def test_zero_epsilon_game_keeps_rank_weighted_top_k_and_trains(self):
+        trainer = self.trainer(seed=315)
+        selected_tiers = []
+        select_action = trainer._select_action
+
+        def capture_tier(scores, legal_indices, tier, equivalent_groups=None):
+            selected_tiers.append(tier)
+            return select_action(scores, legal_indices, tier, equivalent_groups)
+
+        trainer._select_action = capture_tier
+        trajectory = trainer.collect_game(STATE, zero_epsilon=True)
+        before = tuple(parameter.detach().clone() for parameter in trainer.model.parameters())
+
+        loss = trainer.update_model((trajectory,))
+
+        self.assertEqual(trajectory.training_exploration_mode, ZERO_EPSILON_EXPLORATION_MODE)
+        self.assertTrue(selected_tiers)
+        self.assertTrue(all(tier.epsilon == 0 for tier in selected_tiers))
+        self.assertTrue(all(tier.top_k in (2, 5, 10, 15, 20) for tier in selected_tiers))
+        self.assertTrue(all(not decision.used_epsilon for decision in trajectory.decisions))
+        self.assertGreater(loss, 0)
+        self.assertTrue(
+            any(
+                not torch.equal(old, current)
+                for old, current in zip(before, trainer.model.parameters())
+            )
+        )
+
     def test_update_changes_shared_model_only_after_completed_game(self):
         trainer = self.trainer()
         trajectory = trainer.collect_game(STATE)
@@ -820,10 +871,6 @@ class SelfPlayTrainingTests(unittest.TestCase):
         )
         self.assertEqual(
             trainer._trajectory_training_decision_cap("early"),
-            4_096,
-        )
-        self.assertEqual(
-            trainer._trajectory_training_decision_cap("early_mixed"),
             4_096,
         )
 
@@ -999,6 +1046,22 @@ class SelfPlayTrainingTests(unittest.TestCase):
             range(2),
             weights=normalized_rank_weights(2),
             k=1,
+        )
+
+    def test_zero_epsilon_tier_one_is_not_greedy_top_one(self):
+        trainer = self.trainer()
+        scores = torch.tensor([0.0, 5.0, 2.0, 7.0])
+        trainer.rng = mock.Mock()
+        trainer.rng.random.return_value = 0.9
+        trainer.rng.choices.return_value = [1]
+
+        selection = trainer._select_action(scores, [1, 2, 3], PolicyTier(1, 2, 0.0))
+
+        self.assertEqual(selection.model_rank, 2)
+        self.assertEqual(selection.action_index, 1)
+        self.assertFalse(selection.used_epsilon)
+        trainer.rng.choices.assert_called_once_with(
+            range(2), weights=normalized_rank_weights(2), k=1
         )
 
     def test_top_k_with_tied_scores_stays_within_legal_pool(self):
@@ -1344,14 +1407,78 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(selection.legal_action_count, 2)
         self.assertEqual(selection.equivalent_action_indices, (0, 1, 2))
 
-    def test_default_tier_subsets_and_random_assignment(self):
+    def test_training_tier_rosters_and_seat_randomization(self):
         trainer = self.trainer(seed=99)
+        three_player_assignments = [
+            tuple(tier.number for tier in trainer._assign_training_tiers(3)) for _ in range(120)
+        ]
 
-        self.assertEqual(set(tier.number for tier in trainer._assign_tiers(3)), {1, 3, 5})
-        self.assertEqual(set(tier.number for tier in trainer._assign_tiers(4)), {1, 2, 4, 5})
-        assignments = [tuple(tier.number for tier in trainer._assign_tiers(5)) for _ in range(8)]
-        self.assertTrue(all(set(assignment) == {1, 2, 3, 4, 5} for assignment in assignments))
-        self.assertGreater(len(set(assignments)), 1)
+        self.assertTrue(
+            all(
+                len(set(assignment)) == 3
+                and {1, 2}.issubset(assignment)
+                and len(set(assignment) & {3, 4, 5}) == 1
+                for assignment in three_player_assignments
+            )
+        )
+        for tier_number in (1, 2, 3, 4, 5):
+            occupied_seats = {
+                assignment.index(tier_number)
+                for assignment in three_player_assignments
+                if tier_number in assignment
+            }
+            self.assertEqual(occupied_seats, {0, 1, 2})
+
+        self.assertEqual(
+            {tier.number for tier in trainer._assign_training_tiers(4)},
+            {1, 2, 4, 5},
+        )
+        five_player_assignments = [
+            tuple(tier.number for tier in trainer._assign_training_tiers(5)) for _ in range(8)
+        ]
+        self.assertTrue(
+            all(set(assignment) == {1, 2, 3, 4, 5} for assignment in five_player_assignments)
+        )
+        self.assertGreater(len(set(five_player_assignments)), 1)
+
+    def test_three_player_training_opponent_is_seeded_and_uniform(self):
+        def assignments(seed, count):
+            trainer = self.trainer(seed=seed)
+            return [
+                tuple(tier.number for tier in trainer._assign_training_tiers(3))
+                for _ in range(count)
+            ]
+
+        first = assignments(9_901, 12_000)
+        self.assertEqual(first, assignments(9_901, 12_000))
+        third_tiers = [
+            next(tier for tier in assignment if tier in {3, 4, 5}) for assignment in first
+        ]
+        counts = Counter(third_tiers)
+        for tier_number in (3, 4, 5):
+            self.assertAlmostEqual(counts[tier_number] / len(third_tiers), 1 / 3, delta=0.02)
+
+    def test_training_roster_is_selected_once_per_game(self):
+        trainer = self.trainer(seed=9_902)
+        assign = trainer._assign_training_tiers
+        assignments = []
+
+        def capture(player_count, *, zero_epsilon=False):
+            tiers = assign(player_count, zero_epsilon=zero_epsilon)
+            assignments.append(tiers)
+            return tiers
+
+        trainer._assign_training_tiers = capture
+        trajectory = trainer.collect_game(STATE)
+
+        self.assertEqual(len(assignments), 1)
+        self.assertEqual(tuple(tier.number for tier in assignments[0]), trajectory.seat_tiers)
+        self.assertTrue(
+            all(
+                decision.policy_tier == trajectory.seat_tiers[decision.acting_player_index]
+                for decision in trajectory.decisions
+            )
+        )
 
     def test_evaluation_tiers_rotate_through_seats_without_epsilon(self):
         trainer = self.trainer()
@@ -1387,6 +1514,73 @@ class SelfPlayTrainingTests(unittest.TestCase):
             [decision.reward_to_go for decision in second.decisions],
         )
         self.assertEqual(first.final_scores, second.final_scores)
+
+    def test_detailed_profiling_is_opt_in_and_does_not_change_trajectory(self):
+        unprofiled_trainer = self.trainer(seed=101)
+        profiled_trainer = self.trainer(seed=101)
+        profiled_trainer.model.load_state_dict(unprofiled_trainer.model.state_dict())
+        profiled_trainer.config = replace(
+            profiled_trainer.config,
+            detailed_profiling=True,
+        )
+
+        unprofiled = unprofiled_trainer.collect_game(STATE)
+        profiled = profiled_trainer.collect_game(STATE)
+
+        self.assertFalse(TrainingConfig().detailed_profiling)
+        self.assertEqual(unprofiled.action_trace, profiled.action_trace)
+        self.assertEqual(unprofiled.final_scores, profiled.final_scores)
+        self.assertEqual(unprofiled.terminal_rewards, profiled.terminal_rewards)
+        self.assertEqual(
+            [
+                (
+                    decision.action_index,
+                    decision.player_reward_deltas,
+                    decision.immediate_reward,
+                    decision.reward_to_go,
+                )
+                for decision in unprofiled.decisions
+            ],
+            [
+                (
+                    decision.action_index,
+                    decision.player_reward_deltas,
+                    decision.immediate_reward,
+                    decision.reward_to_go,
+                )
+                for decision in profiled.decisions
+            ],
+        )
+        self.assertEqual(
+            (
+                unprofiled.inference_seconds,
+                unprofiled.scoring_seconds,
+                unprofiled.execution_seconds,
+                unprofiled.validation_seconds,
+                unprofiled.observation_seconds,
+                unprofiled.legality_seconds,
+                unprofiled.selection_seconds,
+                unprofiled.context_seconds,
+                unprofiled.reward_seconds,
+            ),
+            (0.0,) * 9,
+        )
+        self.assertGreater(
+            sum(
+                (
+                    profiled.inference_seconds,
+                    profiled.scoring_seconds,
+                    profiled.execution_seconds,
+                    profiled.validation_seconds,
+                    profiled.observation_seconds,
+                    profiled.legality_seconds,
+                    profiled.selection_seconds,
+                    profiled.context_seconds,
+                    profiled.reward_seconds,
+                )
+            ),
+            0,
+        )
 
     def test_discounted_reward_to_go_is_separate_for_each_player(self):
         decisions = (

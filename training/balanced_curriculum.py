@@ -26,8 +26,6 @@ CONFIGURATIONS = tuple(
     (map_num, player_count) for map_num in (1, 2, 3) for player_count in (3, 4, 5)
 )
 ENDING_CONDITIONS = tuple(EndingCondition)
-EARLY_ROUTE_SCAFFOLD_RATE = 0.70
-EARLY_ROUTE_SCAFFOLD_SEED_OFFSET = 71_003
 
 
 @dataclass(frozen=True)
@@ -53,36 +51,21 @@ class MaturityProfile:
 
 
 MATURITY_PROFILES = (
-    # Fresh remains excluded until early-game performance is stable.
-    # MaturityProfile("fresh", 1, None, None, None, None, None, (1, 1)),
-    MaturityProfile("early", 24, (0, 5), (2, 4), 9, 7, StartingPosition.ONE_ROUND_BEFORE, (2, 5)),
+    MaturityProfile("fresh", 10, None, None, None, None, None, (1, 1)),
+    MaturityProfile("early", 5, (0, 5), (2, 4), 9, 7, StartingPosition.ONE_ROUND_BEFORE, (2, 5)),
+    MaturityProfile("mid", 2, (6, 11), (5, 7), 3, 5, StartingPosition.ONE_ROUND_BEFORE, (6, 10)),
+    MaturityProfile("late", 2, (12, 15), (7, 9), 2, 3, StartingPosition.ONE_ROUND_BEFORE, (11, 15)),
     MaturityProfile(
-        "early_mixed",
-        48,
-        (2, 6),
-        (3, 5),
-        7,
-        6,
-        StartingPosition.ONE_ROUND_BEFORE,
-        (3, 6),
-    ),
-    MaturityProfile("mid", 9, (6, 11), (5, 7), 3, 5, StartingPosition.ONE_ROUND_BEFORE, (6, 10)),
-    MaturityProfile("late", 9, (12, 15), (7, 9), 2, 3, StartingPosition.ONE_ROUND_BEFORE, (11, 15)),
-    MaturityProfile(
-        "end", 6, (16, 17), (9, 11), 1, 2, StartingPosition.TWO_DECISIONS_BEFORE, (16, 20)
-    ),
-    MaturityProfile(
-        "mixed",
-        64,
-        (0, 12),
-        (2, 8),
-        5,
-        5,
-        StartingPosition.ONE_ROUND_BEFORE,
-        (6, 12),
+        "end", 1, (16, 17), (9, 11), 1, 2, StartingPosition.TWO_DECISIONS_BEFORE, (16, 20)
     ),
 )
 MATURITY_CYCLE = tuple(profile for profile in MATURITY_PROFILES for _ in range(profile.weight))
+_PROFILE_BY_NAME = {profile.name: profile for profile in MATURITY_PROFILES}
+EVALUATION_MATURITY_CYCLE = tuple(
+    _PROFILE_BY_NAME[name]
+    for name, count in (("early", 4), ("mid", 3), ("late", 2), ("end", 1))
+    for _ in range(count)
+)
 
 
 def _select_focus(rng, map_num, player_count, ending_condition):
@@ -133,7 +116,7 @@ def _focus_labels(focus, regional):
 
 
 def _scenario_condition_label(maturity, ending_condition):
-    if maturity.name in {"early", "early_mixed", "mixed"}:
+    if maturity.name == "early":
         return None
     if maturity.name == "mid":
         return {
@@ -157,10 +140,19 @@ def _select_optional_modules(rng, map_num):
     return use_missions, use_favour, marker_setup
 
 
-def _uses_early_route_scaffold(seed):
-    """Choose the early variant without consuming the normal generator RNG stream."""
-    return random.Random(seed + EARLY_ROUTE_SCAFFOLD_SEED_OFFSET).random() < (
-        EARLY_ROUTE_SCAFFOLD_RATE
+def _select_fresh_optional_modules(rng, map_num):
+    return (
+        map_num == 1 and rng.random() < 0.50,
+        rng.random() < 0.50,
+        rng.choice(tuple(BonusMarkerSetup)),
+    )
+
+
+def _starting_bonus_marker_routes(game):
+    return tuple(
+        (route.bonus_marker.type, *(city.name for city in route.cities))
+        for route in game.selected_map.routes
+        if route.bonus_marker is not None
     )
 
 
@@ -192,9 +184,15 @@ class BalancedCurriculumRunner(CurriculumRunner):
         random.Random(self.config.seed + 500_009 + block * 1_000_003).shuffle(profiles)
         return profiles[index]
 
+    def _evaluation_maturity_for_seed(self, seed):
+        block, index = divmod(seed, len(EVALUATION_MATURITY_CYCLE))
+        profiles = list(EVALUATION_MATURITY_CYCLE)
+        random.Random(self.config.seed + 500_009 + block * 1_000_003).shuffle(profiles)
+        return profiles[index]
+
     @staticmethod
     def _stage_label(_stage):
-        return "early_early_mixed_mid_late_end_mixed_game"
+        return "fresh_early_mid_late_end_game"
 
     @staticmethod
     def _stage_action_limit(_stage):
@@ -202,7 +200,7 @@ class BalancedCurriculumRunner(CurriculumRunner):
 
     def _training_action_limit(self, stage, descriptor):
         maturity = (descriptor.scenario or stage.name).partition("+")[0]
-        return 15_000 if maturity in {"early", "early_mixed"} else self._stage_action_limit(stage)
+        return 15_000 if maturity == "early" else self._stage_action_limit(stage)
 
     def _generate_state(self, stage, seed, directory, *, map_num=None, player_count=None):
         rng = random.Random(seed)
@@ -217,14 +215,13 @@ class BalancedCurriculumRunner(CurriculumRunner):
             directory / f"pending-{seed}.hansa", None, map_num, player_count, seed
         )
         self._latest_descriptor = pending
-        use_missions, use_favour, marker_setup = _select_optional_modules(rng, map_num)
-        maturity = self._maturity_for_game(
-            self.training_generation_number if is_training_generation else seed
-        )
-        early_route_scaffold = (
-            is_training_generation and maturity.name == "early" and _uses_early_route_scaffold(seed)
+        maturity = (
+            self._maturity_for_game(self.game_number)
+            if is_training_generation
+            else self._evaluation_maturity_for_seed(seed)
         )
         if maturity.fresh:
+            use_missions, use_favour, marker_setup = _select_fresh_optional_modules(rng, map_num)
             use_promos, promo_mode, promo_markers = bonus_marker_configuration(marker_setup, seed)
             configuration = GameConfiguration(
                 map_num=map_num,
@@ -235,20 +232,44 @@ class BalancedCurriculumRunner(CurriculumRunner):
                 use_promo_markers=use_promos,
                 promo_marker_mode=promo_mode,
                 promo_markers=promo_markers,
+                randomize_starting_bonus_marker_locations=True,
                 seed=seed,
             )
-            path = save_game(configuration.create_game(), directory / f"full-{seed}.hansa")
-            descriptor = StateDescriptor(path, None, map_num, player_count, seed, "fresh", "fresh")
+            game = configuration.create_game()
+            path = save_game(game, directory / f"full-{seed}.hansa")
+            descriptor = StateDescriptor(
+                path=path,
+                metadata_path=None,
+                map_num=map_num,
+                player_count=player_count,
+                seed=seed,
+                scenario="fresh",
+                starting_position="",
+                starting_scores_by_seat=tuple(player.score for player in game.players),
+                starting_development_by_seat=tuple(0 for _player in game.players),
+                mission_cards_enabled=game.use_mission_cards,
+                emperors_favour_enabled=game.use_emperors_favour,
+                emperors_favour_tiles=tuple(game.tile_pool),
+                bonus_marker_supply_mode={
+                    BonusMarkerSetup.DEFAULT: "standard",
+                    BonusMarkerSetup.ALL_PROMOS: "full_promo",
+                    BonusMarkerSetup.MIXED: "random_mix",
+                }[marker_setup],
+                bonus_marker_draw_supply=tuple(game.selected_map.bonus_marker_pool),
+                starting_bonus_marker_routes=_starting_bonus_marker_routes(game),
+            )
             self._latest_descriptor = descriptor
             if is_training_generation:
                 self.training_generation_number += 1
             return descriptor
 
+        use_missions, use_favour, marker_setup = _select_optional_modules(rng, map_num)
+
         ending_condition = ENDING_CONDITIONS[
             self.training_generation_number % len(ENDING_CONDITIONS)
         ]
         focus, regional = _select_focus(rng, map_num, player_count, ending_condition)
-        if maturity.name in {"early", "early_mixed", "mixed"}:
+        if maturity.name == "early":
             focus, regional = StrategicFocus.NONE, None
         elif maturity.name == "mid":
             focus = {
@@ -273,21 +294,16 @@ class BalancedCurriculumRunner(CurriculumRunner):
                 bonus_markers_remaining=maturity.bonus_markers_remaining,
                 completed_cities_below_limit=maturity.completed_cities_below_limit,
                 starting_position=maturity.starting_position,
-                prepared_routes_one_short=maturity.name not in {"early", "early_mixed", "mixed"},
+                prepared_routes_one_short=maturity.name != "early",
                 development_range=maturity.development_range,
-                prepare_ending_condition=maturity.name not in {"early", "early_mixed", "mixed"},
+                prepare_ending_condition=maturity.name != "early",
                 round_range=maturity.round_range,
-                mixed_development=maturity.name == "mixed",
-                early_mixed_development=maturity.name == "early_mixed",
-                early_route_scaffold=early_route_scaffold,
             )
         )
         path, metadata_path = save_balanced_state(
             generated,
             directory,
-            scenario_directory=(
-                maturity.name if maturity.name in {"early", "early_mixed", "mixed"} else None
-            ),
+            scenario_directory=maturity.name if maturity.name == "early" else None,
         )
         scenario = "+".join(
             filter(
@@ -310,10 +326,6 @@ class BalancedCurriculumRunner(CurriculumRunner):
             None,
             getattr(generated, "starting_scores_by_seat", ()),
             getattr(generated, "starting_development_by_seat", ()),
-            getattr(generated, "development_roles_by_seat", ()),
-            early_route_scaffold if maturity.name == "early" else None,
-            getattr(generated, "scaffolded_route_ids_by_seat", ()),
-            getattr(generated, "scaffolded_route_lengths_by_seat", ()),
         )
         self._latest_descriptor = descriptor
         if is_training_generation:

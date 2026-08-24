@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import random
 import shutil
 import tempfile
 from time import perf_counter
@@ -18,26 +19,34 @@ from game.persistence import save_game
 from training.self_play import (
     ActionLimitExceeded,
     IncompleteGameError,
+    NORMAL_EXPLORATION_MODE,
     SelfPlayTrainer,
+    ZERO_EPSILON_EXPLORATION_MODE,
 )
 from training.targeted_state_generator import StateGenerationError
+
+
+ACTIVE_EVALUATION_SETS = frozenset(("mid_late_end", "early"))
+TRAINING_EXPLORATION_SEED_OFFSET = 2_000_000_033
 
 
 CSV_FIELDS = (
     "game#",
     "batch#",
     "curriculum_stage",
-    "starting_position",
+    "training_stage",
     "run_type",
-    "evaluation_set",
+    "run_mode",
     "map",
     "player_count",
     "starting_score_by_seat",
     "starting_development_by_seat",
-    "development_role_by_seat",
-    "early_route_scaffold",
-    "scaffolded_route_ids_by_seat",
-    "scaffolded_route_lengths_by_seat",
+    "mission_cards_enabled",
+    "emperors_favour_enabled",
+    "emperors_favour_tiles",
+    "bonus_marker_supply_mode",
+    "bonus_marker_draw_supply",
+    "starting_bonus_marker_routes",
     "state_seed",
     "action_seed",
     "winner_player",
@@ -46,34 +55,25 @@ CSV_FIELDS = (
     "final_player_scores",
     "completion_reason",
     "action_count",
-    "early_training_action_limit_outcome",
     "trajectory_decision_count",
     "sampled_training_decision_count",
-    "sampled_training_fraction",
-    "sampled_octile_1",
-    "sampled_octile_2",
-    "sampled_octile_3",
-    "sampled_octile_4",
-    "sampled_octile_5",
-    "sampled_octile_6",
-    "sampled_octile_7",
-    "sampled_octile_8",
     "move_action_count",
     "spent_action_count",
-    "move_ratio",
     "pointless_move_workflows",
     "repeated_move_penalties",
     "all_move_turn_penalties",
     "moves_creating_claimable_route",
     "move_claim_conversions",
-    "move_claim_conversion_rate",
     "retry_count",
     "latest_loss",
-    "rolling_mean_loss",
     "evaluation_suite_size",
     "evaluation_suite_version",
     "generation_seconds",
     "play_seconds",
+    "learning_seconds",
+)
+
+DETAILED_PROFILING_FIELDS = (
     "inference_seconds",
     "scoring_seconds",
     "execution_seconds",
@@ -83,8 +83,24 @@ CSV_FIELDS = (
     "selection_seconds",
     "context_seconds",
     "reward_seconds",
-    "learning_seconds",
 )
+
+
+def csv_fields(*, detailed_profiling=False):
+    return CSV_FIELDS + (DETAILED_PROFILING_FIELDS if detailed_profiling else ())
+
+
+def _run_mode_from_legacy_row(row):
+    """Return the canonical run mode for current or historical CSV rows."""
+    current = (row.get("run_mode") or "").strip()
+    if current:
+        return current
+    run_type = (row.get("run_type") or "").strip().lower()
+    if run_type == "evaluation":
+        evaluation_set = (row.get("evaluation_set") or "mid_late_end").strip()
+        return f"evaluation_{evaluation_set}"
+    exploration = (row.get("training_exploration_mode") or NORMAL_EXPLORATION_MODE).strip()
+    return f"training_{exploration}"
 
 
 @dataclass(frozen=True)
@@ -139,6 +155,7 @@ class CurriculumConfig:
     retry_limit: int = 5
     seed: int = 124
     evaluation_seed: int = 10_000
+    zero_epsilon_training_fraction: float = 0.05
     stages: tuple[CurriculumStage, ...] = DEFAULT_STAGES
     promotion: PromotionCriteria = field(default_factory=PromotionCriteria)
 
@@ -153,6 +170,8 @@ class CurriculumConfig:
                 raise ValueError(f"{name} must be positive")
         if self.retry_limit < 0:
             raise ValueError("retry limit cannot be negative")
+        if not 0 <= self.zero_epsilon_training_fraction <= 1:
+            raise ValueError("zero-epsilon training fraction must be between 0 and 1")
         if not self.stages:
             raise ValueError("at least one curriculum stage is required")
 
@@ -169,10 +188,12 @@ class StateDescriptor:
     evaluation_set: str | None = None
     starting_scores_by_seat: tuple[int, ...] = ()
     starting_development_by_seat: tuple[int, ...] = ()
-    development_roles_by_seat: tuple[str, ...] = ()
-    early_route_scaffold: bool | None = None
-    scaffolded_route_ids_by_seat: tuple[tuple[int, ...], ...] = ()
-    scaffolded_route_lengths_by_seat: tuple[tuple[int, ...], ...] = ()
+    mission_cards_enabled: bool | None = None
+    emperors_favour_enabled: bool | None = None
+    emperors_favour_tiles: tuple[str, ...] = ()
+    bonus_marker_supply_mode: str | None = None
+    bonus_marker_draw_supply: tuple[str, ...] = ()
+    starting_bonus_marker_routes: tuple[tuple[str, str, str], ...] = ()
 
     @property
     def action_seed(self):
@@ -255,31 +276,34 @@ class CurriculumRunner:
         self._latest_descriptor = None
         saved = trainer.curriculum_state or {}
         signature = self._configuration_signature()
+        compatibility_overrides = (
+            {},
+            {"late_game_action_limit": 4_000},
+            {"near_end_score_range": (10, 18)},
+            {"near_end_action_limit": 6_000},
+            {"near_end_action_limit": 6_000, "near_end_score_range": (10, 18)},
+            {"near_end_action_limit": 6_000, "retry_limit": 2},
+            {
+                "near_end_action_limit": 6_000,
+                "near_end_score_range": (10, 18),
+                "retry_limit": 2,
+            },
+            {"retry_limit": 2},
+            {"near_end_action_limit": 3_000, "near_end_score_range": (18, 19)},
+            {
+                "near_end_action_limit": 3_000,
+                "near_end_score_range": (18, 19),
+                "retry_limit": 2,
+            },
+            {"near_end_action_limit": 2_000, "retry_limit": 2},
+        )
         compatible_signatures = {
-            signature,
-            self._configuration_signature(late_game_action_limit=4_000),
-            self._configuration_signature(near_end_score_range=(10, 18)),
-            self._configuration_signature(near_end_action_limit=6_000),
-            self._configuration_signature(
-                near_end_action_limit=6_000, near_end_score_range=(10, 18)
-            ),
-            self._configuration_signature(near_end_action_limit=6_000, retry_limit=2),
-            self._configuration_signature(
-                near_end_action_limit=6_000,
-                near_end_score_range=(10, 18),
-                retry_limit=2,
-            ),
-            self._configuration_signature(retry_limit=2),
-            self._configuration_signature(
-                near_end_action_limit=3_000, near_end_score_range=(18, 19)
-            ),
-            self._configuration_signature(
-                near_end_action_limit=3_000,
-                near_end_score_range=(18, 19),
-                retry_limit=2,
-            ),
-            self._configuration_signature(near_end_action_limit=2_000, retry_limit=2),
+            self._configuration_signature(**overrides) for overrides in compatibility_overrides
         }
+        compatible_signatures.update(
+            self._configuration_signature(include_zero_epsilon=False, **overrides)
+            for overrides in compatibility_overrides
+        )
         if (
             saved.get("configuration_version", 1) >= 4
             and saved.get("configuration_signature") not in compatible_signatures
@@ -310,7 +334,11 @@ class CurriculumRunner:
         manifest_path = self.evaluation_suite_directory / "manifest.json"
         if not manifest_path.is_file():
             return self.config.evaluation_games_per_batch
-        return len(json.loads(manifest_path.read_text(encoding="utf-8")))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return sum(
+            item.get("evaluation_set", "mid_late_end") in ACTIVE_EVALUATION_SETS
+            for item in manifest
+        )
 
     def _configuration_signature(
         self,
@@ -319,6 +347,7 @@ class CurriculumRunner:
         near_end_score_range=None,
         late_game_action_limit=None,
         retry_limit=None,
+        include_zero_epsilon=True,
     ):
         stages = [
             replace(
@@ -352,7 +381,18 @@ class CurriculumRunner:
             "stages": [asdict(stage) for stage in stages],
             "promotion": asdict(self.config.promotion),
         }
+        if include_zero_epsilon:
+            data["zero_epsilon_training_fraction"] = self.config.zero_epsilon_training_fraction
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+    def _training_exploration_mode(self, training_game_number=None):
+        game_number = self.game_number if training_game_number is None else training_game_number
+        rng = random.Random(
+            self.config.seed + TRAINING_EXPLORATION_SEED_OFFSET + game_number * 1_000_003
+        )
+        if rng.random() < self.config.zero_epsilon_training_fraction:
+            return ZERO_EPSILON_EXPLORATION_MODE
+        return NORMAL_EXPLORATION_MODE
 
     def _curriculum_state(self):
         return {
@@ -428,8 +468,10 @@ class CurriculumRunner:
             json.dumps(list(action_trace), indent=2) + "\n", encoding="utf-8"
         )
         details = {
-            "curriculum_stage": descriptor.scenario or stage.name,
-            "starting_position": descriptor.starting_position,
+            "curriculum_stage": (
+                stage.name if descriptor is None else descriptor.scenario or stage.name
+            ),
+            "starting_position": None if descriptor is None else descriptor.starting_position,
             "run_type": run_type,
             "evaluation_set": None if descriptor is None else descriptor.evaluation_set,
             "state_seed": None if descriptor is None else descriptor.seed,
@@ -459,7 +501,6 @@ class CurriculumRunner:
         run_type,
         retry_count,
         latest_loss,
-        rolling_mean_loss,
         game_number,
         *,
         generation_seconds=0.0,
@@ -473,53 +514,43 @@ class CurriculumRunner:
         winner_tiers = [trajectory.seat_tiers[index] for index in trajectory.winner_indices]
         move_action_count = getattr(trajectory, "move_action_count", 0)
         spent_action_count = getattr(trajectory, "spent_action_count", 0)
-        move_ratio = getattr(trajectory, "move_ratio", None)
-        if move_ratio is None and spent_action_count:
-            move_ratio = move_action_count / spent_action_count
         moves_creating_claimable_route = getattr(trajectory, "moves_creating_claimable_route", 0)
         move_claim_conversions = getattr(trajectory, "move_claim_conversions", 0)
-        move_claim_conversion_rate = getattr(trajectory, "move_claim_conversion_rate", None)
-        if move_claim_conversion_rate is None and moves_creating_claimable_route:
-            move_claim_conversion_rate = move_claim_conversions / moves_creating_claimable_route
-        action_count = len(trajectory.action_trace)
         completion_reason = getattr(trajectory, "completion_reason", "normal")
         maturity = (descriptor.scenario or stage.name).partition("+")[0]
-        early_training_action_limit_outcome = None
-        if run_type in {"training", "training_timeout"} and maturity in {
-            "early",
-            "early_mixed",
-        }:
-            if completion_reason == "action_limit":
-                early_training_action_limit_outcome = "timed_out_at_15000"
-            elif action_count <= 10_000:
-                early_training_action_limit_outcome = "finished_by_10000"
-            else:
-                early_training_action_limit_outcome = "finished_10001_to_15000"
-        sampled_octiles = (
-            getattr(training_sample_coverage, "sampled_octiles", ())
-            if training_sample_coverage
-            else ()
+        run_mode = (
+            f"training_{getattr(trajectory, 'training_exploration_mode', NORMAL_EXPLORATION_MODE)}"
+            if run_type in {"training", "training_timeout"}
+            else f"evaluation_{descriptor.evaluation_set or 'mid_late_end'}"
         )
-        return {
+        row = {
             "game#": game_number,
             "batch#": self.report_batch_number,
             "curriculum_stage": descriptor.scenario or stage.name,
-            "starting_position": descriptor.starting_position,
+            "training_stage": (maturity if run_type in {"training", "training_timeout"} else None),
             "run_type": run_type,
-            "evaluation_set": descriptor.evaluation_set,
+            "run_mode": run_mode,
             "map": descriptor.map_num,
             "player_count": descriptor.player_count,
             "starting_score_by_seat": json.dumps(descriptor.starting_scores_by_seat),
             "starting_development_by_seat": json.dumps(descriptor.starting_development_by_seat),
-            "development_role_by_seat": json.dumps(descriptor.development_roles_by_seat),
-            "early_route_scaffold": (
-                str(descriptor.early_route_scaffold).lower()
-                if descriptor.early_route_scaffold is not None
+            "mission_cards_enabled": descriptor.mission_cards_enabled,
+            "emperors_favour_enabled": descriptor.emperors_favour_enabled,
+            "emperors_favour_tiles": (
+                json.dumps(descriptor.emperors_favour_tiles)
+                if descriptor.emperors_favour_tiles
                 else None
             ),
-            "scaffolded_route_ids_by_seat": json.dumps(descriptor.scaffolded_route_ids_by_seat),
-            "scaffolded_route_lengths_by_seat": json.dumps(
-                descriptor.scaffolded_route_lengths_by_seat
+            "bonus_marker_supply_mode": descriptor.bonus_marker_supply_mode,
+            "bonus_marker_draw_supply": (
+                json.dumps(descriptor.bonus_marker_draw_supply)
+                if descriptor.bonus_marker_draw_supply
+                else None
+            ),
+            "starting_bonus_marker_routes": (
+                json.dumps(descriptor.starting_bonus_marker_routes)
+                if descriptor.starting_bonus_marker_routes
+                else None
             ),
             "state_seed": descriptor.seed,
             "action_seed": descriptor.action_seed if action_seed is None else action_seed,
@@ -528,59 +559,46 @@ class CurriculumRunner:
             "tier_to_seat_assignments": json.dumps(trajectory.seat_tiers),
             "final_player_scores": json.dumps(trajectory.final_scores),
             "completion_reason": completion_reason,
-            "action_count": action_count,
-            "early_training_action_limit_outcome": early_training_action_limit_outcome,
+            "action_count": len(trajectory.action_trace),
             "trajectory_decision_count": (
                 training_sample_coverage.total_decisions if training_sample_coverage else None
             ),
             "sampled_training_decision_count": (
                 training_sample_coverage.sampled_decisions if training_sample_coverage else None
             ),
-            "sampled_training_fraction": (
-                training_sample_coverage.sampled_fraction if training_sample_coverage else None
-            ),
-            **{
-                f"sampled_octile_{index + 1}": (
-                    sampled_octiles[index] if len(sampled_octiles) == 8 else None
-                )
-                for index in range(8)
-            },
             "move_action_count": move_action_count,
             "spent_action_count": spent_action_count,
-            "move_ratio": move_ratio,
             "pointless_move_workflows": getattr(trajectory, "pointless_move_workflows", 0),
             "repeated_move_penalties": getattr(trajectory, "repeated_move_penalties", 0),
             "all_move_turn_penalties": getattr(trajectory, "all_move_turn_penalties", 0),
             "moves_creating_claimable_route": moves_creating_claimable_route,
             "move_claim_conversions": move_claim_conversions,
-            "move_claim_conversion_rate": move_claim_conversion_rate,
             "retry_count": retry_count,
             "latest_loss": latest_loss,
-            "rolling_mean_loss": rolling_mean_loss,
             "evaluation_suite_size": evaluation_suite_size,
             "evaluation_suite_version": evaluation_suite_version,
             "generation_seconds": _rounded_seconds(generation_seconds),
             "play_seconds": _rounded_seconds(trajectory.play_seconds),
-            "inference_seconds": _rounded_seconds(trajectory.inference_seconds),
-            "scoring_seconds": _rounded_seconds(trajectory.scoring_seconds),
-            "execution_seconds": _rounded_seconds(trajectory.execution_seconds),
-            "validation_seconds": _rounded_seconds(trajectory.validation_seconds),
-            "observation_seconds": _rounded_seconds(trajectory.observation_seconds),
-            "legality_seconds": _rounded_seconds(trajectory.legality_seconds),
-            "selection_seconds": _rounded_seconds(trajectory.selection_seconds),
-            "context_seconds": _rounded_seconds(trajectory.context_seconds),
-            "reward_seconds": _rounded_seconds(trajectory.reward_seconds),
             "learning_seconds": _rounded_seconds(learning_seconds),
         }
+        if self.trainer.config.detailed_profiling:
+            row.update(
+                {
+                    field: _rounded_seconds(getattr(trajectory, field))
+                    for field in DETAILED_PROFILING_FIELDS
+                }
+            )
+        return row
 
     def _append_csv(self, rows):
         self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+        fields = csv_fields(detailed_profiling=self.trainer.config.detailed_profiling)
         replacement = None
         if self.csv_path.is_file():
             with self.csv_path.open(newline="", encoding="utf-8-sig") as source:
                 reader = csv.DictReader(source)
                 existing_fields = tuple(reader.fieldnames or ())
-                if existing_fields != CSV_FIELDS:
+                if existing_fields != fields:
                     with tempfile.NamedTemporaryFile(
                         "w",
                         dir=self.csv_path.parent,
@@ -589,17 +607,17 @@ class CurriculumRunner:
                         encoding="utf-8",
                     ) as output:
                         replacement = Path(output.name)
-                        writer = csv.DictWriter(output, fieldnames=CSV_FIELDS)
+                        writer = csv.DictWriter(output, fieldnames=fields)
                         writer.writeheader()
                         for existing in reader:
-                            writer.writerow(
-                                {field: existing.get(field, "") for field in CSV_FIELDS}
-                            )
+                            migrated = {field: existing.get(field, "") for field in fields}
+                            migrated["run_mode"] = _run_mode_from_legacy_row(existing)
+                            writer.writerow(migrated)
             if replacement is not None:
                 replacement.replace(self.csv_path)
         write_header = not self.csv_path.exists()
         with self.csv_path.open("a", newline="", encoding="utf-8") as output:
-            writer = csv.DictWriter(output, fieldnames=CSV_FIELDS)
+            writer = csv.DictWriter(output, fieldnames=fields)
             if write_header:
                 writer.writeheader()
             writer.writerows(rows)
@@ -610,7 +628,6 @@ class CurriculumRunner:
         pending_rows = []
         pending_game_numbers = []
         rows = []
-        recent_losses = []
         unfinished = 0
 
         def save_completed_group():
@@ -633,6 +650,7 @@ class CurriculumRunner:
         while game_index < total_games:
             completed_game = False
             retry_reason = None
+            training_exploration_mode = None
             for retry_count in range(self.config.retry_limit + 1):
                 retry = (
                     ""
@@ -656,6 +674,8 @@ class CurriculumRunner:
                     retry_reason = f"generation constraints: {error}"
                     continue
                 generation_seconds = perf_counter() - generation_started
+                if training_exploration_mode is None:
+                    training_exploration_mode = self._training_exploration_mode(self.game_number)
                 self.trainer.rng.seed(descriptor.action_seed)
                 self.trainer.config = replace(
                     self.trainer.config,
@@ -667,6 +687,7 @@ class CurriculumRunner:
                         failure_callback=self._failure_callback(
                             stage, descriptor, retry_count, "training"
                         ),
+                        zero_epsilon=(training_exploration_mode == ZERO_EPSILON_EXPLORATION_MODE),
                     )
                 except IncompleteGameError as error:
                     unfinished += 1
@@ -724,7 +745,6 @@ class CurriculumRunner:
                                 "training_timeout",
                                 retry_count,
                                 game_loss,
-                                None,
                                 self.report_game_number,
                                 generation_seconds=generation_seconds,
                                 learning_seconds=learning_seconds,
@@ -751,11 +771,6 @@ class CurriculumRunner:
                 self.game_number += 1
                 self.report_game_number += 1
                 completed_game = True
-                if game_loss is not None:
-                    recent_losses.append(game_loss)
-                rolling_mean = (
-                    sum(recent_losses[-5:]) / len(recent_losses[-5:]) if recent_losses else None
-                )
                 row = self._trajectory_row(
                     trajectory,
                     descriptor,
@@ -763,7 +778,6 @@ class CurriculumRunner:
                     "training",
                     retry_count,
                     game_loss,
-                    rolling_mean,
                     self.report_game_number,
                     generation_seconds=generation_seconds,
                     learning_seconds=learning_seconds,
@@ -789,6 +803,11 @@ class CurriculumRunner:
             manifest_path = self.evaluation_suite_directory / "manifest.json"
             if manifest_path.is_file():
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest = [
+                    item
+                    for item in manifest
+                    if item.get("evaluation_set", "mid_late_end") in ACTIVE_EVALUATION_SETS
+                ]
                 evaluation_set_sizes = {}
                 for item in manifest:
                     evaluation_set = item.get("evaluation_set", "mid_late_end")
@@ -808,7 +827,7 @@ class CurriculumRunner:
                         item.get("scenario"),
                         (
                             ""
-                            if item.get("evaluation_set") in {"early", "mixed_development"}
+                            if item.get("evaluation_set") == "early"
                             else "immediate_finish"
                             if item.get("immediate_finish", False)
                             else "one_round_before"
@@ -816,16 +835,6 @@ class CurriculumRunner:
                         item.get("evaluation_set", "mid_late_end"),
                         tuple(item.get("starting_score_by_seat", ())),
                         tuple(item.get("starting_development_by_seat", ())),
-                        tuple(item.get("development_role_by_seat", ())),
-                        item.get("early_route_scaffold"),
-                        tuple(
-                            tuple(route_ids)
-                            for route_ids in item.get("scaffolded_route_ids_by_seat", ())
-                        ),
-                        tuple(
-                            tuple(lengths)
-                            for lengths in item.get("scaffolded_route_lengths_by_seat", ())
-                        ),
                     )
                     for item in manifest
                 ]
@@ -872,8 +881,7 @@ class CurriculumRunner:
                             ),
                             evaluation=True,
                             evaluation_tier_rotation=self.batch_number - 1,
-                            capture_action_limit=descriptor.evaluation_set
-                            in {"early", "mixed_development"},
+                            capture_action_limit=descriptor.evaluation_set == "early",
                         )
                     except ActionLimitExceeded:
                         failure_reason = "action_limit"
@@ -928,7 +936,6 @@ class CurriculumRunner:
                         "evaluation",
                         retry_count,
                         evaluation_loss,
-                        None,
                         self.report_game_number,
                         action_seed=action_seed,
                         evaluation_suite_size=evaluation_set_sizes.get(

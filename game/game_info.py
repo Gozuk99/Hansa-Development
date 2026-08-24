@@ -32,6 +32,7 @@ class Game:
         use_mission_cards=False,
         use_emperors_favour=False,
         bonus_marker_supply=None,
+        randomize_starting_bonus_marker_locations=False,
     ):
         validate_game_configuration(map_num, num_players)
         if use_mission_cards and map_num != 1:
@@ -45,6 +46,8 @@ class Game:
         self.use_mission_cards = use_mission_cards
         self.use_emperors_favour = use_emperors_favour
         self.selected_map = self.assign_map(map_num, num_players)
+        if randomize_starting_bonus_marker_locations:
+            self.selected_map.randomize_starting_bonus_marker_locations()
         self._post_catalogue = tuple(
             (route, post) for route in self.selected_map.routes for post in route.posts
         )

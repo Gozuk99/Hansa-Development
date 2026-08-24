@@ -57,6 +57,38 @@ class Map:
                     if self.messages_enabled:
                         print(f"Ran out of initial bonus types to assign for route between {route.cities[0].name} and {route.cities[1].name}")
 
+    def randomize_starting_bonus_marker_locations(self):
+        """Move the three fixed starter markers to seeded, legal routes."""
+        starting_markers = [
+            route.bonus_marker.type
+            for route in self.routes
+            if route.bonus_marker is not None
+        ]
+        if sorted(starting_markers) != sorted(("Move3", "SwapOffice", "PlaceAdjacent")):
+            raise ValueError("Expected the three canonical starting bonus markers")
+
+        for route in self.routes:
+            if route.bonus_marker is not None:
+                route.bonus_marker = None
+                route.has_bonus_marker = False
+
+        legal_routes = [
+            route
+            for route in self.routes
+            if route.permanent_bonus_marker is None
+            and route.region not in ("Wales", "Scotland")
+            and not route.has_tradesmen()
+            and route.has_empty_office_in_cities()
+        ]
+        if len(legal_routes) < len(starting_markers):
+            raise ValueError("Map does not contain enough legal starting bonus-marker routes")
+
+        for route, marker_type in zip(
+            self.rng.sample(legal_routes, len(starting_markers)),
+            starting_markers,
+        ):
+            route.assign_map_new_bonus_marker(marker_type)
+
     def assign_bm_pool_default(self):
         for bm_type, count in self.STANDARD_BONUS_MARKER_SUPPLY.items():
             self.bonus_marker_pool.extend([bm_type] * count)
