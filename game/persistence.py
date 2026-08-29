@@ -119,6 +119,17 @@ def _remove_legacy_player_state(game: Game) -> None:
             del player.reward_structure
         if hasattr(player, "board"):
             del player.board
+        player.consecutive_paid_move_actions = getattr(player, "consecutive_paid_move_actions", 0)
+        player.paid_actions_spent_this_turn = getattr(player, "paid_actions_spent_this_turn", 0)
+        player.paid_move_actions_spent_this_turn = getattr(
+            player, "paid_move_actions_spent_this_turn", 0
+        )
+        player.pending_move_claim_route_slots = getattr(
+            player, "pending_move_claim_route_slots", frozenset()
+        )
+        player.rewarded_move_focus_route_slots = getattr(
+            player, "rewarded_move_focus_route_slots", frozenset()
+        )
 
 
 def default_save_directory() -> Path:
@@ -244,6 +255,8 @@ def load_game(filename: str | Path) -> Game:
     game = restored["game"]
     _remove_legacy_player_state(game)
     _restore_office_printed_privileges(game)
+    if not hasattr(game, "normal_move_pre_board_snapshot"):
+        game.normal_move_pre_board_snapshot = None
     game._saved_controller_rng_state = restored.get("controller_rng_state")
     try:
         validate_loaded_game(game)

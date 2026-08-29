@@ -1,14 +1,21 @@
 import csv
+from copy import deepcopy
 import json
 from pathlib import Path
 import random
 from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest import mock
 
+import torch
+
+from ai.ai_model import MODEL_CHECKPOINT_FORMAT, MODEL_CHECKPOINT_VERSION
 from training.curriculum import (
     CSV_FIELDS,
+    DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS,
     DETAILED_PROFILING_FIELDS,
+    SHADOW_FILTER_CSV_FIELDS,
     CurriculumConfig,
     CurriculumRunner,
     CurriculumStage,
@@ -22,6 +29,8 @@ from training.self_play import (
     ActionLimitExceeded,
     IncompleteGameError,
     TrainingConfig,
+    TRAINING_CHECKPOINT_FORMAT,
+    TRAINING_CHECKPOINT_VERSION,
     TrainingProgress,
 )
 from training.targeted_state_generator import StateGenerationError
@@ -194,18 +203,39 @@ class CurriculumTrainingTests(unittest.TestCase):
             "evaluation_set",
         ):
             self.assertNotIn(field, CSV_FIELDS)
-        self.assertIn("training_stage", CSV_FIELDS)
-        self.assertIn("run_mode", CSV_FIELDS)
         for field in (
+            "curriculum_stage",
+            "training_stage",
+            "run_type",
+            "run_mode",
             "trajectory_decision_count",
             "sampled_training_decision_count",
+        ):
+            self.assertNotIn(field, CSV_FIELDS)
+        self.assertIn("run", CSV_FIELDS)
+        self.assertIn("scenario", CSV_FIELDS)
+        for field in (
+            "total_training_decisions",
+            "sampled_training_decisions",
             "move_action_count",
             "spent_action_count",
             "moves_creating_claimable_route",
             "move_claim_conversions",
+            "shadow_filter_selected_count",
+            "shadow_filter_epsilon_selected_count",
             "generation_seconds",
             "play_seconds",
             "learning_seconds",
+            "q_loss",
+            "policy_loss",
+            "total_loss",
+            "policy_q_top1_agreement",
+            "policy_top1_q_rank",
+            "policy_entropy",
+            "policy_top2_mass",
+            "policy_top5_mass",
+            "policy_top10_mass",
+            "policy_trunk_gradient_scale",
         ):
             self.assertIn(field, CSV_FIELDS)
         for field in DETAILED_PROFILING_FIELDS:
@@ -221,22 +251,123 @@ class CurriculumTrainingTests(unittest.TestCase):
         ):
             self.assertIn(field, CSV_FIELDS)
 
-    def test_zero_epsilon_training_fraction_is_configurable_and_validated(self):
-        self.assertEqual(CurriculumConfig().zero_epsilon_training_fraction, 0.05)
+    def test_shadow_filter_audit_csv_contains_only_flagged_training_actions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runner = self.runner(root)
+            record = SimpleNamespace(
+                decision_index=6,
+                action_index=321,
+                action_type="PostInteraction",
+                semantic_action_indices=(321, 322, 323),
+                semantic_q_rank=24,
+                q_value=-4.5,
+                q_gap_from_best=7.25,
+                semantic_policy_rank=13,
+                policy_probability=0.01,
+                immediate_reward=-5.0,
+                local_training_target=-1000.0,
+                local_training_adjustment=-200.0,
+                reward_to_go=-900.0,
+                final_training_target=-1200.0,
+                receives_terminal_credit=False,
+                terminal_credit_value=0.0,
+                acting_player_index=1,
+                acting_player_final_score=12,
+                acting_player_won=False,
+                policy_tier=2,
+                used_epsilon=True,
+            )
+            trajectory = completed_trajectory()
+            trajectory.shadow_filter_records = (record,)
+            trajectory.shadow_filter_selected_count = 1
+            trajectory.shadow_filter_epsilon_selected_count = 1
+            trajectory.training_exploration_mode = "normal"
+            trajectory.completion_reason = "20_points"
+            descriptor = StateDescriptor(
+                VALIDATION_STATE,
+                None,
+                2,
+                5,
+                123,
+                scenario="late+near_score",
+            )
+
+            rows = runner._shadow_filter_rows(
+                trajectory,
+                descriptor,
+                runner.config.stages[0],
+                retry_count=2,
+                game_number=17,
+            )
+            runner._append_shadow_filter_csv(rows)
+
+            with (root / "filter_shadow.csv").open(newline="", encoding="utf-8") as source:
+                written = list(csv.DictReader(source))
+            self.assertEqual(tuple(written[0]), SHADOW_FILTER_CSV_FIELDS)
+            self.assertEqual(len(written), 1)
+            self.assertEqual(written[0]["game#"], "17")
+            self.assertEqual(written[0]["run"], "training_late")
+            self.assertEqual(written[0]["game_maturity"], "late")
+            self.assertEqual(written[0]["decision_number"], "7")
+            self.assertEqual(json.loads(written[0]["semantic_action_indices"]), [321, 322, 323])
+            self.assertEqual(written[0]["would_filter"], "True")
+            self.assertEqual(written[0]["final_training_target"], "-1200.0")
+            self.assertEqual(written[0]["used_epsilon"], "True")
+
+    def test_zero_epsilon_training_schedule_is_configurable_and_validated(self):
+        self.assertEqual(
+            dict(CurriculumConfig().zero_epsilon_training_fractions),
+            {"fresh": 0.05, "early": 0.05, "mid": 0.05, "late": 0.50, "end": 1.00},
+        )
         self.assertEqual(
             parse_curriculum_args(
                 ["--zero-epsilon-training-percentage", "12.5"]
             ).zero_epsilon_training_percentage,
             12.5,
         )
+        maturity_args = parse_curriculum_args(
+            [
+                "--fresh-zero-epsilon-training-percentage",
+                "6",
+                "--early-zero-epsilon-training-percentage",
+                "7",
+                "--mid-zero-epsilon-training-percentage",
+                "8",
+                "--late-zero-epsilon-training-percentage",
+                "40",
+                "--end-zero-epsilon-training-percentage",
+                "100",
+            ]
+        )
+        self.assertEqual(
+            (
+                maturity_args.fresh_zero_epsilon_training_percentage,
+                maturity_args.early_zero_epsilon_training_percentage,
+                maturity_args.mid_zero_epsilon_training_percentage,
+                maturity_args.late_zero_epsilon_training_percentage,
+                maturity_args.end_zero_epsilon_training_percentage,
+            ),
+            (6.0, 7.0, 8.0, 40.0, 100.0),
+        )
         with self.assertRaises(ValueError):
-            CurriculumConfig(zero_epsilon_training_fraction=-0.01)
+            CurriculumConfig(
+                zero_epsilon_training_fractions=(("fresh", -0.01),)
+                + DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS[1:]
+            )
         with self.assertRaises(ValueError):
-            CurriculumConfig(zero_epsilon_training_fraction=1.01)
+            CurriculumConfig(
+                zero_epsilon_training_fractions=(("fresh", 1.01),)
+                + DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS[1:]
+            )
 
     def test_detailed_profiling_cli_is_disabled_by_default_and_opt_in(self):
         self.assertFalse(parse_curriculum_args([]).detailed_profiling)
         self.assertTrue(parse_curriculum_args(["--detailed-profiling"]).detailed_profiling)
+
+    def test_shadow_filter_audit_cli_is_disabled_by_default_and_opt_in(self):
+        self.assertFalse(parse_curriculum_args([]).shadow_filter_audit)
+        self.assertTrue(parse_curriculum_args(["--shadow-filter-audit"]).shadow_filter_audit)
 
     def test_saved_game_numbers_are_compact_but_preserve_gaps(self):
         self.assertEqual(_format_game_numbers([16, 17, 18, 19, 20]), "16-20")
@@ -251,7 +382,7 @@ class CurriculumTrainingTests(unittest.TestCase):
 
             self.assertEqual(trainer.evaluation_rotations, [0, 1])
 
-    def test_early_fixed_evaluation_is_distinct_and_never_updates_model(self):
+    def test_fresh_fixed_evaluation_is_distinct_and_never_updates_model(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             evaluation = root / "evaluation"
@@ -268,14 +399,14 @@ class CurriculumTrainingTests(unittest.TestCase):
                     "evaluation_set": "mid_late_end",
                 },
                 {
-                    "save_file": "early.hansa",
-                    "metadata_file": "early.json",
+                    "save_file": "fresh.hansa",
+                    "metadata_file": "fresh.json",
                     "map_num": 2,
                     "player_count": 5,
                     "seed": 200,
-                    "scenario": "early_game",
-                    "suite_version": 5,
-                    "evaluation_set": "early",
+                    "scenario": "fresh_game",
+                    "suite_version": 10,
+                    "evaluation_set": "fresh",
                 },
                 {
                     "save_file": "removed-mixed.hansa",
@@ -299,15 +430,15 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(trainer.capture_action_limits, [False, True])
             with (root / "results.csv").open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
-            evaluation_rows = [row for row in rows if row["run_type"] == "evaluation"]
+            evaluation_rows = [row for row in rows if row["run"].startswith("evaluation_")]
             self.assertEqual(
-                [row["run_mode"] for row in evaluation_rows],
-                ["evaluation_mid_late_end", "evaluation_early"],
+                [row["run"] for row in evaluation_rows],
+                ["evaluation_mid_late_end", "evaluation_fresh"],
             )
             self.assertEqual([row["evaluation_suite_size"] for row in evaluation_rows], ["1", "1"])
 
-    def test_early_evaluation_timeout_is_recorded_without_training(self):
-        class EarlyTimeoutTrainer(FakeTrainer):
+    def test_fresh_evaluation_timeout_is_recorded_without_training(self):
+        class FreshTimeoutTrainer(FakeTrainer):
             def collect_game(self, path, *, failure_callback=None, evaluation=False, **kwargs):
                 trajectory = super().collect_game(
                     path,
@@ -323,27 +454,26 @@ class CurriculumTrainingTests(unittest.TestCase):
             evaluation.mkdir()
             manifest = [
                 {
-                    "save_file": "early.hansa",
-                    "metadata_file": "early.json",
+                    "save_file": "fresh.hansa",
+                    "metadata_file": "fresh.json",
                     "map_num": 3,
                     "player_count": 4,
                     "seed": 300,
-                    "scenario": "early_game",
-                    "suite_version": 5,
-                    "evaluation_set": "early",
+                    "scenario": "fresh_game",
+                    "suite_version": 10,
+                    "evaluation_set": "fresh",
                 }
             ]
             (evaluation / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-            trainer = EarlyTimeoutTrainer()
+            trainer = FreshTimeoutTrainer()
             self.runner(root, trainer).run()
 
             self.assertEqual(trainer.update_calls, 1)
             with (root / "results.csv").open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
-            early = next(row for row in rows if row["run_type"] == "evaluation")
-            self.assertEqual(early["run_mode"], "evaluation_early")
-            self.assertEqual(early["completion_reason"], "action_limit")
-            self.assertNotIn("timeout", early)
+            fresh = next(row for row in rows if row["run"] == "evaluation_fresh")
+            self.assertEqual(fresh["completion_reason"], "action_limit")
+            self.assertNotIn("timeout", fresh)
 
     def test_existing_windows_utf8_csv_header_loads(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -366,26 +496,33 @@ class CurriculumTrainingTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             parse_curriculum_args(["--fresh"])
 
-    def test_existing_csv_is_migrated_to_compact_schema_and_run_mode(self):
+    def test_existing_csv_is_migrated_to_compact_schema_and_run(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             csv_path = root / "results.csv"
             runner = self.runner(root)
             csv_path.write_text(
-                "game#,run_type,training_exploration_mode,evaluation_set\n"
-                "1,training,zero_epsilon,\n",
+                "game#,curriculum_stage,training_stage,run_type,run_mode,"
+                "training_exploration_mode,evaluation_set,trajectory_decision_count,"
+                "sampled_training_decision_count\n"
+                "1,early+score_focus,early,training,training_zero_epsilon,"
+                "zero_epsilon,,4096,1024\n"
+                "2,near_score,end,training_timeout,training_normal,,,2048,1024\n",
                 encoding="utf-8",
             )
 
-            runner._append_csv(
-                ({"game#": 2, "run_type": "training", "run_mode": "training_normal"},)
-            )
+            runner._append_csv(({"game#": 3, "run": "training_end"},))
 
             with csv_path.open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
-            self.assertEqual([row["game#"] for row in rows], ["1", "2"])
+            self.assertEqual([row["game#"] for row in rows], ["1", "2", "3"])
             self.assertIn("play_seconds", rows[0])
-            self.assertEqual(rows[0]["run_mode"], "training_zero_epsilon")
+            self.assertEqual(rows[0]["run"], "training_early_zero_epsilon")
+            self.assertEqual(rows[0]["scenario"], "score_focus")
+            self.assertEqual(rows[0]["total_training_decisions"], "4096")
+            self.assertEqual(rows[0]["sampled_training_decisions"], "1024")
+            self.assertEqual(rows[1]["run"], "training_end")
+            self.assertEqual(rows[1]["completion_reason"], "action_limit")
             self.assertNotIn("training_exploration_mode", rows[0])
 
     def test_csv_timing_values_are_rounded_to_hundredths(self):
@@ -406,8 +543,8 @@ class CurriculumTrainingTests(unittest.TestCase):
 
             self.assertEqual(row["generation_seconds"], 0.12)
             self.assertEqual(row["learning_seconds"], 0.99)
-            self.assertEqual(row["curriculum_stage"], "near_bonus_markers")
-            self.assertEqual(row["run_mode"], "training_normal")
+            self.assertEqual(row["run"], "training_end")
+            self.assertEqual(row["scenario"], "near_bonus_markers")
             self.assertEqual(row["move_action_count"], 2)
             self.assertEqual(row["spent_action_count"], 5)
             self.assertEqual(row["pointless_move_workflows"], 1)
@@ -415,6 +552,73 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(row["all_move_turn_penalties"], 1)
             self.assertEqual(row["moves_creating_claimable_route"], 2)
             self.assertEqual(row["move_claim_conversions"], 1)
+
+    def test_run_labels_cover_training_evaluation_and_timeout_cases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner(Path(directory))
+            expected = {
+                "fresh": "training_fresh",
+                "early": "training_early",
+                "mid+score_focus": "training_mid",
+                "late+near_score": "training_late",
+                "end+near_bonus_markers": "training_end",
+            }
+            for scenario, expected_run in expected.items():
+                row = runner._trajectory_row(
+                    completed_trajectory(),
+                    StateDescriptor(VALIDATION_STATE, None, 1, 3, 1, scenario),
+                    runner.config.stages[0],
+                    "training",
+                    0,
+                    None,
+                    1,
+                )
+                self.assertEqual(row["run"], expected_run)
+
+            zero_epsilon = completed_trajectory()
+            zero_epsilon.training_exploration_mode = ZERO_EPSILON_EXPLORATION_MODE
+            fresh = runner._trajectory_row(
+                zero_epsilon,
+                StateDescriptor(VALIDATION_STATE, None, 1, 3, 1, "fresh"),
+                runner.config.stages[0],
+                "training",
+                0,
+                None,
+                1,
+            )
+            self.assertEqual(fresh["run"], "training_fresh_zero_epsilon")
+
+            for evaluation_set in ("fresh", "mid_late_end"):
+                evaluation = runner._trajectory_row(
+                    completed_trajectory(),
+                    StateDescriptor(
+                        VALIDATION_STATE,
+                        None,
+                        1,
+                        3,
+                        1,
+                        "fresh" if evaluation_set == "fresh" else "near_score",
+                        evaluation_set=evaluation_set,
+                    ),
+                    runner.config.stages[0],
+                    "evaluation",
+                    0,
+                    None,
+                    1,
+                )
+                self.assertEqual(evaluation["run"], f"evaluation_{evaluation_set}")
+
+            timeout = runner._trajectory_row(
+                action_limited_trajectory(),
+                StateDescriptor(VALIDATION_STATE, None, 1, 3, 1, "early"),
+                runner.config.stages[0],
+                "training_timeout",
+                0,
+                None,
+                1,
+            )
+            self.assertEqual(timeout["run"], "training_early")
+            self.assertEqual(timeout["completion_reason"], "action_limit")
 
     def test_detailed_profiling_fields_are_written_only_when_enabled(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -438,6 +642,30 @@ class CurriculumTrainingTests(unittest.TestCase):
                 tuple(field for field in row if field in DETAILED_PROFILING_FIELDS),
                 DETAILED_PROFILING_FIELDS,
             )
+
+    def test_loop_control_timing_is_printed_only_with_detailed_profiling(self):
+        class ZeroSubtimingTrainer(FakeTrainer):
+            def collect_game(self, *args, **kwargs):
+                trajectory = super().collect_game(*args, **kwargs)
+                trajectory.play_seconds = 2.0
+                for field in DETAILED_PROFILING_FIELDS:
+                    setattr(trajectory, field, 0.0)
+                return trajectory
+
+        messages_by_mode = {}
+        for detailed_profiling in (False, True):
+            with tempfile.TemporaryDirectory() as directory:
+                runner = self.runner(
+                    Path(directory),
+                    ZeroSubtimingTrainer(detailed_profiling=detailed_profiling),
+                )
+                messages = []
+                runner.progress_callback = messages.append
+                runner.run()
+                messages_by_mode[detailed_profiling] = messages
+
+        self.assertFalse(any("loop/control" in message for message in messages_by_mode[False]))
+        self.assertTrue(any("loop/control 2.00s" in message for message in messages_by_mode[True]))
 
     def config(self, **changes):
         values = {
@@ -473,10 +701,9 @@ class CurriculumTrainingTests(unittest.TestCase):
                 training_sample_coverage=coverage,
             )
 
-            self.assertEqual(row["sampled_training_decision_count"], 4_096)
-            self.assertEqual(row["trajectory_decision_count"], 5_000)
-            self.assertEqual(row["training_stage"], "early")
-            self.assertEqual(row["run_mode"], "training_normal")
+            self.assertEqual(row["sampled_training_decisions"], 4_096)
+            self.assertEqual(row["total_training_decisions"], 5_000)
+            self.assertEqual(row["run"], "training_early")
             self.assertNotIn("sampled_training_fraction", row)
             self.assertFalse(any(field.startswith("sampled_octile_") for field in row))
 
@@ -513,7 +740,7 @@ class CurriculumTrainingTests(unittest.TestCase):
                 1,
             )
 
-            self.assertEqual(row["training_stage"], "fresh")
+            self.assertEqual(row["run"], "training_fresh")
             self.assertTrue(row["mission_cards_enabled"])
             self.assertTrue(row["emperors_favour_enabled"])
             self.assertEqual(row["bonus_marker_supply_mode"], "random_mix")
@@ -533,7 +760,123 @@ class CurriculumTrainingTests(unittest.TestCase):
             temporary_directory=root / "states",
             failure_directory=root / "failures",
             evaluation_suite_directory=root / "evaluation",
+            backup_directory=root / "backups",
         )
+
+    @staticmethod
+    def write_backup_sources(runner):
+        runner.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            {
+                "training_checkpoint_format": TRAINING_CHECKPOINT_FORMAT,
+                "training_checkpoint_version": TRAINING_CHECKPOINT_VERSION,
+            },
+            runner.checkpoint_path,
+        )
+        torch.save(
+            {
+                "model_checkpoint_format": MODEL_CHECKPOINT_FORMAT,
+                "model_checkpoint_version": MODEL_CHECKPOINT_VERSION,
+            },
+            runner.playable_model_path,
+        )
+
+    def test_rolling_backup_is_created_at_exact_hundred_game_milestones(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trainer = FakeTrainer()
+            runner = self.runner(root, trainer)
+            self.write_backup_sources(runner)
+
+            trainer.progress.completed_games = 99
+            self.assertIsNone(runner._create_rolling_backup())
+            trainer.progress.completed_games = 100
+            first = runner._create_rolling_backup()
+            trainer.progress.completed_games = 199
+            self.assertIsNone(runner._create_rolling_backup())
+            trainer.progress.completed_games = 200
+            second = runner._create_rolling_backup()
+
+            self.assertEqual(first.name, "game_0100")
+            self.assertEqual(second.name, "game_0200")
+            for backup in (first, second):
+                self.assertTrue((backup / "hansa_nn_model.pth").is_file())
+                self.assertTrue((backup / "training_checkpoint.pth").is_file())
+                self.assertTrue((backup / "metadata.json").is_file())
+
+    def test_rolling_backup_metadata_records_training_progress(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner(Path(directory), FakeTrainer())
+            self.write_backup_sources(runner)
+            runner.batch_number = 7
+            runner.trainer.progress.completed_games = 300
+            runner.trainer.progress.training_updates = 1_234
+
+            backup = runner._create_rolling_backup()
+            metadata = json.loads((backup / "metadata.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(metadata["completed_training_games"], 300)
+            self.assertEqual(metadata["batch_number"], 7)
+            self.assertEqual(metadata["training_updates"], 1_234)
+            self.assertEqual(metadata["training_checkpoint_format"], TRAINING_CHECKPOINT_FORMAT)
+            self.assertEqual(metadata["training_checkpoint_version"], TRAINING_CHECKPOINT_VERSION)
+            self.assertTrue(metadata["timestamp"].endswith("+00:00"))
+
+    def test_rolling_backup_retains_only_ten_after_new_snapshot_succeeds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner(Path(directory), FakeTrainer())
+            self.write_backup_sources(runner)
+            runner.backup_directory.mkdir(parents=True)
+            for completed_games in range(100, 1_001, 100):
+                (runner.backup_directory / f"game_{completed_games:04d}").mkdir()
+            runner.trainer.progress.completed_games = 1_100
+
+            runner._create_rolling_backup()
+
+            backups = sorted(path.name for path in runner.backup_directory.glob("game_*"))
+            self.assertEqual(len(backups), 10)
+            self.assertNotIn("game_0100", backups)
+            self.assertIn("game_1100", backups)
+
+    def test_failed_rolling_backup_preserves_every_previous_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner(Path(directory), FakeTrainer())
+            self.write_backup_sources(runner)
+            runner.backup_directory.mkdir(parents=True)
+            expected = {f"game_{completed_games:04d}" for completed_games in range(100, 1_001, 100)}
+            for name in expected:
+                (runner.backup_directory / name).mkdir()
+            runner.trainer.progress.completed_games = 1_100
+
+            with mock.patch(
+                "training.curriculum.shutil.copy2",
+                side_effect=(None, OSError("simulated interrupted backup")),
+            ):
+                with self.assertRaisesRegex(OSError, "simulated interrupted backup"):
+                    runner._create_rolling_backup()
+
+            remaining = {
+                path.name
+                for path in runner.backup_directory.iterdir()
+                if path.name.startswith("game_")
+            }
+            self.assertEqual(remaining, expected)
+            self.assertFalse((runner.backup_directory / "game_1100").exists())
+
+    def test_training_milestone_publishes_backup_after_normal_active_save(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trainer = FakeTrainer()
+            trainer.progress.completed_games = 99
+            runner = self.runner(root, trainer)
+
+            with mock.patch("training.curriculum._validate_backup_artifacts"):
+                runner.run()
+
+            backup = root / "backups" / "game_0100"
+            self.assertTrue((backup / "hansa_nn_model.pth").is_file())
+            self.assertTrue((backup / "training_checkpoint.pth").is_file())
+            self.assertEqual(trainer.checkpoint_calls, 2)
 
     def test_obsolete_mixed_evaluation_entries_are_not_counted(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -544,7 +887,7 @@ class CurriculumTrainingTests(unittest.TestCase):
                 json.dumps(
                     [
                         {"evaluation_set": "mid_late_end"},
-                        {"evaluation_set": "early"},
+                        {"evaluation_set": "fresh"},
                         {"evaluation_set": "mixed_development"},
                     ]
                 ),
@@ -565,6 +908,7 @@ class CurriculumTrainingTests(unittest.TestCase):
 
             self.assertEqual(trainer.collect_calls, 2)
             self.assertEqual(trainer.update_calls, 1)
+            self.assertEqual(trainer.measured_losses, 1)
             self.assertEqual(trainer.progress.completed_games, 1)
             self.assertEqual(trainer.evaluation_calls, [False, True])
             self.assertEqual(runner.generated_seeds, [124, 10000])
@@ -574,17 +918,16 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(state, trainer.saved_curriculum_state)
             with (root / "results.csv").open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
-            self.assertEqual([row["run_type"] for row in rows], ["training", "evaluation"])
             self.assertEqual(
-                [row["run_mode"] for row in rows],
-                ["training_normal", "evaluation_mid_late_end"],
+                [row["run"] for row in rows],
+                ["training_end_zero_epsilon", "evaluation_mid_late_end"],
             )
             self.assertEqual([row["game#"] for row in rows], ["1", "2"])
-            self.assertEqual(rows[0]["latest_loss"], "10.0")
-            self.assertEqual(rows[0]["trajectory_decision_count"], "1")
-            self.assertEqual(rows[0]["sampled_training_decision_count"], "1")
+            self.assertEqual(rows[0]["latest_loss"], "12.5")
+            self.assertEqual(rows[0]["total_training_decisions"], "1")
+            self.assertEqual(rows[0]["sampled_training_decisions"], "1")
             self.assertEqual(trainer.curriculum_maturities, ["test"])
-            self.assertEqual(rows[1]["latest_loss"], "20.0")
+            self.assertEqual(rows[1]["latest_loss"], "10.0")
             self.assertEqual(rows[1]["evaluation_suite_size"], "1")
             self.assertEqual(rows[0]["state_seed"], "124")
             self.assertEqual(rows[0]["action_seed"], "1000000131")
@@ -610,7 +953,14 @@ class CurriculumTrainingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             trainer = FakeTrainer()
-            runner = self.runner(root, trainer, zero_epsilon_training_fraction=1.0)
+            runner = self.runner(
+                root,
+                trainer,
+                zero_epsilon_training_fractions=tuple(
+                    (maturity, 1.0)
+                    for maturity, _fraction in DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS
+                ),
+            )
 
             runner.run()
 
@@ -619,14 +969,21 @@ class CurriculumTrainingTests(unittest.TestCase):
             with (root / "results.csv").open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
             training, evaluation = rows
-            self.assertEqual(training["run_mode"], "training_zero_epsilon")
-            self.assertEqual(evaluation["run_mode"], "evaluation_mid_late_end")
+            self.assertEqual(training["run"], "training_end_zero_epsilon")
+            self.assertEqual(evaluation["run"], "evaluation_mid_late_end")
 
     def test_fresh_zero_epsilon_game_uses_the_normal_training_update(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             trainer = FakeTrainer()
-            runner = self.runner(root, trainer, zero_epsilon_training_fraction=1.0)
+            runner = self.runner(
+                root,
+                trainer,
+                zero_epsilon_training_fractions=tuple(
+                    (maturity, 1.0)
+                    for maturity, _fraction in DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS
+                ),
+            )
             runner._generate_state = lambda *_args, **_kwargs: StateDescriptor(
                 VALIDATION_STATE,
                 None,
@@ -644,8 +1001,7 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(trainer.zero_epsilon_calls, [True, False])
             with (root / "results.csv").open(newline="", encoding="utf-8") as source:
                 training = next(csv.DictReader(source))
-            self.assertEqual(training["training_stage"], "fresh")
-            self.assertEqual(training["run_mode"], "training_zero_epsilon")
+            self.assertEqual(training["run"], "training_fresh_zero_epsilon")
 
     def test_evaluation_retries_replacement_route_deadlock(self):
         class RetryEvaluationTrainer(FakeTrainer):
@@ -711,7 +1067,7 @@ class CurriculumTrainingTests(unittest.TestCase):
                 rows = list(csv.DictReader(source))
             self.assertEqual(trainer.evaluation_attempts, 2)
             self.assertEqual(len(rows), 2)
-            self.assertEqual(rows[1]["run_type"], "evaluation")
+            self.assertEqual(rows[1]["run"], "evaluation_mid_late_end")
             self.assertEqual(rows[1]["completion_reason"], "normal")
             self.assertEqual(rows[1]["retry_count"], "1")
 
@@ -736,7 +1092,7 @@ class CurriculumTrainingTests(unittest.TestCase):
 
             with (root / "results.csv").open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
-            self.assertEqual([row["run_type"] for row in rows], ["training"])
+            self.assertEqual([row["run"] for row in rows], ["training_end"])
             self.assertEqual(trainer.collect_calls, 4)
             self.assertIn("keeping the fixed state for the next batch", messages[-2])
 
@@ -821,9 +1177,10 @@ class CurriculumTrainingTests(unittest.TestCase):
                 rows = list(csv.DictReader(source))
             self.assertEqual(len(rows), 2)
             self.assertEqual(
-                [row["run_type"] for row in rows],
-                ["training_timeout", "evaluation"],
+                [row["run"] for row in rows],
+                ["training_end", "evaluation_mid_late_end"],
             )
+            self.assertEqual(rows[0]["completion_reason"], "action_limit")
 
     def test_dead_end_saves_failure_and_retries_with_new_seed(self):
         class RetryTrainer(FakeTrainer):
@@ -845,7 +1202,14 @@ class CurriculumTrainingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             trainer = RetryTrainer()
-            runner = self.runner(root, trainer, zero_epsilon_training_fraction=1.0)
+            runner = self.runner(
+                root,
+                trainer,
+                zero_epsilon_training_fractions=tuple(
+                    (maturity, 1.0)
+                    for maturity, _fraction in DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS
+                ),
+            )
 
             runner.run()
 
@@ -901,7 +1265,10 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(runner.generated_seeds, [124, 125, 10131, 10000])
             with (root / "results.csv").open(newline="", encoding="utf-8") as source:
                 rows = list(csv.DictReader(source))
-            self.assertEqual([row["run_type"] for row in rows], ["training", "evaluation"])
+            self.assertEqual(
+                [row["run"] for row in rows],
+                ["training_end", "evaluation_mid_late_end"],
+            )
 
     def test_generation_failure_retries_with_a_new_seed(self):
         class GenerationRetryRunner(TestRunner):
@@ -968,6 +1335,38 @@ class CurriculumTrainingTests(unittest.TestCase):
             }
 
             self.runner(root, trainer, evaluation_games_per_batch=2)
+
+    def test_checkpoint_with_legacy_global_zero_epsilon_setting_preserves_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trainer = FakeTrainer()
+            trainer.optimizer = object()
+            trainer.progress.completed_games = 12_345
+            trainer.progress.training_updates = 6_789
+            trainer.progress.policy_training_updates = 432
+            first = self.runner(root, trainer)
+            trainer.curriculum_state = {
+                "configuration_version": 4,
+                "configuration_signature": first._configuration_signature(
+                    legacy_zero_epsilon_training_fraction=0.05
+                ),
+                "stage_index": 0,
+                "batch_number": 27,
+                "game_number": 99,
+                "rolling_losses": [10.0, 9.0],
+            }
+            model = trainer.model
+            optimizer = trainer.optimizer
+            progress = deepcopy(trainer.progress)
+
+            resumed = self.runner(root, trainer)
+
+            self.assertIs(trainer.model, model)
+            self.assertIs(trainer.optimizer, optimizer)
+            self.assertEqual(trainer.progress, progress)
+            self.assertEqual(resumed.batch_number, 27)
+            self.assertEqual(resumed.game_number, 99)
+            self.assertEqual(resumed.rolling_losses, [10.0, 9.0])
 
     def test_near_end_action_limit_upgrade_accepts_existing_checkpoint(self):
         with tempfile.TemporaryDirectory() as directory:

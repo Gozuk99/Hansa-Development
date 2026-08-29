@@ -1,0 +1,56 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000057,
+  "map_num": 1,
+  "player_count": 4,
+  "mission_cards": true,
+  "emperors_favour": false,
+  "bonus_marker_setup": "default",
+  "state_id": "state-f01fe686f8c045d4",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [],
+  "bonus_marker_draw_supply": [
+    "Move3",
+    "PlaceAdjacent",
+    "3Actions",
+    "PlaceAdjacent",
+    "4Actions",
+    "SwapOffice",
+    "UpgradeAbility",
+    "4Actions",
+    "SwapOffice",
+    "UpgradeAbility",
+    "PlaceAdjacent",
+    "3Actions"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "PlaceAdjacent",
+      "Goslar",
+      "Hildesheim"
+    ],
+    [
+      "Move3",
+      "Emden",
+      "Stade"
+    ],
+    [
+      "SwapOffice",
+      "Gottingen",
+      "Warburg"
+    ]
+  ],
+  "save_file": "state-f01fe686f8c045d4.hansa"
+}

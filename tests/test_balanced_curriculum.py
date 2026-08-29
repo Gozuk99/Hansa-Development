@@ -31,7 +31,10 @@ from training.balanced_state_generator import (
     starting_scores_have_valid_sources,
 )
 from map_data.map_attributes import Map
-from training.curriculum import CurriculumConfig
+from training.curriculum import (
+    DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS,
+    CurriculumConfig,
+)
 from training.targeted_state_generator import _fill_prepared_route
 
 
@@ -39,7 +42,10 @@ class BalancedCurriculumTests(unittest.TestCase):
     @staticmethod
     def _runner(training_generation_number=0):
         runner = object.__new__(BalancedCurriculumRunner)
-        runner.config = SimpleNamespace(seed=124, zero_epsilon_training_fraction=0.05)
+        runner.config = SimpleNamespace(
+            seed=124,
+            zero_epsilon_training_fractions=DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS,
+        )
         runner.game_number = training_generation_number
         runner.training_generation_number = training_generation_number
         return runner
@@ -228,49 +234,48 @@ class BalancedCurriculumTests(unittest.TestCase):
             observed,
             {
                 "fresh": 10,
-                "early": 5,
-                "mid": 2,
-                "late": 2,
-                "end": 1,
+                "mid": 3,
+                "late": 4,
+                "end": 3,
             },
         )
         total = sum(profile.weight for profile in MATURITY_PROFILES)
         self.assertEqual(total, 20)
         self.assertEqual(observed["fresh"] / total, 0.50)
-        self.assertEqual(observed["early"] / total, 0.25)
-        self.assertEqual(observed["mid"] / total, 0.10)
-        self.assertEqual(observed["late"] / total, 0.10)
-        self.assertEqual(observed["end"] / total, 0.05)
+        self.assertEqual(observed["early"] / total, 0.00)
+        self.assertEqual(observed["mid"] / total, 0.15)
+        self.assertEqual(observed["late"] / total, 0.20)
+        self.assertEqual(observed["end"] / total, 0.15)
         self.assertEqual(
             (observed["mid"], observed["late"], observed["end"]),
-            (2, 2, 1),
+            (3, 4, 3),
         )
         self.assertEqual(
             runner._stage_label(None),
-            "fresh_early_mid_late_end_game",
+            "fresh_mid_late_end_game",
         )
 
-    def test_zero_epsilon_selection_is_deterministic_and_independent_of_maturity(self):
+    def test_zero_epsilon_selection_uses_deterministic_maturity_schedule(self):
         runner = self._runner()
-        first = [runner._training_exploration_mode(game) for game in range(10_000)]
-        second = [self._runner()._training_exploration_mode(game) for game in range(10_000)]
-
-        self.assertEqual(first, second)
-        zero_rate = first.count("zero_epsilon") / len(first)
-        self.assertGreater(zero_rate, 0.04)
-        self.assertLess(zero_rate, 0.06)
-        by_maturity = {
-            maturity: [
-                first[game]
-                for game in range(len(first))
-                if runner._maturity_for_game(game).name == maturity
-            ]
-            for maturity in ("fresh", "early", "mid", "late", "end")
+        expected_rates = {
+            "fresh": 0.05,
+            "early": 0.05,
+            "mid": 0.05,
+            "late": 0.50,
+            "end": 1.00,
         }
-        for modes in by_maturity.values():
-            stage_rate = modes.count("zero_epsilon") / len(modes)
-            self.assertGreater(stage_rate, 0.03)
-            self.assertLess(stage_rate, 0.07)
+        for maturity, expected_rate in expected_rates.items():
+            first = [runner._training_exploration_mode(maturity, game) for game in range(10_000)]
+            second = [
+                self._runner()._training_exploration_mode(maturity, game) for game in range(10_000)
+            ]
+            self.assertEqual(first, second)
+            observed_rate = first.count("zero_epsilon") / len(first)
+            self.assertAlmostEqual(observed_rate, expected_rate, delta=0.02)
+
+        late = [runner._training_exploration_mode("late", game) for game in range(100)]
+        self.assertIn("normal", late)
+        self.assertIn("zero_epsilon", late)
 
     def test_fallback_evaluation_maturity_distribution_remains_unchanged(self):
         runner = self._runner()
@@ -637,12 +642,8 @@ class BalancedCurriculumTests(unittest.TestCase):
         )
 
     def test_curriculum_early_request_does_not_prepare_an_ending(self):
-        early_number = next(
-            game_number
-            for game_number in range(len(MATURITY_CYCLE))
-            if self._runner()._maturity_for_game(game_number).name == "early"
-        )
-        runner = self._runner(early_number)
+        runner = self._runner()
+        early = next(profile for profile in MATURITY_PROFILES if profile.name == "early")
         runner._latest_descriptor = None
         generated = SimpleNamespace()
 
@@ -659,11 +660,12 @@ class BalancedCurriculumTests(unittest.TestCase):
                     return_value=(state_path, metadata_path),
                 ) as save,
             ):
-                descriptor = runner._generate_state(
-                    SimpleNamespace(full_game=False),
-                    123,
-                    Path(directory),
-                )
+                with mock.patch.object(runner, "_maturity_for_game", return_value=early):
+                    descriptor = runner._generate_state(
+                        SimpleNamespace(full_game=False),
+                        123,
+                        Path(directory),
+                    )
 
         request = generate.call_args.args[0]
         self.assertFalse(request.prepare_ending_condition)

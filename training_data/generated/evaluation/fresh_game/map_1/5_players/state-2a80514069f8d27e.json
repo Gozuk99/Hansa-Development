@@ -1,0 +1,64 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000062,
+  "map_num": 1,
+  "player_count": 5,
+  "mission_cards": true,
+  "emperors_favour": true,
+  "bonus_marker_setup": "mixed",
+  "state_id": "state-2a80514069f8d27e",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "+1Action",
+    "+4PtsPerOwnedCity",
+    "DisplaceAnywhere",
+    "+1DisplacedPiece",
+    "+7PtsPerCompletedAbility"
+  ],
+  "bonus_marker_draw_supply": [
+    "BlockTradeRoute",
+    "SwapOffice",
+    "Tribute4EstablishingTP",
+    "3Actions",
+    "SwapOffice",
+    "Move3",
+    "ExchangeBonusMarker",
+    "Tribute4EstablishingTP",
+    "4Actions",
+    "UpgradeAbility",
+    "4Actions",
+    "3Actions"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "Move3",
+      "Goslar",
+      "Magdeburg"
+    ],
+    [
+      "PlaceAdjacent",
+      "Goslar",
+      "Quedlinburg"
+    ],
+    [
+      "SwapOffice",
+      "Goslar",
+      "Hildesheim"
+    ]
+  ],
+  "save_file": "state-2a80514069f8d27e.hansa"
+}

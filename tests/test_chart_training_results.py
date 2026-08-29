@@ -10,7 +10,7 @@ from tools.chart_training_results import (
     _derived_ratio,
     _evaluation_dashboard,
     _evaluation_set,
-    _run_mode,
+    _run,
     _statistics,
     _tier_player_count_charts,
     build_dashboard,
@@ -20,7 +20,7 @@ from tools.chart_training_results import (
 
 class TrainingResultsChartTests(unittest.TestCase):
     def test_current_and_legacy_run_modes_and_derived_metrics(self):
-        current = {"run_type": "evaluation", "run_mode": "evaluation_early"}
+        current = {"run": "evaluation_early"}
         legacy = {
             "run_type": "training",
             "training_exploration_mode": "zero_epsilon",
@@ -30,13 +30,13 @@ class TrainingResultsChartTests(unittest.TestCase):
             "spent_action_count": "12",
             "move_claim_conversions": "2",
             "moves_creating_claimable_route": "4",
-            "sampled_training_decision_count": "1024",
-            "trajectory_decision_count": "4096",
+            "sampled_training_decisions": "1024",
+            "total_training_decisions": "4096",
         }
 
-        self.assertEqual(_run_mode(current), "evaluation_early")
+        self.assertEqual(_run(current), "evaluation_early")
         self.assertEqual(_evaluation_set(current), "early")
-        self.assertEqual(_run_mode(legacy), "training_zero_epsilon")
+        self.assertEqual(_run(legacy), "training_end_zero_epsilon")
         self.assertEqual(_derived_ratio(counters, "move_action_count", "spent_action_count"), 0.25)
         self.assertEqual(
             _derived_ratio(
@@ -49,8 +49,8 @@ class TrainingResultsChartTests(unittest.TestCase):
         self.assertEqual(
             _derived_ratio(
                 counters,
-                "sampled_training_decision_count",
-                "trajectory_decision_count",
+                "sampled_training_decisions",
+                "total_training_decisions",
             ),
             0.25,
         )
@@ -290,8 +290,7 @@ class TrainingResultsChartTests(unittest.TestCase):
             fieldnames = (
                 "game#",
                 "batch#",
-                "run_type",
-                "run_mode",
+                "run",
                 "evaluation_suite_version",
                 "evaluation_suite_size",
                 "map",
@@ -317,8 +316,7 @@ class TrainingResultsChartTests(unittest.TestCase):
                         {
                             "game#": 1,
                             "batch#": 2,
-                            "run_type": "evaluation",
-                            "run_mode": "evaluation_mid_late_end",
+                            "run": "evaluation_mid_late_end",
                             "evaluation_suite_version": 5,
                             "evaluation_suite_size": 1,
                             "map": 1,
@@ -332,9 +330,8 @@ class TrainingResultsChartTests(unittest.TestCase):
                         {
                             "game#": 2,
                             "batch#": 2,
-                            "run_type": "evaluation",
-                            "run_mode": "evaluation_early",
-                            "evaluation_suite_version": 5,
+                            "run": "evaluation_fresh",
+                            "evaluation_suite_version": 10,
                             "evaluation_suite_size": 1,
                             "map": 2,
                             "player_count": 5,
@@ -362,19 +359,19 @@ class TrainingResultsChartTests(unittest.TestCase):
             self.assertEqual(dashboard.count("data-evaluation-panel"), 1)
             self.assertEqual(dashboard.count("data-evaluation-data"), 1)
             self.assertIn('<option value="standard">Standard</option>', dashboard)
-            self.assertIn('<option value="early">Early</option>', dashboard)
+            self.assertIn('<option value="fresh">Fresh</option>', dashboard)
             self.assertNotIn("Mixed Development", dashboard)
             self.assertIn("data-evaluation-map", dashboard)
             self.assertIn("data-evaluation-players", dashboard)
             self.assertIn("datasets[mode]", DASHBOARD_SCRIPT)
             self.assertIn("data-evaluation-title", DASHBOARD_SCRIPT)
             self.assertIn("Tier 1 win rate by player count", DASHBOARD_SCRIPT)
-            self.assertIn("Average interactions per early-game evaluation", DASHBOARD_SCRIPT)
-            self.assertIn("Early-game timeout rate", DASHBOARD_SCRIPT)
+            self.assertIn("Average interactions per fresh-game evaluation", DASHBOARD_SCRIPT)
+            self.assertIn("Fresh-game timeout rate", DASHBOARD_SCRIPT)
             self.assertIn("Move % of paid actions", DASHBOARD_SCRIPT)
             self.assertIn("Move → Claim conversion rate", DASHBOARD_SCRIPT)
             self.assertIn('"standard":', dashboard)
-            self.assertIn('"early":', dashboard)
+            self.assertIn('"fresh":', dashboard)
             self.assertIn('"map":"2","players":"5"', dashboard)
 
             self.assertIn("Move → Claim conversion rate", DASHBOARD_SCRIPT)

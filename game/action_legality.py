@@ -26,30 +26,59 @@ def _move_piece_fits(player, piece, post):
     )
 
 
-def _can_finish_move_after_placement(game, selected_post):
-    """Return whether every later held piece still has a distinct legal post."""
-    player = game.current_player
-    remaining_pieces = player.holding_pieces[1:]
-    if not remaining_pieces:
-        return True
-    available_posts = [
-        post
-        for route in game.selected_map.routes
-        for post in route.posts
-        if post is not selected_post and not post.is_owned()
-    ]
+class _MovePlacementFeasibility:
+    """Reuse one exact held-piece matching search within a legal-mask call."""
 
-    def can_assign(piece_index, posts):
-        if piece_index == len(remaining_pieces):
-            return True
-        piece = remaining_pieces[piece_index]
-        return any(
-            _move_piece_fits(player, piece, post)
-            and can_assign(piece_index + 1, posts[:index] + posts[index + 1 :])
-            for index, post in enumerate(posts)
+    def __init__(self, game):
+        self.player = game.current_player
+        self.remaining_pieces = tuple(self.player.holding_pieces[1:])
+        self.available_posts = tuple(
+            post
+            for route in game.selected_map.routes
+            for post in route.posts
+            if not post.is_owned()
         )
+        self.post_positions = {post: position for position, post in enumerate(self.available_posts)}
+        self.compatible_masks = tuple(
+            sum(
+                1 << position
+                for position, post in enumerate(self.available_posts)
+                if _move_piece_fits(self.player, piece, post)
+            )
+            for piece in self.remaining_pieces
+        )
+        self.memo = {}
 
-    return can_assign(0, available_posts)
+    def can_finish(self, selected_post):
+        if not self.remaining_pieces:
+            return True
+        selected_position = self.post_positions.get(selected_post)
+        unavailable_mask = 0 if selected_position is None else 1 << selected_position
+        return self._can_assign(0, unavailable_mask)
+
+    def _can_assign(self, piece_index, unavailable_mask):
+        if piece_index == len(self.remaining_pieces):
+            return True
+        key = (piece_index, unavailable_mask)
+        cached = self.memo.get(key)
+        if cached is not None:
+            return cached
+
+        candidates = self.compatible_masks[piece_index] & ~unavailable_mask
+        while candidates:
+            candidate = candidates & -candidates
+            if self._can_assign(piece_index + 1, unavailable_mask | candidate):
+                self.memo[key] = True
+                return True
+            candidates ^= candidate
+        self.memo[key] = False
+        return False
+
+
+def _can_finish_move_after_placement(game, selected_post, feasibility=None):
+    """Return whether every later held piece still has a distinct legal post."""
+    solver = feasibility or _MovePlacementFeasibility(game)
+    return solver.can_finish(selected_post)
 
 
 def mask_place_adjacent(game):
@@ -109,6 +138,8 @@ def mask_post_action(game):
     can_displace = (
         current_player.personal_supply_squares + current_player.personal_supply_circles > 1
     )
+    move_feasibility = None
+    displacement_feasibility = {}
 
     post_idx = 0
     for route in game.selected_map.routes:
@@ -200,10 +231,16 @@ def mask_post_action(game):
                 # the piece's shape during pickup.
                 if current_player.holding_pieces:
                     if is_post_empty:
+                        if move_feasibility is None:
+                            move_feasibility = _MovePlacementFeasibility(game)
                         shape_to_place, _, origin_region = current_player.holding_pieces[0]
                         if current_player.is_valid_region_transition(
                             origin_region, post.region
-                        ) and _can_finish_move_after_placement(game, post):
+                        ) and _can_finish_move_after_placement(
+                            game,
+                            post,
+                            move_feasibility,
+                        ):
                             if shape_to_place == "square" and (
                                 not post.required_shape or post.required_shape == "square"
                             ):
@@ -252,20 +289,28 @@ def mask_post_action(game):
                         current_player.personal_supply_squares
                         + current_player.personal_supply_circles
                         >= displacement_cost
-                        and displacement_can_be_completed(
-                            game, route, post.owner, post.owner_piece_shape
-                        )
                     ):
-                        if (
-                            post.required_shape in (None, "square")
-                            and current_player.personal_supply_squares > 0
-                        ):
-                            post_tensor[post_idx] = 1
-                        if (
-                            post.required_shape in (None, "circle")
-                            and current_player.personal_supply_circles > 0
-                        ):
-                            post_tensor[MAX_POSTS + post_idx] = 1
+                        displacement_key = (route, post.owner, post.owner_piece_shape)
+                        if displacement_key not in displacement_feasibility:
+                            displacement_feasibility[displacement_key] = (
+                                displacement_can_be_completed(
+                                    game,
+                                    route,
+                                    post.owner,
+                                    post.owner_piece_shape,
+                                )
+                            )
+                        if displacement_feasibility[displacement_key]:
+                            if (
+                                post.required_shape in (None, "square")
+                                and current_player.personal_supply_squares > 0
+                            ):
+                                post_tensor[post_idx] = 1
+                            if (
+                                post.required_shape in (None, "circle")
+                                and current_player.personal_supply_circles > 0
+                            ):
+                                post_tensor[MAX_POSTS + post_idx] = 1
             post_idx += 1
 
     return post_tensor

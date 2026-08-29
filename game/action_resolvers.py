@@ -493,6 +493,7 @@ def resolve_city_interaction(game, action):
         city, shape = catalogue[action.city_interaction_slot - GREEN_CITY_SLOT_START]
         if not city.claim_green_city(game, shape):
             raise InvalidActionError("Green-city choice is no longer legal")
+        game.mark_observation_structure_changed()
         game.waiting_for_bm_green_city = False
         return
 
@@ -510,11 +511,14 @@ def resolve_ability_interaction(game, index):
 
 def resolve_control_interaction(game):
     if game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2:
+        finishing_move_any_2 = game.waiting_for_bm_move_any_2
         game.current_player.pieces_to_pickup = 0
         if not game.current_player.holding_pieces:
             game.current_player.finish_move()
             game.waiting_for_bm_move3 = False
             game.waiting_for_bm_move_any_2 = False
+            if finishing_move_any_2:
+                game.clear_normal_move_pre_board_snapshot()
         return
 
     if game.turn_phase == TurnPhase.DISPLACEMENT:

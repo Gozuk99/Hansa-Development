@@ -1,0 +1,61 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000068,
+  "map_num": 2,
+  "player_count": 4,
+  "mission_cards": false,
+  "emperors_favour": true,
+  "bonus_marker_setup": "mixed",
+  "state_id": "state-0e45e67810fa4af9",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "+7PtsPerCompletedAbility",
+    "+1Action",
+    "+1IncomeIfOthersIncome",
+    "+4PtsPerOwnedCity"
+  ],
+  "bonus_marker_draw_supply": [
+    "PlaceAdjacent",
+    "PlaceAdjacent",
+    "ExchangeBonusMarker",
+    "SwapOffice",
+    "BlockTradeRoute",
+    "ExchangeBonusMarker",
+    "SwapOffice",
+    "UpgradeAbility",
+    "3Actions",
+    "3Actions",
+    "Tribute4EstablishingTP",
+    "4Actions"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "SwapOffice",
+      "Belgard",
+      "Kulm"
+    ],
+    [
+      "PlaceAdjacent",
+      "Kulm",
+      "Elbing"
+    ],
+    [
+      "Move3",
+      "Halle",
+      "Magdeburg"
+    ]
+  ],
+  "save_file": "state-0e45e67810fa4af9.hansa"
+}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -19,9 +20,12 @@ from training.balanced_state_generator import (  # noqa: E402
     RegionalFocus,
     StartingPosition,
     StrategicFocus,
+    bonus_marker_configuration,
     generate_balanced_state,
     save_balanced_state,
 )
+from game.game_config import GameConfiguration, human_players  # noqa: E402
+from game.persistence import save_game  # noqa: E402
 from training.targeted_state_generator import (  # noqa: E402
     DEFAULT_OUTPUT_DIRECTORY,
     EndGameScenario,
@@ -44,7 +48,7 @@ class EvaluationSpec:
     name: str
     map_num: int
     player_count: int
-    ending_condition: EndingCondition
+    ending_condition: EndingCondition | None
     score_range: tuple[int, int] = (16, 17)
     east_west: bool = False
     regional_focus: RegionalFocus | None = None
@@ -62,7 +66,8 @@ class EvaluationSpec:
     round_range: tuple[int, int] = (8, 20)
 
 
-EVALUATION_SUITE_VERSION = 9
+EVALUATION_SUITE_VERSION = 10
+RETIRED_EARLY_EVALUATION_SEED_COUNT = 27
 
 
 def _regional_focus(player_count, ending_index):
@@ -112,32 +117,27 @@ def _evaluation_specs():
                         prepared_routes_one_short=not immediate_finish,
                     )
                 )
-    # Early evaluation is deliberately ordinary development, not a disguised
-    # near-end puzzle. Each supported map/player combination has one position
-    # for every bonus-marker setup so optional modules are not confounded with
-    # map or player count.
+    # Fresh evaluation is an untouched initial game position.
     for map_num in (1, 2, 3):
         for players in (3, 4, 5):
             for setup_index, marker_setup in enumerate(BonusMarkerSetup):
                 configuration_index = (map_num - 1) * 9 + (players - 3) * 3 + setup_index
                 specs.append(
                     EvaluationSpec(
-                        f"map{map_num}_{players}p_early_{marker_setup.value}",
+                        f"map{map_num}_{players}p_fresh_{marker_setup.value}",
                         map_num,
                         players,
-                        EndingCondition.NEAR_SCORE,
-                        score_range=(0, 5),
+                        None,
+                        score_range=(0, 0),
                         mission_cards=(map_num == 1 and configuration_index in {1, 3, 6, 8}),
                         emperors_favour=configuration_index % 2 == 0,
                         promo_markers=marker_setup is not BonusMarkerSetup.DEFAULT,
                         bonus_marker_setup=marker_setup,
-                        bonus_markers_remaining=9 + configuration_index % 4,
-                        completed_cities_below_limit=7,
-                        prepared_routes_one_short=True,
-                        development_range=(2, 4),
-                        evaluation_set="early",
+                        prepared_routes_one_short=False,
+                        development_range=(0, 0),
+                        evaluation_set="fresh",
                         prepare_ending_condition=False,
-                        round_range=(2, 5),
+                        round_range=(1, 1),
                     )
                 )
     return tuple(specs)
@@ -146,7 +146,15 @@ def _evaluation_specs():
 EVALUATION_SPECS = _evaluation_specs()
 
 
+def _evaluation_seed(base_seed, spec_index, spec):
+    """Preserve the existing fixed Fresh boards after retiring Early evaluation."""
+    retired_offset = RETIRED_EARLY_EVALUATION_SEED_COUNT if spec.evaluation_set == "fresh" else 0
+    return base_seed + spec_index + retired_offset
+
+
 def evaluation_request(spec, seed):
+    if spec.ending_condition is None:
+        raise ValueError("Fresh evaluation uses fresh_evaluation_game(), not balanced generation")
     return BalancedGenerationRequest(
         seed=seed,
         map_num=spec.map_num,
@@ -173,6 +181,36 @@ def evaluation_request(spec, seed):
     )
 
 
+def fresh_evaluation_game(spec, seed):
+    """Create one deterministic, untouched initial evaluation game."""
+    if spec.evaluation_set != "fresh" or spec.bonus_marker_setup is None:
+        raise ValueError("A Fresh evaluation spec with a marker setup is required")
+    use_promos, promo_mode, promo_markers = bonus_marker_configuration(
+        spec.bonus_marker_setup,
+        seed,
+    )
+    return GameConfiguration(
+        map_num=spec.map_num,
+        player_count=spec.player_count,
+        player_controls=human_players(spec.player_count),
+        use_mission_cards=spec.mission_cards,
+        use_emperors_favour=spec.emperors_favour,
+        use_promo_markers=use_promos,
+        promo_marker_mode=promo_mode,
+        promo_markers=promo_markers,
+        randomize_starting_bonus_marker_locations=True,
+        seed=seed,
+    ).create_game()
+
+
+def _starting_bonus_marker_routes(game):
+    return tuple(
+        (route.bonus_marker.type, *(city.name for city in route.cities))
+        for route in game.selected_map.routes
+        if route.bonus_marker is not None
+    )
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--count", type=int, default=1)
@@ -182,6 +220,11 @@ def parse_args(argv=None):
         "--eval",
         action="store_true",
         help=f"create the permanent {len(EVALUATION_SPECS)}-state evaluation suite",
+    )
+    parser.add_argument(
+        "--fresh-eval",
+        action="store_true",
+        help="append the inactive Fresh fixed-evaluation states without replacing the suite",
     )
     parser.add_argument(
         "--scenario",
@@ -222,13 +265,31 @@ def _generate_evaluation_suite(args):
 
     manifest = []
     for index, spec in enumerate(EVALUATION_SPECS):
-        generated = generate_balanced_state(
-            evaluation_request(spec, args.seed + index), max_attempts=10_000
-        )
+        seed = _evaluation_seed(args.seed, index, spec)
+        if spec.evaluation_set == "fresh":
+            game = fresh_evaluation_game(spec, seed)
+            save_path, metadata_path = _save_fresh_evaluation_state(
+                game,
+                spec,
+                seed,
+                evaluation_directory,
+            )
+            manifest.append(
+                _fresh_manifest_entry(
+                    game,
+                    spec,
+                    seed,
+                    save_path,
+                    metadata_path,
+                    evaluation_directory,
+                )
+            )
+            print(f"{index + 1}/{len(EVALUATION_SPECS)} {spec.name}: {save_path}")
+            continue
+        generated = generate_balanced_state(evaluation_request(spec, seed), max_attempts=10_000)
         save_path, metadata_path = save_balanced_state(
             generated,
             evaluation_directory / spec.name,
-            scenario_directory="early_game" if spec.evaluation_set == "early" else None,
         )
         focuses = ["east_west"] if spec.east_west else []
         if spec.regional_focus is not None:
@@ -237,18 +298,14 @@ def _generate_evaluation_suite(args):
             {
                 **asdict(spec),
                 "suite_version": EVALUATION_SUITE_VERSION,
-                "scenario": (
-                    "early_game"
-                    if spec.evaluation_set == "early"
-                    else "+".join((spec.ending_condition.value, *focuses))
-                ),
+                "scenario": "+".join((spec.ending_condition.value, *focuses)),
                 "ending_condition": spec.ending_condition.value,
                 "regional_focus": (
                     None if spec.regional_focus is None else spec.regional_focus.value
                 ),
                 "starting_score_by_seat": generated.starting_scores_by_seat,
                 "starting_development_by_seat": generated.starting_development_by_seat,
-                "seed": args.seed + index,
+                "seed": seed,
                 "save_file": save_path.relative_to(evaluation_directory).as_posix(),
                 "metadata_file": metadata_path.relative_to(evaluation_directory).as_posix(),
             }
@@ -262,8 +319,109 @@ def _generate_evaluation_suite(args):
     print(f"Created {len(EVALUATION_SPECS)} fixed evaluation states in {evaluation_directory}")
 
 
+def _save_fresh_evaluation_state(game, spec, seed, evaluation_directory):
+    identity = {
+        "suite_version": EVALUATION_SUITE_VERSION,
+        "evaluation_set": "fresh",
+        "seed": seed,
+        "map_num": spec.map_num,
+        "player_count": spec.player_count,
+        "mission_cards": spec.mission_cards,
+        "emperors_favour": spec.emperors_favour,
+        "bonus_marker_setup": spec.bonus_marker_setup.value,
+    }
+    state_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+    directory = (
+        evaluation_directory / "fresh_game" / f"map_{spec.map_num}" / f"{spec.player_count}_players"
+    )
+    save_path = save_game(game, directory / f"state-{state_id}.hansa")
+    metadata_path = directory / f"state-{state_id}.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                **identity,
+                "state_id": f"state-{state_id}",
+                "starting_score_by_seat": [player.score for player in game.players],
+                "starting_development_by_seat": [0 for _player in game.players],
+                "emperor_tiles": list(game.tile_pool),
+                "bonus_marker_draw_supply": list(game.selected_map.bonus_marker_pool),
+                "starting_bonus_marker_routes": _starting_bonus_marker_routes(game),
+                "save_file": save_path.name,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return save_path, metadata_path
+
+
+def _fresh_manifest_entry(
+    game,
+    spec,
+    seed,
+    save_path,
+    metadata_path,
+    evaluation_directory,
+):
+    return {
+        **asdict(spec),
+        "suite_version": EVALUATION_SUITE_VERSION,
+        "scenario": "fresh_game",
+        "ending_condition": None,
+        "regional_focus": None,
+        "starting_score_by_seat": tuple(player.score for player in game.players),
+        "starting_development_by_seat": tuple(0 for _player in game.players),
+        "seed": seed,
+        "save_file": save_path.relative_to(evaluation_directory).as_posix(),
+        "metadata_file": metadata_path.relative_to(evaluation_directory).as_posix(),
+    }
+
+
+def _append_fresh_evaluation_suite(args):
+    evaluation_directory = args.output / "evaluation"
+    manifest_path = evaluation_directory / "manifest.json"
+    if not manifest_path.is_file():
+        raise SystemExit(f"Evaluation manifest does not exist at {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if any(entry.get("evaluation_set") == "fresh" for entry in manifest):
+        raise SystemExit("Fresh evaluation states already exist; nothing was overwritten")
+
+    fresh_specs = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "fresh"]
+    spec_indices = {spec.name: index for index, spec in enumerate(EVALUATION_SPECS)}
+    for position, spec in enumerate(fresh_specs, 1):
+        spec_index = spec_indices[spec.name]
+        seed = _evaluation_seed(args.seed, spec_index, spec)
+        game = fresh_evaluation_game(spec, seed)
+        save_path, metadata_path = _save_fresh_evaluation_state(
+            game,
+            spec,
+            seed,
+            evaluation_directory,
+        )
+        manifest.append(
+            _fresh_manifest_entry(
+                game,
+                spec,
+                seed,
+                save_path,
+                metadata_path,
+                evaluation_directory,
+            )
+        )
+        print(f"{position}/{len(fresh_specs)} {spec.name}: {save_path}")
+
+    temporary_manifest = manifest_path.with_suffix(".json.tmp")
+    temporary_manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    temporary_manifest.replace(manifest_path)
+    print(f"Appended {len(fresh_specs)} Fresh states; suite now contains {len(manifest)} states")
+
+
 def main(argv=None):
     args = parse_args(argv)
+    if args.fresh_eval:
+        _append_fresh_evaluation_suite(args)
+        return
     if args.eval:
         _generate_evaluation_suite(args)
         return

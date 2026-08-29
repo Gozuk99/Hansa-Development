@@ -90,8 +90,9 @@ The zero-epsilon percentage is configurable from the curriculum runner CLI.
 Fresh positions use canonical new-game setup, including seeded optional modules,
 marker supplies, and randomized legal locations for the three fixed starter-marker
 types. The CSV records each maturity so results can be compared separately.
-Its `run_mode` identifies normal or zero-epsilon training and the active fixed
-evaluation set without mutually exclusive columns.
+The single `run` field identifies maturity, normal or zero-epsilon training,
+and the active fixed evaluation set. Optional `scenario` text retains only
+strategic detail that is not already encoded in `run`.
 Early positions retain nine to twelve bonus markers in supply while all three
 route markers remain in play.
 Fresh positions choose standard, full-promo, and random-mix draw supplies with
@@ -107,19 +108,17 @@ exactly one post short: one of two,
 two of three, or three of four posts. Automatic training focuses do not add an
 opponent blocker to that final post, so the model must place the missing piece
 before it can claim the route.
-Evaluation suite version 9 preserves the 27 established fixed positions and the
-27 deterministic early-game positions: one for every map, supported player
-count, and bonus-marker setup. The early set has low scores, modest development, zero completed cities,
-three active route markers, varied remaining marker supply, and deterministic
-optional modules. It contains no East-West, regional-control, immediate-finish,
-or fresh-game setup. CSV `run_mode` values identify `evaluation_mid_late_end`
-versus `evaluation_early`, and the
-dashboard gives early evaluation its own filtered section and timeout reporting.
+The fixed evaluation suite contains 27 established version 9 Mid/Late/End
+positions and 27 version 10 Fresh positions: one Fresh game for every map,
+supported player count, and bonus-marker setup. Fresh evaluation begins from
+the untouched initial position with deterministic optional modules. CSV `run`
+values identify `evaluation_mid_late_end` versus `evaluation_fresh`, and the
+dashboard provides a shared filtered view for both evaluation sets.
 Across all generated states, a positive starting score is
 accepted only when that player controls a city or occupies a spent special
 prestige/bonus-VP circle.
 Every map/player-count combination deliberately covers default,
-all-promotional, and mixed bonus-marker supplies. Map 1's nine early positions
+all-promotional, and mixed bonus-marker supplies. Map 1's nine Fresh positions
 include four with mission cards and five without.
 End-relative labels such as `two_decisions_before`, `one_round_before`, and
 `immediate_finish` are reserved for end-focused training or fixed evaluation
@@ -142,6 +141,13 @@ training signal; diagnostic bundles are preserved under
 Normal runs retain only high-level generation, play, and learning timers. Pass
 `--detailed-profiling` to collect and write the nine fine-grained hot-loop timing
 metrics for a diagnostic run; detailed profiling is disabled by default.
+
+Every 100 completed training games, the runner copies the active playable model
+and resumable training checkpoint into `training_output/backups/game_XXXX/`.
+Each snapshot includes integrity hashes and progress metadata. A snapshot is
+published only after both artifacts validate, and the newest ten snapshots are
+retained. Manual model releases belong under `releases/` and are never created
+or rotated by curriculum training.
 
 ## Training policy tiers
 

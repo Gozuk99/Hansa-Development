@@ -2,8 +2,11 @@ import contextlib
 import io
 import unittest
 
+import torch
+
 from tests.action_helpers import legal_action_mask
 
+from ai.observation_encoder import ObservationEncoder
 from game.game_runner import create_headless_game
 from game.invariants import validate_game
 from map_data.map_attributes import BonusMarker
@@ -132,6 +135,9 @@ class StandardBonusMarkerTests(unittest.TestCase):
         shapes = ["circle"] + ["square"] * (len(route.posts) - 1)
         occupy_route(player, route, shapes)
         route_index = game.selected_map.routes.index(route)
+        encoder = ObservationEncoder()
+        encoder.get_game_state(game)
+        revision_before = game._observation_structure_revision
 
         game.apply_action(PLACE_ADJACENT_ACTION)
         circle_choice = ADDITIONAL_CHOICE_START + route_index * 4 + 1
@@ -144,6 +150,13 @@ class StandardBonusMarkerTests(unittest.TestCase):
         self.assertIs(city.offices[0].controller, player)
         self.assertIn(marker, player.used_bonus_markers)
         self.assertTrue(all(post.owner is None for post in route.posts))
+        self.assertEqual(game._observation_structure_revision, revision_before + 1)
+        self.assertTrue(
+            torch.equal(
+                encoder.get_game_state(game),
+                ObservationEncoder().get_game_state(game),
+            )
+        )
         validate_game(game)
 
     def test_move_three_can_pick_multiple_opponents_swap_and_finish_early(self):

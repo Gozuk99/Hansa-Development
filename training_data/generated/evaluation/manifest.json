@@ -1188,13 +1188,13 @@
     "metadata_file": "map3_5p_near_completed_cities/near_completed_cities/map_3/5_players/state-1ad9fc07fcf5b64a.json"
   },
   {
-    "name": "map1_3p_early_default",
+    "name": "map1_3p_fresh_default",
     "map_num": 1,
     "player_count": 3,
-    "ending_condition": "near_score",
+    "ending_condition": null,
     "score_range": [
       0,
-      5
+      0
     ],
     "east_west": false,
     "regional_focus": null,
@@ -1203,372 +1203,372 @@
     "promo_markers": false,
     "bonus_marker_setup": "default",
     "immediate_finish": false,
-    "bonus_markers_remaining": 9,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
+      0,
+      0
     ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      1,
       1,
       1
     ],
-    "starting_development_by_seat": [
-      2,
-      4,
-      4
-    ],
-    "seed": 1000000027,
-    "save_file": "map1_3p_early_default/early_game/map_1/3_players/state-8a0951748a96bd0d.hansa",
-    "metadata_file": "map1_3p_early_default/early_game/map_1/3_players/state-8a0951748a96bd0d.json"
-  },
-  {
-    "name": "map1_3p_early_all_promos",
-    "map_num": 1,
-    "player_count": 3,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": true,
-    "emperors_favour": false,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 10,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      3,
-      3,
-      4
-    ],
-    "starting_development_by_seat": [
-      2,
-      2,
-      4
-    ],
-    "seed": 1000000028,
-    "save_file": "map1_3p_early_all_promos/early_game/map_1/3_players/state-2afa2ef94f6abcf1.hansa",
-    "metadata_file": "map1_3p_early_all_promos/early_game/map_1/3_players/state-2afa2ef94f6abcf1.json"
-  },
-  {
-    "name": "map1_3p_early_mixed",
-    "map_num": 1,
-    "player_count": 3,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": true,
-    "bonus_marker_setup": "mixed",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 11,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      3,
-      3,
-      2
-    ],
-    "starting_development_by_seat": [
-      2,
-      2,
-      2
-    ],
-    "seed": 1000000029,
-    "save_file": "map1_3p_early_mixed/early_game/map_1/3_players/state-28164dddc0361366.hansa",
-    "metadata_file": "map1_3p_early_mixed/early_game/map_1/3_players/state-28164dddc0361366.json"
-  },
-  {
-    "name": "map1_4p_early_default",
-    "map_num": 1,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": true,
-    "emperors_favour": false,
-    "promo_markers": false,
-    "bonus_marker_setup": "default",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 12,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
+    "suite_version": 10,
+    "scenario": "fresh_game",
     "starting_score_by_seat": [
       0,
-      1,
-      1,
-      0
-    ],
-    "starting_development_by_seat": [
-      4,
-      2,
-      2,
-      2
-    ],
-    "seed": 1000000030,
-    "save_file": "map1_4p_early_default/early_game/map_1/4_players/state-641d6a1f3f75aae1.hansa",
-    "metadata_file": "map1_4p_early_default/early_game/map_1/4_players/state-641d6a1f3f75aae1.json"
-  },
-  {
-    "name": "map1_4p_early_all_promos",
-    "map_num": 1,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 9,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      5,
-      5,
-      5,
-      5
-    ],
-    "starting_development_by_seat": [
-      3,
-      4,
-      3,
-      3
-    ],
-    "seed": 1000000031,
-    "save_file": "map1_4p_early_all_promos/early_game/map_1/4_players/state-2252bdc1701f318a.hansa",
-    "metadata_file": "map1_4p_early_all_promos/early_game/map_1/4_players/state-2252bdc1701f318a.json"
-  },
-  {
-    "name": "map1_4p_early_mixed",
-    "map_num": 1,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": true,
-    "bonus_marker_setup": "mixed",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 10,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      5,
-      5,
-      5,
-      5
-    ],
-    "starting_development_by_seat": [
-      2,
-      3,
-      2,
-      4
-    ],
-    "seed": 1000000032,
-    "save_file": "map1_4p_early_mixed/early_game/map_1/4_players/state-5f06b672f0b60a0b.hansa",
-    "metadata_file": "map1_4p_early_mixed/early_game/map_1/4_players/state-5f06b672f0b60a0b.json"
-  },
-  {
-    "name": "map1_5p_early_default",
-    "map_num": 1,
-    "player_count": 5,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": true,
-    "emperors_favour": true,
-    "promo_markers": false,
-    "bonus_marker_setup": "default",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 11,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      5,
-      5,
-      5,
-      5,
-      5
-    ],
-    "starting_development_by_seat": [
-      4,
-      2,
-      3,
-      4,
-      3
-    ],
-    "seed": 1000000033,
-    "save_file": "map1_5p_early_default/early_game/map_1/5_players/state-0772693667f1e2ab.hansa",
-    "metadata_file": "map1_5p_early_default/early_game/map_1/5_players/state-0772693667f1e2ab.json"
-  },
-  {
-    "name": "map1_5p_early_all_promos",
-    "map_num": 1,
-    "player_count": 5,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 12,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      0,
-      1,
-      1,
       0,
       0
     ],
     "starting_development_by_seat": [
-      3,
-      2,
-      2,
-      3,
-      2
+      0,
+      0,
+      0
     ],
-    "seed": 1000000034,
-    "save_file": "map1_5p_early_all_promos/early_game/map_1/5_players/state-c3f14c99caa9abfc.hansa",
-    "metadata_file": "map1_5p_early_all_promos/early_game/map_1/5_players/state-c3f14c99caa9abfc.json"
+    "seed": 1000000054,
+    "save_file": "fresh_game/map_1/3_players/state-f2b9ae795848624c.hansa",
+    "metadata_file": "fresh_game/map_1/3_players/state-f2b9ae795848624c.json"
   },
   {
-    "name": "map1_5p_early_mixed",
+    "name": "map1_3p_fresh_all_promos",
     "map_num": 1,
-    "player_count": 5,
-    "ending_condition": "near_score",
+    "player_count": 3,
+    "ending_condition": null,
     "score_range": [
       0,
-      5
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000055,
+    "save_file": "fresh_game/map_1/3_players/state-6a561ac390708af3.hansa",
+    "metadata_file": "fresh_game/map_1/3_players/state-6a561ac390708af3.json"
+  },
+  {
+    "name": "map1_3p_fresh_mixed",
+    "map_num": 1,
+    "player_count": 3,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000056,
+    "save_file": "fresh_game/map_1/3_players/state-8b0e5ba2aba04224.hansa",
+    "metadata_file": "fresh_game/map_1/3_players/state-8b0e5ba2aba04224.json"
+  },
+  {
+    "name": "map1_4p_fresh_default",
+    "map_num": 1,
+    "player_count": 4,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000057,
+    "save_file": "fresh_game/map_1/4_players/state-f01fe686f8c045d4.hansa",
+    "metadata_file": "fresh_game/map_1/4_players/state-f01fe686f8c045d4.json"
+  },
+  {
+    "name": "map1_4p_fresh_all_promos",
+    "map_num": 1,
+    "player_count": 4,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000058,
+    "save_file": "fresh_game/map_1/4_players/state-78a1ea2be99febf5.hansa",
+    "metadata_file": "fresh_game/map_1/4_players/state-78a1ea2be99febf5.json"
+  },
+  {
+    "name": "map1_4p_fresh_mixed",
+    "map_num": 1,
+    "player_count": 4,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000059,
+    "save_file": "fresh_game/map_1/4_players/state-6b5dccd5c9b8a558.hansa",
+    "metadata_file": "fresh_game/map_1/4_players/state-6b5dccd5c9b8a558.json"
+  },
+  {
+    "name": "map1_5p_fresh_default",
+    "map_num": 1,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": true,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000060,
+    "save_file": "fresh_game/map_1/5_players/state-bfdfc514fc72e6cd.hansa",
+    "metadata_file": "fresh_game/map_1/5_players/state-bfdfc514fc72e6cd.json"
+  },
+  {
+    "name": "map1_5p_fresh_all_promos",
+    "map_num": 1,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000061,
+    "save_file": "fresh_game/map_1/5_players/state-8eef2e1d0d25198f.hansa",
+    "metadata_file": "fresh_game/map_1/5_players/state-8eef2e1d0d25198f.json"
+  },
+  {
+    "name": "map1_5p_fresh_mixed",
+    "map_num": 1,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
     ],
     "east_west": false,
     "regional_focus": null,
@@ -1577,323 +1577,47 @@
     "promo_markers": true,
     "bonus_marker_setup": "mixed",
     "immediate_finish": false,
-    "bonus_markers_remaining": 9,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      4,
-      3,
-      4,
-      4,
-      3
-    ],
-    "starting_development_by_seat": [
-      4,
-      3,
-      3,
-      3,
-      4
-    ],
-    "seed": 1000000035,
-    "save_file": "map1_5p_early_mixed/early_game/map_1/5_players/state-d83585c96b10375e.hansa",
-    "metadata_file": "map1_5p_early_mixed/early_game/map_1/5_players/state-d83585c96b10375e.json"
-  },
-  {
-    "name": "map2_3p_early_default",
-    "map_num": 2,
-    "player_count": 3,
-    "ending_condition": "near_score",
-    "score_range": [
       0,
-      5
+      0
     ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": false,
-    "bonus_marker_setup": "default",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 10,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
+      1,
+      1
     ],
-    "suite_version": 9,
-    "scenario": "early_game",
+    "suite_version": 10,
+    "scenario": "fresh_game",
     "starting_score_by_seat": [
-      1,
-      1,
+      0,
+      0,
+      0,
+      0,
       0
     ],
     "starting_development_by_seat": [
-      2,
-      3,
-      3
+      0,
+      0,
+      0,
+      0,
+      0
     ],
-    "seed": 1000000036,
-    "save_file": "map2_3p_early_default/early_game/map_2/3_players/state-af93268fc4b7ad5c.hansa",
-    "metadata_file": "map2_3p_early_default/early_game/map_2/3_players/state-af93268fc4b7ad5c.json"
+    "seed": 1000000062,
+    "save_file": "fresh_game/map_1/5_players/state-2a80514069f8d27e.hansa",
+    "metadata_file": "fresh_game/map_1/5_players/state-2a80514069f8d27e.json"
   },
   {
-    "name": "map2_3p_early_all_promos",
+    "name": "map2_3p_fresh_default",
     "map_num": 2,
     "player_count": 3,
-    "ending_condition": "near_score",
+    "ending_condition": null,
     "score_range": [
       0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 11,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      3,
-      3,
-      3
-    ],
-    "starting_development_by_seat": [
-      4,
-      3,
-      2
-    ],
-    "seed": 1000000037,
-    "save_file": "map2_3p_early_all_promos/early_game/map_2/3_players/state-108ea316f7ba658f.hansa",
-    "metadata_file": "map2_3p_early_all_promos/early_game/map_2/3_players/state-108ea316f7ba658f.json"
-  },
-  {
-    "name": "map2_3p_early_mixed",
-    "map_num": 2,
-    "player_count": 3,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": true,
-    "bonus_marker_setup": "mixed",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 12,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      3,
-      2,
-      2
-    ],
-    "starting_development_by_seat": [
-      3,
-      4,
-      2
-    ],
-    "seed": 1000000038,
-    "save_file": "map2_3p_early_mixed/early_game/map_2/3_players/state-cdc279a63511405c.hansa",
-    "metadata_file": "map2_3p_early_mixed/early_game/map_2/3_players/state-cdc279a63511405c.json"
-  },
-  {
-    "name": "map2_4p_early_default",
-    "map_num": 2,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": false,
-    "bonus_marker_setup": "default",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 9,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      4,
-      3,
-      4,
-      3
-    ],
-    "starting_development_by_seat": [
-      4,
-      3,
-      3,
-      2
-    ],
-    "seed": 1000000039,
-    "save_file": "map2_4p_early_default/early_game/map_2/4_players/state-b96452b6fd9887f1.hansa",
-    "metadata_file": "map2_4p_early_default/early_game/map_2/4_players/state-b96452b6fd9887f1.json"
-  },
-  {
-    "name": "map2_4p_early_all_promos",
-    "map_num": 2,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 10,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      1,
-      2,
-      1,
-      2
-    ],
-    "starting_development_by_seat": [
-      2,
-      4,
-      3,
-      3
-    ],
-    "seed": 1000000040,
-    "save_file": "map2_4p_early_all_promos/early_game/map_2/4_players/state-41b7f03b08ad0342.hansa",
-    "metadata_file": "map2_4p_early_all_promos/early_game/map_2/4_players/state-41b7f03b08ad0342.json"
-  },
-  {
-    "name": "map2_4p_early_mixed",
-    "map_num": 2,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": true,
-    "bonus_marker_setup": "mixed",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 11,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      3,
-      3,
-      4,
-      4
-    ],
-    "starting_development_by_seat": [
-      3,
-      4,
-      4,
-      3
-    ],
-    "seed": 1000000041,
-    "save_file": "map2_4p_early_mixed/early_game/map_2/4_players/state-7d93270d674a10fa.hansa",
-    "metadata_file": "map2_4p_early_mixed/early_game/map_2/4_players/state-7d93270d674a10fa.json"
-  },
-  {
-    "name": "map2_5p_early_default",
-    "map_num": 2,
-    "player_count": 5,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
+      0
     ],
     "east_west": false,
     "regional_focus": null,
@@ -1902,374 +1626,88 @@
     "promo_markers": false,
     "bonus_marker_setup": "default",
     "immediate_finish": false,
-    "bonus_markers_remaining": 12,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
+      0,
+      0
     ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      4,
-      5,
-      4,
-      5,
-      5
-    ],
-    "starting_development_by_seat": [
-      3,
-      2,
-      2,
-      2,
-      4
-    ],
-    "seed": 1000000042,
-    "save_file": "map2_5p_early_default/early_game/map_2/5_players/state-7ce0744a49e36690.hansa",
-    "metadata_file": "map2_5p_early_default/early_game/map_2/5_players/state-7ce0744a49e36690.json"
-  },
-  {
-    "name": "map2_5p_early_all_promos",
-    "map_num": 2,
-    "player_count": 5,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 9,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      5,
-      5,
-      5,
-      5,
-      5
-    ],
-    "starting_development_by_seat": [
-      4,
-      2,
-      2,
-      3,
-      2
-    ],
-    "seed": 1000000043,
-    "save_file": "map2_5p_early_all_promos/early_game/map_2/5_players/state-c6f910e4514f80b3.hansa",
-    "metadata_file": "map2_5p_early_all_promos/early_game/map_2/5_players/state-c6f910e4514f80b3.json"
-  },
-  {
-    "name": "map2_5p_early_mixed",
-    "map_num": 2,
-    "player_count": 5,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": true,
-    "bonus_marker_setup": "mixed",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 10,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      0,
-      1,
-      1,
       1,
       1
     ],
-    "starting_development_by_seat": [
-      4,
-      3,
-      2,
-      4,
-      4
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
     ],
-    "seed": 1000000044,
-    "save_file": "map2_5p_early_mixed/early_game/map_2/5_players/state-832059ccba89e31a.hansa",
-    "metadata_file": "map2_5p_early_mixed/early_game/map_2/5_players/state-832059ccba89e31a.json"
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000063,
+    "save_file": "fresh_game/map_2/3_players/state-1e9f78c057bbab1d.hansa",
+    "metadata_file": "fresh_game/map_2/3_players/state-1e9f78c057bbab1d.json"
   },
   {
-    "name": "map3_3p_early_default",
-    "map_num": 3,
+    "name": "map2_3p_fresh_all_promos",
+    "map_num": 2,
     "player_count": 3,
-    "ending_condition": "near_score",
+    "ending_condition": null,
     "score_range": [
       0,
-      5
+      0
     ],
     "east_west": false,
     "regional_focus": null,
     "mission_cards": false,
     "emperors_favour": true,
-    "promo_markers": false,
-    "bonus_marker_setup": "default",
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
     "immediate_finish": false,
-    "bonus_markers_remaining": 11,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
+      0,
+      0
     ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      2,
       1,
       1
     ],
-    "starting_development_by_seat": [
-      4,
-      2,
-      2
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
     ],
-    "seed": 1000000045,
-    "save_file": "map3_3p_early_default/early_game/map_3/3_players/state-d7a0066133f812ca.hansa",
-    "metadata_file": "map3_3p_early_default/early_game/map_3/3_players/state-d7a0066133f812ca.json"
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000064,
+    "save_file": "fresh_game/map_2/3_players/state-a3ca9c350511d5db.hansa",
+    "metadata_file": "fresh_game/map_2/3_players/state-a3ca9c350511d5db.json"
   },
   {
-    "name": "map3_3p_early_all_promos",
-    "map_num": 3,
+    "name": "map2_3p_fresh_mixed",
+    "map_num": 2,
     "player_count": 3,
-    "ending_condition": "near_score",
+    "ending_condition": null,
     "score_range": [
       0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 12,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      5,
-      5,
-      4
-    ],
-    "starting_development_by_seat": [
-      4,
-      2,
-      4
-    ],
-    "seed": 1000000046,
-    "save_file": "map3_3p_early_all_promos/early_game/map_3/3_players/state-dae22f08a84fad14.hansa",
-    "metadata_file": "map3_3p_early_all_promos/early_game/map_3/3_players/state-dae22f08a84fad14.json"
-  },
-  {
-    "name": "map3_3p_early_mixed",
-    "map_num": 3,
-    "player_count": 3,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": true,
-    "bonus_marker_setup": "mixed",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 9,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      5,
-      5,
-      5
-    ],
-    "starting_development_by_seat": [
-      4,
-      2,
-      4
-    ],
-    "seed": 1000000047,
-    "save_file": "map3_3p_early_mixed/early_game/map_3/3_players/state-cfb00e8880107e9b.hansa",
-    "metadata_file": "map3_3p_early_mixed/early_game/map_3/3_players/state-cfb00e8880107e9b.json"
-  },
-  {
-    "name": "map3_4p_early_default",
-    "map_num": 3,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": false,
-    "promo_markers": false,
-    "bonus_marker_setup": "default",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 10,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      5,
-      5,
-      4,
-      5
-    ],
-    "starting_development_by_seat": [
-      4,
-      2,
-      4,
-      4
-    ],
-    "seed": 1000000048,
-    "save_file": "map3_4p_early_default/early_game/map_3/4_players/state-95c714adfcd39107.hansa",
-    "metadata_file": "map3_4p_early_default/early_game/map_3/4_players/state-95c714adfcd39107.json"
-  },
-  {
-    "name": "map3_4p_early_all_promos",
-    "map_num": 3,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
-    ],
-    "east_west": false,
-    "regional_focus": null,
-    "mission_cards": false,
-    "emperors_favour": true,
-    "promo_markers": true,
-    "bonus_marker_setup": "all_promos",
-    "immediate_finish": false,
-    "bonus_markers_remaining": 11,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
-    "development_range": [
-      2,
-      4
-    ],
-    "evaluation_set": "early",
-    "prepare_ending_condition": false,
-    "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
-      3,
-      4,
-      4,
-      4
-    ],
-    "starting_development_by_seat": [
-      2,
-      4,
-      3,
-      2
-    ],
-    "seed": 1000000049,
-    "save_file": "map3_4p_early_all_promos/early_game/map_3/4_players/state-2e5d253f5fc90e5c.hansa",
-    "metadata_file": "map3_4p_early_all_promos/early_game/map_3/4_players/state-2e5d253f5fc90e5c.json"
-  },
-  {
-    "name": "map3_4p_early_mixed",
-    "map_num": 3,
-    "player_count": 4,
-    "ending_condition": "near_score",
-    "score_range": [
-      0,
-      5
+      0
     ],
     "east_west": false,
     "regional_focus": null,
@@ -2278,45 +1716,43 @@
     "promo_markers": true,
     "bonus_marker_setup": "mixed",
     "immediate_finish": false,
-    "bonus_markers_remaining": 12,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
+      0,
+      0
     ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
       1,
-      2,
-      2,
       1
     ],
-    "starting_development_by_seat": [
-      2,
-      3,
-      2,
-      3
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
     ],
-    "seed": 1000000050,
-    "save_file": "map3_4p_early_mixed/early_game/map_3/4_players/state-310fe521a1e1a1e4.hansa",
-    "metadata_file": "map3_4p_early_mixed/early_game/map_3/4_players/state-310fe521a1e1a1e4.json"
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000065,
+    "save_file": "fresh_game/map_2/3_players/state-2a2fba5b89fd888e.hansa",
+    "metadata_file": "fresh_game/map_2/3_players/state-2a2fba5b89fd888e.json"
   },
   {
-    "name": "map3_5p_early_default",
-    "map_num": 3,
-    "player_count": 5,
-    "ending_condition": "near_score",
+    "name": "map2_4p_fresh_default",
+    "map_num": 2,
+    "player_count": 4,
+    "ending_condition": null,
     "score_range": [
       0,
-      5
+      0
     ],
     "east_west": false,
     "regional_focus": null,
@@ -2325,47 +1761,45 @@
     "promo_markers": false,
     "bonus_marker_setup": "default",
     "immediate_finish": false,
-    "bonus_markers_remaining": 9,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
+      0,
+      0
     ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
-    ],
-    "suite_version": 9,
-    "scenario": "early_game",
-    "starting_score_by_seat": [
       1,
-      2,
-      2,
-      2,
-      2
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0
     ],
     "starting_development_by_seat": [
-      3,
-      2,
-      4,
-      3,
-      3
+      0,
+      0,
+      0,
+      0
     ],
-    "seed": 1000000051,
-    "save_file": "map3_5p_early_default/early_game/map_3/5_players/state-4ac20f318ac77438.hansa",
-    "metadata_file": "map3_5p_early_default/early_game/map_3/5_players/state-4ac20f318ac77438.json"
+    "seed": 1000000066,
+    "save_file": "fresh_game/map_2/4_players/state-fe7f8e59350773bb.hansa",
+    "metadata_file": "fresh_game/map_2/4_players/state-fe7f8e59350773bb.json"
   },
   {
-    "name": "map3_5p_early_all_promos",
-    "map_num": 3,
-    "player_count": 5,
-    "ending_condition": "near_score",
+    "name": "map2_4p_fresh_all_promos",
+    "map_num": 2,
+    "player_count": 4,
+    "ending_condition": null,
     "score_range": [
       0,
-      5
+      0
     ],
     "east_west": false,
     "regional_focus": null,
@@ -2374,47 +1808,45 @@
     "promo_markers": true,
     "bonus_marker_setup": "all_promos",
     "immediate_finish": false,
-    "bonus_markers_remaining": 10,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
+      0,
+      0
     ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
+      1,
+      1
     ],
-    "suite_version": 9,
-    "scenario": "early_game",
+    "suite_version": 10,
+    "scenario": "fresh_game",
     "starting_score_by_seat": [
-      3,
-      3,
-      2,
-      3,
-      2
+      0,
+      0,
+      0,
+      0
     ],
     "starting_development_by_seat": [
-      3,
-      2,
-      2,
-      4,
-      3
+      0,
+      0,
+      0,
+      0
     ],
-    "seed": 1000000052,
-    "save_file": "map3_5p_early_all_promos/early_game/map_3/5_players/state-e588cb97397cefcf.hansa",
-    "metadata_file": "map3_5p_early_all_promos/early_game/map_3/5_players/state-e588cb97397cefcf.json"
+    "seed": 1000000067,
+    "save_file": "fresh_game/map_2/4_players/state-7ee2a0077075f0b7.hansa",
+    "metadata_file": "fresh_game/map_2/4_players/state-7ee2a0077075f0b7.json"
   },
   {
-    "name": "map3_5p_early_mixed",
-    "map_num": 3,
-    "player_count": 5,
-    "ending_condition": "near_score",
+    "name": "map2_4p_fresh_mixed",
+    "map_num": 2,
+    "player_count": 4,
+    "ending_condition": null,
     "score_range": [
       0,
-      5
+      0
     ],
     "east_west": false,
     "regional_focus": null,
@@ -2423,37 +1855,605 @@
     "promo_markers": true,
     "bonus_marker_setup": "mixed",
     "immediate_finish": false,
-    "bonus_markers_remaining": 11,
-    "completed_cities_below_limit": 7,
-    "prepared_routes_one_short": true,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
     "development_range": [
-      2,
-      4
+      0,
+      0
     ],
-    "evaluation_set": "early",
+    "evaluation_set": "fresh",
     "prepare_ending_condition": false,
     "round_range": [
-      2,
-      5
+      1,
+      1
     ],
-    "suite_version": 9,
-    "scenario": "early_game",
+    "suite_version": 10,
+    "scenario": "fresh_game",
     "starting_score_by_seat": [
-      2,
-      2,
-      3,
-      3,
-      2
+      0,
+      0,
+      0,
+      0
     ],
     "starting_development_by_seat": [
-      4,
-      3,
-      4,
-      4,
-      3
+      0,
+      0,
+      0,
+      0
     ],
-    "seed": 1000000053,
-    "save_file": "map3_5p_early_mixed/early_game/map_3/5_players/state-7f6fb2fe35807927.hansa",
-    "metadata_file": "map3_5p_early_mixed/early_game/map_3/5_players/state-7f6fb2fe35807927.json"
+    "seed": 1000000068,
+    "save_file": "fresh_game/map_2/4_players/state-0e45e67810fa4af9.hansa",
+    "metadata_file": "fresh_game/map_2/4_players/state-0e45e67810fa4af9.json"
+  },
+  {
+    "name": "map2_5p_fresh_default",
+    "map_num": 2,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000069,
+    "save_file": "fresh_game/map_2/5_players/state-8af3468bb3f2e6e4.hansa",
+    "metadata_file": "fresh_game/map_2/5_players/state-8af3468bb3f2e6e4.json"
+  },
+  {
+    "name": "map2_5p_fresh_all_promos",
+    "map_num": 2,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000070,
+    "save_file": "fresh_game/map_2/5_players/state-591c05a18f6742bc.hansa",
+    "metadata_file": "fresh_game/map_2/5_players/state-591c05a18f6742bc.json"
+  },
+  {
+    "name": "map2_5p_fresh_mixed",
+    "map_num": 2,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000071,
+    "save_file": "fresh_game/map_2/5_players/state-52f273c5fd3e1d7c.hansa",
+    "metadata_file": "fresh_game/map_2/5_players/state-52f273c5fd3e1d7c.json"
+  },
+  {
+    "name": "map3_3p_fresh_default",
+    "map_num": 3,
+    "player_count": 3,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000072,
+    "save_file": "fresh_game/map_3/3_players/state-913146e945e6dddc.hansa",
+    "metadata_file": "fresh_game/map_3/3_players/state-913146e945e6dddc.json"
+  },
+  {
+    "name": "map3_3p_fresh_all_promos",
+    "map_num": 3,
+    "player_count": 3,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000073,
+    "save_file": "fresh_game/map_3/3_players/state-ce69f02313752b61.hansa",
+    "metadata_file": "fresh_game/map_3/3_players/state-ce69f02313752b61.json"
+  },
+  {
+    "name": "map3_3p_fresh_mixed",
+    "map_num": 3,
+    "player_count": 3,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000074,
+    "save_file": "fresh_game/map_3/3_players/state-4ee4f8a6fe07a526.hansa",
+    "metadata_file": "fresh_game/map_3/3_players/state-4ee4f8a6fe07a526.json"
+  },
+  {
+    "name": "map3_4p_fresh_default",
+    "map_num": 3,
+    "player_count": 4,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000075,
+    "save_file": "fresh_game/map_3/4_players/state-4000c8591dda2978.hansa",
+    "metadata_file": "fresh_game/map_3/4_players/state-4000c8591dda2978.json"
+  },
+  {
+    "name": "map3_4p_fresh_all_promos",
+    "map_num": 3,
+    "player_count": 4,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000076,
+    "save_file": "fresh_game/map_3/4_players/state-ed9af0082cc2898f.hansa",
+    "metadata_file": "fresh_game/map_3/4_players/state-ed9af0082cc2898f.json"
+  },
+  {
+    "name": "map3_4p_fresh_mixed",
+    "map_num": 3,
+    "player_count": 4,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000077,
+    "save_file": "fresh_game/map_3/4_players/state-8656db9572494c6c.hansa",
+    "metadata_file": "fresh_game/map_3/4_players/state-8656db9572494c6c.json"
+  },
+  {
+    "name": "map3_5p_fresh_default",
+    "map_num": 3,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": false,
+    "bonus_marker_setup": "default",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000078,
+    "save_file": "fresh_game/map_3/5_players/state-ae50608a5da572db.hansa",
+    "metadata_file": "fresh_game/map_3/5_players/state-ae50608a5da572db.json"
+  },
+  {
+    "name": "map3_5p_fresh_all_promos",
+    "map_num": 3,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": false,
+    "promo_markers": true,
+    "bonus_marker_setup": "all_promos",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000079,
+    "save_file": "fresh_game/map_3/5_players/state-495e68e1608b07c0.hansa",
+    "metadata_file": "fresh_game/map_3/5_players/state-495e68e1608b07c0.json"
+  },
+  {
+    "name": "map3_5p_fresh_mixed",
+    "map_num": 3,
+    "player_count": 5,
+    "ending_condition": null,
+    "score_range": [
+      0,
+      0
+    ],
+    "east_west": false,
+    "regional_focus": null,
+    "mission_cards": false,
+    "emperors_favour": true,
+    "promo_markers": true,
+    "bonus_marker_setup": "mixed",
+    "immediate_finish": false,
+    "bonus_markers_remaining": 2,
+    "completed_cities_below_limit": 2,
+    "prepared_routes_one_short": false,
+    "development_range": [
+      0,
+      0
+    ],
+    "evaluation_set": "fresh",
+    "prepare_ending_condition": false,
+    "round_range": [
+      1,
+      1
+    ],
+    "suite_version": 10,
+    "scenario": "fresh_game",
+    "starting_score_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "starting_development_by_seat": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "seed": 1000000080,
+    "save_file": "fresh_game/map_3/5_players/state-2b6a70506dc4aaa1.hansa",
+    "metadata_file": "fresh_game/map_3/5_players/state-2b6a70506dc4aaa1.json"
   }
 ]

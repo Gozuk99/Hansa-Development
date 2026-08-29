@@ -56,6 +56,11 @@ class Player:
         self.actions_remaining = ACTIONS_MAX_VALUES[0]
         self.actions_at_turn_start = self.actions_remaining
         self.actions_granted_this_turn = 0
+        self.consecutive_paid_move_actions = 0
+        self.paid_actions_spent_this_turn = 0
+        self.paid_move_actions_spent_this_turn = 0
+        self.pending_move_claim_route_slots = frozenset()
+        self.rewarded_move_focus_route_slots = frozenset()
         self.bank = 3
 
         inventory = starting_inventory(order)
@@ -76,6 +81,10 @@ class Player:
         self.actions_remaining = self.actions + extra_actions
         self.actions_at_turn_start = self.actions_remaining
         self.actions_granted_this_turn = 0
+        self.consecutive_paid_move_actions = 0
+        self.paid_actions_spent_this_turn = 0
+        self.paid_move_actions_spent_this_turn = 0
+        self.pending_move_claim_route_slots = frozenset()
         self.ending_turn = False
 
     @property
@@ -99,10 +108,16 @@ class Player:
     def locked_ability_merchants(self):
         return len(BOOK_OF_KNOWLEDGE_MAX_VALUES) - 1 - BOOK_OF_KNOWLEDGE_MAX_VALUES.index(self.book)
 
-    def spend_action(self):
+    def spend_action(self, *, is_move=False):
         if self.actions_remaining <= 0:
             raise RuntimeError(f"Player {self.order} has no actions remaining")
         self.actions_remaining -= 1
+        self.paid_actions_spent_this_turn += 1
+        if is_move:
+            self.consecutive_paid_move_actions += 1
+            self.paid_move_actions_spent_this_turn += 1
+        else:
+            self.consecutive_paid_move_actions = 0
 
     def grant_actions(self, count):
         if count < 0:

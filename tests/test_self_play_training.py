@@ -2,17 +2,29 @@ from collections import Counter
 from dataclasses import replace
 import math
 from pathlib import Path
+import random
 import tempfile
 import unittest
 from unittest import mock
 
 import torch
+import torch.nn.functional as functional
 
-from ai.ai_model import HansaNN, device
+from ai.ai_model import HansaNN, HansaNNOutput, device
 from ai.observation_encoder import ObservationEncoder
-from ai.observation_schema import LEGACY_OBSERVATION_SCHEMA_V1_FINGERPRINT
+from ai.observation_schema import (
+    LEGACY_OBSERVATION_SCHEMA_V2_FINGERPRINT,
+    LEGACY_OBSERVATION_SCHEMA_V3_FINGERPRINT,
+    LEGACY_OBSERVATION_SCHEMA_V4_FINGERPRINT,
+    LEGACY_OBSERVATION_SIZE,
+    LEGACY_OBSERVATION_SIZE_V3,
+    LEGACY_OBSERVATION_SIZE_V4,
+)
+from game import action_legality
 from game.action_codec import DEFAULT_ACTION_CODEC
 from game.action_schema import ACTION_SCHEMA_VERSION, ACTION_SPACE_SIZE
+from game.game_info import Game
+from game.game_actions import InvalidActionError
 from game.persistence import load_game
 from game.turn_state import TurnPhase
 from map_data.constants import MAX_POSTS
@@ -25,8 +37,10 @@ from training.self_play import (
     NO_REPLACEMENT_ROUTE_PENALTY,
     PolicyTier,
     SelfPlayTrainer,
+    TierRosterConfig,
     TrainingConfig,
     TrainingDecision,
+    TrainingRosterPolicy,
     ZERO_EPSILON_EXPLORATION_MODE,
     _is_normal_move_in_progress,
     action_phase_selection_groups,
@@ -100,6 +114,38 @@ def training_decision(
         movement_workflow_id,
         equivalent_action_indices=equivalent_action_indices,
         receives_terminal_credit=receives_terminal_credit,
+    )
+
+
+class TinyDualHead(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.trunk = torch.nn.Linear(3, 5)
+        self.q_head = torch.nn.Linear(5, ACTION_SPACE_SIZE)
+        self.policy_head = torch.nn.Linear(5, ACTION_SPACE_SIZE)
+
+    def forward(self, observations):
+        features = torch.tanh(self.trunk(observations))
+        return HansaNNOutput(
+            q_values=self.q_head(features),
+            policy_logits=self.policy_head(features.detach()),
+        )
+
+
+def tiny_training_decisions(count):
+    legal_mask = torch.zeros(ACTION_SPACE_SIZE, dtype=torch.bool)
+    legal_mask[:4] = True
+    return tuple(
+        replace(
+            training_decision(index % 4, 0, (0,), 0),
+            observation=torch.tensor(
+                (float(index % 7), float((index + 1) % 5), 1.0),
+                dtype=torch.float32,
+            ),
+            legal_action_mask=legal_mask,
+            reward_to_go=float((index % 11) - 5),
+        )
+        for index in range(count)
     )
 
 
@@ -515,6 +561,49 @@ class SelfPlayTrainingTests(unittest.TestCase):
             0,
         )
 
+    def test_route_equivalence_does_not_penalize_distinct_piece_swaps(self):
+        blue = object()
+        green = object()
+        land_route = mock.Mock(required_circles=0)
+        first_post = mock.Mock(owner=blue, owner_piece_shape="circle")
+        second_post = mock.Mock(owner=blue, owner_piece_shape="square")
+        post_routes = {first_post: land_route, second_post: land_route}
+
+        self.assertEqual(
+            pointless_movement_penalty(
+                [(first_post, blue, "square"), (second_post, blue, "circle")],
+                [first_post, second_post],
+                post_routes,
+            ),
+            0,
+        )
+
+        first_post.owner = green
+        first_post.owner_piece_shape = "square"
+        second_post.owner = blue
+        second_post.owner_piece_shape = "square"
+        self.assertEqual(
+            pointless_movement_penalty(
+                [(first_post, blue, "square"), (second_post, green, "square")],
+                [first_post, second_post],
+                post_routes,
+            ),
+            0,
+        )
+
+        first_post.owner = blue
+        first_post.owner_piece_shape = "square"
+        second_post.owner = blue
+        second_post.owner_piece_shape = "circle"
+        self.assertEqual(
+            pointless_movement_penalty(
+                [(first_post, blue, "square"), (second_post, blue, "circle")],
+                [first_post, second_post],
+                post_routes,
+            ),
+            -1000,
+        )
+
     def test_completed_move_rewards_only_net_new_claimable_routes(self):
         self.assertEqual(completed_route_move_reward({1}, {1, 2}), 50)
         self.assertEqual(completed_route_move_reward({1, 2}, {1}), -50)
@@ -870,9 +959,56 @@ class SelfPlayTrainingTests(unittest.TestCase):
             1_024,
         )
         self.assertEqual(
+            trainer._trajectory_training_decision_cap("fresh"),
+            4_096,
+        )
+        self.assertEqual(
             trainer._trajectory_training_decision_cap("early"),
             4_096,
         )
+
+    def test_fresh_coverage_uses_four_optimizer_updates(self):
+        for decision_count, expected_sampled in ((1_000, 1_000), (3_500, 3_500), (6_000, 4_096)):
+            with self.subTest(decision_count=decision_count):
+                trainer = SelfPlayTrainer(
+                    model=TinyDualHead().to(device),
+                    config=TrainingConfig(seed=811),
+                )
+                trajectory = mock.Mock(decisions=tiny_training_decisions(decision_count))
+                with mock.patch.object(
+                    trainer.optimizer,
+                    "step",
+                    wraps=trainer.optimizer.step,
+                ) as optimizer_step:
+                    trainer.update_model((trajectory,), curriculum_maturities=("fresh",))
+
+                coverage = trainer.last_training_sample_coverage[0]
+                self.assertEqual(coverage.total_decisions, decision_count)
+                self.assertEqual(coverage.sampled_decisions, expected_sampled)
+                self.assertEqual(optimizer_step.call_count, 4)
+                self.assertEqual(trainer.progress.training_updates, 4)
+                self.assertEqual(trainer.progress.policy_training_updates, 4)
+
+    def test_fresh_gradient_accumulation_matches_unsplit_effective_batch(self):
+        config = TrainingConfig(seed=812, max_gradient_norm=1_000_000.0)
+        accumulated = SelfPlayTrainer(model=TinyDualHead().to(device), config=config)
+        unsplit = SelfPlayTrainer(model=TinyDualHead().to(device), config=config)
+        unsplit.model.load_state_dict(accumulated.model.state_dict())
+        decisions = tiny_training_decisions(300)
+
+        accumulated_losses = accumulated._optimize_effective_batch(
+            decisions,
+            microbatch_size=256,
+        )
+        unsplit_losses = unsplit._optimize_effective_batch(
+            decisions,
+            microbatch_size=len(decisions),
+        )
+
+        for actual, expected in zip(accumulated_losses, unsplit_losses):
+            self.assertAlmostEqual(actual, expected, places=5)
+        for actual, expected in zip(accumulated.model.parameters(), unsplit.model.parameters()):
+            self.assertTrue(torch.allclose(actual, expected, atol=1e-6, rtol=1e-5))
 
     def test_normal_long_trajectory_samples_at_most_1024_decisions(self):
         trainer = self.trainer()
@@ -1344,6 +1480,34 @@ class SelfPlayTrainingTests(unittest.TestCase):
             (((indices[0], indices[1]), (indices[2],), (indices[3],)),),
         )
 
+    def test_move_any_two_groups_matching_pieces_for_every_owner(self):
+        current_player = object()
+        opponent = object()
+        route = mock.Mock(
+            required_circles=0,
+            posts=[
+                mock.Mock(owner=current_player, owner_piece_shape="square"),
+                mock.Mock(owner=current_player, owner_piece_shape="square"),
+                mock.Mock(owner=opponent, owner_piece_shape="square"),
+                mock.Mock(owner=opponent, owner_piece_shape="square"),
+            ],
+        )
+        game = mock.Mock()
+        game.current_player = current_player
+        game.selected_map.routes = [route]
+        indices = [
+            DEFAULT_ACTION_CODEC.encode(PostInteraction(slot, PieceShape.TRADER))
+            for slot in range(4)
+        ]
+
+        categories = move_workflow_exploration_categories(
+            game,
+            indices,
+            any_pickups=True,
+        )
+
+        self.assertEqual(categories, (((indices[0], indices[1]), (indices[2], indices[3])),))
+
     def test_ranked_action_selection_collapses_equivalent_placements(self):
         trainer = self.trainer()
         trainer.rng = mock.Mock()
@@ -1429,10 +1593,29 @@ class SelfPlayTrainingTests(unittest.TestCase):
             }
             self.assertEqual(occupied_seats, {0, 1, 2})
 
-        self.assertEqual(
-            {tier.number for tier in trainer._assign_training_tiers(4)},
-            {1, 2, 4, 5},
+        four_player_assignments = [
+            tuple(tier.number for tier in trainer._assign_training_tiers(4)) for _ in range(120)
+        ]
+        self.assertTrue(
+            all(
+                len(set(assignment)) == 4
+                and {1, 2, 3}.issubset(assignment)
+                and len(set(assignment) & {4, 5}) == 1
+                for assignment in four_player_assignments
+            )
         )
+        self.assertEqual(
+            {
+                next(tier for tier in assignment if tier in {4, 5})
+                for assignment in four_player_assignments
+            },
+            {4, 5},
+        )
+        for tier_number in (1, 2, 3):
+            self.assertEqual(
+                {assignment.index(tier_number) for assignment in four_player_assignments},
+                {0, 1, 2, 3},
+            )
         five_player_assignments = [
             tuple(tier.number for tier in trainer._assign_training_tiers(5)) for _ in range(8)
         ]
@@ -1440,6 +1623,46 @@ class SelfPlayTrainingTests(unittest.TestCase):
             all(set(assignment) == {1, 2, 3, 4, 5} for assignment in five_player_assignments)
         )
         self.assertGreater(len(set(five_player_assignments)), 1)
+
+    def test_training_and_evaluation_rosters_are_owned_by_configuration(self):
+        rosters = TierRosterConfig(
+            evaluation_three_player=(1, 4, 5),
+            training_three_player=TrainingRosterPolicy((1, 3), (4, 5)),
+        )
+        trainer = SelfPlayTrainer(config=TrainingConfig(seed=101, tier_rosters=rosters))
+
+        training_assignments = {
+            tuple(tier.number for tier in trainer._assign_training_tiers(3)) for _ in range(40)
+        }
+        self.assertTrue(all({1, 3}.issubset(assignment) for assignment in training_assignments))
+        self.assertEqual(
+            {
+                next(tier for tier in assignment if tier in {4, 5})
+                for assignment in training_assignments
+            },
+            {4, 5},
+        )
+        self.assertEqual(
+            tuple(tier.number for tier in trainer._assign_evaluation_tiers(3, 0)),
+            (1, 4, 5),
+        )
+
+    def test_configured_training_rosters_preserve_legacy_rng_order(self):
+        seed = 10_204
+        trainer = self.trainer(seed=seed)
+        expected_rng = random.Random(seed)
+
+        for player_count in (3, 4, 5, 4, 3, 5):
+            if player_count == 3:
+                expected = [1, 2, expected_rng.choice((3, 4, 5))]
+            elif player_count == 4:
+                expected = [1, 2, 3, expected_rng.choice((4, 5))]
+            else:
+                expected = [1, 2, 3, 4, 5]
+            expected_rng.shuffle(expected)
+
+            actual = [tier.number for tier in trainer._assign_training_tiers(player_count)]
+            self.assertEqual(actual, expected)
 
     def test_three_player_training_opponent_is_seeded_and_uniform(self):
         def assignments(seed, count):
@@ -1457,6 +1680,22 @@ class SelfPlayTrainingTests(unittest.TestCase):
         counts = Counter(third_tiers)
         for tier_number in (3, 4, 5):
             self.assertAlmostEqual(counts[tier_number] / len(third_tiers), 1 / 3, delta=0.02)
+
+    def test_four_player_training_opponent_and_seats_are_seeded(self):
+        def assignments(seed, count):
+            trainer = self.trainer(seed=seed)
+            return [
+                tuple(tier.number for tier in trainer._assign_training_tiers(4))
+                for _ in range(count)
+            ]
+
+        first = assignments(9_903, 200)
+        self.assertEqual(first, assignments(9_903, 200))
+        self.assertEqual(
+            {next(tier for tier in assignment if tier in {4, 5}) for assignment in first},
+            {4, 5},
+        )
+        self.assertGreater(len(set(first)), 2)
 
     def test_training_roster_is_selected_once_per_game(self):
         trainer = self.trainer(seed=9_902)
@@ -1490,6 +1729,14 @@ class SelfPlayTrainingTests(unittest.TestCase):
             [(1, 3, 5), (3, 5, 1), (5, 1, 3)],
         )
         self.assertTrue(all(tier.epsilon == 0 for assignment in assignments for tier in assignment))
+        self.assertEqual(
+            tuple(tier.number for tier in trainer._assign_evaluation_tiers(4, 0)),
+            (1, 2, 4, 5),
+        )
+        self.assertEqual(
+            tuple(tier.number for tier in trainer._assign_evaluation_tiers(5, 0)),
+            (1, 2, 3, 4, 5),
+        )
         for player_count in (3, 4, 5):
             rotations = [
                 trainer._assign_evaluation_tiers(player_count, rotation)
@@ -1514,6 +1761,121 @@ class SelfPlayTrainingTests(unittest.TestCase):
             [decision.reward_to_go for decision in second.decisions],
         )
         self.assertEqual(first.final_scores, second.final_scores)
+
+    def test_zero_extended_legacy_model_preserves_seeded_self_play_trace(self):
+        config = TrainingConfig(max_actions=200, seed=417)
+        expanded_model = HansaNN()
+        with torch.no_grad():
+            expanded_model.layer1.weight[:, LEGACY_OBSERVATION_SIZE:] = 0
+        legacy_model = HansaNN()
+        legacy_model.load_state_dict(expanded_model.state_dict())
+        expanded = SelfPlayTrainer(model=expanded_model, config=config)
+        legacy = SelfPlayTrainer(model=legacy_model, config=config)
+
+        expanded_trajectory = expanded.collect_game(STATE)
+        with mock.patch.object(
+            legacy.encoder,
+            "_normal_move_snapshot_features",
+            return_value=[0] * ObservationEncoder.MOVE_SNAPSHOT_SIZE,
+        ):
+            legacy_trajectory = legacy.collect_game(STATE)
+
+        self.assertEqual(expanded_trajectory.action_trace, legacy_trajectory.action_trace)
+        self.assertEqual(expanded_trajectory.completion_reason, legacy_trajectory.completion_reason)
+        self.assertEqual(expanded_trajectory.final_scores, legacy_trajectory.final_scores)
+
+    def test_prevalidated_execution_requires_action_enabled_in_supplied_mask(self):
+        game = load_game(STATE)
+        mask = torch.tensor(game.ai_action_mask(), dtype=torch.uint8)
+        action_index = mask.nonzero(as_tuple=False).flatten()[0].item()
+        mask[action_index] = 0
+
+        with self.assertRaises(InvalidActionError):
+            game._apply_prevalidated_ai_action(action_index, mask)
+
+    def test_prevalidated_self_play_matches_fully_validated_trace(self):
+        optimized_trainer = self.trainer(seed=4242)
+        validated_trainer = self.trainer(seed=4242)
+        validated_trainer.model.load_state_dict(optimized_trainer.model.state_dict())
+
+        optimized = optimized_trainer.collect_game(STATE)
+
+        def fully_validated(game, action_index, _legal_action_mask):
+            game.apply_ai_action(action_index)
+
+        with mock.patch.object(Game, "_apply_prevalidated_ai_action", fully_validated):
+            validated = validated_trainer.collect_game(STATE)
+
+        self.assertEqual(optimized.action_trace, validated.action_trace)
+        self.assertEqual(optimized.final_scores, validated.final_scores)
+        self.assertEqual(optimized.terminal_rewards, validated.terminal_rewards)
+        self.assertEqual(
+            [decision.reward_to_go for decision in optimized.decisions],
+            [decision.reward_to_go for decision in validated.decisions],
+        )
+
+    def test_prevalidated_execution_does_not_regenerate_legal_actions(self):
+        game = load_game(STATE)
+        mask = torch.tensor(game.ai_action_mask(), dtype=torch.uint8)
+        action_index = mask.nonzero(as_tuple=False).flatten()[0].item()
+
+        with mock.patch.object(
+            game,
+            "get_legal_actions",
+            wraps=game.get_legal_actions,
+        ) as legal_actions:
+            game._apply_prevalidated_ai_action(action_index, mask)
+
+        legal_actions.assert_not_called()
+
+    def test_cached_move_feasibility_preserves_seeded_self_play_trace(self):
+        def uncached_can_finish(game, selected_post, _feasibility=None):
+            player = game.current_player
+            remaining_pieces = player.holding_pieces[1:]
+            available_posts = [
+                post
+                for route in game.selected_map.routes
+                for post in route.posts
+                if post is not selected_post and not post.is_owned()
+            ]
+
+            def can_assign(piece_index, posts):
+                if piece_index == len(remaining_pieces):
+                    return True
+                piece = remaining_pieces[piece_index]
+                return any(
+                    action_legality._move_piece_fits(player, piece, post)
+                    and can_assign(piece_index + 1, posts[:index] + posts[index + 1 :])
+                    for index, post in enumerate(posts)
+                )
+
+            return can_assign(0, available_posts)
+
+        config = TrainingConfig(
+            learning_rate=0.0001,
+            max_actions=200,
+            disable_move_action=False,
+            move_general_stock_threshold=0,
+            seed=8_705,
+        )
+        cached = SelfPlayTrainer(config=config)
+        uncached = SelfPlayTrainer(config=config)
+        uncached.model.load_state_dict(cached.model.state_dict())
+
+        cached_trajectory = cached.collect_game(STATE)
+        with mock.patch.object(
+            action_legality,
+            "_can_finish_move_after_placement",
+            uncached_can_finish,
+        ):
+            uncached_trajectory = uncached.collect_game(STATE)
+
+        self.assertEqual(cached_trajectory.action_trace, uncached_trajectory.action_trace)
+        self.assertEqual(cached_trajectory.final_scores, uncached_trajectory.final_scores)
+        self.assertEqual(
+            cached_trajectory.completion_reason,
+            uncached_trajectory.completion_reason,
+        )
 
     def test_detailed_profiling_is_opt_in_and_does_not_change_trajectory(self):
         unprofiled_trainer = self.trainer(seed=101)
@@ -1864,12 +2226,20 @@ class SelfPlayTrainingTests(unittest.TestCase):
             self.assertEqual(restored.progress.checkpoint_loads, 1)
             self.assertEqual(restored.config.gamma, 0.99)
             self.assertEqual(restored.config.learning_rate, 0.0001)
-            self.assertTrue(all(group["lr"] == 0.0001 for group in restored.optimizer.param_groups))
+            self.assertAlmostEqual(restored.optimizer.param_groups[0]["lr"], 0.0001)
+            self.assertAlmostEqual(restored.optimizer.param_groups[1]["lr"], 0.0001)
             self.assertEqual(restored.config.income_penalty_scale, 100)
             self.assertEqual(restored.config.early_max_training_decisions, 4_096)
             self.assertEqual(restored.config.tier_top_k, (2, 5, 10, 15, 20))
             self.assertEqual(restored.config.tier_epsilons, (0.05, 0.10, 0.20, 0.35, 0.35))
-            self.assertEqual(restored.config.three_player_tiers, (1, 3, 5))
+            self.assertEqual(
+                restored.config.tier_rosters.evaluation_three_player,
+                (1, 3, 5),
+            )
+            self.assertEqual(
+                restored.config.tier_rosters.training_three_player,
+                TrainingRosterPolicy((1, 2), (3, 4, 5)),
+            )
             self.assertEqual(restored.rng.getstate(), trainer.rng.getstate())
             self.assertEqual(restored.curriculum_state, curriculum_state)
             self.assertTrue(
@@ -1887,22 +2257,179 @@ class SelfPlayTrainingTests(unittest.TestCase):
                 curriculum_state,
             )
 
-    def test_checkpoint_explicitly_migrates_observation_v1_weights_and_optimizer(self):
-        trainer = self.trainer()
+    def test_legacy_tier_roster_checkpoint_migrates_without_resetting_state(self):
+        trainer = self.trainer(seed=321)
+        trainer.optimizer.zero_grad(set_to_none=True)
+        trainer.model.layer1.weight.sum().backward()
+        trainer.optimizer.step()
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = Path(directory) / "model.pth"
             trainer.save_checkpoint(checkpoint, (STATE,))
             contents = torch.load(checkpoint, map_location="cpu")
-            contents["observation_schema_version"] = 1
-            contents["observation_schema_fingerprint"] = LEGACY_OBSERVATION_SCHEMA_V1_FINGERPRINT
+            contents["training_config"].pop("tier_rosters")
+            contents["training_config"].update(
+                {
+                    "three_player_tiers": (1, 3, 5),
+                    "four_player_tiers": (1, 2, 4, 5),
+                    "five_player_tiers": (1, 2, 3, 4, 5),
+                }
+            )
+            expected_model = {name: value.clone() for name, value in contents["state_dict"].items()}
+            expected_optimizer = contents["optimizer_state_dict"]
+            expected_progress = contents["training_progress"]
+            torch.save(contents, checkpoint)
+
+            restored = SelfPlayTrainer.from_checkpoint(checkpoint)
+
+        self.assertEqual(
+            restored.config.tier_rosters,
+            TierRosterConfig(),
+        )
+        self.assertEqual(restored.progress.training_updates, expected_progress["training_updates"])
+        self.assertTrue(
+            all(
+                torch.equal(restored.model.state_dict()[name].cpu(), value)
+                for name, value in expected_model.items()
+            )
+        )
+        restored_optimizer = restored.optimizer.state_dict()
+        self.assertEqual(restored_optimizer["param_groups"], expected_optimizer["param_groups"])
+        for parameter_id, state in expected_optimizer["state"].items():
+            for key, value in state.items():
+                restored_value = restored_optimizer["state"][parameter_id][key]
+                if isinstance(value, torch.Tensor):
+                    self.assertTrue(torch.equal(restored_value.cpu(), value))
+                else:
+                    self.assertEqual(restored_value, value)
+
+    def test_checkpoint_explicitly_migrates_legacy_observation_weights_and_optimizer(self):
+        trainer = self.trainer()
+        trainer.optimizer.zero_grad(set_to_none=True)
+        trainer.model.layer1.weight.sum().backward()
+        trainer.optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "model.pth"
+            trainer.save_checkpoint(checkpoint, (STATE,))
+            contents = torch.load(checkpoint, map_location="cpu")
+            contents["state_dict"]["layer1.weight"] = contents["state_dict"]["layer1.weight"][
+                :, :LEGACY_OBSERVATION_SIZE
+            ]
+            layer1_id = contents["optimizer_state_dict"]["param_groups"][0]["params"][0]
+            layer1_optimizer_state = contents["optimizer_state_dict"]["state"][layer1_id]
+            for key, value in tuple(layer1_optimizer_state.items()):
+                if isinstance(value, torch.Tensor) and value.ndim == 2:
+                    layer1_optimizer_state[key] = value[:, :LEGACY_OBSERVATION_SIZE]
+            contents["observation_schema_version"] = 2
+            contents["observation_size"] = LEGACY_OBSERVATION_SIZE
+            contents["observation_schema_fingerprint"] = LEGACY_OBSERVATION_SCHEMA_V2_FINGERPRINT
             torch.save(contents, checkpoint)
 
             restored = SelfPlayTrainer.from_checkpoint(checkpoint)
             self.assertTrue(restored.model.migrated_observation_schema)
+            restored_layer1_id = restored.optimizer.state_dict()["param_groups"][0]["params"][0]
+            restored_layer1_state = restored.optimizer.state_dict()["state"][restored_layer1_id]
+            for key in ("exp_avg", "exp_avg_sq"):
+                self.assertEqual(
+                    restored_layer1_state[key].shape,
+                    restored.model.layer1.weight.shape,
+                )
+                self.assertFalse(restored_layer1_state[key][:, LEGACY_OBSERVATION_SIZE:].any())
             self.assertEqual(
                 restored.optimizer.state_dict()["param_groups"],
                 trainer.optimizer.state_dict()["param_groups"],
             )
+
+    def test_checkpoint_migrates_version_three_input_optimizer_columns_neutrally(self):
+        trainer = self.trainer()
+        trainer.optimizer.zero_grad(set_to_none=True)
+        trainer.model.layer1.weight.sum().backward()
+        trainer.optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "model.pth"
+            trainer.save_checkpoint(checkpoint, (STATE,))
+            contents = torch.load(checkpoint, map_location="cpu")
+            original_weight = contents["state_dict"]["layer1.weight"].clone()
+            contents["state_dict"]["layer1.weight"] = original_weight[
+                :, :LEGACY_OBSERVATION_SIZE_V3
+            ]
+            layer1_id = contents["optimizer_state_dict"]["param_groups"][0]["params"][0]
+            layer1_optimizer_state = contents["optimizer_state_dict"]["state"][layer1_id]
+            original_optimizer_tensors = {}
+            for key, value in tuple(layer1_optimizer_state.items()):
+                if isinstance(value, torch.Tensor) and value.ndim == 2:
+                    original_optimizer_tensors[key] = value[:, :LEGACY_OBSERVATION_SIZE_V3].clone()
+                    layer1_optimizer_state[key] = original_optimizer_tensors[key]
+            contents["observation_schema_version"] = 3
+            contents["observation_size"] = LEGACY_OBSERVATION_SIZE_V3
+            contents["observation_schema_fingerprint"] = LEGACY_OBSERVATION_SCHEMA_V3_FINGERPRINT
+            torch.save(contents, checkpoint)
+
+            restored = SelfPlayTrainer.from_checkpoint(checkpoint)
+
+        self.assertTrue(restored.model.migrated_observation_schema)
+        self.assertTrue(
+            torch.equal(
+                restored.model.layer1.weight.cpu()[:, :LEGACY_OBSERVATION_SIZE_V3],
+                original_weight[:, :LEGACY_OBSERVATION_SIZE_V3],
+            )
+        )
+        self.assertFalse(restored.model.layer1.weight[:, LEGACY_OBSERVATION_SIZE_V3:].any())
+        restored_layer1_id = restored.optimizer.state_dict()["param_groups"][0]["params"][0]
+        restored_layer1_state = restored.optimizer.state_dict()["state"][restored_layer1_id]
+        for key, expected in original_optimizer_tensors.items():
+            self.assertTrue(
+                torch.equal(
+                    restored_layer1_state[key][:, :LEGACY_OBSERVATION_SIZE_V3],
+                    expected,
+                )
+            )
+            self.assertFalse(restored_layer1_state[key][:, LEGACY_OBSERVATION_SIZE_V3:].any())
+
+    def test_checkpoint_migrates_version_four_input_optimizer_columns_neutrally(self):
+        trainer = self.trainer()
+        trainer.optimizer.zero_grad(set_to_none=True)
+        trainer.model.layer1.weight.sum().backward()
+        trainer.optimizer.step()
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "model.pth"
+            trainer.save_checkpoint(checkpoint, (STATE,))
+            contents = torch.load(checkpoint, map_location="cpu")
+            original_weight = contents["state_dict"]["layer1.weight"].clone()
+            contents["state_dict"]["layer1.weight"] = original_weight[
+                :, :LEGACY_OBSERVATION_SIZE_V4
+            ]
+            layer1_id = contents["optimizer_state_dict"]["param_groups"][0]["params"][0]
+            layer1_optimizer_state = contents["optimizer_state_dict"]["state"][layer1_id]
+            original_optimizer_tensors = {}
+            for key, value in tuple(layer1_optimizer_state.items()):
+                if isinstance(value, torch.Tensor) and value.ndim == 2:
+                    original_optimizer_tensors[key] = value[:, :LEGACY_OBSERVATION_SIZE_V4].clone()
+                    layer1_optimizer_state[key] = original_optimizer_tensors[key]
+            contents["observation_schema_version"] = 4
+            contents["observation_size"] = LEGACY_OBSERVATION_SIZE_V4
+            contents["observation_schema_fingerprint"] = LEGACY_OBSERVATION_SCHEMA_V4_FINGERPRINT
+            torch.save(contents, checkpoint)
+
+            restored = SelfPlayTrainer.from_checkpoint(checkpoint)
+
+        self.assertTrue(restored.model.migrated_observation_schema)
+        self.assertTrue(
+            torch.equal(
+                restored.model.layer1.weight.cpu()[:, :LEGACY_OBSERVATION_SIZE_V4],
+                original_weight[:, :LEGACY_OBSERVATION_SIZE_V4],
+            )
+        )
+        self.assertFalse(restored.model.layer1.weight[:, LEGACY_OBSERVATION_SIZE_V4:].any())
+        restored_layer1_id = restored.optimizer.state_dict()["param_groups"][0]["params"][0]
+        restored_layer1_state = restored.optimizer.state_dict()["state"][restored_layer1_id]
+        for key, expected in original_optimizer_tensors.items():
+            self.assertTrue(
+                torch.equal(
+                    restored_layer1_state[key][:, :LEGACY_OBSERVATION_SIZE_V4],
+                    expected,
+                )
+            )
+            self.assertFalse(restored_layer1_state[key][:, LEGACY_OBSERVATION_SIZE_V4:].any())
 
     def test_tier_metrics_are_recorded_by_tier_not_seat(self):
         trainer = self.trainer()
@@ -1918,6 +2445,90 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertGreaterEqual(metrics["average_selected_rank"], 1)
         self.assertEqual(
             metrics["epsilon_selections"] + metrics["top_k_selections"], tier_decisions
+        )
+
+    def test_trajectory_loss_q_only_chunks_match_full_dual_head_reference(self):
+        trainer = self.trainer()
+        decisions = []
+        equivalent_groups = ((), (7, 8), (7, 8, 9))
+        for index in range(7):
+            decisions.append(
+                replace(
+                    training_decision(
+                        7,
+                        0,
+                        (0,),
+                        0,
+                        equivalent_action_indices=equivalent_groups[index % 3],
+                    ),
+                    observation=torch.full(
+                        (ObservationEncoder.FEATURE_SIZE,),
+                        index / 10,
+                    ),
+                    reward_to_go=float(index * 13 - 27),
+                )
+            )
+
+        def full_dual_head_reference(samples):
+            observations = (
+                torch.stack([sample.observation for sample in samples]).float().to(device)
+            )
+            targets = torch.tensor(
+                [sample.reward_to_go for sample in samples],
+                dtype=torch.float32,
+                device=device,
+            )
+            with torch.no_grad():
+                q_values = trainer._model_outputs(observations).q_values
+                return (
+                    torch.stack(
+                        [
+                            functional.smooth_l1_loss(
+                                q_values[
+                                    row,
+                                    torch.as_tensor(
+                                        sample.equivalent_action_indices or (sample.action_index,),
+                                        dtype=torch.long,
+                                        device=device,
+                                    ),
+                                ],
+                                targets[row].expand(
+                                    len(sample.equivalent_action_indices or (sample.action_index,))
+                                ),
+                            )
+                            for row, sample in enumerate(samples)
+                        ]
+                    )
+                    .mean()
+                    .item()
+                )
+
+        parameters_before = tuple(
+            parameter.detach().clone() for parameter in trainer.model.parameters()
+        )
+        for decision_count in (3, 7):
+            with self.subTest(decision_count=decision_count):
+                samples = tuple(decisions[:decision_count])
+                expected = full_dual_head_reference(samples)
+                policy_forward = trainer.model.policy_head.forward
+                with mock.patch.object(
+                    trainer.model.policy_head,
+                    "forward",
+                    wraps=policy_forward,
+                ) as policy:
+                    actual = trainer.trajectory_loss(
+                        mock.Mock(decisions=samples),
+                        chunk_size=4,
+                    )
+
+                self.assertAlmostEqual(actual, expected, places=6)
+                policy.assert_not_called()
+
+        self.assertTrue(
+            all(
+                torch.equal(before, after)
+                for before, after in zip(parameters_before, trainer.model.parameters())
+            )
         )
 
     def test_only_selected_output_receives_direct_training_gradient(self):
@@ -1939,6 +2550,86 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertNotEqual(float(model.values[7]), 0)
         unchanged = torch.cat((model.values[:7], model.values[8:]))
         self.assertTrue(torch.equal(unchanged, torch.zeros_like(unchanged)))
+
+    def test_vectorized_q_loss_matches_legacy_loss_and_gradients(self):
+        base_decision = tiny_training_decisions(1)[0]
+        batch = (
+            replace(
+                base_decision,
+                action_index=0,
+                equivalent_action_indices=(0,),
+                reward_to_go=-3.0,
+            ),
+            replace(
+                base_decision,
+                action_index=1,
+                equivalent_action_indices=(1, 2),
+                reward_to_go=2.5,
+            ),
+            replace(
+                base_decision,
+                action_index=3,
+                equivalent_action_indices=(3, 4, 5, 6),
+                reward_to_go=8.0,
+            ),
+        )
+        optimized = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(seed=6_145),
+        )
+        legacy = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(seed=6_145),
+        )
+        legacy.model.load_state_dict(optimized.model.state_dict())
+
+        optimized_q_loss = optimized._decision_batch_losses(batch)[0]
+        optimized_q_loss.backward()
+
+        observations = torch.stack([sample.observation for sample in batch]).float().to(device)
+        targets = torch.tensor(
+            [sample.reward_to_go for sample in batch],
+            dtype=torch.float32,
+            device=device,
+        )
+        legacy_outputs = legacy._model_outputs(observations)
+        legacy_q_loss = torch.stack(
+            [
+                functional.smooth_l1_loss(
+                    legacy_outputs.q_values[
+                        row,
+                        torch.as_tensor(
+                            sample.equivalent_action_indices or (sample.action_index,),
+                            dtype=torch.long,
+                            device=device,
+                        ),
+                    ],
+                    targets[row].expand(
+                        len(sample.equivalent_action_indices or (sample.action_index,))
+                    ),
+                )
+                for row, sample in enumerate(batch)
+            ]
+        ).mean()
+        legacy_q_loss.backward()
+
+        self.assertTrue(torch.allclose(optimized_q_loss, legacy_q_loss, atol=1e-7, rtol=1e-7))
+        for optimized_parameter, legacy_parameter in zip(
+            optimized.model.parameters(),
+            legacy.model.parameters(),
+        ):
+            if optimized_parameter.grad is None or legacy_parameter.grad is None:
+                self.assertIsNone(optimized_parameter.grad)
+                self.assertIsNone(legacy_parameter.grad)
+            else:
+                self.assertTrue(
+                    torch.allclose(
+                        optimized_parameter.grad,
+                        legacy_parameter.grad,
+                        atol=1e-7,
+                        rtol=1e-6,
+                    )
+                )
 
     def test_equivalent_route_outputs_share_the_training_target(self):
         class IndependentOutputs(torch.nn.Module):
@@ -1973,14 +2664,14 @@ class SelfPlayTrainingTests(unittest.TestCase):
         unchanged = torch.cat((model.values[:7], model.values[10:]))
         self.assertTrue(torch.equal(unchanged, torch.zeros_like(unchanged)))
 
-    def test_training_clips_each_minibatch_gradient(self):
+    def test_training_clips_q_path_and_detached_policy_head_independently(self):
         trainer = self.trainer()
         trajectory = trainer.collect_game(STATE)
 
         with mock.patch("torch.nn.utils.clip_grad_norm_") as clip:
             trainer.update_model((trajectory,))
 
-        self.assertEqual(clip.call_count, trainer.progress.training_updates)
+        self.assertEqual(clip.call_count, trainer.progress.training_updates * 2)
         self.assertTrue(
             all(call.args[1] == trainer.config.max_gradient_norm for call in clip.call_args_list)
         )

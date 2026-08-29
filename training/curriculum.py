@@ -15,28 +15,42 @@ import tempfile
 from time import perf_counter
 import traceback
 
+import torch
+
+from ai.ai_model import MODEL_CHECKPOINT_FORMAT, MODEL_CHECKPOINT_VERSION
 from game.persistence import save_game
 from training.self_play import (
     ActionLimitExceeded,
     IncompleteGameError,
     NORMAL_EXPLORATION_MODE,
+    SHADOW_FILTER_POLICY_TOP_K,
+    SHADOW_FILTER_Q_TOP_K,
     SelfPlayTrainer,
+    TRAINING_CHECKPOINT_FORMAT,
+    TRAINING_CHECKPOINT_VERSION,
     ZERO_EPSILON_EXPLORATION_MODE,
 )
 from training.targeted_state_generator import StateGenerationError
 
 
-ACTIVE_EVALUATION_SETS = frozenset(("mid_late_end", "early"))
+ACTIVE_EVALUATION_SETS = frozenset(("mid_late_end", "fresh"))
 TRAINING_EXPLORATION_SEED_OFFSET = 2_000_000_033
+ROLLING_BACKUP_INTERVAL = 100
+ROLLING_BACKUP_RETENTION = 10
+DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS = (
+    ("fresh", 0.05),
+    ("early", 0.05),
+    ("mid", 0.05),
+    ("late", 0.50),
+    ("end", 1.00),
+)
 
 
 CSV_FIELDS = (
     "game#",
     "batch#",
-    "curriculum_stage",
-    "training_stage",
-    "run_type",
-    "run_mode",
+    "run",
+    "scenario",
     "map",
     "player_count",
     "starting_score_by_seat",
@@ -55,8 +69,8 @@ CSV_FIELDS = (
     "final_player_scores",
     "completion_reason",
     "action_count",
-    "trajectory_decision_count",
-    "sampled_training_decision_count",
+    "total_training_decisions",
+    "sampled_training_decisions",
     "move_action_count",
     "spent_action_count",
     "pointless_move_workflows",
@@ -64,13 +78,63 @@ CSV_FIELDS = (
     "all_move_turn_penalties",
     "moves_creating_claimable_route",
     "move_claim_conversions",
+    "shadow_filter_selected_count",
+    "shadow_filter_epsilon_selected_count",
     "retry_count",
     "latest_loss",
+    "q_loss",
+    "policy_loss",
+    "total_loss",
+    "policy_q_top1_agreement",
+    "policy_top1_q_rank",
+    "policy_entropy",
+    "policy_top2_mass",
+    "policy_top5_mass",
+    "policy_top10_mass",
+    "policy_trunk_gradient_scale",
     "evaluation_suite_size",
     "evaluation_suite_version",
     "generation_seconds",
     "play_seconds",
     "learning_seconds",
+)
+
+SHADOW_FILTER_CSV_FIELDS = (
+    "game#",
+    "batch#",
+    "run",
+    "game_maturity",
+    "scenario",
+    "map",
+    "player_count",
+    "state_seed",
+    "action_seed",
+    "retry_count",
+    "completion_reason",
+    "decision_number",
+    "action_index",
+    "action_type",
+    "semantic_action_indices",
+    "semantic_q_rank",
+    "q_value",
+    "q_gap_from_best",
+    "semantic_policy_rank",
+    "policy_probability",
+    "policy_rejection_threshold",
+    "q_rejection_threshold",
+    "would_filter",
+    "immediate_reward",
+    "local_training_target",
+    "local_training_adjustment",
+    "reward_to_go",
+    "final_training_target",
+    "receives_terminal_credit",
+    "terminal_credit_value",
+    "acting_player",
+    "acting_player_final_score",
+    "acting_player_won",
+    "policy_tier",
+    "used_epsilon",
 )
 
 DETAILED_PROFILING_FIELDS = (
@@ -90,17 +154,74 @@ def csv_fields(*, detailed_profiling=False):
     return CSV_FIELDS + (DETAILED_PROFILING_FIELDS if detailed_profiling else ())
 
 
-def _run_mode_from_legacy_row(row):
-    """Return the canonical run mode for current or historical CSV rows."""
-    current = (row.get("run_mode") or "").strip()
+TRAINING_MATURITIES = frozenset(("fresh", "early", "mid", "late", "end"))
+
+
+def _maturity_from_stage_name(stage_name):
+    value = (stage_name or "").strip().lower()
+    if value in TRAINING_MATURITIES:
+        return value
+    if value.startswith("near_end") or value.startswith("end"):
+        return "end"
+    if value.startswith("late"):
+        return "late"
+    if value.startswith("mid"):
+        return "mid"
+    if value.startswith("early"):
+        return "early"
+    if value.startswith("fresh") or value == "full_game":
+        return "fresh"
+    if value.startswith("near_"):
+        return "end"
+    return "end"
+
+
+def _canonical_run_from_legacy_row(row):
+    """Return one canonical run label for current or historical CSV rows."""
+    current = (row.get("run") or "").strip().lower()
+    legacy_mode = (row.get("run_mode") or "").strip().lower()
+    run_type = (row.get("run_type") or "").strip().lower()
+    if current.startswith("evaluation_"):
+        return current
+    if legacy_mode.startswith("evaluation_"):
+        return legacy_mode
+    if run_type == "evaluation":
+        evaluation_set = (row.get("evaluation_set") or "mid_late_end").strip().lower()
+        return f"evaluation_{evaluation_set}"
+
+    stage = (row.get("training_stage") or "").strip().lower()
+    if stage not in TRAINING_MATURITIES and current.startswith("training_"):
+        current_stage = current.removeprefix("training_").removesuffix("_zero_epsilon")
+        if current_stage in TRAINING_MATURITIES:
+            stage = current_stage
+    if stage not in TRAINING_MATURITIES:
+        curriculum_stage = (row.get("curriculum_stage") or "").partition("+")[0]
+        stage = _maturity_from_stage_name(curriculum_stage)
+
+    exploration = (row.get("training_exploration_mode") or "").strip().lower()
+    zero_epsilon = (
+        current.endswith("_zero_epsilon")
+        or legacy_mode.endswith("_zero_epsilon")
+        or exploration == ZERO_EPSILON_EXPLORATION_MODE
+    )
+    suffix = "_zero_epsilon" if zero_epsilon else ""
+    return f"training_{stage}{suffix}"
+
+
+def _scenario_from_legacy_row(row):
+    """Preserve only scenario detail not already encoded by ``run``."""
+    current = (row.get("scenario") or "").strip()
     if current:
         return current
-    run_type = (row.get("run_type") or "").strip().lower()
-    if run_type == "evaluation":
-        evaluation_set = (row.get("evaluation_set") or "mid_late_end").strip()
-        return f"evaluation_{evaluation_set}"
-    exploration = (row.get("training_exploration_mode") or NORMAL_EXPLORATION_MODE).strip()
-    return f"training_{exploration}"
+    value = (row.get("curriculum_stage") or "").strip()
+    if not value:
+        return ""
+    first, separator, detail = value.partition("+")
+    if first.lower() in TRAINING_MATURITIES:
+        return detail if separator else ""
+    if first.lower() in {"early_game", "mid_game", "late_game", "full_game"}:
+        return detail if separator else ""
+    return value
 
 
 @dataclass(frozen=True)
@@ -155,7 +276,9 @@ class CurriculumConfig:
     retry_limit: int = 5
     seed: int = 124
     evaluation_seed: int = 10_000
-    zero_epsilon_training_fraction: float = 0.05
+    zero_epsilon_training_fractions: tuple[tuple[str, float], ...] = (
+        DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS
+    )
     stages: tuple[CurriculumStage, ...] = DEFAULT_STAGES
     promotion: PromotionCriteria = field(default_factory=PromotionCriteria)
 
@@ -170,8 +293,13 @@ class CurriculumConfig:
                 raise ValueError(f"{name} must be positive")
         if self.retry_limit < 0:
             raise ValueError("retry limit cannot be negative")
-        if not 0 <= self.zero_epsilon_training_fraction <= 1:
-            raise ValueError("zero-epsilon training fraction must be between 0 and 1")
+        fractions = dict(self.zero_epsilon_training_fractions)
+        if len(fractions) != len(self.zero_epsilon_training_fractions):
+            raise ValueError("zero-epsilon training maturities must be unique")
+        if set(fractions) != TRAINING_MATURITIES:
+            raise ValueError("zero-epsilon training fractions must define every maturity")
+        if any(not 0 <= fraction <= 1 for fraction in fractions.values()):
+            raise ValueError("zero-epsilon training fractions must be between 0 and 1")
         if not self.stages:
             raise ValueError("at least one curriculum stage is required")
 
@@ -249,6 +377,29 @@ def _rounded_seconds(value):
     return round(float(value), 2)
 
 
+def _file_sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_backup_artifacts(checkpoint_path, model_path):
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    if checkpoint.get("training_checkpoint_format") != TRAINING_CHECKPOINT_FORMAT:
+        raise ValueError("Rolling backup contains an invalid training checkpoint format")
+    if checkpoint.get("training_checkpoint_version") != TRAINING_CHECKPOINT_VERSION:
+        raise ValueError("Rolling backup contains an invalid training checkpoint version")
+    del checkpoint
+
+    model = torch.load(model_path, map_location="cpu")
+    if model.get("model_checkpoint_format") != MODEL_CHECKPOINT_FORMAT:
+        raise ValueError("Rolling backup contains an invalid model checkpoint format")
+    if model.get("model_checkpoint_version") != MODEL_CHECKPOINT_VERSION:
+        raise ValueError("Rolling backup contains an invalid model checkpoint version")
+
+
 class CurriculumRunner:
     def __init__(
         self,
@@ -261,6 +412,7 @@ class CurriculumRunner:
         temporary_directory="training_output/curriculum/states",
         failure_directory="training_data/failures",
         evaluation_suite_directory="training_data/generated/evaluation",
+        backup_directory="training_output/backups",
         progress_callback=None,
     ):
         self.trainer = trainer
@@ -268,9 +420,11 @@ class CurriculumRunner:
         self.checkpoint_path = Path(checkpoint_path)
         self.playable_model_path = Path(playable_model_path)
         self.csv_path = Path(csv_path)
+        self.shadow_filter_csv_path = self.csv_path.with_name("filter_shadow.csv")
         self.temporary_directory = Path(temporary_directory)
         self.failure_directory = Path(failure_directory)
         self.evaluation_suite_directory = Path(evaluation_suite_directory)
+        self.backup_directory = Path(backup_directory)
         self.progress_callback = progress_callback
         self._captured_errors = set()
         self._latest_descriptor = None
@@ -304,6 +458,13 @@ class CurriculumRunner:
             self._configuration_signature(include_zero_epsilon=False, **overrides)
             for overrides in compatibility_overrides
         )
+        compatible_signatures.update(
+            self._configuration_signature(
+                legacy_zero_epsilon_training_fraction=0.05,
+                **overrides,
+            )
+            for overrides in compatibility_overrides
+        )
         if (
             saved.get("configuration_version", 1) >= 4
             and saved.get("configuration_signature") not in compatible_signatures
@@ -330,6 +491,73 @@ class CurriculumRunner:
                 message = f"[Batch {self.run_batch_number}/{self.config.iterations}] {message}"
             self.progress_callback(message)
 
+    def _rolling_backup_due(self):
+        completed_games = self.trainer.progress.completed_games
+        return completed_games > 0 and completed_games % ROLLING_BACKUP_INTERVAL == 0
+
+    def _create_rolling_backup(self):
+        if not self._rolling_backup_due():
+            return None
+        completed_games = self.trainer.progress.completed_games
+        final_directory = self.backup_directory / f"game_{completed_games:04d}"
+        if final_directory.is_dir():
+            return final_directory
+
+        self.backup_directory.mkdir(parents=True, exist_ok=True)
+        temporary_directory = Path(
+            tempfile.mkdtemp(
+                prefix=f".{final_directory.name}.",
+                suffix=".tmp",
+                dir=self.backup_directory,
+            )
+        )
+        try:
+            model_backup = temporary_directory / "hansa_nn_model.pth"
+            checkpoint_backup = temporary_directory / "training_checkpoint.pth"
+            shutil.copy2(self.playable_model_path, model_backup)
+            shutil.copy2(self.checkpoint_path, checkpoint_backup)
+            _validate_backup_artifacts(checkpoint_backup, model_backup)
+            checkpoint_hash = _file_sha256(checkpoint_backup)
+            model_hash = _file_sha256(model_backup)
+            if checkpoint_hash != _file_sha256(self.checkpoint_path):
+                raise OSError("Rolling training-checkpoint copy failed integrity verification")
+            if model_hash != _file_sha256(self.playable_model_path):
+                raise OSError("Rolling model copy failed integrity verification")
+            metadata = {
+                "completed_training_games": completed_games,
+                "batch_number": self.batch_number,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "training_updates": self.trainer.progress.training_updates,
+                "training_checkpoint_format": TRAINING_CHECKPOINT_FORMAT,
+                "training_checkpoint_version": TRAINING_CHECKPOINT_VERSION,
+                "model_checkpoint_format": MODEL_CHECKPOINT_FORMAT,
+                "model_checkpoint_version": MODEL_CHECKPOINT_VERSION,
+                "training_checkpoint_sha256": checkpoint_hash,
+                "model_sha256": model_hash,
+            }
+            (temporary_directory / "metadata.json").write_text(
+                json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            temporary_directory.replace(final_directory)
+        except Exception:
+            shutil.rmtree(temporary_directory, ignore_errors=True)
+            raise
+
+        backups = sorted(
+            (
+                child
+                for child in self.backup_directory.iterdir()
+                if child.is_dir()
+                and child.name.startswith("game_")
+                and child.name.removeprefix("game_").isdigit()
+            ),
+            key=lambda child: int(child.name.removeprefix("game_")),
+        )
+        for expired in backups[:-ROLLING_BACKUP_RETENTION]:
+            shutil.rmtree(expired)
+        return final_directory
+
     def _evaluation_game_count(self):
         manifest_path = self.evaluation_suite_directory / "manifest.json"
         if not manifest_path.is_file():
@@ -348,6 +576,7 @@ class CurriculumRunner:
         late_game_action_limit=None,
         retry_limit=None,
         include_zero_epsilon=True,
+        legacy_zero_epsilon_training_fraction=None,
     ):
         stages = [
             replace(
@@ -382,15 +611,21 @@ class CurriculumRunner:
             "promotion": asdict(self.config.promotion),
         }
         if include_zero_epsilon:
-            data["zero_epsilon_training_fraction"] = self.config.zero_epsilon_training_fraction
+            if legacy_zero_epsilon_training_fraction is not None:
+                data["zero_epsilon_training_fraction"] = legacy_zero_epsilon_training_fraction
+            else:
+                data["zero_epsilon_training_fractions"] = dict(
+                    self.config.zero_epsilon_training_fractions
+                )
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
-    def _training_exploration_mode(self, training_game_number=None):
+    def _training_exploration_mode(self, maturity, training_game_number=None):
         game_number = self.game_number if training_game_number is None else training_game_number
         rng = random.Random(
             self.config.seed + TRAINING_EXPLORATION_SEED_OFFSET + game_number * 1_000_003
         )
-        if rng.random() < self.config.zero_epsilon_training_fraction:
+        fraction = dict(self.config.zero_epsilon_training_fractions)[maturity]
+        if rng.random() < fraction:
             return ZERO_EPSILON_EXPLORATION_MODE
         return NORMAL_EXPLORATION_MODE
 
@@ -517,19 +752,25 @@ class CurriculumRunner:
         moves_creating_claimable_route = getattr(trajectory, "moves_creating_claimable_route", 0)
         move_claim_conversions = getattr(trajectory, "move_claim_conversions", 0)
         completion_reason = getattr(trajectory, "completion_reason", "normal")
-        maturity = (descriptor.scenario or stage.name).partition("+")[0]
-        run_mode = (
-            f"training_{getattr(trajectory, 'training_exploration_mode', NORMAL_EXPLORATION_MODE)}"
-            if run_type in {"training", "training_timeout"}
-            else f"evaluation_{descriptor.evaluation_set or 'mid_late_end'}"
-        )
+        scenario_label = descriptor.scenario or stage.name
+        maturity = _maturity_from_stage_name(scenario_label.partition("+")[0])
+        is_training = run_type in {"training", "training_timeout"}
+        if is_training:
+            exploration = getattr(trajectory, "training_exploration_mode", NORMAL_EXPLORATION_MODE)
+            run = f"training_{maturity}"
+            if exploration == ZERO_EPSILON_EXPLORATION_MODE:
+                run += "_zero_epsilon"
+            scenario = _scenario_from_legacy_row(
+                {"curriculum_stage": scenario_label, "training_stage": maturity}
+            )
+        else:
+            run = f"evaluation_{descriptor.evaluation_set or 'mid_late_end'}"
+            scenario = "" if descriptor.evaluation_set == "fresh" else scenario_label
         row = {
             "game#": game_number,
             "batch#": self.report_batch_number,
-            "curriculum_stage": descriptor.scenario or stage.name,
-            "training_stage": (maturity if run_type in {"training", "training_timeout"} else None),
-            "run_type": run_type,
-            "run_mode": run_mode,
+            "run": run,
+            "scenario": scenario or None,
             "map": descriptor.map_num,
             "player_count": descriptor.player_count,
             "starting_score_by_seat": json.dumps(descriptor.starting_scores_by_seat),
@@ -560,10 +801,10 @@ class CurriculumRunner:
             "final_player_scores": json.dumps(trajectory.final_scores),
             "completion_reason": completion_reason,
             "action_count": len(trajectory.action_trace),
-            "trajectory_decision_count": (
+            "total_training_decisions": (
                 training_sample_coverage.total_decisions if training_sample_coverage else None
             ),
-            "sampled_training_decision_count": (
+            "sampled_training_decisions": (
                 training_sample_coverage.sampled_decisions if training_sample_coverage else None
             ),
             "move_action_count": move_action_count,
@@ -573,8 +814,38 @@ class CurriculumRunner:
             "all_move_turn_penalties": getattr(trajectory, "all_move_turn_penalties", 0),
             "moves_creating_claimable_route": moves_creating_claimable_route,
             "move_claim_conversions": move_claim_conversions,
+            "shadow_filter_selected_count": getattr(trajectory, "shadow_filter_selected_count", 0),
+            "shadow_filter_epsilon_selected_count": getattr(
+                trajectory, "shadow_filter_epsilon_selected_count", 0
+            ),
             "retry_count": retry_count,
             "latest_loss": latest_loss,
+            "q_loss": (
+                self.trainer.progress.last_q_loss
+                if run_type in {"training", "training_timeout"}
+                else latest_loss
+            ),
+            "policy_loss": (
+                self.trainer.progress.last_policy_loss
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "total_loss": (
+                self.trainer.progress.last_total_loss
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "policy_q_top1_agreement": getattr(trajectory, "policy_q_top1_agreement", None),
+            "policy_top1_q_rank": getattr(trajectory, "policy_top1_q_rank", None),
+            "policy_entropy": getattr(trajectory, "policy_entropy", None),
+            "policy_top2_mass": getattr(trajectory, "policy_top2_mass", None),
+            "policy_top5_mass": getattr(trajectory, "policy_top5_mass", None),
+            "policy_top10_mass": getattr(trajectory, "policy_top10_mass", None),
+            "policy_trunk_gradient_scale": (
+                self.trainer._policy_trunk_gradient_scale()
+                if hasattr(self.trainer, "_policy_trunk_gradient_scale")
+                else None
+            ),
             "evaluation_suite_size": evaluation_suite_size,
             "evaluation_suite_version": evaluation_suite_version,
             "generation_seconds": _rounded_seconds(generation_seconds),
@@ -611,7 +882,22 @@ class CurriculumRunner:
                         writer.writeheader()
                         for existing in reader:
                             migrated = {field: existing.get(field, "") for field in fields}
-                            migrated["run_mode"] = _run_mode_from_legacy_row(existing)
+                            migrated["run"] = _canonical_run_from_legacy_row(existing)
+                            migrated["scenario"] = _scenario_from_legacy_row(existing)
+                            migrated["total_training_decisions"] = existing.get(
+                                "total_training_decisions",
+                                existing.get("trajectory_decision_count", ""),
+                            )
+                            migrated["sampled_training_decisions"] = existing.get(
+                                "sampled_training_decisions",
+                                existing.get("sampled_training_decision_count", ""),
+                            )
+                            if (
+                                existing.get("run_type") or ""
+                            ).strip().lower() == "training_timeout" and not migrated[
+                                "completion_reason"
+                            ]:
+                                migrated["completion_reason"] = "action_limit"
                             writer.writerow(migrated)
             if replacement is not None:
                 replacement.replace(self.csv_path)
@@ -622,10 +908,77 @@ class CurriculumRunner:
                 writer.writeheader()
             writer.writerows(rows)
 
+    def _shadow_filter_rows(self, trajectory, descriptor, stage, retry_count, game_number):
+        records = getattr(trajectory, "shadow_filter_records", ())
+        if not records:
+            return []
+        scenario_label = descriptor.scenario or stage.name
+        maturity = _maturity_from_stage_name(scenario_label.partition("+")[0])
+        exploration = getattr(trajectory, "training_exploration_mode", NORMAL_EXPLORATION_MODE)
+        run = f"training_{maturity}"
+        if exploration == ZERO_EPSILON_EXPLORATION_MODE:
+            run += "_zero_epsilon"
+        scenario = _scenario_from_legacy_row(
+            {"curriculum_stage": scenario_label, "training_stage": maturity}
+        )
+        completion_reason = getattr(trajectory, "completion_reason", "normal")
+        return [
+            {
+                "game#": game_number,
+                "batch#": self.report_batch_number,
+                "run": run,
+                "game_maturity": maturity,
+                "scenario": scenario or None,
+                "map": descriptor.map_num,
+                "player_count": descriptor.player_count,
+                "state_seed": descriptor.seed,
+                "action_seed": descriptor.action_seed,
+                "retry_count": retry_count,
+                "completion_reason": completion_reason,
+                "decision_number": record.decision_index + 1,
+                "action_index": record.action_index,
+                "action_type": record.action_type,
+                "semantic_action_indices": json.dumps(record.semantic_action_indices),
+                "semantic_q_rank": record.semantic_q_rank,
+                "q_value": record.q_value,
+                "q_gap_from_best": record.q_gap_from_best,
+                "semantic_policy_rank": record.semantic_policy_rank,
+                "policy_probability": record.policy_probability,
+                "policy_rejection_threshold": SHADOW_FILTER_POLICY_TOP_K,
+                "q_rejection_threshold": SHADOW_FILTER_Q_TOP_K,
+                "would_filter": True,
+                "immediate_reward": record.immediate_reward,
+                "local_training_target": record.local_training_target,
+                "local_training_adjustment": record.local_training_adjustment,
+                "reward_to_go": record.reward_to_go,
+                "final_training_target": record.final_training_target,
+                "receives_terminal_credit": record.receives_terminal_credit,
+                "terminal_credit_value": record.terminal_credit_value,
+                "acting_player": record.acting_player_index + 1,
+                "acting_player_final_score": record.acting_player_final_score,
+                "acting_player_won": record.acting_player_won,
+                "policy_tier": record.policy_tier,
+                "used_epsilon": record.used_epsilon,
+            }
+            for record in records
+        ]
+
+    def _append_shadow_filter_csv(self, rows):
+        if not rows:
+            return
+        self.shadow_filter_csv_path.parent.mkdir(parents=True, exist_ok=True)
+        write_header = not self.shadow_filter_csv_path.exists()
+        with self.shadow_filter_csv_path.open("a", newline="", encoding="utf-8") as output:
+            writer = csv.DictWriter(output, fieldnames=SHADOW_FILTER_CSV_FIELDS)
+            if write_header:
+                writer.writeheader()
+            writer.writerows(rows)
+
     def _collect_training(self, stage, directory):
         descriptors = []
         pending_update = []
         pending_rows = []
+        pending_shadow_filter_rows = []
         pending_game_numbers = []
         rows = []
         unfinished = 0
@@ -640,9 +993,14 @@ class CurriculumRunner:
             )
             self.trainer.model.save_model(self.playable_model_path)
             self._append_csv(pending_rows)
+            self._append_shadow_filter_csv(pending_shadow_filter_rows)
+            backup = self._create_rolling_backup()
+            if backup is not None:
+                self._report(f"Saved rolling backup {backup.name}")
             self._report(f"Saved training games {_format_game_numbers(pending_game_numbers)}")
             pending_update.clear()
             pending_rows.clear()
+            pending_shadow_filter_rows.clear()
             pending_game_numbers.clear()
 
         total_games = self.config.training_games_per_batch
@@ -674,8 +1032,13 @@ class CurriculumRunner:
                     retry_reason = f"generation constraints: {error}"
                     continue
                 generation_seconds = perf_counter() - generation_started
+                maturity = (descriptor.scenario or stage.name).partition("+")[0]
+                exploration_maturity = _maturity_from_stage_name(maturity)
                 if training_exploration_mode is None:
-                    training_exploration_mode = self._training_exploration_mode(self.game_number)
+                    training_exploration_mode = self._training_exploration_mode(
+                        exploration_maturity,
+                        self.game_number,
+                    )
                 self.trainer.rng.seed(descriptor.action_seed)
                 self.trainer.config = replace(
                     self.trainer.config,
@@ -708,17 +1071,30 @@ class CurriculumRunner:
                         f"{reason}: {error}" if reason == "no_legal_interaction" else reason
                     )
                     continue
-                game_loss = self.trainer.trajectory_loss(trajectory)
-                maturity = (descriptor.scenario or stage.name).partition("+")[0]
                 result = getattr(trajectory, "completion_reason", "normal")
                 descriptors.append(descriptor)
                 learning_started = perf_counter()
-                self.trainer.update_model((trajectory,), curriculum_maturities=(maturity,))
+                game_loss = self.trainer.update_model(
+                    (trajectory,), curriculum_maturities=(maturity,)
+                )
                 learning_seconds = perf_counter() - learning_started
+                pending_shadow_filter_rows.extend(
+                    self._shadow_filter_rows(
+                        trajectory,
+                        descriptor,
+                        stage,
+                        retry_count,
+                        self.report_game_number + 1,
+                    )
+                )
                 sample_coverage = getattr(self.trainer, "last_training_sample_coverage", ())
                 training_sample_coverage = sample_coverage[0] if sample_coverage else None
                 loss = f"; loss {game_loss:.2f}" if game_loss is not None else ""
-                slow_timings = _play_timing_breakdown(trajectory)
+                slow_timings = (
+                    _play_timing_breakdown(trajectory)
+                    if self.trainer.config.detailed_profiling
+                    else ""
+                )
                 timing = f" ({slow_timings})" if slow_timings else ""
                 generation = (
                     f"; generate {generation_seconds:.2f}s" if generation_seconds >= 1 else ""
@@ -785,7 +1161,10 @@ class CurriculumRunner:
                 )
                 rows.append(row)
                 pending_rows.append(row)
-                if len(pending_update) == self.config.update_batch_size:
+                if (
+                    len(pending_update) == self.config.update_batch_size
+                    or self._rolling_backup_due()
+                ):
                     save_completed_group()
                 break
             if completed_game:
@@ -827,7 +1206,7 @@ class CurriculumRunner:
                         item.get("scenario"),
                         (
                             ""
-                            if item.get("evaluation_set") == "early"
+                            if item.get("evaluation_set") == "fresh"
                             else "immediate_finish"
                             if item.get("immediate_finish", False)
                             else "one_round_before"
@@ -881,7 +1260,7 @@ class CurriculumRunner:
                             ),
                             evaluation=True,
                             evaluation_tier_rotation=self.batch_number - 1,
-                            capture_action_limit=descriptor.evaluation_set == "early",
+                            capture_action_limit=descriptor.evaluation_set == "fresh",
                         )
                     except ActionLimitExceeded:
                         failure_reason = "action_limit"
@@ -919,7 +1298,11 @@ class CurriculumRunner:
                 trajectories.append(trajectory)
                 evaluation_loss = self.trainer.trajectory_loss(trajectory)
                 result = getattr(trajectory, "completion_reason", "normal")
-                slow_timings = _play_timing_breakdown(trajectory)
+                slow_timings = (
+                    _play_timing_breakdown(trajectory)
+                    if self.trainer.config.detailed_profiling
+                    else ""
+                )
                 timing = f" ({slow_timings})" if slow_timings else ""
                 self._report(
                     f"Evaluation game {index + 1}/{total_games}: {result}; "

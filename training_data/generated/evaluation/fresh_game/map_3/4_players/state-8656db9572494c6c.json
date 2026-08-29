@@ -1,0 +1,56 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000077,
+  "map_num": 3,
+  "player_count": 4,
+  "mission_cards": false,
+  "emperors_favour": false,
+  "bonus_marker_setup": "mixed",
+  "state_id": "state-8656db9572494c6c",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [],
+  "bonus_marker_draw_supply": [
+    "BlockTradeRoute",
+    "UpgradeAbility",
+    "SwapOffice",
+    "Tribute4EstablishingTP",
+    "3Actions",
+    "PlaceAdjacent",
+    "BlockTradeRoute",
+    "4Actions",
+    "UpgradeAbility",
+    "ExchangeBonusMarker",
+    "PlaceAdjacent",
+    "Move3"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "Move3",
+      "Lancaster",
+      "Richmond"
+    ],
+    [
+      "PlaceAdjacent",
+      "York",
+      "Nottingham"
+    ],
+    [
+      "SwapOffice",
+      "Oxford",
+      "Salisbury"
+    ]
+  ],
+  "save_file": "state-8656db9572494c6c.hansa"
+}

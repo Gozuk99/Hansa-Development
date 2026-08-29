@@ -17,9 +17,19 @@ from time import perf_counter
 import torch
 import torch.nn.functional as functional
 
-from ai.ai_model import HansaNN, device
+from ai.ai_model import (
+    MODEL_CHECKPOINT_FORMAT,
+    MODEL_CHECKPOINT_VERSION,
+    LEGACY_MODEL_CHECKPOINT_VERSION,
+    HansaNN,
+    HansaNNOutput,
+    device,
+)
 from ai.observation_encoder import ObservationEncoder
 from ai.observation_schema import (
+    LEGACY_OBSERVATION_SIZE,
+    LEGACY_OBSERVATION_SIZE_V3,
+    LEGACY_OBSERVATION_SIZE_V4,
     observation_schema_metadata,
     validate_model_observation_schema_metadata,
 )
@@ -37,8 +47,11 @@ from map_data.constants import ACTIONS_MAX_VALUES, DARK_GREEN, UPGRADE_MAX_VALUE
 
 
 TRAINING_CHECKPOINT_FORMAT = "hansa-shared-q-training"
-TRAINING_CHECKPOINT_VERSION = 5
+TRAINING_CHECKPOINT_VERSION = 7
+LEGACY_DUAL_HEAD_CHECKPOINT_VERSION = 6
+LEGACY_Q_ONLY_CHECKPOINT_VERSION = 5
 DEFAULT_LEARNING_RATE = 0.0001
+TRAJECTORY_LOSS_CHUNK_SIZE = 512
 LEGACY_LEARNING_RATE = 0.00001
 LEGACY_EARLY_MAX_TRAINING_DECISIONS = 2_048
 PRESTIGE_REWARD_MULTIPLIER = 100
@@ -62,8 +75,11 @@ POINTLESS_MOVEMENT_LOCAL_TARGET = -1000
 _CURRICULUM_STATE_UNSET = object()
 DEFAULT_TIER_TOP_K = (2, 5, 10, 15, 20)
 DEFAULT_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 0.35)
+FRESH_OPTIMIZER_UPDATES_PER_TRAJECTORY = 4
 NORMAL_EXPLORATION_MODE = "normal"
 ZERO_EPSILON_EXPLORATION_MODE = "zero_epsilon"
+SHADOW_FILTER_POLICY_TOP_K = 10
+SHADOW_FILTER_Q_TOP_K = 20
 LEGACY_TIER_TOP_K = (2, 5, 10, 15, None)
 LEGACY_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 1.00)
 _ACTIONS_BY_INDEX = tuple(
@@ -101,6 +117,74 @@ class ActionLimitExceeded(IncompleteGameError):
 
 
 @dataclass(frozen=True)
+class TrainingRosterPolicy:
+    """One training roster: fixed tiers plus one uniformly selected opponent tier."""
+
+    fixed_tiers: tuple[int, ...]
+    random_tier_pool: tuple[int, ...] = ()
+
+    @classmethod
+    def from_serialized(cls, value):
+        if isinstance(value, cls):
+            return value
+        return cls(
+            fixed_tiers=tuple(value["fixed_tiers"]),
+            random_tier_pool=tuple(value.get("random_tier_pool", ())),
+        )
+
+
+@dataclass(frozen=True)
+class TierRosterConfig:
+    """Own the distinct training policies and fixed evaluation rosters."""
+
+    evaluation_three_player: tuple[int, ...] = (1, 3, 5)
+    evaluation_four_player: tuple[int, ...] = (1, 2, 4, 5)
+    evaluation_five_player: tuple[int, ...] = (1, 2, 3, 4, 5)
+    training_three_player: TrainingRosterPolicy = field(
+        default_factory=lambda: TrainingRosterPolicy((1, 2), (3, 4, 5))
+    )
+    training_four_player: TrainingRosterPolicy = field(
+        default_factory=lambda: TrainingRosterPolicy((1, 2, 3), (4, 5))
+    )
+    training_five_player: TrainingRosterPolicy = field(
+        default_factory=lambda: TrainingRosterPolicy((1, 2, 3, 4, 5))
+    )
+
+    @classmethod
+    def from_serialized(cls, value):
+        if isinstance(value, cls):
+            return value
+        return cls(
+            evaluation_three_player=tuple(value["evaluation_three_player"]),
+            evaluation_four_player=tuple(value["evaluation_four_player"]),
+            evaluation_five_player=tuple(value["evaluation_five_player"]),
+            training_three_player=TrainingRosterPolicy.from_serialized(
+                value["training_three_player"]
+            ),
+            training_four_player=TrainingRosterPolicy.from_serialized(
+                value["training_four_player"]
+            ),
+            training_five_player=TrainingRosterPolicy.from_serialized(
+                value["training_five_player"]
+            ),
+        )
+
+    def evaluation_rosters(self):
+        return {
+            3: self.evaluation_three_player,
+            4: self.evaluation_four_player,
+            5: self.evaluation_five_player,
+        }
+
+    def training_policies(self):
+        return {
+            3: self.training_three_player,
+            4: self.training_four_player,
+            5: self.training_five_player,
+        }
+
+
+@dataclass(frozen=True)
 class TrainingConfig:
     learning_rate: float = DEFAULT_LEARNING_RATE
     max_gradient_norm: float = 1.0
@@ -111,17 +195,26 @@ class TrainingConfig:
     gamma: float = 0.99
     decision_batch_size: int = 256
     normal_max_training_decisions: int = 1_024
+    fresh_max_training_decisions: int = 4_096
     early_max_training_decisions: int = 4_096
     full_validation_interval: int = 50
     detailed_profiling: bool = False
+    shadow_filter_audit_enabled: bool = False
     income_penalty_scale: float = 100.0
+    policy_loss_weight: float = 1.0
+    policy_head_lr_multiplier: float = 1.0
+    policy_return_scale: float = 1_000.0
     tier_top_k: tuple[int | None, ...] = DEFAULT_TIER_TOP_K
     tier_epsilons: tuple[float, ...] = DEFAULT_TIER_EPSILONS
-    three_player_tiers: tuple[int, ...] = (1, 3, 5)
-    four_player_tiers: tuple[int, ...] = (1, 2, 4, 5)
-    five_player_tiers: tuple[int, ...] = (1, 2, 3, 4, 5)
+    tier_rosters: TierRosterConfig = field(default_factory=TierRosterConfig)
 
     def __post_init__(self):
+        if not isinstance(self.tier_rosters, TierRosterConfig):
+            object.__setattr__(
+                self,
+                "tier_rosters",
+                TierRosterConfig.from_serialized(self.tier_rosters),
+            )
         if self.learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
         if self.max_gradient_norm <= 0:
@@ -136,30 +229,46 @@ class TrainingConfig:
             raise ValueError("decision batch size must be positive")
         if self.normal_max_training_decisions < 1:
             raise ValueError("normal maximum training decisions must be positive")
+        if self.fresh_max_training_decisions < 1:
+            raise ValueError("fresh maximum training decisions must be positive")
         if self.early_max_training_decisions < 1:
             raise ValueError("early maximum training decisions must be positive")
         if self.full_validation_interval < 1:
             raise ValueError("full validation interval must be positive")
         if self.income_penalty_scale < 0:
             raise ValueError("income penalty scale cannot be negative")
+        if self.policy_loss_weight < 0:
+            raise ValueError("policy loss weight cannot be negative")
+        if self.policy_head_lr_multiplier <= 0:
+            raise ValueError("policy-head learning-rate multiplier must be positive")
+        if self.policy_return_scale <= 0:
+            raise ValueError("policy return scale must be positive")
         if len(self.tier_top_k) != len(self.tier_epsilons):
             raise ValueError("tier top-k and epsilon settings must have equal lengths")
         if any(top_k is not None and top_k < 1 for top_k in self.tier_top_k):
             raise ValueError("tier top-k values must be positive")
         if any(not 0 <= epsilon <= 1 for epsilon in self.tier_epsilons):
             raise ValueError("tier epsilon values must be between 0 and 1")
-        for player_count, tiers in self.tier_subsets().items():
+        for player_count, tiers in self.tier_rosters.evaluation_rosters().items():
             if len(tiers) != player_count or len(set(tiers)) != player_count:
-                raise ValueError(f"{player_count}-player tiers must be unique")
+                raise ValueError(f"{player_count}-player evaluation tiers must be unique")
             if any(tier < 1 or tier > len(self.tier_top_k) for tier in tiers):
-                raise ValueError(f"{player_count}-player tier is undefined")
-
-    def tier_subsets(self):
-        return {
-            3: self.three_player_tiers,
-            4: self.four_player_tiers,
-            5: self.five_player_tiers,
-        }
+                raise ValueError(f"{player_count}-player evaluation tier is undefined")
+        for player_count, policy in self.tier_rosters.training_policies().items():
+            selected_count = len(policy.fixed_tiers) + bool(policy.random_tier_pool)
+            if selected_count != player_count:
+                raise ValueError(
+                    f"{player_count}-player training policy must select {player_count} tiers"
+                )
+            all_tiers = policy.fixed_tiers + policy.random_tier_pool
+            if len(set(policy.fixed_tiers)) != len(policy.fixed_tiers) or set(
+                policy.fixed_tiers
+            ) & set(policy.random_tier_pool):
+                raise ValueError(f"{player_count}-player training tiers must be unique")
+            if len(set(policy.random_tier_pool)) != len(policy.random_tier_pool):
+                raise ValueError(f"{player_count}-player random tier pool must be unique")
+            if any(tier < 1 or tier > len(self.tier_top_k) for tier in all_tiers):
+                raise ValueError(f"{player_count}-player training tier is undefined")
 
 
 @dataclass(frozen=True)
@@ -176,6 +285,7 @@ class ActionSelection:
     model_rank: int
     legal_action_count: int
     equivalent_action_indices: tuple[int, ...] = ()
+    semantic_q_scores: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -198,7 +308,33 @@ class TrainingDecision:
     local_training_target: float | None = None
     local_training_adjustment: float = 0.0
     equivalent_action_indices: tuple[int, ...] = ()
+    equivalent_action_groups: tuple[tuple[int, ...], ...] = ()
     receives_terminal_credit: bool = True
+
+
+@dataclass(frozen=True)
+class ShadowFilterAuditRecord:
+    decision_index: int
+    action_index: int
+    action_type: str
+    semantic_action_indices: tuple[int, ...]
+    semantic_q_rank: int
+    q_value: float
+    q_gap_from_best: float
+    semantic_policy_rank: int
+    policy_probability: float
+    immediate_reward: float
+    local_training_target: float | None
+    local_training_adjustment: float
+    reward_to_go: float
+    final_training_target: float
+    receives_terminal_credit: bool
+    terminal_credit_value: float
+    acting_player_index: int
+    acting_player_final_score: int
+    acting_player_won: bool
+    policy_tier: int
+    used_epsilon: bool
 
 
 @dataclass(frozen=True)
@@ -230,6 +366,15 @@ class CompletedTrajectory:
     move_claim_conversions: int = 0
     move_claim_conversion_rate: float | None = None
     training_exploration_mode: str = NORMAL_EXPLORATION_MODE
+    policy_q_top1_agreement: float | None = None
+    policy_top1_q_rank: float | None = None
+    policy_entropy: float | None = None
+    policy_top2_mass: float | None = None
+    policy_top5_mass: float | None = None
+    policy_top10_mass: float | None = None
+    shadow_filter_records: tuple[ShadowFilterAuditRecord, ...] = ()
+    shadow_filter_selected_count: int = 0
+    shadow_filter_epsilon_selected_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -286,6 +431,7 @@ def should_fully_validate(action_count, interval, turn_before, phase_before, gam
 class TrainingProgress:
     completed_games: int = 0
     training_updates: int = 0
+    policy_training_updates: int = 0
     decisions: int = 0
     invalid_action_attempts: int = 0
     game_completion_failures: int = 0
@@ -294,6 +440,10 @@ class TrainingProgress:
     checkpoint_loads: int = 0
     last_loss: float | None = None
     mean_loss: float | None = None
+    last_q_loss: float | None = None
+    last_policy_loss: float | None = None
+    last_total_loss: float | None = None
+    mean_policy_loss: float | None = None
     tier_games: dict[int, int] = field(default_factory=dict)
     tier_wins: dict[int, int] = field(default_factory=dict)
     tier_selected_rank_total: dict[int, int] = field(default_factory=dict)
@@ -301,6 +451,312 @@ class TrainingProgress:
     tier_top_k_selections: dict[int, int] = field(default_factory=dict)
     tier_immediate_reward_total: dict[int, float] = field(default_factory=dict)
     tier_reward_to_go_total: dict[int, float] = field(default_factory=dict)
+
+
+@dataclass
+class ShadowPolicyMetrics:
+    """Defer shadow-policy aggregation to one vectorized device operation per game."""
+
+    decisions: int = 0
+    records: list = field(default_factory=list)
+
+    def record(self, q_group_scores, policy_logits, groups):
+        if len(q_group_scores) != len(groups):
+            raise ValueError("Shadow diagnostics require one Q score per semantic group")
+        self.decisions += 1
+        self.records.append((q_group_scores, policy_logits, groups))
+
+    def averages(self):
+        if not self.decisions:
+            return (None,) * 6
+
+        policy_rows = torch.stack([record[1] for record in self.records])
+        metric_device = policy_rows.device
+        metric_dtype = policy_rows.dtype
+        member_rows = []
+        member_actions = []
+        member_groups = []
+        q_scores = []
+        group_decisions = []
+        group_positions = []
+        group_offsets = []
+        group_id = 0
+        max_group_count = 0
+        for decision_index, (decision_q_scores, _policy_logits, groups) in enumerate(self.records):
+            group_offsets.append(group_id)
+            max_group_count = max(max_group_count, len(groups))
+            for group_position, (q_score, group) in enumerate(zip(decision_q_scores, groups)):
+                q_scores.append(q_score)
+                group_decisions.append(decision_index)
+                group_positions.append(group_position)
+                member_rows.extend((decision_index,) * len(group))
+                member_actions.extend(group)
+                member_groups.extend((group_id,) * len(group))
+                group_id += 1
+
+        member_rows = torch.tensor(member_rows, dtype=torch.long, device=metric_device)
+        member_actions = torch.tensor(member_actions, dtype=torch.long, device=metric_device)
+        member_groups = torch.tensor(member_groups, dtype=torch.long, device=metric_device)
+        group_decisions = torch.tensor(
+            group_decisions,
+            dtype=torch.long,
+            device=metric_device,
+        )
+        group_positions = torch.tensor(
+            group_positions,
+            dtype=torch.long,
+            device=metric_device,
+        )
+        q_scores = torch.tensor(q_scores, dtype=metric_dtype, device=metric_device)
+        group_offsets = torch.tensor(group_offsets, dtype=torch.long, device=metric_device)
+
+        member_logits = policy_rows[member_rows, member_actions]
+        group_logits = torch.zeros(group_id, dtype=metric_dtype, device=metric_device)
+        group_logits.scatter_add_(0, member_groups, member_logits)
+        group_counts = torch.zeros(group_id, dtype=metric_dtype, device=metric_device)
+        group_counts.scatter_add_(0, member_groups, torch.ones_like(member_logits))
+        group_logits /= group_counts
+
+        policy_maxima = torch.full(
+            (self.decisions,),
+            -torch.inf,
+            dtype=metric_dtype,
+            device=metric_device,
+        )
+        policy_maxima.scatter_reduce_(
+            0,
+            group_decisions,
+            group_logits,
+            reduce="amax",
+            include_self=True,
+        )
+        exponentials = torch.exp(group_logits - policy_maxima[group_decisions])
+        denominators = torch.zeros(
+            self.decisions,
+            dtype=metric_dtype,
+            device=metric_device,
+        )
+        denominators.scatter_add_(0, group_decisions, exponentials)
+        probabilities = exponentials / denominators[group_decisions]
+
+        policy_top_positions = self._first_maximum_positions(
+            group_logits,
+            group_decisions,
+            group_positions,
+            policy_maxima,
+            max_group_count,
+        )
+        q_maxima = torch.full_like(policy_maxima, -torch.inf)
+        q_maxima.scatter_reduce_(
+            0,
+            group_decisions,
+            q_scores,
+            reduce="amax",
+            include_self=True,
+        )
+        q_top_positions = self._first_maximum_positions(
+            q_scores,
+            group_decisions,
+            group_positions,
+            q_maxima,
+            max_group_count,
+        )
+        policy_top_groups = group_offsets + policy_top_positions
+        selected_q_scores = q_scores[policy_top_groups]
+        outranks_policy_top = (q_scores > selected_q_scores[group_decisions]) | (
+            (q_scores == selected_q_scores[group_decisions])
+            & (group_positions < policy_top_positions[group_decisions])
+        )
+        policy_q_ranks = torch.ones(
+            self.decisions,
+            dtype=torch.long,
+            device=metric_device,
+        )
+        policy_q_ranks.scatter_add_(
+            0,
+            group_decisions,
+            outranks_policy_top.to(torch.long),
+        )
+
+        entropy_by_group = -(probabilities * torch.log(probabilities.clamp_min(1e-12)))
+        entropy = torch.zeros_like(policy_maxima)
+        entropy.scatter_add_(0, group_decisions, entropy_by_group)
+        probability_rows = torch.zeros(
+            (self.decisions, max_group_count),
+            dtype=metric_dtype,
+            device=metric_device,
+        )
+        probability_rows[group_decisions, group_positions] = probabilities
+        top_values = torch.topk(
+            probability_rows,
+            min(10, max_group_count),
+            dim=1,
+            sorted=True,
+        ).values
+        totals = torch.stack(
+            (
+                (policy_top_positions == q_top_positions).sum().to(metric_dtype),
+                policy_q_ranks.sum().to(metric_dtype),
+                entropy.sum(),
+                top_values[:, :2].sum(),
+                top_values[:, :5].sum(),
+                top_values.sum(),
+            )
+        )
+        return tuple((totals / self.decisions).cpu().tolist())
+
+    @staticmethod
+    def _first_maximum_positions(
+        scores,
+        group_decisions,
+        group_positions,
+        maxima,
+        missing_position,
+    ):
+        candidates = torch.where(
+            scores == maxima[group_decisions],
+            group_positions,
+            missing_position,
+        )
+        positions = torch.full(
+            maxima.shape,
+            missing_position,
+            dtype=torch.long,
+            device=scores.device,
+        )
+        positions.scatter_reduce_(
+            0,
+            group_decisions,
+            candidates,
+            reduce="amin",
+            include_self=True,
+        )
+        return positions
+
+
+@dataclass(frozen=True)
+class _ShadowFilterSelection:
+    decision_index: int
+    action_index: int
+    action_type: str
+    semantic_action_indices: tuple[int, ...]
+    semantic_q_rank: int
+    q_value: float
+    q_gap_from_best: float
+    semantic_policy_rank: torch.Tensor
+    policy_probability: torch.Tensor
+
+
+@dataclass
+class ShadowFilterAudit:
+    """Collect observational semantic rejection candidates without affecting play."""
+
+    records: list[_ShadowFilterSelection] = field(default_factory=list)
+
+    def record(self, decision_index, selection, policy_logits, groups):
+        if len(selection.semantic_q_scores) != len(groups):
+            raise ValueError("Shadow filtering requires one Q score per semantic group")
+        selected_position = next(
+            position for position, group in enumerate(groups) if selection.action_index in group
+        )
+        group_logits = semantic_group_logits(policy_logits, groups)
+        selected_logit = group_logits[selected_position]
+        positions = torch.arange(len(groups), device=group_logits.device)
+        policy_rank = (
+            1
+            + (
+                (group_logits > selected_logit)
+                | ((group_logits == selected_logit) & (positions < selected_position))
+            ).sum()
+        )
+        policy_probability = torch.softmax(group_logits, dim=0)[selected_position]
+        q_value = selection.semantic_q_scores[selected_position]
+        self.records.append(
+            _ShadowFilterSelection(
+                decision_index=decision_index,
+                action_index=selection.action_index,
+                action_type=type(_ACTIONS_BY_INDEX[selection.action_index]).__name__,
+                semantic_action_indices=groups[selected_position],
+                semantic_q_rank=selection.model_rank,
+                q_value=q_value,
+                q_gap_from_best=max(selection.semantic_q_scores) - q_value,
+                semantic_policy_rank=policy_rank,
+                policy_probability=policy_probability,
+            )
+        )
+
+    def flagged_outcomes(
+        self,
+        reward_to_go_decisions,
+        training_decisions,
+        terminal_rewards,
+        final_scores,
+        winner_indices,
+    ):
+        if not self.records:
+            return ()
+        policy_values = torch.stack(
+            [
+                torch.stack(
+                    (
+                        record.semantic_policy_rank.to(torch.float32),
+                        record.policy_probability.to(torch.float32),
+                    )
+                )
+                for record in self.records
+            ]
+        ).cpu()
+        winners = set(winner_indices)
+        outcomes = []
+        for record, (policy_rank_value, policy_probability_value) in zip(
+            self.records, policy_values.tolist()
+        ):
+            policy_rank = int(policy_rank_value)
+            if not would_shadow_filter(policy_rank, record.semantic_q_rank):
+                continue
+            reward_decision = reward_to_go_decisions[record.decision_index]
+            training_decision = training_decisions[record.decision_index]
+            player_index = training_decision.acting_player_index
+            receives_terminal_credit = training_decision.receives_terminal_credit
+            outcomes.append(
+                ShadowFilterAuditRecord(
+                    decision_index=record.decision_index,
+                    action_index=record.action_index,
+                    action_type=record.action_type,
+                    semantic_action_indices=record.semantic_action_indices,
+                    semantic_q_rank=record.semantic_q_rank,
+                    q_value=record.q_value,
+                    q_gap_from_best=record.q_gap_from_best,
+                    semantic_policy_rank=policy_rank,
+                    policy_probability=policy_probability_value,
+                    immediate_reward=training_decision.immediate_reward,
+                    local_training_target=training_decision.local_training_target,
+                    local_training_adjustment=training_decision.local_training_adjustment,
+                    reward_to_go=reward_decision.reward_to_go,
+                    final_training_target=training_decision.reward_to_go,
+                    receives_terminal_credit=receives_terminal_credit,
+                    terminal_credit_value=(
+                        terminal_rewards[player_index] if receives_terminal_credit else 0.0
+                    ),
+                    acting_player_index=player_index,
+                    acting_player_final_score=final_scores[player_index],
+                    acting_player_won=player_index in winners,
+                    policy_tier=training_decision.policy_tier,
+                    used_epsilon=training_decision.used_epsilon,
+                )
+            )
+        return tuple(outcomes)
+
+
+def would_shadow_filter(
+    policy_rank,
+    q_rank,
+    *,
+    policy_top_k=SHADOW_FILTER_POLICY_TOP_K,
+    q_top_k=SHADOW_FILTER_Q_TOP_K,
+):
+    """Return whether both conservative semantic-rank rejection gates agree."""
+    return policy_rank > policy_top_k and q_rank > q_top_k
 
 
 def _file_sha256(path: Path) -> str:
@@ -366,6 +822,7 @@ def move_workflow_exploration_categories(
     legal_indices,
     *,
     opponent_pickups=False,
+    any_pickups=False,
     post_contexts=None,
 ):
     """Group equivalent normal-Move or Move-3 clicks into semantic choices."""
@@ -382,11 +839,12 @@ def move_workflow_exploration_categories(
         )
         if context is not None:
             route_index, route, post = context
-            is_pickup = (
-                post.owner is not None and post.owner is not game.current_player
-                if opponent_pickups
-                else post.owner is game.current_player
-            )
+            if any_pickups:
+                is_pickup = post.owner is not None
+            elif opponent_pickups:
+                is_pickup = post.owner is not None and post.owner is not game.current_player
+            else:
+                is_pickup = post.owner is game.current_player
             if is_pickup and route.required_circles == 0:
                 # The occupied post already determines the piece shape.
                 key = (
@@ -558,6 +1016,11 @@ def assign_reward_to_go(decisions, terminal_rewards, gamma):
 def assign_training_targets(decisions, terminal_rewards, gamma):
     """Assign game returns, then override only explicitly local movement mistakes."""
     completed = assign_reward_to_go(decisions, terminal_rewards, gamma)
+    return apply_local_training_targets(completed)
+
+
+def apply_local_training_targets(decisions):
+    """Apply local target overrides and adjustments after reward-to-go is complete."""
     return tuple(
         replace(decision, reward_to_go=decision.local_training_target)
         if decision.local_training_target is not None
@@ -567,7 +1030,7 @@ def assign_training_targets(decisions, terminal_rewards, gamma):
         )
         if decision.local_training_adjustment
         else decision
-        for decision in completed
+        for decision in decisions
     )
 
 
@@ -737,7 +1200,7 @@ def _is_normal_move_in_progress(action_phase, player):
 
 
 def pointless_movement_penalty(origin_pieces, destination_posts, post_routes=None):
-    """Penalize exact or non-maritime route-equivalent movement."""
+    """Penalize exact or indistinguishable non-maritime movement."""
     if not origin_pieces or len(origin_pieces) != len(destination_posts):
         return 0.0
     original = {post: (owner, shape) for post, owner, shape in origin_pieces}
@@ -749,6 +1212,8 @@ def pointless_movement_penalty(origin_pieces, destination_posts, post_routes=Non
     )
     if exact_no_change:
         return float(POINTLESS_MOVEMENT_LOCAL_TARGET)
+    if len({(owner, shape) for _, owner, shape in origin_pieces}) > 1:
+        return 0.0
     if post_routes is None:
         return 0.0
     origin_routes = [post_routes.get(post) for post in original]
@@ -779,6 +1244,14 @@ def move_route_focus_reward(rewarded_routes, destination_counts):
     return frozenset(set(rewarded_routes) | focused_routes), float(
         MOVE_ROUTE_FOCUS_REWARD if newly_rewarded else 0
     )
+
+
+def clear_move_route_focus_after_claim(rewarded_routes, action, turn_phase):
+    """Make a claimed route eligible for a later Move-focus reward."""
+    rewarded = set(rewarded_routes)
+    if turn_phase is TurnPhase.ACTIONS and isinstance(action, RouteInteraction):
+        rewarded.discard(action.route_slot)
+    return frozenset(rewarded)
 
 
 def update_move_claim_combo(
@@ -887,20 +1360,224 @@ def apply_route_completion_reward(reward_deltas, *, action, turn_phase, acting_p
     return tuple(adjusted)
 
 
+def policy_quality_signal(targets, return_scale):
+    """Bound signed trajectory quality without copying Q ranks or behavior odds."""
+    return torch.tanh(targets / return_scale)
+
+
+def semantic_group_logits(logits, groups):
+    """Represent equivalent action indices once using their mean learned logit."""
+    return torch.stack(
+        [
+            logits[torch.as_tensor(group, dtype=torch.long, device=logits.device)].mean()
+            for group in groups
+        ]
+    )
+
+
+def _policy_semantic_groups(sample):
+    """Return the legal semantic choices and selected choice for one sample."""
+    legal_mask = sample.legal_action_mask
+    if legal_mask.device.type != "cpu":
+        legal_mask = legal_mask.detach().cpu()
+    legal_indices = tuple(legal_mask.nonzero(as_tuple=False).flatten().tolist())
+    if sample.action_index not in legal_indices:
+        legal_indices += (sample.action_index,)
+
+    legal_set = set(legal_indices)
+    stored_groups = list(sample.equivalent_action_groups)
+    selected_group = sample.equivalent_action_indices
+    if len(selected_group) > 1 and selected_group not in stored_groups:
+        stored_groups.append(selected_group)
+
+    grouped_by_index = {}
+    for group in stored_groups:
+        legal_group = tuple(index for index in group if index in legal_set)
+        if len(legal_group) < 2 or any(index in grouped_by_index for index in legal_group):
+            continue
+        for index in legal_group:
+            grouped_by_index[index] = legal_group
+
+    semantic_groups = []
+    emitted_groups = set()
+    for index in legal_indices:
+        group = grouped_by_index.get(index, (index,))
+        if group in emitted_groups:
+            continue
+        semantic_groups.append(group)
+        emitted_groups.add(group)
+
+    selected_position = next(
+        position for position, group in enumerate(semantic_groups) if sample.action_index in group
+    )
+    return tuple(semantic_groups), selected_position
+
+
+def policy_batch_losses(policy_logits, samples, quality_signals):
+    """Return bounded return-weighted losses for a batch of semantic choices."""
+    samples = tuple(samples)
+    if policy_logits.ndim != 2 or policy_logits.shape[0] != len(samples):
+        raise ValueError("Policy logits must contain one row per training sample")
+    if quality_signals.shape != (len(samples),):
+        raise ValueError("Policy quality must contain one value per training sample")
+
+    structures = [_policy_semantic_groups(sample) for sample in samples]
+    member_rows = []
+    member_actions = []
+    member_group_ids = []
+    group_decisions = []
+    group_positions = []
+    group_sizes = []
+    selected_positions = []
+    group_id = 0
+    maximum_group_count = 0
+    for decision_index, (groups, selected_position) in enumerate(structures):
+        maximum_group_count = max(maximum_group_count, len(groups))
+        selected_positions.append(selected_position)
+        for group_position, group in enumerate(groups):
+            group_decisions.append(decision_index)
+            group_positions.append(group_position)
+            group_sizes.append(len(group))
+            member_rows.extend((decision_index,) * len(group))
+            member_actions.extend(group)
+            member_group_ids.extend((group_id,) * len(group))
+            group_id += 1
+
+    policy_device = policy_logits.device
+    member_rows = torch.tensor(member_rows, dtype=torch.long, device=policy_device)
+    member_actions = torch.tensor(member_actions, dtype=torch.long, device=policy_device)
+    member_group_ids = torch.tensor(member_group_ids, dtype=torch.long, device=policy_device)
+    group_decisions = torch.tensor(group_decisions, dtype=torch.long, device=policy_device)
+    group_positions = torch.tensor(group_positions, dtype=torch.long, device=policy_device)
+    group_sizes = torch.tensor(group_sizes, dtype=policy_logits.dtype, device=policy_device)
+    selected_positions = torch.tensor(selected_positions, dtype=torch.long, device=policy_device)
+
+    member_logits = policy_logits[member_rows, member_actions]
+    group_logits = torch.zeros(group_id, dtype=policy_logits.dtype, device=policy_device)
+    group_logits.scatter_add_(0, member_group_ids, member_logits)
+    group_logits = group_logits / group_sizes
+    dense_logits = torch.full(
+        (len(samples), maximum_group_count),
+        -torch.inf,
+        dtype=policy_logits.dtype,
+        device=policy_device,
+    )
+    dense_logits[group_decisions, group_positions] = group_logits
+    log_normalizers = torch.logsumexp(dense_logits, dim=1)
+    selected_logits = dense_logits.gather(1, selected_positions.unsqueeze(1)).squeeze(1)
+    selected_log_probabilities = selected_logits - log_normalizers
+    unselected_logits = dense_logits.clone()
+    unselected_logits.scatter_(1, selected_positions.unsqueeze(1), -torch.inf)
+    log_unselected_probabilities = torch.logsumexp(unselected_logits, dim=1) - log_normalizers
+
+    positive_quality = quality_signals.clamp_min(0)
+    negative_quality = (-quality_signals).clamp_min(0)
+    legal_group_counts = torch.tensor(
+        [len(groups) for groups, _selected in structures],
+        dtype=torch.long,
+        device=policy_device,
+    )
+    has_choice = legal_group_counts > 1
+    log_unselected_probabilities = torch.where(
+        has_choice,
+        log_unselected_probabilities,
+        torch.zeros_like(log_unselected_probabilities),
+    )
+    losses = (
+        -positive_quality * selected_log_probabilities
+        - negative_quality * log_unselected_probabilities
+    )
+    return torch.where(has_choice, losses, torch.zeros_like(losses))
+
+
+def policy_decision_loss(policy_logits, sample, quality_signal):
+    """Return bounded return-weighted policy loss for one semantic decision."""
+    return policy_batch_losses(
+        policy_logits.unsqueeze(0),
+        (sample,),
+        quality_signal.reshape(1),
+    )[0]
+
+
+def record_shadow_policy_metrics(metrics, q_group_scores, policy_logits, groups):
+    """Compare shadow policy and Q over the same legal semantic choices."""
+    metrics.record(q_group_scores, policy_logits, groups)
+
+
 class SelfPlayTrainer:
-    """Collect frozen-policy games and update one shared action-value model afterward."""
+    """Collect frozen Q-selected games and update both shared-model heads afterward."""
 
     def __init__(self, model=None, config=None):
         self.model = model or HansaNN()
         self.config = config or TrainingConfig()
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config.learning_rate)
+        self.optimizer = self._build_optimizer()
         self.encoder = ObservationEncoder()
         self.rng = random.Random(self.config.seed)
         self.progress = TrainingProgress()
         self.loss_total = 0.0
+        self.policy_loss_total = 0.0
         self.source_state_sha256 = None
         self.curriculum_state = None
         self.last_training_sample_coverage = ()
+
+    def _build_optimizer(self):
+        if not hasattr(self.model, "policy_head"):
+            self._q_and_trunk_parameters = tuple(self.model.parameters())
+            self._policy_parameters = ()
+            return torch.optim.Adam(self._q_and_trunk_parameters, lr=self.config.learning_rate)
+        self._policy_parameters = tuple(self.model.policy_head.parameters())
+        policy_parameter_ids = {id(parameter) for parameter in self._policy_parameters}
+        self._q_and_trunk_parameters = tuple(
+            parameter
+            for parameter in self.model.parameters()
+            if id(parameter) not in policy_parameter_ids
+        )
+        return torch.optim.Adam(
+            (
+                {"params": self._q_and_trunk_parameters, "lr": self.config.learning_rate},
+                {
+                    "params": self._policy_parameters,
+                    "lr": (self.config.learning_rate * self.config.policy_head_lr_multiplier),
+                },
+            )
+        )
+
+    def _clip_q_gradients(self):
+        torch.nn.utils.clip_grad_norm_(
+            self._q_and_trunk_parameters,
+            self.config.max_gradient_norm,
+        )
+
+    def _accumulate_independent_losses(self, q_loss, policy_loss, scale=1.0):
+        """Accumulate scaled Q and isolated-policy gradients without clipping or stepping."""
+        (scale * q_loss).backward()
+        if self._policy_parameters and self.config.policy_loss_weight:
+            (scale * self.config.policy_loss_weight * policy_loss).backward()
+
+    def _clip_independent_gradients(self):
+        self._clip_q_gradients()
+        if self._policy_parameters and self.config.policy_loss_weight:
+            torch.nn.utils.clip_grad_norm_(
+                self._policy_parameters,
+                self.config.max_gradient_norm,
+            )
+
+    def _backward_independent_losses(self, q_loss, policy_loss):
+        """Backpropagate Q normally while confining policy gradients to its head."""
+        self.optimizer.zero_grad(set_to_none=True)
+        self._accumulate_independent_losses(q_loss, policy_loss)
+        self._clip_independent_gradients()
+
+    def _model_outputs(self, observations, *, model=None):
+        model = self.model if model is None else model
+        if hasattr(model, "policy_head"):
+            return model(observations)
+        q_values = model(observations)
+        return HansaNNOutput(q_values=q_values, policy_logits=q_values.detach())
+
+    def _policy_trunk_gradient_scale(self):
+        """Report the fixed shadow-policy isolation level used by this trainer."""
+        return 0.0
 
     def _tier(self, number):
         return PolicyTier(
@@ -909,33 +1586,28 @@ class SelfPlayTrainer:
             self.config.tier_epsilons[number - 1],
         )
 
-    def _assign_tiers(self, player_count):
+    def _assign_training_tiers(self, player_count, *, zero_epsilon=False):
         try:
-            numbers = list(self.config.tier_subsets()[player_count])
+            policy = self.config.tier_rosters.training_policies()[player_count]
         except KeyError as error:
             raise TrainingRunError(
-                f"No tier subset is configured for {player_count} players"
+                f"No training tier policy is configured for {player_count} players"
             ) from error
+        numbers = list(policy.fixed_tiers)
+        if policy.random_tier_pool:
+            numbers.append(self.rng.choice(policy.random_tier_pool))
         self.rng.shuffle(numbers)
-        return tuple(self._tier(number) for number in numbers)
-
-    def _assign_training_tiers(self, player_count, *, zero_epsilon=False):
-        if player_count == 3:
-            numbers = [1, 2, self.rng.choice((3, 4, 5))]
-            self.rng.shuffle(numbers)
-            tiers = tuple(self._tier(number) for number in numbers)
-        else:
-            tiers = self._assign_tiers(player_count)
+        tiers = tuple(self._tier(number) for number in numbers)
         if not zero_epsilon:
             return tiers
         return tuple(replace(tier, epsilon=0.0) for tier in tiers)
 
     def _assign_evaluation_tiers(self, player_count, rotation):
         try:
-            numbers = list(self.config.tier_subsets()[player_count])
+            numbers = list(self.config.tier_rosters.evaluation_rosters()[player_count])
         except KeyError as error:
             raise TrainingRunError(
-                f"No tier subset is configured for {player_count} players"
+                f"No evaluation tier roster is configured for {player_count} players"
             ) from error
         offset = rotation % player_count
         numbers = numbers[offset:] + numbers[:offset]
@@ -953,15 +1625,9 @@ class SelfPlayTrainer:
 
     @staticmethod
     def _group_mean_scores(scores, groups):
-        """Transfer the small output once, then average equivalent interactions."""
+        """Transfer the model output once, then average equivalent interactions."""
         values = scores.tolist()
-        means = []
-        for group in groups:
-            if len(group) == 1:
-                means.append(values[group[0]])
-                continue
-            means.append(sum(values[index] for index in group) / len(group))
-        return tuple(means)
+        return tuple(sum(values[index] for index in group) / len(group) for group in groups)
 
     @staticmethod
     def _model_rank(group_scores, selected_position):
@@ -990,7 +1656,14 @@ class SelfPlayTrainer:
         if group_count == 1:
             group = groups[0]
             selected = group[0] if len(group) == 1 else group[self.rng.randrange(len(group))]
-            return ActionSelection(selected, False, 1, 1, group)
+            return ActionSelection(
+                selected,
+                False,
+                1,
+                1,
+                group,
+                self._group_mean_scores(scores, groups),
+            )
         group_scores = self._group_mean_scores(scores, groups)
         if self.rng.random() < tier.epsilon:
             selected_position = self.rng.randrange(group_count)
@@ -1019,6 +1692,7 @@ class SelfPlayTrainer:
             model_rank,
             group_count,
             selected_group,
+            group_scores,
         )
 
     def _select_workflow_action(self, scores, legal_indices, exploration_categories=None):
@@ -1040,7 +1714,14 @@ class SelfPlayTrainer:
         if candidate_count == 1:
             group = candidate_groups[0]
             selected = group[0] if len(group) == 1 else group[self.rng.randrange(len(group))]
-            return ActionSelection(selected, False, 1, 1, group)
+            return ActionSelection(
+                selected,
+                False,
+                1,
+                1,
+                group,
+                self._group_mean_scores(scores, candidate_groups),
+            )
         candidate_scores = self._group_mean_scores(scores, candidate_groups)
 
         ranked_positions = self._rank_legal_positions(candidate_scores, min(3, candidate_count))
@@ -1085,6 +1766,7 @@ class SelfPlayTrainer:
             model_rank,
             candidate_count,
             selected_group,
+            candidate_scores,
         )
 
     def _complete_trajectory(
@@ -1100,11 +1782,32 @@ class SelfPlayTrainer:
         completed=True,
         timings=None,
         movement_metrics=None,
+        shadow_policy_metrics=None,
+        shadow_filter_audit=None,
         training_exploration_mode=NORMAL_EXPLORATION_MODE,
     ):
         movement_metrics = movement_metrics or MovementBehaviorMetrics()
+        shadow_policy_metrics = shadow_policy_metrics or ShadowPolicyMetrics()
+        policy_averages = shadow_policy_metrics.averages()
+        reward_to_go_decisions = assign_reward_to_go(
+            decisions,
+            terminal_rewards,
+            self.config.gamma,
+        )
+        training_decisions = apply_local_training_targets(reward_to_go_decisions)
+        shadow_filter_records = (
+            shadow_filter_audit.flagged_outcomes(
+                reward_to_go_decisions,
+                training_decisions,
+                terminal_rewards,
+                final_scores,
+                winner_indices,
+            )
+            if shadow_filter_audit is not None
+            else ()
+        )
         trajectory = CompletedTrajectory(
-            assign_training_targets(decisions, terminal_rewards, self.config.gamma),
+            training_decisions,
             tuple(terminal_rewards),
             tuple(final_scores),
             tuple(winner_indices),
@@ -1122,6 +1825,10 @@ class SelfPlayTrainer:
             movement_metrics.move_claim_conversions,
             movement_metrics.move_claim_conversion_rate,
             training_exploration_mode,
+            *policy_averages,
+            shadow_filter_records,
+            len(shadow_filter_records),
+            sum(record.used_epsilon for record in shadow_filter_records),
         )
         if completed:
             self.progress.completed_games += 1
@@ -1139,8 +1846,14 @@ class SelfPlayTrainer:
         evaluation_tier_rotation=0,
         capture_action_limit=False,
         zero_epsilon=False,
+        shadow_filter_audit=None,
+        evaluation_models_by_seat=None,
     ) -> CompletedTrajectory:
         """Play one exact starting state without changing model weights."""
+        if evaluation_models_by_seat is not None and not evaluation:
+            raise ValueError("Per-seat model overrides are restricted to evaluation games")
+        if shadow_filter_audit is None:
+            shadow_filter_audit = self.config.shadow_filter_audit_enabled
         play_started = perf_counter()
         detailed_profiling = self.config.detailed_profiling
         inference_seconds = 0.0
@@ -1169,6 +1882,12 @@ class SelfPlayTrainer:
 
         game = load_game(starting_state)
         game.set_interactive_errors(False)
+        if evaluation_models_by_seat is not None:
+            evaluation_models_by_seat = tuple(evaluation_models_by_seat)
+            if len(evaluation_models_by_seat) != len(game.players):
+                raise ValueError("Evaluation requires exactly one model for each player seat")
+            for evaluation_model in evaluation_models_by_seat:
+                evaluation_model.eval()
         post_contexts = _post_contexts_by_slot(game)
         post_routes = {post: route for _route_index, route, post in post_contexts}
         post_route_indices = {post: route_index for route_index, _route, post in post_contexts}
@@ -1187,13 +1906,16 @@ class SelfPlayTrainer:
         game_end_trigger_player = None
         pending_disruption = None
         tracked_turn = game.turn_number
+        tracked_turn_player = game.current_player
         movement_metrics = MovementBehaviorMetrics()
-        pending_move_claim_routes = [frozenset() for _player in game.players]
-        rewarded_move_focus_routes = [frozenset() for _player in game.players]
+        shadow_policy_metrics = ShadowPolicyMetrics()
+        collect_shadow_filter = shadow_filter_audit and not evaluation
+        shadow_filter_metrics = ShadowFilterAudit() if collect_shadow_filter else None
+        for player in game.players:
+            player.pending_move_claim_route_slots = frozenset()
+            player.rewarded_move_focus_route_slots = frozenset()
         pending_terminal_move_workflows = []
         pending_terminal_completed_routes = set()
-        consecutive_move_actions = 0
-        turn_spent_actions = 0
         turn_move_workflow_ids = []
         move_destination_counts = {}
         move_blocked_next_player = False
@@ -1224,14 +1946,14 @@ class SelfPlayTrainer:
                         decisions,
                         movement_metrics,
                         turn_move_workflow_ids,
-                        turn_spent_actions,
+                        tracked_turn_player.paid_actions_spent_this_turn,
                     )
                     tracked_turn = game.turn_number
-                    pending_move_claim_routes = [frozenset() for _player in game.players]
+                    tracked_turn_player = game.current_player
+                    for player in game.players:
+                        player.pending_move_claim_route_slots = frozenset()
                     pending_terminal_move_workflows = []
                     pending_terminal_completed_routes = set()
-                    consecutive_move_actions = 0
-                    turn_spent_actions = 0
                     turn_move_workflow_ids = []
                     move_destination_counts = {}
                     move_blocked_next_player = False
@@ -1289,6 +2011,8 @@ class SelfPlayTrainer:
                                 completed=False,
                                 timings=timings(),
                                 movement_metrics=movement_metrics,
+                                shadow_policy_metrics=shadow_policy_metrics,
+                                shadow_filter_audit=shadow_filter_metrics,
                                 training_exploration_mode=training_exploration_mode,
                             )
                         error = IncompleteGameError(
@@ -1299,21 +2023,34 @@ class SelfPlayTrainer:
                     legal_action_indices = _action_index_tuple(legal_indices)
                     if detailed_profiling:
                         inference_started = perf_counter()
-                    scores = self.model(observation.features.float().unsqueeze(0).to(device))[0]
+                    model_output = self._model_outputs(
+                        observation.features.float().unsqueeze(0).to(device),
+                        model=(
+                            None
+                            if evaluation_models_by_seat is None
+                            else evaluation_models_by_seat[observation.observer_index]
+                        ),
+                    )
+                    scores = model_output.q_values[0]
+                    policy_logits = model_output.policy_logits[0]
                     if detailed_profiling:
                         inference_seconds += perf_counter() - inference_started
                         selection_started = perf_counter()
                     tier = seat_tiers[observation.observer_index]
                     if game.turn_phase is TurnPhase.ACTIONS:
+                        equivalent_groups = action_phase_selection_groups(
+                            game,
+                            legal_action_indices,
+                            post_contexts,
+                        )
+                        semantic_action_groups = equivalent_groups or tuple(
+                            (index,) for index in legal_action_indices
+                        )
                         selection = self._select_action(
                             scores,
                             legal_action_indices,
                             tier,
-                            action_phase_selection_groups(
-                                game,
-                                legal_action_indices,
-                                post_contexts,
-                            ),
+                            equivalent_groups,
                         )
                     else:
                         if game.turn_phase is TurnPhase.MOVE_PIECES:
@@ -1322,22 +2059,43 @@ class SelfPlayTrainer:
                                 legal_action_indices,
                                 post_contexts=post_contexts,
                             )
-                        elif (
-                            game.turn_phase is TurnPhase.BONUS_MARKER_CHOICE
-                            and game.waiting_for_bm_move3
+                        elif game.turn_phase is TurnPhase.BONUS_MARKER_CHOICE and (
+                            game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2
                         ):
                             exploration_categories = move_workflow_exploration_categories(
                                 game,
                                 legal_action_indices,
-                                opponent_pickups=True,
+                                opponent_pickups=game.waiting_for_bm_move3,
+                                any_pickups=game.waiting_for_bm_move_any_2,
                                 post_contexts=post_contexts,
                             )
                         else:
                             exploration_categories = None
+                        semantic_action_groups = (
+                            tuple(
+                                group for category in exploration_categories for group in category
+                            )
+                            if exploration_categories is not None
+                            else tuple((index,) for index in legal_action_indices)
+                        )
                         selection = self._select_workflow_action(
                             scores,
                             legal_action_indices,
                             exploration_categories,
+                        )
+                    if game.turn_phase is TurnPhase.ACTIONS:
+                        record_shadow_policy_metrics(
+                            shadow_policy_metrics,
+                            selection.semantic_q_scores,
+                            policy_logits,
+                            semantic_action_groups,
+                        )
+                    if collect_shadow_filter:
+                        shadow_filter_metrics.record(
+                            len(decisions),
+                            selection,
+                            policy_logits,
+                            semantic_action_groups,
                         )
                     action_index = selection.action_index
                     action = _ACTIONS_BY_INDEX[action_index]
@@ -1517,7 +2275,7 @@ class SelfPlayTrainer:
                     action_attempted = True
                     if detailed_profiling:
                         execution_started = perf_counter()
-                    game.apply_ai_action(action_index)
+                    game._apply_prevalidated_ai_action(action_index, mask)
                     if move_tracking_active:
                         move_pieces_picked_up = max(
                             move_pieces_picked_up, len(acting_player.holding_pieces)
@@ -1621,7 +2379,7 @@ class SelfPlayTrainer:
                 movement_local_target = None
                 movement_local_adjustment = 0.0
                 if normal_move_completed and action_was_spent:
-                    next_consecutive_move = consecutive_move_actions + 1
+                    next_consecutive_move = acting_player.consecutive_paid_move_actions
                     repeated_move_penalty = consecutive_move_penalty(
                         movement_capacity, next_consecutive_move
                     )
@@ -1654,12 +2412,10 @@ class SelfPlayTrainer:
                         move_blocked_next_player = True
                 if action_was_spent:
                     movement_metrics.spent_action_count += 1
-                    turn_spent_actions += 1
                     newly_completed_routes = frozenset()
                     if normal_move_completed:
                         movement_metrics.move_action_count += 1
                         turn_move_workflow_ids.append(movement_workflow_id)
-                        consecutive_move_actions += 1
                         movement_destination_routes = frozenset(
                             post_route_indices[post] for post in move_destination_posts
                         )
@@ -1683,10 +2439,10 @@ class SelfPlayTrainer:
                             if move_blocked_next_player:
                                 adjusted[observation.observer_index] += MOVE_BLOCK_REWARD
                             (
-                                rewarded_move_focus_routes[observation.observer_index],
+                                acting_player.rewarded_move_focus_route_slots,
                                 route_focus_reward,
                             ) = move_route_focus_reward(
-                                rewarded_move_focus_routes[observation.observer_index],
+                                acting_player.rewarded_move_focus_route_slots,
                                 move_destination_counts,
                             )
                             adjusted[observation.observer_index] += route_focus_reward
@@ -1704,20 +2460,21 @@ class SelfPlayTrainer:
                         move_origin_posts = []
                         move_origin_pieces = []
                         move_destination_posts = []
-                    else:
-                        consecutive_move_actions = 0
-                    if action_phase is TurnPhase.ACTIONS and isinstance(action, RouteInteraction):
-                        rewarded = set(rewarded_move_focus_routes[observation.observer_index])
-                        rewarded.discard(action.route_slot)
-                        rewarded_move_focus_routes[observation.observer_index] = frozenset(rewarded)
+                    acting_player.rewarded_move_focus_route_slots = (
+                        clear_move_route_focus_after_claim(
+                            acting_player.rewarded_move_focus_route_slots,
+                            action,
+                            action_phase,
+                        )
+                    )
                     pending_routes, combo_reward = update_move_claim_combo(
-                        pending_move_claim_routes[observation.observer_index],
+                        acting_player.pending_move_claim_route_slots,
                         action=action,
                         turn_phase=action_phase,
                         action_was_spent=True,
                         newly_completed_routes=newly_completed_routes,
                     )
-                    pending_move_claim_routes[observation.observer_index] = pending_routes
+                    acting_player.pending_move_claim_route_slots = pending_routes
                     if combo_reward:
                         movement_metrics.move_claim_conversions += 1
                         adjusted = list(player_reward_deltas)
@@ -1789,6 +2546,9 @@ class SelfPlayTrainer:
                         turn_before,
                         movement_workflow_id,
                         equivalent_action_indices=selection.equivalent_action_indices,
+                        equivalent_action_groups=tuple(
+                            group for group in semantic_action_groups if len(group) > 1
+                        ),
                         receives_terminal_credit=not (
                             starts_normal_move or normal_move_in_progress
                         ),
@@ -1820,7 +2580,7 @@ class SelfPlayTrainer:
                     decisions,
                     movement_metrics,
                     turn_move_workflow_ids,
-                    turn_spent_actions,
+                    tracked_turn_player.paid_actions_spent_this_turn,
                 )
                 self.progress.game_completion_failures += 1
                 error = ActionLimitExceeded(
@@ -1843,6 +2603,8 @@ class SelfPlayTrainer:
                     completed=False,
                     timings=timings(),
                     movement_metrics=movement_metrics,
+                    shadow_policy_metrics=shadow_policy_metrics,
+                    shadow_filter_audit=shadow_filter_metrics,
                     training_exploration_mode=training_exploration_mode,
                 )
 
@@ -1850,7 +2612,7 @@ class SelfPlayTrainer:
             decisions,
             movement_metrics,
             turn_move_workflow_ids,
-            turn_spent_actions,
+            tracked_turn_player.paid_actions_spent_this_turn,
         )
         if detailed_profiling:
             validation_started = perf_counter()
@@ -1869,6 +2631,8 @@ class SelfPlayTrainer:
             reason=completed_game_reason(game),
             timings=timings(),
             movement_metrics=movement_metrics,
+            shadow_policy_metrics=shadow_policy_metrics,
+            shadow_filter_audit=shadow_filter_metrics,
             training_exploration_mode=training_exploration_mode,
         )
 
@@ -1920,17 +2684,29 @@ class SelfPlayTrainer:
             }
         return metrics
 
-    def _training_batches(self, decisions, *, max_training_decisions=None):
+    def _training_batches(
+        self,
+        decisions,
+        *,
+        max_training_decisions=None,
+        effective_batch_count=None,
+    ):
         decisions = list(decisions)
-        batch_size = self.config.decision_batch_size
+        if not decisions:
+            return ()
         if max_training_decisions is None:
             max_training_decisions = self.config.normal_max_training_decisions
-        if len(decisions) <= min(batch_size, max_training_decisions):
-            self.rng.shuffle(decisions)
-            return (decisions,)
-
         sample_size = min(len(decisions), max_training_decisions)
-        batch_count = math.ceil(sample_size / batch_size)
+        if effective_batch_count is None:
+            batch_size = self.config.decision_batch_size
+            batch_count = math.ceil(sample_size / batch_size)
+        else:
+            batch_count = min(effective_batch_count, sample_size)
+            batch_size = math.ceil(sample_size / batch_count)
+        if batch_count == 1:
+            self.rng.shuffle(decisions)
+            return (decisions[:sample_size],)
+
         grouped = {}
         for index, decision in enumerate(decisions):
             key = (
@@ -2138,11 +2914,76 @@ class SelfPlayTrainer:
         return tuple(counts)
 
     def _trajectory_training_decision_cap(self, curriculum_maturity):
-        return (
-            self.config.early_max_training_decisions
-            if curriculum_maturity == "early"
-            else self.config.normal_max_training_decisions
+        if curriculum_maturity == "early":
+            return self.config.early_max_training_decisions
+        if curriculum_maturity == "fresh":
+            return self.config.fresh_max_training_decisions
+        return self.config.normal_max_training_decisions
+
+    def _decision_batch_losses(self, batch):
+        observations = torch.stack([sample.observation for sample in batch]).float().to(device)
+        targets = torch.tensor(
+            [sample.reward_to_go for sample in batch], dtype=torch.float32, device=device
         )
+        model_outputs = self._model_outputs(observations)
+        action_groups = tuple(
+            sample.equivalent_action_indices or (sample.action_index,) for sample in batch
+        )
+        maximum_size = max(map(len, action_groups))
+        group_sizes = torch.as_tensor(
+            [len(group) for group in action_groups],
+            dtype=torch.long,
+            device=device,
+        )
+        padded_indices = torch.as_tensor(
+            [tuple(group) + (group[0],) * (maximum_size - len(group)) for group in action_groups],
+            dtype=torch.long,
+            device=device,
+        )
+        member_mask = torch.arange(maximum_size, device=device).unsqueeze(0) < group_sizes[:, None]
+        selected_q_values = model_outputs.q_values.gather(1, padded_indices)
+        member_losses = functional.smooth_l1_loss(
+            selected_q_values,
+            targets[:, None].expand_as(selected_q_values),
+            reduction="none",
+        )
+        decision_losses = (member_losses * member_mask).sum(dim=1) / group_sizes
+        q_loss = decision_losses.mean()
+        quality_signals = policy_quality_signal(
+            targets,
+            self.config.policy_return_scale,
+        )
+        policy_loss = policy_batch_losses(
+            model_outputs.policy_logits,
+            batch,
+            quality_signals,
+        ).mean()
+        total_loss = q_loss + self.config.policy_loss_weight * policy_loss
+        return q_loss, policy_loss, total_loss
+
+    def _optimize_effective_batch(self, batch, *, microbatch_size=None):
+        """Apply one optimizer update from a correctly weighted effective batch."""
+        if not batch:
+            raise TrainingRunError("Cannot optimize an empty decision batch")
+        if microbatch_size is None:
+            microbatch_size = self.config.decision_batch_size
+        if microbatch_size < 1:
+            raise ValueError("Microbatch size must be positive")
+
+        self.optimizer.zero_grad(set_to_none=True)
+        effective_size = len(batch)
+        detached_losses = torch.zeros(3, dtype=torch.float32, device=device)
+        for start in range(0, effective_size, microbatch_size):
+            microbatch = batch[start : start + microbatch_size]
+            scale = len(microbatch) / effective_size
+            q_loss, policy_loss, total_loss = self._decision_batch_losses(microbatch)
+            self._accumulate_independent_losses(q_loss, policy_loss, scale)
+            detached_losses += scale * torch.stack(
+                (q_loss.detach(), policy_loss.detach(), total_loss.detach())
+            )
+        self._clip_independent_gradients()
+        self.optimizer.step()
+        return tuple(detached_losses.cpu().tolist())
 
     def update_model(self, trajectories, *, curriculum_maturities=None) -> float:
         """Update from representative batches within each trajectory's configured cap."""
@@ -2156,7 +2997,9 @@ class SelfPlayTrainer:
             if len(curriculum_maturities) != len(trajectories):
                 raise TrainingRunError("Each trajectory must have one curriculum maturity")
         self.model.train()
-        losses = []
+        q_losses = []
+        policy_losses = []
+        total_losses = []
         coverage = []
         for trajectory, curriculum_maturity in zip(trajectories, curriculum_maturities):
             if curriculum_maturity == "early":
@@ -2168,6 +3011,11 @@ class SelfPlayTrainer:
                     max_training_decisions=self._trajectory_training_decision_cap(
                         curriculum_maturity
                     ),
+                    effective_batch_count=(
+                        FRESH_OPTIMIZER_UPDATES_PER_TRAJECTORY
+                        if curriculum_maturity == "fresh"
+                        else None
+                    ),
                 )
                 sampled_octiles = ()
             coverage.append(
@@ -2178,80 +3026,85 @@ class SelfPlayTrainer:
                 )
             )
             for batch in batches:
-                observations = (
-                    torch.stack([sample.observation for sample in batch]).float().to(device)
-                )
-                targets = torch.tensor(
-                    [sample.reward_to_go for sample in batch], dtype=torch.float32, device=device
-                )
-                model_outputs = self.model(observations)
-                decision_losses = torch.stack(
-                    [
-                        functional.smooth_l1_loss(
-                            model_outputs[
-                                row,
-                                torch.as_tensor(
-                                    sample.equivalent_action_indices or (sample.action_index,),
-                                    dtype=torch.long,
-                                    device=device,
-                                ),
-                            ],
-                            targets[row].expand(
-                                len(sample.equivalent_action_indices or (sample.action_index,))
-                            ),
-                        )
-                        for row, sample in enumerate(batch)
-                    ]
-                )
-                loss = decision_losses.mean()
-                self.optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.config.max_gradient_norm
-                )
-                self.optimizer.step()
-                losses.append(float(loss.detach().cpu()))
+                q_value, policy_value, total_value = self._optimize_effective_batch(batch)
+                q_losses.append(q_value)
+                policy_losses.append(policy_value)
+                total_losses.append(total_value)
                 self.progress.training_updates += 1
+                if self._policy_parameters and self.config.policy_loss_weight:
+                    self.progress.policy_training_updates += 1
         self.last_training_sample_coverage = tuple(coverage)
         self.model.eval()
 
-        value = sum(losses) / len(losses)
+        value = sum(q_losses) / len(q_losses)
+        policy_value = sum(policy_losses) / len(policy_losses)
+        total_value = sum(total_losses) / len(total_losses)
         self.progress.last_loss = value
-        self.loss_total += sum(losses)
+        self.progress.last_q_loss = value
+        self.progress.last_policy_loss = policy_value
+        self.progress.last_total_loss = total_value
+        self.loss_total += sum(q_losses)
+        if self._policy_parameters and self.config.policy_loss_weight:
+            self.policy_loss_total += sum(policy_losses)
         self.progress.mean_loss = self.loss_total / self.progress.training_updates
+        self.progress.mean_policy_loss = (
+            self.policy_loss_total / self.progress.policy_training_updates
+            if self.progress.policy_training_updates
+            else None
+        )
         return value
 
-    def trajectory_loss(self, trajectory) -> float | None:
+    def trajectory_loss(
+        self,
+        trajectory,
+        *,
+        chunk_size=TRAJECTORY_LOSS_CHUNK_SIZE,
+    ) -> float | None:
         """Measure one learning game's loss without updating the model."""
         samples = list(trajectory.decisions)
         if not samples:
             return None
-        observations = torch.stack([sample.observation for sample in samples]).float().to(device)
-        targets = torch.tensor(
-            [sample.reward_to_go for sample in samples], dtype=torch.float32, device=device
-        )
+        if chunk_size < 1:
+            raise ValueError("Trajectory-loss chunk size must be positive")
         self.model.eval()
+        loss_chunks = []
         with torch.no_grad():
-            model_outputs = self.model(observations)
-            decision_losses = torch.stack(
-                [
-                    functional.smooth_l1_loss(
-                        model_outputs[
-                            row,
-                            torch.as_tensor(
-                                sample.equivalent_action_indices or (sample.action_index,),
-                                dtype=torch.long,
-                                device=device,
-                            ),
-                        ],
-                        targets[row].expand(
-                            len(sample.equivalent_action_indices or (sample.action_index,))
-                        ),
+            for start in range(0, len(samples), chunk_size):
+                chunk = samples[start : start + chunk_size]
+                observations = (
+                    torch.stack([sample.observation for sample in chunk]).float().to(device)
+                )
+                targets = torch.tensor(
+                    [sample.reward_to_go for sample in chunk],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                model_outputs = (
+                    self.model.forward_q(observations)
+                    if hasattr(self.model, "forward_q")
+                    else self._model_outputs(observations).q_values
+                )
+                loss_chunks.append(
+                    torch.stack(
+                        [
+                            functional.smooth_l1_loss(
+                                model_outputs[
+                                    row,
+                                    torch.as_tensor(
+                                        sample.equivalent_action_indices or (sample.action_index,),
+                                        dtype=torch.long,
+                                        device=device,
+                                    ),
+                                ],
+                                targets[row].expand(
+                                    len(sample.equivalent_action_indices or (sample.action_index,))
+                                ),
+                            )
+                            for row, sample in enumerate(chunk)
+                        ]
                     )
-                    for row, sample in enumerate(samples)
-                ]
-            )
-            return decision_losses.mean().item()
+                )
+            return torch.cat(loss_chunks).mean().item()
 
     def train(self, starting_states, episodes, *, batch_size=8, quiet=True):
         if episodes < 1:
@@ -2292,6 +3145,8 @@ class SelfPlayTrainer:
         checkpoint = {
             "training_checkpoint_format": TRAINING_CHECKPOINT_FORMAT,
             "training_checkpoint_version": TRAINING_CHECKPOINT_VERSION,
+            "model_checkpoint_format": MODEL_CHECKPOINT_FORMAT,
+            "model_checkpoint_version": MODEL_CHECKPOINT_VERSION,
             "state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "training_progress": asdict(self.progress),
@@ -2299,6 +3154,8 @@ class SelfPlayTrainer:
             "source_state_sha256": sources,
             "policy_rng_state": self.rng.getstate(),
             "loss_total": self.loss_total,
+            "policy_loss_total": self.policy_loss_total,
+            "policy_trunk_gradient_scale": self._policy_trunk_gradient_scale(),
             "curriculum_state": curriculum_state,
             **action_schema_metadata(),
             **observation_schema_metadata(),
@@ -2321,14 +3178,35 @@ class SelfPlayTrainer:
         checkpoint = torch.load(path, map_location=device)
         if checkpoint.get("training_checkpoint_format") != TRAINING_CHECKPOINT_FORMAT:
             raise ValueError("Not a Hansa shared-model training checkpoint")
-        if checkpoint.get("training_checkpoint_version") != TRAINING_CHECKPOINT_VERSION:
+        checkpoint_version = checkpoint.get("training_checkpoint_version")
+        if checkpoint_version not in (
+            LEGACY_Q_ONLY_CHECKPOINT_VERSION,
+            LEGACY_DUAL_HEAD_CHECKPOINT_VERSION,
+            TRAINING_CHECKPOINT_VERSION,
+        ):
             raise ValueError("Incompatible training checkpoint version")
+        expected_model_version = (
+            MODEL_CHECKPOINT_VERSION
+            if checkpoint_version == TRAINING_CHECKPOINT_VERSION
+            else LEGACY_MODEL_CHECKPOINT_VERSION
+        )
+        if checkpoint_version != LEGACY_Q_ONLY_CHECKPOINT_VERSION and (
+            checkpoint.get("model_checkpoint_format") != MODEL_CHECKPOINT_FORMAT
+            or checkpoint.get("model_checkpoint_version") != expected_model_version
+        ):
+            raise ValueError("Training checkpoint has an incompatible model schema")
         validate_action_schema_metadata(checkpoint, "Training checkpoint")
         migrated_observation_schema = validate_model_observation_schema_metadata(
             checkpoint, "Training checkpoint"
         )
 
         config_values = dict(checkpoint["training_config"])
+        for obsolete_key in (
+            "policy_trunk_gradient_scale_initial",
+            "policy_trunk_gradient_scale_final",
+            "policy_trunk_gradient_ramp_updates",
+        ):
+            config_values.pop(obsolete_key, None)
         if config_values.get("learning_rate") == LEGACY_LEARNING_RATE:
             config_values["learning_rate"] = DEFAULT_LEARNING_RATE
         if tuple(config_values.get("tier_top_k", ())) == LEGACY_TIER_TOP_K:
@@ -2337,18 +3215,173 @@ class SelfPlayTrainer:
             config_values["tier_epsilons"] = DEFAULT_TIER_EPSILONS
         if config_values.get("early_max_training_decisions") == LEGACY_EARLY_MAX_TRAINING_DECISIONS:
             config_values["early_max_training_decisions"] = 4_096
+        serialized_rosters = config_values.pop("tier_rosters", None)
+        if serialized_rosters is None:
+            evaluation_three = tuple(config_values.pop("three_player_tiers", (1, 3, 5)))
+            evaluation_four = tuple(config_values.pop("four_player_tiers", (1, 2, 4, 5)))
+            evaluation_five = tuple(config_values.pop("five_player_tiers", (1, 2, 3, 4, 5)))
+            config_values["tier_rosters"] = TierRosterConfig(
+                evaluation_three_player=evaluation_three,
+                evaluation_four_player=evaluation_four,
+                evaluation_five_player=evaluation_five,
+                training_five_player=TrainingRosterPolicy(evaluation_five),
+            )
+        else:
+            for legacy_key in (
+                "three_player_tiers",
+                "four_player_tiers",
+                "five_player_tiers",
+            ):
+                config_values.pop(legacy_key, None)
+            config_values["tier_rosters"] = TierRosterConfig.from_serialized(serialized_rosters)
         config = TrainingConfig(**config_values)
         trainer = cls(config=config)
-        trainer.model.load_state_dict(checkpoint["state_dict"])
-        trainer.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        for parameter_group in trainer.optimizer.param_groups:
-            parameter_group["lr"] = config.learning_rate
-        trainer.progress = TrainingProgress(**checkpoint["training_progress"])
+        trainer.model._load_checkpoint_state(checkpoint, "Training checkpoint")
+        optimizer_state = checkpoint["optimizer_state_dict"]
+        if migrated_observation_schema:
+            optimizer_state = trainer._migrate_observation_optimizer_state(optimizer_state)
+        if checkpoint_version == LEGACY_Q_ONLY_CHECKPOINT_VERSION:
+            trainer._load_q_only_optimizer_state(optimizer_state)
+        elif trainer.model.migrated_shared_layer:
+            trainer.optimizer.load_state_dict(
+                trainer._migrate_shared_layer_optimizer_state(optimizer_state)
+            )
+        else:
+            trainer.optimizer.load_state_dict(optimizer_state)
+        trainer.optimizer.param_groups[0]["lr"] = config.learning_rate
+        if len(trainer.optimizer.param_groups) > 1:
+            trainer.optimizer.param_groups[1]["lr"] = (
+                config.learning_rate * config.policy_head_lr_multiplier
+            )
+        progress_values = dict(checkpoint["training_progress"])
+        if checkpoint_version == LEGACY_Q_ONLY_CHECKPOINT_VERSION:
+            progress_values["policy_training_updates"] = 0
+            progress_values["last_policy_loss"] = None
+            progress_values["mean_policy_loss"] = None
+        else:
+            progress_values.setdefault("policy_training_updates", 0)
+        trainer.progress = TrainingProgress(**progress_values)
         trainer.progress.checkpoint_loads += 1
         trainer.rng.setstate(checkpoint["policy_rng_state"])
         trainer.loss_total = checkpoint["loss_total"]
+        trainer.policy_loss_total = (
+            0.0
+            if checkpoint_version == LEGACY_Q_ONLY_CHECKPOINT_VERSION
+            else checkpoint.get("policy_loss_total", 0.0)
+        )
         trainer.source_state_sha256 = checkpoint["source_state_sha256"]
         trainer.curriculum_state = checkpoint.get("curriculum_state")
         trainer.model.migrated_observation_schema = migrated_observation_schema
         trainer.model.eval()
         return trainer
+
+    def _load_q_only_optimizer_state(self, legacy_state):
+        """Preserve mature trunk/Q Adam state while initializing the new head."""
+        self.optimizer.load_state_dict(
+            self._migrate_shared_layer_optimizer_state(legacy_state, q_only=True)
+        )
+
+    def _migrate_shared_layer_optimizer_state(self, legacy_state, *, q_only=False):
+        """Add neutral Adam state for the identity-initialized shared layer."""
+        current = self.optimizer.state_dict()
+        old_groups = legacy_state.get("param_groups", ())
+        expected_group_count = 1 if q_only else 2
+        if len(old_groups) != expected_group_count:
+            raise ValueError(
+                f"Legacy optimizer must contain {expected_group_count} parameter group(s)"
+            )
+
+        old_q_ids = tuple(old_groups[0]["params"])
+        new_q_ids = tuple(current["param_groups"][0]["params"])
+        shared_parameters = tuple(self.model.shared_layer3.parameters())
+        shared_indices = tuple(
+            index
+            for index, parameter in enumerate(self._q_and_trunk_parameters)
+            if any(parameter is shared for shared in shared_parameters)
+        )
+        legacy_q_count = len(new_q_ids) - len(shared_indices)
+        if len(old_q_ids) not in (legacy_q_count, len(new_q_ids)):
+            raise ValueError("Legacy optimizer Q/trunk parameter layout is incompatible")
+
+        migrated_state = {}
+        for old_id, new_id in zip(old_q_ids, new_q_ids):
+            if old_id in legacy_state["state"]:
+                migrated_state[new_id] = legacy_state["state"][old_id]
+
+        if len(old_q_ids) == legacy_q_count:
+            exemplar = next(iter(legacy_state["state"].values()), {})
+            for index in shared_indices:
+                migrated_state[new_q_ids[index]] = self._neutral_adam_state(
+                    self._q_and_trunk_parameters[index], exemplar
+                )
+
+        migrated_groups = current["param_groups"]
+        for key, value in old_groups[0].items():
+            if key != "params":
+                migrated_groups[0][key] = value
+        if not q_only:
+            old_policy_ids = tuple(old_groups[1]["params"])
+            new_policy_ids = tuple(migrated_groups[1]["params"])
+            if len(old_policy_ids) != len(new_policy_ids):
+                raise ValueError("Legacy optimizer policy parameter layout is incompatible")
+            for old_id, new_id in zip(old_policy_ids, new_policy_ids):
+                if old_id in legacy_state["state"]:
+                    migrated_state[new_id] = legacy_state["state"][old_id]
+            for key, value in old_groups[1].items():
+                if key != "params":
+                    migrated_groups[1][key] = value
+        return {"state": migrated_state, "param_groups": migrated_groups}
+
+    @staticmethod
+    def _neutral_adam_state(parameter, exemplar):
+        step = exemplar.get("step")
+        neutral = {
+            "step": torch.zeros_like(step) if isinstance(step, torch.Tensor) else 0.0,
+            "exp_avg": torch.zeros_like(parameter),
+            "exp_avg_sq": torch.zeros_like(parameter),
+        }
+        if "max_exp_avg_sq" in exemplar:
+            neutral["max_exp_avg_sq"] = torch.zeros_like(parameter)
+        return neutral
+
+    def _migrate_observation_optimizer_state(self, legacy_state):
+        """Zero-expand Adam tensors associated with the legacy input layer."""
+        groups = legacy_state.get("param_groups", ())
+        if not groups or not groups[0].get("params"):
+            return legacy_state
+        layer1_index = next(
+            index
+            for index, parameter in enumerate(self._q_and_trunk_parameters)
+            if parameter is self.model.layer1.weight
+        )
+        layer1_parameter_id = groups[0]["params"][layer1_index]
+        layer1_state = legacy_state.get("state", {}).get(layer1_parameter_id)
+        if not layer1_state:
+            return legacy_state
+
+        migrated_state = dict(legacy_state)
+        migrated_entries = dict(legacy_state["state"])
+        migrated_layer1 = dict(layer1_state)
+        changed = False
+        for key, value in layer1_state.items():
+            if (
+                not isinstance(value, torch.Tensor)
+                or value.ndim != 2
+                or value.shape[0] != self.model.layer1.out_features
+                or value.shape[1]
+                not in (
+                    LEGACY_OBSERVATION_SIZE,
+                    LEGACY_OBSERVATION_SIZE_V3,
+                    LEGACY_OBSERVATION_SIZE_V4,
+                )
+            ):
+                continue
+            expanded = value.new_zeros(self.model.layer1.weight.shape)
+            expanded[:, : value.shape[1]].copy_(value)
+            migrated_layer1[key] = expanded
+            changed = True
+        if not changed:
+            return legacy_state
+        migrated_entries[layer1_parameter_id] = migrated_layer1
+        migrated_state["state"] = migrated_entries
+        return migrated_state

@@ -29,19 +29,43 @@ MOVEMENT_COUNT_FIELDS = (
 )
 
 
-def _run_mode(row):
-    """Read the current run mode while accepting historical CSV schemas."""
-    mode = (row.get("run_mode") or "").strip()
-    if mode:
+def _run(row):
+    """Read one canonical run label while accepting historical CSV schemas."""
+    current = (row.get("run") or "").strip().lower()
+    if current:
+        return current
+    mode = (row.get("run_mode") or "").strip().lower()
+    if mode.startswith("evaluation_"):
         return mode
     if (row.get("run_type") or "").strip().lower() == "evaluation":
         return f"evaluation_{(row.get('evaluation_set') or 'mid_late_end').strip()}"
-    exploration = (row.get("training_exploration_mode") or "normal").strip()
-    return f"training_{exploration}"
+
+    stage = (row.get("training_stage") or "").strip().lower()
+    if stage not in {"fresh", "early", "mid", "late", "end"}:
+        stage = (row.get("curriculum_stage") or "").partition("+")[0].lower()
+    if stage.startswith("near_") or stage.startswith("near_end"):
+        stage = "end"
+    elif stage.startswith("late"):
+        stage = "late"
+    elif stage.startswith("mid"):
+        stage = "mid"
+    elif stage.startswith("early"):
+        stage = "early"
+    elif stage.startswith("fresh") or stage == "full_game":
+        stage = "fresh"
+    if stage not in {"fresh", "early", "mid", "late", "end"}:
+        stage = "end"
+    exploration = (row.get("training_exploration_mode") or "").strip().lower()
+    zero_epsilon = mode.endswith("_zero_epsilon") or exploration == "zero_epsilon"
+    return f"training_{stage}{'_zero_epsilon' if zero_epsilon else ''}"
+
+
+def _run_type(row):
+    return "evaluation" if _run(row).startswith("evaluation_") else "training"
 
 
 def _evaluation_set(row):
-    mode = _run_mode(row)
+    mode = _run(row)
     return mode.removeprefix("evaluation_") if mode.startswith("evaluation_") else None
 
 
@@ -334,11 +358,11 @@ function renderEvaluationPanel(container) {
   const players = container.querySelector('[data-evaluation-players]').value;
   const ordered = filteredEvaluationBatches(records, map, players);
   const panel = container.querySelector('[data-evaluation-panel]');
-  const labels = {standard:'Standard',early:'Early'};
+  const labels = {standard:'Standard',fresh:'Fresh'};
   container.querySelector('[data-evaluation-title]').textContent =
     `Evaluation — ${labels[mode]} — suite version ${dataset.suiteVersion}`;
   if (!ordered.length) { panel.innerHTML = '<p class="hint">No evaluation data matches these filters.</p>'; return; }
-  const benchmark = mode === 'early';
+  const benchmark = mode === 'fresh';
   const tiers = [...new Set(ordered.flatMap(entry => Object.keys(entry.tierGames)))].sort();
   const tierColors = {'1':'#2563eb','2':'#16a34a','3':'#7c3aed','4':'#db2777','5':'#64748b'};
   const ratio = (entry, numerator, denominator) => entry[denominator] ? entry[numerator] / entry[denominator] : null;
@@ -368,7 +392,7 @@ function renderEvaluationPanel(container) {
   const status = failures.length ? `<p class="evaluation-warning"><strong>Evaluation failures:</strong> ${evaluationEscape(failures.join(', '))}</p>`
     : '<p class="evaluation-success">All latest evaluation games completed normally.</p>';
   const randomBaseline = evaluationRolling(ordered.map(entry => entry.random/entry.games*100));
-  const actionTitle = mode === 'early' ? 'Average interactions per early-game evaluation'
+  const actionTitle = mode === 'fresh' ? 'Average interactions per fresh-game evaluation'
     : 'Average completed-game length';
   const actionValues = ordered.map(entry => benchmark ? entry.allActions/entry.games
     : entry.completed ? entry.actions/entry.completed : null);
@@ -386,9 +410,9 @@ function renderEvaluationPanel(container) {
       {label:'Evaluation loss',color:'#2563eb',values:lossValues},
       {label:'Five-batch average',color:'#16a34a',values:evaluationRolling(lossValues,5)},
     ],'',{focusRange:true}) : '';
-  const earlyTierOne = mode === 'early' ? evaluationLineChart(
+  const freshTierOne = mode === 'fresh' ? evaluationLineChart(
     'Tier 1 win rate by player count',
-    'Higher is better. Each line is a rolling 10-batch rate across the same fixed early positions.',
+    'Higher is better. Each line is a rolling 10-batch rate across the same fixed fresh positions.',
     ordered,
     ['3','4','5'].map((playerCount,index) => ({
       label:`Tier 1 — ${playerCount}P`,
@@ -405,11 +429,11 @@ function renderEvaluationPanel(container) {
       })()),
     })).filter((_series,index) => players === 'all' || players === String(index+3)),
     '%',{maximum:100}) : '';
-  panel.innerHTML = summary + status + earlyTierOne + evaluationLoss
+  panel.innerHTML = summary + status + freshTierOne + evaluationLoss
     + evaluationLineChart('Win rate by tier','Higher is better. Each colored line is a rolling 10-batch policy-tier rate.',ordered,winSeries,'%',{maximum:100,baseline:randomBaseline})
-    + (mode === 'early' ? '' : evaluationLineChart('Average final score by tier','Higher is generally better. Lines show rolling 10-batch averages across the same fixed positions.',ordered,scoreSeries,' points',{focusRange:true,tickStep:5}))
+    + (mode === 'fresh' ? '' : evaluationLineChart('Average final score by tier','Higher is generally better. Lines show rolling 10-batch averages across the same fixed positions.',ordered,scoreSeries,' points',{focusRange:true,tickStep:5}))
     + evaluationLineChart(actionTitle,benchmark ? 'Includes completed games and timeouts.' : 'Lower is generally better, provided games still finish normally.',ordered,[{label:benchmark?'Interactions/game':'Game length',color:'#2563eb',values:actionValues}],' actions')
-    + (benchmark ? evaluationLineChart('Early-game timeout rate','Lower is better. A timeout means the fixed position reached the evaluation interaction limit.',ordered,[{label:'Timeout rate',color:'#dc2626',values:ordered.map(entry => entry.timeouts/entry.games*100)}],'%',{maximum:100}) : '')
+    + (benchmark ? evaluationLineChart('Fresh-game timeout rate','Lower is better. A timeout means the fixed position reached the evaluation interaction limit.',ordered,[{label:'Timeout rate',color:'#dc2626',values:ordered.map(entry => entry.timeouts/entry.games*100)}],'%',{maximum:100}) : '')
     + evaluationLineChart('Move % of paid actions','Lower generally indicates less reliance on Move, but Move remains legal and sometimes necessary.',ordered,[{label:'Move %',color:'#2563eb',values:ordered.map(entry => { const value=moveRatio(entry); return value === null ? null : value*100; })}],'%',{maximum:100})
     + evaluationLineChart('Movement pathology','Lower is better. The three lines combine pointless workflows, repeated-Move penalties, and all-Move turns.',ordered,pathologySeries,'/game')
     + evaluationLineChart('Move → Claim conversion rate','Higher means more route-creating normal Moves were followed by an immediate paid claim. This is diagnostic, not a requirement for every Move.',ordered,[{label:'Move to Claim conversion',color:'#16a34a',values:ordered.map(entry => { const value=ratio(entry.movementTotals,'move_claim_conversions','moves_creating_claimable_route'); return value === null ? null : value*100; })}],'%',{maximum:100});
@@ -464,8 +488,8 @@ def read_results(path: Path, max_points: int):
     recent_training_losses = deque(maxlen=50)
     counts = {
         "run_type": Counter(),
-        "run_mode": Counter(),
-        "curriculum_stage": Counter(),
+        "run": Counter(),
+        "scenario": Counter(),
         "completion_reason": Counter(),
         "map": Counter(),
         "player_count": Counter(),
@@ -488,27 +512,30 @@ def read_results(path: Path, max_points: int):
         "evaluation_versions": {},
         "evaluation_set_versions": {},
         "current_evaluation_suite_version": 0,
-        "early_evaluation_map_player_batches": {},
-        "current_early_evaluation_suite_version": 0,
+        "fresh_evaluation_map_player_batches": {},
+        "current_fresh_evaluation_suite_version": 0,
     }
     row_count = 0
     training_game_number = 0
     with path.open(newline="", encoding="utf-8-sig") as source:
         reader = csv.DictReader(source)
-        required = {"game#", "run_type"}
-        missing = required.difference(reader.fieldnames or ())
-        if missing:
-            raise ValueError(f"Missing required CSV column(s): {', '.join(sorted(missing))}")
+        fields = set(reader.fieldnames or ())
+        if "game#" not in fields or not ({"run", "run_type"} & fields):
+            raise ValueError("Missing required CSV column(s): game# and run (or legacy run_type)")
 
         for row_count, row in enumerate(reader, start=1):
-            run_type = row.get("run_type", "").strip().lower()
-            if run_type not in ("training", "training_timeout", "evaluation"):
+            legacy_run_type = row.get("run_type", "").strip().lower()
+            if not row.get("run") and legacy_run_type not in (
+                "training",
+                "training_timeout",
+                "evaluation",
+            ):
                 continue
-            counts["run_mode"][_run_mode(row)] += 1
-            if run_type == "training_timeout":
-                counts["run_type"][run_type] += 1
-                counts["completion_reason"]["action_limit"] += 1
-                continue
+            run_type = _run_type(row)
+            counts["run"][_run(row)] += 1
+            counts["run_type"][run_type] += 1
+            if legacy_run_type == "training_timeout" and not row.get("completion_reason"):
+                row["completion_reason"] = "action_limit"
             game_number = _number(row.get("game#")) or float(row_count)
             if run_type == "training":
                 training_game_number += 1
@@ -522,7 +549,7 @@ def read_results(path: Path, max_points: int):
                     chart_game_number, statistics.median(recent_training_losses)
                 )
             for name in counts:
-                if name != "run_mode" and name in row:
+                if name not in {"run", "run_type"} and name in row:
                     counts[name][row.get(name, "unknown") or "unknown"] += 1
             player_count = row.get("player_count", "unknown") or "unknown"
             assigned_tiers = _json_list(row.get("tier_to_seat_assignments"))
@@ -634,12 +661,12 @@ def read_results(path: Path, max_points: int):
         latest = counts["evaluation_versions"][latest_version]
         counts["current_evaluation_suite_version"] = latest_version
         counts["evaluation_map_player_batches"] = latest["map_player_batches"]
-    early_versions = counts["evaluation_set_versions"].get("early", {})
-    if early_versions:
-        latest_version = max(early_versions)
-        latest = early_versions[latest_version]
-        counts["current_early_evaluation_suite_version"] = latest_version
-        counts["early_evaluation_map_player_batches"] = latest["map_player_batches"]
+    fresh_versions = counts["evaluation_set_versions"].get("fresh", {})
+    if fresh_versions:
+        latest_version = max(fresh_versions)
+        latest = fresh_versions[latest_version]
+        counts["current_fresh_evaluation_suite_version"] = latest_version
+        counts["fresh_evaluation_map_player_batches"] = latest["map_player_batches"]
     return row_count, series, counts
 
 
@@ -708,7 +735,7 @@ def _chart(chart_id, title, training, evaluation, median=()):
 
 
 def _dashboard_summary(counts):
-    training_games = counts["run_type"]["training"] + counts["run_type"]["training_timeout"]
+    training_games = counts["run_type"]["training"]
     evaluation_games = counts["run_type"]["evaluation"]
     timeouts = counts["completion_reason"]["action_limit"]
     return (
@@ -994,9 +1021,9 @@ def _evaluation_dashboard(counts):
             "suiteVersion": counts["current_evaluation_suite_version"],
             "records": _evaluation_records(counts["evaluation_map_player_batches"]),
         },
-        "early": {
-            "suiteVersion": counts["current_early_evaluation_suite_version"],
-            "records": _evaluation_records(counts["early_evaluation_map_player_batches"]),
+        "fresh": {
+            "suiteVersion": counts["current_fresh_evaluation_suite_version"],
+            "records": _evaluation_records(counts["fresh_evaluation_map_player_batches"]),
         },
     }
     if not any(dataset["records"] for dataset in datasets.values()):
@@ -1008,7 +1035,7 @@ def _evaluation_dashboard(counts):
       <h2 data-evaluation-title>Evaluation — Standard</h2>
       <label>Evaluation type: <select data-evaluation-type>
       <option value="standard">Standard</option>
-      <option value="early">Early</option></select></label>
+      <option value="fresh">Fresh</option></select></label>
       <label>Board: <select data-evaluation-map><option value="all">All maps</option>
       <option value="1">Map 1</option><option value="2">Map 2</option>
       <option value="3">Map 3</option></select></label>

@@ -25,21 +25,24 @@ The observer is always `game.players[game.active_player]`, and the legal mask
 belongs to that same player. GUI and headless AI use this one builder. Drawing
 code does not filter private information.
 
-`features` is a fixed 4,241-value `int16` tensor. Its groups are laid out in
+`features` is a fixed 4,724-value `int16` tensor. Its groups are laid out in
 this order: `game`, `players`, `cities`, `routes`, `optional_components`, then
-`workflow`. A model adapter may cast or normalize the values but must preserve
-that layout.
+`workflow`, `pre_move_board`, `paid_action_history`, then `route_reward_history`.
+A model adapter may cast or normalize the values but must preserve that layout.
 
 Schema versions and fingerprints are checkpoint/file compatibility metadata.
 They are never neural-network features.
 
-The implemented observation contract is version 2. Version 2 hides opponents'
-used bonus-marker identities outside the Exchange Bonus Marker workflow. Shared
-model checkpoints store its version, 4,241-value size, and fingerprint alongside
-the action-schema metadata. Unknown or shape-incompatible schemas are rejected.
-The one explicit exception is a version-1 model or training checkpoint: its
-same-shaped weights and optimizer may transfer into version 2, and its next save
-records version 2. Old observation datasets are not silently reinterpreted.
+The implemented observation contract is version 5. Version 3 added the immutable
+pre-Move route/post occupancy needed to distinguish restoration from legitimate
+cross-route movement. Version 4 adds three current-turn paid-action-history
+features. Version 5 adds per-route Move-to-Claim and Move-focus history. Shared
+model checkpoints store the version, 4,724-value size, and fingerprint alongside
+the action-schema metadata. Version-1/version-2 4,241-input, version-3
+4,641-input, and version-4 4,644-input model/training checkpoints are explicitly
+migrated by copying their old first-layer columns and zero-initializing the new
+columns. Unknown schemas are rejected. Old observation datasets are not
+silently reinterpreted.
 
 ## Relative players
 
@@ -254,6 +257,49 @@ All unused workflow fields are zero. The legal mask supplies destination and
 choice availability; internal search lists and legality-helper values are not
 features.
 
+## Pre-Move board snapshot
+
+Indices `4241..4640` contain 40 route slots × 5 post slots × 2 values:
+
+| Value | Meaning |
+|---|---|
+| relative owner | Occupant immediately before the normal Move or Move Any 2 first pickup |
+| shape | Trader/circle ID for that original occupant |
+
+Unused route/post slots and all states outside an active normal Move or Move Any
+2 workflow are zero. The snapshot is captured before the first pickup, remains
+immutable while pieces are picked up and placed, and clears when the workflow
+finishes. Move 3 and displacement do not populate it.
+
+## Current-turn paid-action history
+
+Indices `4641..4643` expose the current player's completed paid-action history
+for the active turn:
+
+| Index | Meaning |
+|---:|---|
+| `4641` | Consecutive paid Move actions immediately preceding the next paid action |
+| `4642` | Total paid actions already spent this turn |
+| `4643` | Paid Move actions already spent this turn |
+
+The counters update when a paid action actually completes, not for individual
+workflow clicks. Starting a new turn resets all three values to zero. Granting
+extra actions, forfeiting actions, bonus-marker workflows, and response
+workflows do not increment them.
+
+## Per-route reward history
+
+Indices `4644..4723` contain two values for each of the 40 canonical route slots:
+
+| Route offset | Meaning |
+|---:|---|
+| `route_slot * 2` | Route currently qualifies for the existing Move-to-Claim reward |
+| `route_slot * 2 + 1` | Route has already received the existing Move-focus reward |
+
+Unused route slots are zero. Move-to-Claim flags expire under the existing
+next-paid-action and turn-boundary rules. Move-focus flags remain set until the
+corresponding route is claimed.
+
 `Game.get_legal_actions()` and `ai_action_mask()` evaluate legality for
 `active_player` in response phases. The observation builder pairs that same
 player's visible information with the returned legal mask.
@@ -310,6 +356,8 @@ Tests must prove:
 - capacity overflow fails clearly;
 - GUI and headless AI receive the same observation.
 
-The previous 4,445-value encoder was replaced by this 4,241-value
-player-visible encoder. `HansaNN` consumes this input directly, and model and
-training checkpoints store its exact schema identity.
+The previous 4,241-value encoder was first expanded to 4,641 values for the
+pre-Move snapshot, then to 4,644 values for paid-action history, and finally to
+this 4,724-value player-visible encoder for per-route reward history. `HansaNN`
+consumes this input directly, and model and training checkpoints store its exact
+schema identity.

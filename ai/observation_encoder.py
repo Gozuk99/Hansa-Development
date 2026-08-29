@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from array import array
 from dataclasses import dataclass
 from weakref import WeakKeyDictionary
 
@@ -52,6 +53,9 @@ class ObservationEncoder:
     ROUTE_SIZE = 38
     OPTIONAL_COMPONENTS_SIZE = 33
     WORKFLOW_SIZE = 43
+    MOVE_SNAPSHOT_SIZE = MAX_ROUTES * MAX_POSTS_PER_ROUTE * 2
+    PAID_ACTION_HISTORY_SIZE = 3
+    ROUTE_REWARD_HISTORY_SIZE = MAX_ROUTES * 2
     FEATURE_SIZE = (
         GAME_SIZE
         + MAX_PLAYERS * PLAYER_SIZE
@@ -59,7 +63,13 @@ class ObservationEncoder:
         + MAX_ROUTES * ROUTE_SIZE
         + OPTIONAL_COMPONENTS_SIZE
         + WORKFLOW_SIZE
+        + MOVE_SNAPSHOT_SIZE
+        + PAID_ACTION_HISTORY_SIZE
+        + ROUTE_REWARD_HISTORY_SIZE
     )
+    ROUTE_REWARD_HISTORY_START = FEATURE_SIZE - ROUTE_REWARD_HISTORY_SIZE
+    PAID_ACTION_HISTORY_START = ROUTE_REWARD_HISTORY_START - PAID_ACTION_HISTORY_SIZE
+    MOVE_SNAPSHOT_START = PAID_ACTION_HISTORY_START - MOVE_SNAPSHOT_SIZE
     if FEATURE_SIZE != OBSERVATION_SIZE:
         raise RuntimeError(
             f"Observation layout has {FEATURE_SIZE} values; schema declares {OBSERVATION_SIZE}"
@@ -156,12 +166,24 @@ class ObservationEncoder:
         route_start = city_start + self.MAX_CITIES * self.CITY_SIZE
         optional_start = route_start + self.MAX_ROUTES * self.ROUTE_SIZE
         workflow_start = optional_start + self.OPTIONAL_COMPONENTS_SIZE
+        move_snapshot_start = workflow_start + self.WORKFLOW_SIZE
+        paid_action_history_start = move_snapshot_start + self.MOVE_SNAPSHOT_SIZE
+        route_reward_history_start = paid_action_history_start + self.PAID_ACTION_HISTORY_SIZE
         features[player_start:city_start] = self._player_features(game, relative_players)
         self._write_dynamic_city_features(features, city_start, game, owner_ids)
         self._write_dynamic_route_features(features, route_start, game, owner_ids)
         self._write_dynamic_optional_features(features, optional_start, game, owner_ids)
-        features[workflow_start:] = self._workflow_features(game, relative_players[0], owner_ids)
-        features = torch.tensor(features, dtype=torch.int16)
+        features[workflow_start:move_snapshot_start] = self._workflow_features(
+            game, relative_players[0], owner_ids
+        )
+        features[move_snapshot_start:paid_action_history_start] = (
+            self._normal_move_snapshot_features(game, owner_ids)
+        )
+        features[paid_action_history_start:route_reward_history_start] = (
+            self._paid_action_history_features(game)
+        )
+        features[route_reward_history_start:] = self._route_reward_history_features(game)
+        features = torch.frombuffer(array("h", features), dtype=torch.int16)
         if features.numel() != self.FEATURE_SIZE:
             raise RuntimeError(
                 f"Observation has {features.numel()} values; expected {self.FEATURE_SIZE}"
@@ -169,10 +191,12 @@ class ObservationEncoder:
         return features
 
     def _structural_template(self, game):
-        signature = self._structural_signature(game)
+        revision = getattr(game, "_observation_structure_revision", 0)
         cached = self._structural_templates.get(game)
-        if cached is not None and cached[0] == signature:
-            return cached[1]
+        if cached is not None and cached[0] == revision:
+            return cached[2]
+
+        signature = self._structural_signature(game)
 
         template = [0] * self.FEATURE_SIZE
         template[0] = game.map_num
@@ -223,7 +247,7 @@ class ObservationEncoder:
             template[base + 1] = self.PRIVILEGE_TO_ID.get(self._color_name(circle["color"]), 0)
 
         template = tuple(template)
-        self._structural_templates[game] = (signature, template)
+        self._structural_templates[game] = (revision, signature, template)
         return template
 
     @staticmethod
@@ -514,6 +538,46 @@ class ObservationEncoder:
             *pending_pieces,
             game.replace_bonus_marker,
         ]
+
+    def _normal_move_snapshot_features(self, game, owner_ids):
+        """Encode the immutable board occupancy from before the paid Move began."""
+        snapshot = getattr(game, "normal_move_pre_board_snapshot", None)
+        if snapshot is None:
+            return [0] * self.MOVE_SNAPSHOT_SIZE
+
+        features = [0] * self.MOVE_SNAPSHOT_SIZE
+        for route_index, route_posts in enumerate(snapshot):
+            if route_index >= self.MAX_ROUTES:
+                raise ValueError("Move snapshot exceeds route observation capacity")
+            if len(route_posts) > self.MAX_POSTS_PER_ROUTE:
+                raise ValueError("Move snapshot exceeds post observation capacity")
+            for post_index, (owner, shape) in enumerate(route_posts):
+                base = (route_index * self.MAX_POSTS_PER_ROUTE + post_index) * 2
+                features[base] = owner_ids.get(owner, 0)
+                features[base + 1] = self.PIECE_TYPE_TO_ID[shape]
+        return features
+
+    @staticmethod
+    def _paid_action_history_features(game):
+        """Expose paid-action types already completed in the current turn."""
+        player = game.current_player
+        return [
+            player.consecutive_paid_move_actions,
+            player.paid_actions_spent_this_turn,
+            player.paid_move_actions_spent_this_turn,
+        ]
+
+    def _route_reward_history_features(self, game):
+        """Expose pending Move->Claim and consumed Move-focus state by route slot."""
+        player = game.current_player
+        pending = player.pending_move_claim_route_slots
+        rewarded = player.rewarded_move_focus_route_slots
+        features = [0] * self.ROUTE_REWARD_HISTORY_SIZE
+        for route_slot in range(len(game.selected_map.routes)):
+            base = route_slot * 2
+            features[base] = int(route_slot in pending)
+            features[base + 1] = int(route_slot in rewarded)
+        return features
 
     def assign_mission_card_mapping(self, game, player, observer=None):
         """Compatibility helper: expose only the observer's own Mission Card."""
