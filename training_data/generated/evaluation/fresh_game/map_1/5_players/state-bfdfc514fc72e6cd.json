@@ -1,0 +1,64 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000060,
+  "map_num": 1,
+  "player_count": 5,
+  "mission_cards": true,
+  "emperors_favour": true,
+  "bonus_marker_setup": "default",
+  "state_id": "state-bfdfc514fc72e6cd",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "+1Action",
+    "+4PtsPerOwnedCity",
+    "+1DisplacedPiece",
+    "+7PtsPerCompletedAbility",
+    "DisplaceAnywhere"
+  ],
+  "bonus_marker_draw_supply": [
+    "3Actions",
+    "3Actions",
+    "SwapOffice",
+    "4Actions",
+    "UpgradeAbility",
+    "PlaceAdjacent",
+    "4Actions",
+    "PlaceAdjacent",
+    "Move3",
+    "SwapOffice",
+    "UpgradeAbility",
+    "PlaceAdjacent"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "PlaceAdjacent",
+      "Kampen",
+      "Osnabruck"
+    ],
+    [
+      "SwapOffice",
+      "Kampen",
+      "Arnheim"
+    ],
+    [
+      "Move3",
+      "Paderborn",
+      "Hildesheim"
+    ]
+  ],
+  "save_file": "state-bfdfc514fc72e6cd.hansa"
+}

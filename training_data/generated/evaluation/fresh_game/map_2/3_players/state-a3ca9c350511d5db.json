@@ -1,0 +1,58 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000064,
+  "map_num": 2,
+  "player_count": 3,
+  "mission_cards": false,
+  "emperors_favour": true,
+  "bonus_marker_setup": "all_promos",
+  "state_id": "state-a3ca9c350511d5db",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "+4PtsPerOwnedCity",
+    "+7PtsPerCompletedAbility",
+    "+1DisplacedPiece"
+  ],
+  "bonus_marker_draw_supply": [
+    "PlaceAdjacent",
+    "3Actions",
+    "SwapOffice",
+    "3Actions",
+    "ExchangeBonusMarker",
+    "Tribute4EstablishingTP",
+    "PlaceAdjacent",
+    "Tribute4EstablishingTP",
+    "ExchangeBonusMarker",
+    "BlockTradeRoute",
+    "BlockTradeRoute",
+    "4Actions"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "SwapOffice",
+      "Danzig",
+      "Belgard"
+    ],
+    [
+      "PlaceAdjacent",
+      "Belgard",
+      "Anklam"
+    ],
+    [
+      "Move3",
+      "Thorn",
+      "Krackau"
+    ]
+  ],
+  "save_file": "state-a3ca9c350511d5db.hansa"
+}

@@ -1,0 +1,64 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000070,
+  "map_num": 2,
+  "player_count": 5,
+  "mission_cards": false,
+  "emperors_favour": true,
+  "bonus_marker_setup": "all_promos",
+  "state_id": "state-591c05a18f6742bc",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "DisplaceAnywhere",
+    "+1IncomeIfOthersIncome",
+    "+4PtsPerOwnedCity",
+    "+1DisplacedPiece",
+    "+7PtsPerCompletedAbility"
+  ],
+  "bonus_marker_draw_supply": [
+    "ExchangeBonusMarker",
+    "ExchangeBonusMarker",
+    "SwapOffice",
+    "PlaceAdjacent",
+    "SwapOffice",
+    "BlockTradeRoute",
+    "UpgradeAbility",
+    "UpgradeAbility",
+    "BlockTradeRoute",
+    "Tribute4EstablishingTP",
+    "3Actions",
+    "Tribute4EstablishingTP"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "PlaceAdjacent",
+      "Havelberg",
+      "Perleberg"
+    ],
+    [
+      "SwapOffice",
+      "Thorn",
+      "Krackau"
+    ],
+    [
+      "Move3",
+      "Breslau",
+      "Frankfurt"
+    ]
+  ],
+  "save_file": "state-591c05a18f6742bc.hansa"
+}

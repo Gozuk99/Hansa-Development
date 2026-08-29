@@ -1,0 +1,61 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000066,
+  "map_num": 2,
+  "player_count": 4,
+  "mission_cards": false,
+  "emperors_favour": true,
+  "bonus_marker_setup": "default",
+  "state_id": "state-fe7f8e59350773bb",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "+1IncomeIfOthersIncome",
+    "+1DisplacedPiece",
+    "DisplaceAnywhere",
+    "+1Action"
+  ],
+  "bonus_marker_draw_supply": [
+    "3Actions",
+    "UpgradeAbility",
+    "PlaceAdjacent",
+    "SwapOffice",
+    "4Actions",
+    "UpgradeAbility",
+    "3Actions",
+    "PlaceAdjacent",
+    "Move3",
+    "PlaceAdjacent",
+    "4Actions",
+    "SwapOffice"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "Move3",
+      "Kulm",
+      "Elbing"
+    ],
+    [
+      "PlaceAdjacent",
+      "Krackau",
+      "Breslau"
+    ],
+    [
+      "SwapOffice",
+      "Brandenburg",
+      "Tangermunde"
+    ]
+  ],
+  "save_file": "state-fe7f8e59350773bb.hansa"
+}

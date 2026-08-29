@@ -1,0 +1,54 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000065,
+  "map_num": 2,
+  "player_count": 3,
+  "mission_cards": false,
+  "emperors_favour": false,
+  "bonus_marker_setup": "mixed",
+  "state_id": "state-2a2fba5b89fd888e",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [],
+  "bonus_marker_draw_supply": [
+    "PlaceAdjacent",
+    "Tribute4EstablishingTP",
+    "3Actions",
+    "SwapOffice",
+    "BlockTradeRoute",
+    "UpgradeAbility",
+    "SwapOffice",
+    "UpgradeAbility",
+    "PlaceAdjacent",
+    "4Actions",
+    "4Actions",
+    "PlaceAdjacent"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "PlaceAdjacent",
+      "Waren",
+      "Havelberg"
+    ],
+    [
+      "SwapOffice",
+      "Kulm",
+      "Elbing"
+    ],
+    [
+      "Move3",
+      "Allenstein",
+      "Thorn"
+    ]
+  ],
+  "save_file": "state-2a2fba5b89fd888e.hansa"
+}

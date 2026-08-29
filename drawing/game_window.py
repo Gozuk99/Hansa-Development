@@ -114,7 +114,8 @@ class GameWindow:
         if self.game.ai_model is None:
             raise RuntimeError("The game has no shared AI model")
         with torch.no_grad():
-            scores = self.game.ai_model(state.unsqueeze(0)).squeeze(0)
+            output = self.game.ai_model(state.unsqueeze(0))
+            scores = (output.q_values if hasattr(output, "q_values") else output).squeeze(0)
         ranked = [(index, float(scores[index])) for index in legal_actions]
         return choose_ranked_ai_action(
             ranked,

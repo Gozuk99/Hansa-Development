@@ -1,6 +1,10 @@
 import unittest
+from unittest import mock
 
+from game import action_legality
 from game.action_codec import DEFAULT_ACTION_CODEC
+from game.action_legality import _MovePlacementFeasibility, _can_finish_move_after_placement
+from game.game_actions import InvalidActionError
 from game.game_actions import refresh_displacement_targets
 from game.game_runner import create_headless_game, legal_action_indices
 from game.invariants import validate_game
@@ -61,6 +65,14 @@ class LegalActionTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "reserved"):
             game.apply_ai_action(767)
+
+    def test_normal_ai_execution_rejects_decodable_but_illegal_action(self):
+        game = create_headless_game(2, 3, seed=124)
+        mask = game.ai_action_mask()
+        illegal_index = next(index for index, enabled in enumerate(mask[:MAX_POSTS]) if not enabled)
+
+        with self.assertRaises(InvalidActionError):
+            game.apply_ai_action(illegal_index)
 
     def test_displacement_exposes_posts_optional_supply_and_finish(self):
         game = create_headless_game(2, 3, seed=124)
@@ -138,6 +150,83 @@ class LegalActionTests(unittest.TestCase):
         self.assertIn(DEFAULT_ACTION_CODEC.decode(MAX_POSTS + circle_slot), actions)
         self.assertNotIn(DEFAULT_ACTION_CODEC.decode(MAX_POSTS + flexible_slot), actions)
         self.assert_structured_matches_mask(game)
+
+    def test_move_feasibility_matches_uncached_search_across_maps_and_regions(self):
+        def uncached_can_finish(game, selected_post):
+            player = game.current_player
+            remaining_pieces = player.holding_pieces[1:]
+            available_posts = [
+                post
+                for route in game.selected_map.routes
+                for post in route.posts
+                if post is not selected_post and not post.is_owned()
+            ]
+
+            def can_assign(piece_index, posts):
+                if piece_index == len(remaining_pieces):
+                    return True
+                shape, _owner, origin_region = remaining_pieces[piece_index]
+                return any(
+                    player.is_valid_region_transition(origin_region, post.region)
+                    and post.required_shape in (None, shape)
+                    and can_assign(piece_index + 1, posts[:index] + posts[index + 1 :])
+                    for index, post in enumerate(posts)
+                )
+
+            return can_assign(0, available_posts)
+
+        holdings_by_map = {
+            1: (("square", None), ("circle", None), ("square", None)),
+            2: (("circle", None), ("square", None), ("circle", None)),
+            3: (("square", "Wales"), ("circle", "Wales"), ("square", None)),
+        }
+        for map_num, holdings in holdings_by_map.items():
+            with self.subTest(map_num=map_num):
+                game = create_headless_game(map_num, 4, seed=8_700 + map_num)
+                player = game.current_player
+                posts = [post for route in game.selected_map.routes for post in route.posts]
+                for post in posts[::7]:
+                    post.claim(game.players[1], post.required_shape or "square")
+                player.holding_pieces = [
+                    (shape, player, origin_region) for shape, origin_region in holdings
+                ]
+                player.pieces_to_pickup = 0
+                solver = _MovePlacementFeasibility(game)
+
+                for post in posts:
+                    if post.is_owned():
+                        continue
+                    self.assertEqual(
+                        _can_finish_move_after_placement(game, post, solver),
+                        uncached_can_finish(game, post),
+                    )
+
+    def test_displacement_feasibility_is_reused_for_equivalent_route_pieces(self):
+        game = create_headless_game(2, 3, seed=8_704)
+        actor, opponent = game.players[:2]
+        route = next(
+            route
+            for route in game.selected_map.routes
+            if len(route.posts) >= 2 and game.check_brown_blue_priv(route)
+        )
+        for post in route.posts[:2]:
+            post.claim(opponent, "square")
+        actor.personal_supply_squares = max(actor.personal_supply_squares, 3)
+
+        original = action_legality.displacement_can_be_completed
+        with mock.patch.object(
+            action_legality,
+            "displacement_can_be_completed",
+            wraps=original,
+        ) as feasibility:
+            action_legality.mask_post_action(game)
+
+        matching_calls = [
+            call
+            for call in feasibility.call_args_list
+            if call.args[1:] == (route, opponent, "square")
+        ]
+        self.assertEqual(len(matching_calls), 1)
 
     def test_exchange_bonus_marker_has_both_structured_stages(self):
         game = create_headless_game(1, 3, seed=124)

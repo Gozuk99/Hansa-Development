@@ -16,6 +16,7 @@ from ai.ai_model import HansaNN  # noqa: E402
 from training.balanced_curriculum import BalancedCurriculumRunner  # noqa: E402
 from training.curriculum import (  # noqa: E402
     CurriculumConfig,
+    DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS,
     PromotionCriteria,
 )
 from training.self_play import SelfPlayTrainer, TrainingConfig  # noqa: E402
@@ -29,7 +30,7 @@ DEFAULT_EVALUATION_SUITE = ROOT / "training_data/generated/evaluation"
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument(
         "--iterations",
         type=int,
@@ -61,13 +62,25 @@ def parse_args(argv=None):
     parser.add_argument(
         "--zero-epsilon-training-percentage",
         type=float,
-        default=5.0,
-        help="Percentage of training games that disable only the broad epsilon branch",
+        default=None,
+        help="Legacy override applying one zero-epsilon percentage to every maturity",
     )
+    for maturity, fraction in DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS:
+        parser.add_argument(
+            f"--{maturity}-zero-epsilon-training-percentage",
+            type=float,
+            default=fraction * 100,
+            help=f"Zero-epsilon percentage for {maturity} training games",
+        )
     parser.add_argument(
         "--detailed-profiling",
         action="store_true",
         help="Collect fine-grained action-loop timings (disabled by default)",
+    )
+    parser.add_argument(
+        "--shadow-filter-audit",
+        action="store_true",
+        help="Collect the expensive per-action shadow-filter audit (disabled by default)",
     )
     parser.add_argument("--skip-tier-one-promotion-check", action="store_true")
     return parser.parse_args(argv)
@@ -83,6 +96,7 @@ def main(argv=None):
         trainer.config = replace(
             trainer.config,
             detailed_profiling=args.detailed_profiling,
+            shadow_filter_audit_enabled=args.shadow_filter_audit,
         )
     else:
         trainer = SelfPlayTrainer(
@@ -90,9 +104,22 @@ def main(argv=None):
             config=TrainingConfig(
                 seed=args.seed,
                 detailed_profiling=args.detailed_profiling,
+                shadow_filter_audit_enabled=args.shadow_filter_audit,
             ),
         )
 
+    zero_epsilon_fractions = tuple(
+        (
+            maturity,
+            (
+                args.zero_epsilon_training_percentage
+                if args.zero_epsilon_training_percentage is not None
+                else getattr(args, f"{maturity}_zero_epsilon_training_percentage")
+            )
+            / 100,
+        )
+        for maturity, _fraction in DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS
+    )
     config = CurriculumConfig(
         iterations=args.batch,
         training_games_per_batch=args.iterations,
@@ -100,7 +127,7 @@ def main(argv=None):
         update_batch_size=args.batch_size,
         retry_limit=args.retry_limit,
         seed=args.seed,
-        zero_epsilon_training_fraction=args.zero_epsilon_training_percentage / 100,
+        zero_epsilon_training_fractions=zero_epsilon_fractions,
         promotion=PromotionCriteria(
             maximum_unfinished_rate=args.maximum_unfinished_rate,
             minimum_evaluation_completion_rate=args.minimum_evaluation_completion,
@@ -123,8 +150,12 @@ def main(argv=None):
         f"Training complete: {args.batch} batch(es), "
         f"{args.batch * args.iterations} learning game(s), and "
         f"evaluation suite after each batch.\n"
-        "Training mix: 50% fresh, 25% early, 10% mid, 10% late, 5% end; "
-        f"{args.zero_epsilon_training_percentage:g}% zero-epsilon.\n"
+        "Training mix: 50% fresh, 0% early, 15% mid, 20% late, 15% end.\n"
+        "Zero-epsilon by maturity: "
+        + ", ".join(
+            f"{maturity} {fraction * 100:g}%" for maturity, fraction in zero_epsilon_fractions
+        )
+        + ".\n"
         f"Latest loss: {trainer.progress.last_loss}.\n"
         f"Replacement-route deadlocks: {trainer.progress.replacement_route_deadlocks}.\n"
         f"Playable model: {args.playable_model}.\n"

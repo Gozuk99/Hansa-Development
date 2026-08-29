@@ -1,0 +1,54 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000055,
+  "map_num": 1,
+  "player_count": 3,
+  "mission_cards": true,
+  "emperors_favour": false,
+  "bonus_marker_setup": "all_promos",
+  "state_id": "state-6a561ac390708af3",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [],
+  "bonus_marker_draw_supply": [
+    "Move3",
+    "PlaceAdjacent",
+    "PlaceAdjacent",
+    "Tribute4EstablishingTP",
+    "UpgradeAbility",
+    "ExchangeBonusMarker",
+    "BlockTradeRoute",
+    "ExchangeBonusMarker",
+    "Tribute4EstablishingTP",
+    "BlockTradeRoute",
+    "4Actions",
+    "3Actions"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "SwapOffice",
+      "Arnheim",
+      "Duisburg"
+    ],
+    [
+      "PlaceAdjacent",
+      "Munster",
+      "Minden"
+    ],
+    [
+      "Move3",
+      "Paderborn",
+      "Hildesheim"
+    ]
+  ],
+  "save_file": "state-6a561ac390708af3.hansa"
+}

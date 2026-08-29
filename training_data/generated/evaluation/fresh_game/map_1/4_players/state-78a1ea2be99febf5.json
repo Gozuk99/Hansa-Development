@@ -1,0 +1,61 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000058,
+  "map_num": 1,
+  "player_count": 4,
+  "mission_cards": false,
+  "emperors_favour": true,
+  "bonus_marker_setup": "all_promos",
+  "state_id": "state-78a1ea2be99febf5",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "+7PtsPerCompletedAbility",
+    "DisplaceAnywhere",
+    "+1Action",
+    "+1IncomeIfOthersIncome"
+  ],
+  "bonus_marker_draw_supply": [
+    "UpgradeAbility",
+    "Tribute4EstablishingTP",
+    "4Actions",
+    "3Actions",
+    "UpgradeAbility",
+    "SwapOffice",
+    "Tribute4EstablishingTP",
+    "BlockTradeRoute",
+    "BlockTradeRoute",
+    "ExchangeBonusMarker",
+    "SwapOffice",
+    "ExchangeBonusMarker"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "Move3",
+      "Kampen",
+      "Osnabruck"
+    ],
+    [
+      "SwapOffice",
+      "Stade",
+      "Hamburg"
+    ],
+    [
+      "PlaceAdjacent",
+      "Minden",
+      "Hannover"
+    ]
+  ],
+  "save_file": "state-78a1ea2be99febf5.hansa"
+}

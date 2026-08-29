@@ -6,9 +6,33 @@ Use one shared Hansa model for every AI-controlled seat. Each decision and rewar
 
 ## Model Ownership
 
-`HansaNN` accepts the fixed player-visible observation and produces one value for each entry in the 768-action schema. `GameConfiguration` loads at most one shared inference model. Human-only games do not load PyTorch models.
+`HansaNN` accepts the fixed player-visible observation. Its existing
+`4724 -> 2048 -> 1024 -> 1024` trunk feeds two independent `1024 -> 768` outputs.
+The final shared layer is initialized as an exact identity transform with zero
+bias so migrated models initially preserve their prior representation:
 
-Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The model is in evaluation mode and its weights remain frozen while a game is collected. Training performs one update per sampled block of 256 trajectory decisions. Mid, late, and end games are capped at four non-overlapping representative blocks and 1,024 sampled decisions; generated early games are capped at 4,096 sampled decisions. Early sampling targets 512 decisions from each chronological eighth of the complete trajectory, then redistributes unused capacity without splitting movement workflows. Penalized no-replacement-route failures and action-limit trajectories also train before the next game begins. Action-limit trajectories retain genuine rewards and penalties but receive no invented terminal reward; evaluation games never update the model.
+- the mature Q head (`layer3`) estimates expected return for every universal action;
+- the policy head produces relative action-preference logits.
+
+`GameConfiguration` loads at most one shared inference model. Human-only games do not load PyTorch models. The Q head remains the sole authority for gameplay selection during the policy experiment; policy output is shadow-only.
+
+Training owns one shared model and one optimizer through `SelfPlayTrainer`, outside the game engine. The optimizer has a base-rate trunk/Q group and a separately configurable, initially faster policy-head group. The model is in evaluation mode and its weights remain frozen while a game is collected. Training performs one update per sampled block of 256 trajectory decisions. Mid, late, and end games are capped at four non-overlapping representative blocks and 1,024 sampled decisions; generated early games are capped at 4,096 sampled decisions. Early sampling targets 512 decisions from each chronological eighth of the complete trajectory, then redistributes unused capacity without splitting movement workflows. Penalized no-replacement-route failures and action-limit trajectories also train before the next game begins. Action-limit trajectories retain genuine rewards and penalties but receive no invented terminal reward; evaluation games never update the model.
+
+## Policy objective
+
+The policy head is trained from finalized trajectory quality, not from the action selector. For each sampled decision:
+
+1. reward-to-go and any existing local movement target/adjustment are calculated exactly as for Q training;
+2. the signed quality weight is `tanh(reward_to_go / policy_return_scale)`;
+3. illegal actions are excluded;
+4. legal equivalent action indices are collapsed to one semantic choice using their mean logit before normalization;
+5. positive quality uses `-quality_weight * log(P(chosen semantic group))`;
+6. negative quality uses `-abs(quality_weight) * log(1 - P(chosen semantic group))`;
+7. a forced single semantic choice has zero policy loss.
+
+Thus positive quality increases the chosen group's preference, negative quality decreases it, and weak/near-zero evidence makes a small update. `tanh` bounds extreme reward magnitudes without changing Q targets. No state-value head or Q-derived baseline is used: that keeps the new signal independent of Q rankings and preserves the sign of explicit hard local targets. Batch policy loss is the mean decision loss.
+
+The reported joint objective is `q_loss + policy_loss_weight * policy_loss`, but its gradient sources are isolated during shadow training. Q loss updates and clips the complete shared trunk—including the final identity-initialized 1024-unit layer—and Q head normally. The policy head consumes detached output from that final shared layer, so policy loss updates and clips only the policy head at its own learning-rate multiplier. Policy gradients cannot alter any shared layer, the Q head, Q clipping, or Q optimizer state.
 
 ## Player-Visible Decisions
 
@@ -24,7 +48,7 @@ their owner. Opponents' used bonus-marker counts are visible, but their
 face-down identities remain hidden unless that opponent is the selected
 Exchange Bonus Marker target.
 
-The engine owns legality through `Game.get_legal_actions()`. The central codec maps stable interactions to indices, and `Game.apply_ai_action()` executes the selected index. GUI code is not involved in headless inference or training.
+The engine owns legality through `Game.get_legal_actions()`. The central codec maps stable interactions to indices, and `Game.apply_ai_action()` executes the selected index. Both heads always emit 768 values; policy normalization happens only over the current legal semantic choices. GUI code is not involved in headless inference or training.
 
 ## Training Trajectories
 
@@ -79,6 +103,8 @@ rank, and legal-action count. Training progress aggregates wins, games,
 selection behavior, and rewards by tier so later curriculum changes can be based
 on measured results rather than seat order.
 
+Shadow diagnostics compare the policy distribution with the Q ranking without consuming RNG or changing the selected action. Compact CSV fields report Q/policy top-1 agreement, the policy top choice's Q rank, policy entropy, cumulative policy mass in the top 2/5/10 choices, Q loss, policy loss, combined loss, and the fixed zero policy-to-trunk gradient scale.
+
 Each completed trajectory also records movement-behavior diagnostics at the
 trainer's existing workflow boundaries: paid Move share, pointless workflows,
 repeated-Move penalties, all-Move turns, Moves that create a claimable route, and
@@ -87,17 +113,18 @@ evaluation but do not alter reward or target assignment.
 
 ## Checkpoints
 
-One versioned checkpoint stores:
+Checkpoint schema version 6 stores:
 
-- shared model weights;
-- optimizer state;
+- shared trunk, Q-head, and policy-head weights;
+- both optimizer parameter groups and their state;
 - training progress and loss statistics;
 - policy RNG state;
 - training configuration, including gamma and tier definitions;
 - source-state hashes; and
+- policy objective, learning rate, and policy-specific update age;
 - exact observation and action schema identities.
 
-Incompatible checkpoints fail clearly. The shape-compatible observation-v1
+Training checkpoint version 5 and model artifacts without policy parameters have an explicit Q-only migration. Existing trunk/Q weights are loaded exactly, their compatible Adam state is retained, and only the new policy head/optimizer state is initialized. A migrated policy head starts with zero weights and bias, producing neutral equal logits before learning. Its separately persisted policy-update counter starts at zero, while policy-to-trunk influence remains fixed at zero throughout shadow training. Newly saved artifacts carry the dual-head model schema version. Incompatible checkpoints fail clearly. The shape-compatible observation-v1
 model/checkpoint has one explicit transfer path into observation version 2 so
 trained weights are preserved while opponent used-marker identities become
 hidden. The next save records version 2. Older seat-numbered or legacy reward
@@ -126,7 +153,7 @@ The model appears unable to retain enough different useful patterns at once, or 
 
 Example:
 
-`4241 → 4096 → 2048 → 768`
+`4724 → 4096 → 2048 → 768`
 
 Wider means more neurons per layer and therefore more capacity, but also more parameters and computation.
 
@@ -136,7 +163,7 @@ The observation contains the necessary information, training is healthy, but the
 
 Example:
 
-`4241 → 2048 → 1024 → 512 → 768`
+`4724 → 2048 → 1024 → 512 → 768`
 
 Deeper means more stages in which learned patterns can be combined. More depth is not automatically better.
 
@@ -146,7 +173,7 @@ A smaller model reaches approximately the same evaluation performance as the cur
 
 Example:
 
-`4241 → 1024 → 512 → 768`
+`4724 → 1024 → 512 → 768`
 
 If it performs equally well, the larger model is probably wasting computation and may be harder to train.
 
@@ -156,7 +183,7 @@ There is a specific reason to force the model to learn a compact internal repres
 
 Example:
 
-`4241 → 2048 → 256 → 768`
+`4724 → 2048 → 256 → 768`
 
 Do not make the bottleneck extremely small without a specific reason. A layer such as `1`, `2`, or `4` neurons would force almost the entire game state through only a few values and would likely destroy information needed to distinguish hundreds of actions.
 

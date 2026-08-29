@@ -5,7 +5,12 @@ from tests.action_helpers import legal_action_mask
 from game.game_runner import create_headless_game
 from game.turn_state import TurnPhase, TurnStateError
 from game.action_resolvers import resolve_control_interaction
-from game.game_actions import InvalidActionError
+from game.game_actions import (
+    InvalidActionError,
+    claim_route_for_points,
+    claim_route_for_upgrade,
+    move_action,
+)
 from map_data.map_attributes import BonusMarker
 
 
@@ -28,6 +33,122 @@ class TurnStructureTests(unittest.TestCase):
         game.current_player.spend_action()
         with self.assertRaises(RuntimeError):
             game.current_player.spend_action()
+
+    def test_paid_action_history_counts_actions_and_resets_move_streak(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        player = game.current_player
+
+        player.spend_action(is_move=True)
+        self.assertEqual(player.consecutive_paid_move_actions, 1)
+        self.assertEqual(player.paid_actions_spent_this_turn, 1)
+        self.assertEqual(player.paid_move_actions_spent_this_turn, 1)
+
+        player.grant_actions(2)
+        player.spend_action(is_move=True)
+        self.assertEqual(player.consecutive_paid_move_actions, 2)
+        self.assertEqual(player.paid_actions_spent_this_turn, 2)
+        self.assertEqual(player.paid_move_actions_spent_this_turn, 2)
+
+        player.spend_action()
+        self.assertEqual(player.consecutive_paid_move_actions, 0)
+        self.assertEqual(player.paid_actions_spent_this_turn, 3)
+        self.assertEqual(player.paid_move_actions_spent_this_turn, 2)
+
+    def test_action_grants_and_forfeit_do_not_count_as_paid_actions(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        player = game.current_player
+        player.grant_actions(4)
+        player.forfeit_remaining_actions()
+        self.assertEqual(player.paid_actions_spent_this_turn, 0)
+        self.assertEqual(player.paid_move_actions_spent_this_turn, 0)
+        self.assertEqual(player.consecutive_paid_move_actions, 0)
+
+    def test_turn_transition_resets_paid_action_history(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        game.players[1].paid_actions_spent_this_turn = 4
+        game.players[1].paid_move_actions_spent_this_turn = 3
+        game.players[1].consecutive_paid_move_actions = 2
+        game.current_player.forfeit_remaining_actions()
+
+        game.advance_turn()
+
+        self.assertEqual(game.current_player.paid_actions_spent_this_turn, 0)
+        self.assertEqual(game.current_player.paid_move_actions_spent_this_turn, 0)
+        self.assertEqual(game.current_player.consecutive_paid_move_actions, 0)
+
+    def test_income_claim_and_upgrade_count_as_non_move_paid_actions(self):
+        income_game = create_headless_game(map_num=2, num_players=3, seed=124)
+        income_player = income_game.current_player
+        income_player.income_action(1, 0)
+        self.assertEqual(income_player.paid_actions_spent_this_turn, 1)
+        self.assertEqual(income_player.paid_move_actions_spent_this_turn, 0)
+
+        claim_game = create_headless_game(map_num=2, num_players=3, seed=124)
+        claim_player = claim_game.current_player
+        claim_route = next(
+            route for route in claim_game.selected_map.routes if not route.required_circles
+        )
+        for post in claim_route.posts:
+            post.claim(claim_player, "square")
+        claim_route_for_points(claim_game, claim_route)
+        self.assertEqual(claim_player.paid_actions_spent_this_turn, 1)
+        self.assertEqual(claim_player.paid_move_actions_spent_this_turn, 0)
+
+        upgrade_game = create_headless_game(map_num=2, num_players=3, seed=124)
+        upgrade_player = upgrade_game.current_player
+        upgrade_route = next(
+            route
+            for route in upgrade_game.selected_map.routes
+            if any(
+                upgrade in ("Keys", "Privilege", "Book", "Actions", "Bank")
+                for city in route.cities
+                for upgrade in city.upgrade_city_type
+            )
+        )
+        upgrade_city = next(
+            city
+            for city in upgrade_route.cities
+            if any(
+                upgrade in ("Keys", "Privilege", "Book", "Actions", "Bank")
+                for upgrade in city.upgrade_city_type
+            )
+        )
+        upgrade_choice = next(
+            upgrade
+            for upgrade in upgrade_city.upgrade_city_type
+            if upgrade in ("Keys", "Privilege", "Book", "Actions", "Bank")
+        )
+        for post in upgrade_route.posts:
+            post.claim(upgrade_player, post.required_shape or "square")
+        claim_route_for_upgrade(upgrade_game, upgrade_city, upgrade_route, upgrade_choice)
+        self.assertEqual(upgrade_player.paid_actions_spent_this_turn, 1)
+        self.assertEqual(upgrade_player.paid_move_actions_spent_this_turn, 0)
+
+    def test_multiclick_move_counts_once_when_final_piece_is_placed(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        player = game.current_player
+        route = next(
+            route
+            for route in game.selected_map.routes
+            if len([post for post in route.posts if post.required_shape is None]) >= 3
+        )
+        origin, second, destination = [post for post in route.posts if post.required_shape is None][
+            :3
+        ]
+        origin.claim(player, "square")
+        second.claim(player, "square")
+
+        move_action(game, origin)
+        move_action(game, second)
+        self.assertEqual(player.paid_actions_spent_this_turn, 0)
+        self.assertEqual(player.paid_move_actions_spent_this_turn, 0)
+
+        move_action(game, destination)
+        self.assertEqual(player.paid_actions_spent_this_turn, 0)
+        move_action(game, origin)
+        self.assertEqual(player.paid_actions_spent_this_turn, 1)
+        self.assertEqual(player.paid_move_actions_spent_this_turn, 1)
+        self.assertEqual(player.consecutive_paid_move_actions, 1)
 
     def test_advance_turn_requires_completed_turn(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)

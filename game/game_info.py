@@ -46,6 +46,8 @@ class Game:
         self.use_mission_cards = use_mission_cards
         self.use_emperors_favour = use_emperors_favour
         self.selected_map = self.assign_map(map_num, num_players)
+        self._observation_structure_revision = 0
+        self.normal_move_pre_board_snapshot = None
         if randomize_starting_bonus_marker_locations:
             self.selected_map.randomize_starting_bonus_marker_locations()
         self._post_catalogue = tuple(
@@ -252,6 +254,24 @@ class Game:
         """Return authoritative structured legal interactions."""
         return get_legal_actions(self)
 
+    def mark_observation_structure_changed(self):
+        """Invalidate cached observation structure after a rare board-layout change."""
+        self._observation_structure_revision = (
+            getattr(self, "_observation_structure_revision", 0) + 1
+        )
+
+    def capture_normal_move_pre_board_snapshot(self):
+        """Freeze route/post occupancy before a normal Move or Move Any 2 starts."""
+        if self.normal_move_pre_board_snapshot is not None:
+            raise TurnStateError("A normal Move board snapshot is already active")
+        self.normal_move_pre_board_snapshot = tuple(
+            tuple((post.owner, post.owner_piece_shape) for post in route.posts)
+            for route in self.selected_map.routes
+        )
+
+    def clear_normal_move_pre_board_snapshot(self):
+        self.normal_move_pre_board_snapshot = None
+
     def ai_action_mask(self):
         """Return the authoritative 768-entry AI action mask."""
         return DEFAULT_ACTION_CODEC.create_mask(self.get_legal_actions())
@@ -269,6 +289,20 @@ class Game:
         except ActionCodecError as error:
             raise InvalidActionError(str(error)) from error
         self.apply_structured_action(action)
+
+    def _apply_prevalidated_ai_action(self, action_index, legal_action_mask):
+        """Execute an AI action already selected from the supplied current mask."""
+        try:
+            action = DEFAULT_ACTION_CODEC.decode(action_index)
+        except ActionCodecError as error:
+            raise InvalidActionError(str(error)) from error
+        if not 0 <= action_index < len(legal_action_mask) or not bool(
+            legal_action_mask[action_index]
+        ):
+            raise InvalidActionError(
+                f"Prevalidated AI action is not enabled in its legal mask: {action_index}"
+            )
+        execute_action(self, action)
 
     def apply_action(self, action_index):
         """Apply one codec-backed action for GUI and manual callers."""

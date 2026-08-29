@@ -1,4 +1,5 @@
 from collections import deque
+from functools import lru_cache
 
 from map_data.constants import DARK_GREEN
 from player_info.player_attributes import valid_region_transition
@@ -152,6 +153,7 @@ def displacement_can_be_completed(game, route, displaced_player, displaced_shape
     """Whether some legal placement sequence can relocate the mandatory piece."""
     optional_limit = 1 if displaced_shape == "square" else 2
 
+    @lru_cache(maxsize=None)
     def search(unavailable_posts, general_stock, personal_supply, optional_remaining):
         source = general_stock if sum(general_stock) else personal_supply
         shapes = [displaced_shape]
@@ -394,11 +396,14 @@ def move_action(game, post):
         game.waiting_for_bm_move_any_2 and post.is_owned()
     ):
         if player.pieces_to_pickup > 0:
+            if game.waiting_for_bm_move_any_2 and game.normal_move_pre_board_snapshot is None:
+                game.capture_normal_move_pre_board_snapshot()
             player.pick_up_piece(post)
         else:
             raise InvalidActionError("No additional pieces may be picked up")
     elif post.owner == player:
         if player.pieces_to_pickup == 0:
+            game.capture_normal_move_pre_board_snapshot()
             player.start_move()
         player.pick_up_piece(post)
 
@@ -423,12 +428,14 @@ def move_action(game, post):
                     or game.waiting_for_place2_from_route
                     or game.waiting_for_place2_in_scotland_or_wales
                 ):
-                    player.spend_action()
+                    game.clear_normal_move_pre_board_snapshot()
+                    player.spend_action(is_move=True)
                 else:
                     if game.waiting_for_bm_move3:
                         game.waiting_for_bm_move3 = False
                     elif game.waiting_for_bm_move_any_2:
                         game.waiting_for_bm_move_any_2 = False
+                        game.clear_normal_move_pre_board_snapshot()
                     elif game.waiting_for_place2_from_route:
                         game.waiting_for_place2_from_route = False
                     elif game.waiting_for_place2_in_scotland_or_wales:
@@ -631,6 +638,7 @@ def claim_route_for_office(game, city, route):
     elif "PlaceAdjacent" in (bm.type for bm in current_player.bonus_markers):
         score_route(route)
         city.claim_office_with_bonus_marker(current_player)
+        game.mark_observation_structure_changed()
         finalize_route_claim(game, route, "square")
         route.award_tributes(game)
 
@@ -641,6 +649,7 @@ def claim_route_for_additional_office(game, city, route, shape):
         raise ValueError("Additional Trading Post choice is no longer legal")
     score_route(route)
     city.claim_office_with_bonus_marker(player, shape)
+    game.mark_observation_structure_changed()
     finalize_route_claim(game, route, shape)
     route.award_tributes(game)
     game.waiting_for_bm_place_adjacent = False
@@ -657,6 +666,7 @@ def claim_route_for_upgrade(game, city, route, upgrade_choice, prestige_value=No
             else specialprestigepoints_city.claim_highest_prestige(current_player)
         )
         if claimed:
+            game.mark_observation_structure_changed()
             score_route(route)
             finalize_route_claim(game, route, "circle")
     elif any(

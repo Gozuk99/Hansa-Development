@@ -52,11 +52,13 @@ class MaturityProfile:
 
 MATURITY_PROFILES = (
     MaturityProfile("fresh", 10, None, None, None, None, None, (1, 1)),
-    MaturityProfile("early", 5, (0, 5), (2, 4), 9, 7, StartingPosition.ONE_ROUND_BEFORE, (2, 5)),
-    MaturityProfile("mid", 2, (6, 11), (5, 7), 3, 5, StartingPosition.ONE_ROUND_BEFORE, (6, 10)),
-    MaturityProfile("late", 2, (12, 15), (7, 9), 2, 3, StartingPosition.ONE_ROUND_BEFORE, (11, 15)),
+    # Early training is temporarily disabled because Fresh already covers opening/early play;
+    # its profile remains available for evaluation and can be restored by raising this weight.
+    MaturityProfile("early", 0, (0, 5), (2, 4), 9, 7, StartingPosition.ONE_ROUND_BEFORE, (2, 5)),
+    MaturityProfile("mid", 3, (6, 11), (5, 7), 3, 5, StartingPosition.ONE_ROUND_BEFORE, (6, 10)),
+    MaturityProfile("late", 4, (12, 15), (7, 9), 2, 3, StartingPosition.ONE_ROUND_BEFORE, (11, 15)),
     MaturityProfile(
-        "end", 1, (16, 17), (9, 11), 1, 2, StartingPosition.TWO_DECISIONS_BEFORE, (16, 20)
+        "end", 3, (16, 17), (9, 11), 1, 2, StartingPosition.TWO_DECISIONS_BEFORE, (16, 20)
     ),
 )
 MATURITY_CYCLE = tuple(profile for profile in MATURITY_PROFILES for _ in range(profile.weight))
@@ -192,7 +194,7 @@ class BalancedCurriculumRunner(CurriculumRunner):
 
     @staticmethod
     def _stage_label(_stage):
-        return "fresh_early_mid_late_end_game"
+        return "fresh_mid_late_end_game"
 
     @staticmethod
     def _stage_action_limit(_stage):

@@ -1,0 +1,56 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000075,
+  "map_num": 3,
+  "player_count": 4,
+  "mission_cards": false,
+  "emperors_favour": false,
+  "bonus_marker_setup": "default",
+  "state_id": "state-4000c8591dda2978",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [],
+  "bonus_marker_draw_supply": [
+    "UpgradeAbility",
+    "SwapOffice",
+    "Move3",
+    "PlaceAdjacent",
+    "SwapOffice",
+    "3Actions",
+    "3Actions",
+    "4Actions",
+    "PlaceAdjacent",
+    "UpgradeAbility",
+    "4Actions",
+    "PlaceAdjacent"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "Move3",
+      "Carlisle",
+      "Chester"
+    ],
+    [
+      "PlaceAdjacent",
+      "Lancaster",
+      "Hereford"
+    ],
+    [
+      "SwapOffice",
+      "Southhampton",
+      "Salisbury"
+    ]
+  ],
+  "save_file": "state-4000c8591dda2978.hansa"
+}

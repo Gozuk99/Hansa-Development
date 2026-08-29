@@ -1,0 +1,58 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000054,
+  "map_num": 1,
+  "player_count": 3,
+  "mission_cards": false,
+  "emperors_favour": true,
+  "bonus_marker_setup": "default",
+  "state_id": "state-f2b9ae795848624c",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [
+    "+1Action",
+    "DisplaceAnywhere",
+    "+1DisplacedPiece"
+  ],
+  "bonus_marker_draw_supply": [
+    "PlaceAdjacent",
+    "SwapOffice",
+    "Move3",
+    "4Actions",
+    "PlaceAdjacent",
+    "4Actions",
+    "PlaceAdjacent",
+    "UpgradeAbility",
+    "UpgradeAbility",
+    "SwapOffice",
+    "3Actions",
+    "3Actions"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "PlaceAdjacent",
+      "Bremen",
+      "Hannover"
+    ],
+    [
+      "SwapOffice",
+      "Minden",
+      "Brunswick"
+    ],
+    [
+      "Move3",
+      "Halle",
+      "Quedlinburg"
+    ]
+  ],
+  "save_file": "state-f2b9ae795848624c.hansa"
+}

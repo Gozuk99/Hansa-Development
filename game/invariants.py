@@ -36,9 +36,29 @@ def validate_game(game):
             "personal_supply_circles": player.personal_supply_circles,
             "pieces_to_pickup": player.pieces_to_pickup,
             "pieces_to_place": player.pieces_to_place,
+            "consecutive_paid_move_actions": player.consecutive_paid_move_actions,
+            "paid_actions_spent_this_turn": player.paid_actions_spent_this_turn,
+            "paid_move_actions_spent_this_turn": player.paid_move_actions_spent_this_turn,
         }
         for name, value in counts.items():
             _require(value >= 0, f"player {player.order} has negative {name}: {value}")
+        _require(
+            player.paid_move_actions_spent_this_turn <= player.paid_actions_spent_this_turn,
+            f"player {player.order} has more paid Moves than paid actions",
+        )
+        _require(
+            player.consecutive_paid_move_actions <= player.paid_move_actions_spent_this_turn,
+            f"player {player.order} has an invalid consecutive paid-Move count",
+        )
+        route_slots = set(range(len(game.selected_map.routes)))
+        _require(
+            set(player.pending_move_claim_route_slots) <= route_slots,
+            f"player {player.order} has an invalid pending Move->Claim route",
+        )
+        _require(
+            set(player.rewarded_move_focus_route_slots) <= route_slots,
+            f"player {player.order} has an invalid rewarded Move-focus route",
+        )
 
         board_squares = sum(
             post.owner is player and post.owner_piece_shape == "square"

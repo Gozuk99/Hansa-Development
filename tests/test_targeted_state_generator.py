@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest import mock
 
 from game.action_validation import state_fingerprint, validate_action_state
 from game.invariants import validate_game
@@ -21,6 +20,7 @@ from training.balanced_state_generator import (
     EndingCondition,
     generate_balanced_state,
 )
+from training.curriculum import ACTIVE_EVALUATION_SETS
 from training.targeted_state_generator import (
     EndGameScenario,
     GenerationRequest,
@@ -30,7 +30,7 @@ from training.targeted_state_generator import (
 from tools.generate_training_states import (
     EVALUATION_SPECS,
     EVALUATION_SUITE_VERSION,
-    evaluation_request,
+    fresh_evaluation_game,
     parse_args,
 )
 
@@ -79,10 +79,10 @@ class TargetedStateGeneratorTests(unittest.TestCase):
 
     def test_evaluation_suite_covers_maps_players_endings_and_optional_rules(self):
         standard = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "mid_late_end"]
-        early = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "early"]
+        fresh = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "fresh"]
         self.assertEqual(len(EVALUATION_SPECS), 54)
         self.assertEqual(len(standard), 27)
-        self.assertEqual(len(early), 27)
+        self.assertEqual(len(fresh), 27)
         configurations = Counter((spec.map_num, spec.player_count) for spec in standard)
         self.assertEqual(set(configurations.values()), {3})
         self.assertEqual(Counter(spec.map_num for spec in standard), {1: 9, 2: 9, 3: 9})
@@ -107,42 +107,24 @@ class TargetedStateGeneratorTests(unittest.TestCase):
         self.assertTrue(
             all(not spec.mission_cards or spec.map_num == 1 for spec in EVALUATION_SPECS)
         )
+        self.assertTrue(all(spec.round_range == (8, 20) for spec in standard))
         self.assertEqual(
-            {(spec.map_num, spec.player_count) for spec in early},
-            {(map_num, players) for map_num in (1, 2, 3) for players in (3, 4, 5)},
-        )
-        self.assertEqual(Counter(spec.player_count for spec in early), {3: 9, 4: 9, 5: 9})
-        self.assertEqual(
-            Counter((spec.map_num, spec.player_count) for spec in early),
+            Counter((spec.map_num, spec.player_count) for spec in fresh),
             {(map_num, players): 3 for map_num in (1, 2, 3) for players in (3, 4, 5)},
         )
-        self.assertTrue(all(spec.score_range == (0, 5) for spec in early))
-        self.assertTrue(all(spec.development_range == (2, 4) for spec in early))
         self.assertEqual(
-            {spec.bonus_markers_remaining for spec in early},
-            {9, 10, 11, 12},
-        )
-        self.assertTrue(all(spec.completed_cities_below_limit == 7 for spec in early))
-        self.assertTrue(all(not spec.immediate_finish for spec in early))
-        self.assertTrue(all(not spec.east_west and spec.regional_focus is None for spec in early))
-        self.assertTrue(all(not spec.prepare_ending_condition for spec in early))
-        self.assertTrue(all(spec.round_range == (2, 5) for spec in early))
-        self.assertTrue(all(spec.round_range == (8, 20) for spec in standard))
-        self.assertTrue(any(spec.mission_cards for spec in early))
-        self.assertTrue(any(spec.emperors_favour for spec in early))
-        self.assertTrue(any(spec.promo_markers for spec in early))
-        self.assertEqual(
-            Counter(spec.bonus_marker_setup for spec in early),
+            Counter(spec.bonus_marker_setup for spec in fresh),
             {
                 BonusMarkerSetup.DEFAULT: 9,
                 BonusMarkerSetup.ALL_PROMOS: 9,
                 BonusMarkerSetup.MIXED: 9,
             },
         )
-        self.assertEqual(
-            sum(spec.mission_cards for spec in early if spec.map_num == 1),
-            4,
-        )
+        self.assertEqual(sum(spec.mission_cards for spec in fresh if spec.map_num == 1), 4)
+        self.assertTrue(any(spec.emperors_favour for spec in fresh))
+        self.assertTrue(any(not spec.emperors_favour for spec in fresh))
+        self.assertTrue(all(spec.ending_condition is None for spec in fresh))
+        self.assertEqual(ACTIVE_EVALUATION_SETS, {"mid_late_end", "fresh"})
         manifest = json.loads(
             Path("training_data/generated/evaluation/manifest.json").read_text(encoding="utf-8")
         )
@@ -154,117 +136,78 @@ class TargetedStateGeneratorTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            all(entry["suite_version"] == EVALUATION_SUITE_VERSION for entry in manifest)
+            all(
+                entry["suite_version"] == EVALUATION_SUITE_VERSION
+                for entry in manifest
+                if entry["evaluation_set"] == "fresh"
+            )
+        )
+        self.assertEqual(
+            {entry["suite_version"] for entry in manifest if entry["evaluation_set"] != "fresh"},
+            {9},
         )
         self.assertEqual(
             Counter(entry["evaluation_set"] for entry in manifest),
-            {"mid_late_end": 27, "early": 27},
+            {"mid_late_end": 27, "fresh": 27},
         )
         self.assertEqual(
             [entry["seed"] for entry in manifest],
-            list(range(1_000_000_000, 1_000_000_000 + len(EVALUATION_SPECS))),
-        )
-        self.assertNotIn("early_mixed", {entry["evaluation_set"] for entry in manifest})
-        self.assertEqual(
-            {
-                (entry["map_num"], entry["player_count"])
-                for entry in manifest
-                if entry["evaluation_set"] == "early"
-            },
-            {(map_num, players) for map_num in (1, 2, 3) for players in (3, 4, 5)},
+            list(range(1_000_000_000, 1_000_000_027)) + list(range(1_000_000_054, 1_000_000_081)),
         )
         self.assertTrue(
             all(
-                "/early_game/" in entry["save_file"]
+                entry["save_file"].startswith("fresh_game/")
                 for entry in manifest
-                if entry["evaluation_set"] == "early"
+                if entry["evaluation_set"] == "fresh"
             )
         )
         self.assertTrue(parse_args(["--eval"]).eval)
+        self.assertTrue(parse_args(["--fresh-eval"]).fresh_eval)
 
-    def test_early_evaluation_request_does_not_prepare_ending_and_uses_early_rounds(self):
-        spec = next(spec for spec in EVALUATION_SPECS if spec.evaluation_set == "early")
+    def test_fresh_evaluation_generation_is_deterministic_and_untouched(self):
+        specs = [spec for spec in EVALUATION_SPECS if spec.evaluation_set == "fresh"]
+        self.assertEqual(len(specs), 27)
+        for index, spec in enumerate(specs):
+            first = fresh_evaluation_game(spec, 8000 + index)
+            second = fresh_evaluation_game(spec, 8000 + index)
+            self.assertEqual(state_fingerprint(first), state_fingerprint(second))
+            self._assert_fresh_evaluation_game(first)
 
-        request = evaluation_request(spec, 7001)
-        with mock.patch(
-            "training.balanced_state_generator._prepare_ending_condition",
-            side_effect=AssertionError("early evaluation prepared an ending"),
-        ):
-            generated = generate_balanced_state(request)
-
-        self.assertFalse(request.prepare_ending_condition)
-        self.assertTrue(2 <= generated.game.round_number <= 5)
-        self.assertEqual(
-            generated.game.turn_number,
-            (generated.game.round_number - 1) * generated.game.num_players
-            + generated.game.current_player_index
-            + 1,
-        )
-
-    def test_early_evaluation_generation_is_deterministic_and_not_fresh_or_near_end(self):
-        spec = next(spec for spec in EVALUATION_SPECS if spec.evaluation_set == "early")
-        first = generate_balanced_state(evaluation_request(spec, 7001))
-        second = generate_balanced_state(evaluation_request(spec, 7001))
-
-        self.assertEqual(first.attempt_seed, second.attempt_seed)
-        self.assertEqual(state_fingerprint(first.game), state_fingerprint(second.game))
-        for generated in (first, second):
-            validate_game(generated.game)
-            validate_action_state(generated.game)
-            for player in generated.game.players:
-                upgrades = (
-                    player.keys_index
-                    + PRIVILEGE_COLORS.index(player.privilege)
-                    + BOOK_OF_KNOWLEDGE_MAX_VALUES.index(player.book)
-                    + player.actions_index
-                    + BANK_MAX_VALUES.index(player.bank)
-                )
-                offices = sum(
-                    office.controller is player
-                    for city in generated.game.selected_map.cities
-                    for office in city.offices
-                )
-                self.assertGreaterEqual(upgrades + offices, 2)
-            self.assertTrue(all(player.score <= 5 for player in generated.game.players))
-            self.assertLess(
-                generated.game.current_full_cities_count,
-                generated.game.selected_map.max_full_cities - 1,
-            )
-            self.assertGreater(len(generated.game.selected_map.bonus_marker_pool), 3)
-
-    def test_committed_early_evaluation_states_are_valid_developed_and_not_near_end(self):
+    def test_committed_fresh_evaluation_states_are_valid_and_untouched(self):
         evaluation_directory = Path("training_data/generated/evaluation")
         manifest = json.loads((evaluation_directory / "manifest.json").read_text(encoding="utf-8"))
-        early_entries = [entry for entry in manifest if entry["evaluation_set"] == "early"]
+        fresh_entries = [entry for entry in manifest if entry["evaluation_set"] == "fresh"]
 
-        self.assertEqual(len(early_entries), 27)
-        for entry in early_entries:
+        self.assertEqual(len(fresh_entries), 27)
+        for entry in fresh_entries:
             game = load_game(evaluation_directory / entry["save_file"])
-            validate_game(game)
-            validate_action_state(game)
-            self.assertTrue(validate_loaded_game(game))
-            self.assertFalse(game.game_end)
-            self.assertEqual(game.current_full_cities_count, 0)
-            self.assertEqual(
-                sum(route.bonus_marker is not None for route in game.selected_map.routes),
-                3,
+            self._assert_fresh_evaluation_game(game)
+
+    def _assert_fresh_evaluation_game(self, game):
+        validate_game(game)
+        validate_action_state(game)
+        self.assertTrue(validate_loaded_game(game))
+        self.assertFalse(game.game_end)
+        self.assertEqual(game.round_number, 1)
+        self.assertEqual(game.turn_number, 1)
+        self.assertEqual(game.current_full_cities_count, 0)
+        self.assertTrue(all(player.score == 0 for player in game.players))
+        self.assertFalse(
+            any(
+                post.owner is not None for route in game.selected_map.routes for post in route.posts
             )
-            self.assertGreater(len(game.selected_map.bonus_marker_pool), 3)
-            self.assertTrue(all(player.score <= 5 for player in game.players))
-            for player in game.players:
-                upgrades = (
-                    player.keys_index
-                    + PRIVILEGE_COLORS.index(player.privilege)
-                    + BOOK_OF_KNOWLEDGE_MAX_VALUES.index(player.book)
-                    + player.actions_index
-                    + BANK_MAX_VALUES.index(player.bank)
-                )
-                offices = sum(
-                    office.controller is player
-                    for city in game.selected_map.cities
-                    for office in city.offices
-                )
-                self.assertGreaterEqual(upgrades + offices, 2)
+        )
+        self.assertFalse(
+            any(
+                office.controller is not None
+                for city in game.selected_map.cities
+                for office in city.offices
+            )
+        )
+        self.assertEqual(
+            sum(route.bonus_marker is not None for route in game.selected_map.routes),
+            3,
+        )
 
     def test_every_targeted_scenario_generates_a_playable_state(self):
         cases = (

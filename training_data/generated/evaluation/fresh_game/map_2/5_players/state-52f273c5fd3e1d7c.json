@@ -1,0 +1,58 @@
+{
+  "suite_version": 10,
+  "evaluation_set": "fresh",
+  "seed": 1000000071,
+  "map_num": 2,
+  "player_count": 5,
+  "mission_cards": false,
+  "emperors_favour": false,
+  "bonus_marker_setup": "mixed",
+  "state_id": "state-52f273c5fd3e1d7c",
+  "starting_score_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "starting_development_by_seat": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "emperor_tiles": [],
+  "bonus_marker_draw_supply": [
+    "BlockTradeRoute",
+    "SwapOffice",
+    "4Actions",
+    "Tribute4EstablishingTP",
+    "SwapOffice",
+    "3Actions",
+    "Move3",
+    "PlaceAdjacent",
+    "UpgradeAbility",
+    "4Actions",
+    "3Actions",
+    "ExchangeBonusMarker"
+  ],
+  "starting_bonus_marker_routes": [
+    [
+      "PlaceAdjacent",
+      "Brandenburg",
+      "Tangermunde"
+    ],
+    [
+      "Move3",
+      "Brandenburg",
+      "BerlinColln"
+    ],
+    [
+      "SwapOffice",
+      "Halle",
+      "Mittenberg"
+    ]
+  ],
+  "save_file": "state-52f273c5fd3e1d7c.hansa"
+}
