@@ -208,6 +208,34 @@ class TurnStructureTests(unittest.TestCase):
         with self.assertRaises(TurnStateError):
             _ = game.turn_phase
 
+    def test_workflow_predicates_distinguish_immediate_and_replacement_work(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        game.current_player.forfeit_remaining_actions()
+        game.waiting_for_displaced_player = True
+        game.replace_bonus_marker = 1
+
+        self.assertEqual(
+            game.immediate_pending_workflows,
+            (TurnPhase.DISPLACEMENT,),
+        )
+        self.assertTrue(game.has_pending_immediate_workflow)
+        self.assertTrue(game.replacement_marker_workflow_pending)
+        self.assertFalse(game.may_finish_game)
+        self.assertFalse(game.may_advance_player)
+
+        game.waiting_for_displaced_player = False
+
+        self.assertEqual(game.immediate_pending_workflows, ())
+        self.assertFalse(game.has_pending_immediate_workflow)
+        self.assertTrue(game.may_finish_game)
+        self.assertFalse(game.may_advance_player)
+        self.assertEqual(game.turn_phase, TurnPhase.REPLACE_BONUS_MARKERS)
+
+        game.replace_bonus_marker = 0
+
+        self.assertFalse(game.replacement_marker_workflow_pending)
+        self.assertTrue(game.may_advance_player)
+
     def test_tribute_income_precedes_permanent_bonus_marker_follow_up(self):
         game = create_headless_game(map_num=2, num_players=3, seed=124)
         claimant = game.current_player
@@ -222,6 +250,34 @@ class TurnStructureTests(unittest.TestCase):
 
         self.assertEqual(game.turn_phase, TurnPhase.BONUS_MARKER_CHOICE)
         self.assertIs(game.current_player, claimant)
+        self.assertEqual(game.active_player, game.current_player_index)
+
+    def test_tribute_income_skips_exhausted_duplicate_owner(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        tribute_owner = game.players[1]
+        tribute_owner.personal_supply_squares += tribute_owner.general_stock_squares - 2
+        tribute_owner.general_stock_squares = 2
+        tribute_owner.personal_supply_circles += tribute_owner.general_stock_circles
+        tribute_owner.general_stock_circles = 0
+
+        game.begin_tribute_income_responses([tribute_owner, tribute_owner])
+        game.resolve_tribute_income(0)
+
+        self.assertEqual(game.pending_tribute_income_owners, [])
+        self.assertEqual(tribute_owner.general_stock_squares, 0)
+        self.assertEqual(game.active_player, game.current_player_index)
+
+    def test_tribute_income_does_not_queue_owner_with_empty_stock(self):
+        game = create_headless_game(map_num=2, num_players=3, seed=124)
+        tribute_owner = game.players[1]
+        tribute_owner.personal_supply_squares += tribute_owner.general_stock_squares
+        tribute_owner.general_stock_squares = 0
+        tribute_owner.personal_supply_circles += tribute_owner.general_stock_circles
+        tribute_owner.general_stock_circles = 0
+
+        game.begin_tribute_income_responses([tribute_owner])
+
+        self.assertEqual(game.pending_tribute_income_owners, [])
         self.assertEqual(game.active_player, game.current_player_index)
 
     def test_displacement_finishes_before_end_of_turn_marker_replacement(self):

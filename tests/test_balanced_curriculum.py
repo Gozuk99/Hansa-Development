@@ -9,10 +9,13 @@ from unittest import mock
 from game.invariants import validate_game
 from game.loaded_state_validation import validate_loaded_game
 from game.persistence import load_game
+from game.structured_actions import PieceShape, PostInteraction, RouteInteraction
+from game.turn_state import TurnPhase
 from training.balanced_curriculum import (
     CONFIGURATIONS,
     MATURITY_CYCLE,
     MATURITY_PROFILES,
+    MOVE_CONTINUATION_NON_FRESH_FRACTION,
     BalancedCurriculumRunner,
     _scenario_condition_label,
     _select_focus,
@@ -23,11 +26,13 @@ from training.balanced_state_generator import (
     BalancedGenerationRequest,
     BonusMarkerSetup,
     EndingCondition,
+    MoveContinuationScenario,
     RegionalFocus,
     StartingPosition,
     StrategicFocus,
     generate_balanced_state,
     player_has_starting_score_source,
+    save_balanced_state,
     starting_scores_have_valid_sources,
 )
 from map_data.map_attributes import Map
@@ -35,6 +40,7 @@ from training.curriculum import (
     DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS,
     CurriculumConfig,
 )
+from training.self_play import _post_contexts_by_slot, loaded_normal_move_context
 from training.targeted_state_generator import _fill_prepared_route
 
 
@@ -49,6 +55,24 @@ class BalancedCurriculumTests(unittest.TestCase):
         runner.game_number = training_generation_number
         runner.training_generation_number = training_generation_number
         return runner
+
+    @staticmethod
+    def _move_continuation_request(seed, map_num, player_count, scenario, capacity, held):
+        return BalancedGenerationRequest(
+            seed=seed,
+            map_num=map_num,
+            player_count=player_count,
+            ending_condition=EndingCondition.NEAR_SCORE,
+            score_range=(6, 11),
+            development_range=(5, 7),
+            bonus_markers_remaining=3,
+            completed_cities_below_limit=5,
+            prepared_routes_one_short=True,
+            round_range=(6, 10),
+            move_continuation_scenario=scenario,
+            move_capacity=capacity,
+            move_held_piece_count=held,
+        )
 
     def test_each_nine_game_block_contains_every_map_player_combination(self):
         runner = self._runner()
@@ -254,6 +278,218 @@ class BalancedCurriculumTests(unittest.TestCase):
             runner._stage_label(None),
             "fresh_mid_late_end_game",
         )
+
+    def test_move_continuation_subset_is_deterministic_and_mid_late_end_only(self):
+        runner = self._runner()
+        sample_size = 20_000
+        targeted = []
+        by_maturity = Counter()
+        by_capacity = Counter()
+        by_scenario = Counter()
+
+        for game_number in range(sample_size):
+            maturity = runner._maturity_for_game(game_number)
+            first = runner._move_continuation_spec(maturity, game_number)
+            second = runner._move_continuation_spec(maturity, game_number)
+            self.assertEqual(first, second)
+            if maturity.name in {"fresh", "early"}:
+                self.assertIsNone(first)
+            if first is None:
+                continue
+            scenario, capacity, held = first
+            targeted.append(first)
+            by_maturity[maturity.name] += 1
+            by_capacity[capacity] += 1
+            by_scenario[scenario] += 1
+            self.assertLessEqual(held, capacity)
+
+        # The selector applies to 16% of the non-Fresh half of the active
+        # curriculum: approximately 8% of all generated training games.
+        self.assertAlmostEqual(
+            len(targeted) / sample_size,
+            MOVE_CONTINUATION_NON_FRESH_FRACTION / 2,
+            delta=0.01,
+        )
+        self.assertEqual(set(by_maturity), {"mid", "late", "end"})
+        self.assertEqual(set(by_capacity), {3, 4, 5})
+        self.assertEqual(set(by_scenario), set(MoveContinuationScenario))
+
+    def test_representative_move3_move4_move5_continuation_states_are_legal(self):
+        cases = (
+            (12_345, 1, 3, MoveContinuationScenario.CAPACITY_PRACTICE, 3, 1),
+            (12_346, 2, 4, MoveContinuationScenario.CAPACITY_PRACTICE, 4, 3),
+            (12_347, 3, 5, MoveContinuationScenario.CAPACITY_PRACTICE, 5, 4),
+            (12_348, 1, 4, MoveContinuationScenario.PRODUCTIVE_PLACEMENT, 4, 2),
+            (12_351, 1, 5, MoveContinuationScenario.PARTIAL_USE, 5, 2),
+        )
+
+        for seed, map_num, players, scenario, capacity, held in cases:
+            with self.subTest(scenario=scenario, capacity=capacity, held=held):
+                generated = generate_balanced_state(
+                    self._move_continuation_request(
+                        seed,
+                        map_num,
+                        players,
+                        scenario,
+                        capacity,
+                        held,
+                    ),
+                    max_attempts=300,
+                )
+                game = generated.game
+                active = game.current_player
+                legal = game.get_legal_actions()
+                legal_posts = [game.post_context(action.post_slot)[1] for action in legal]
+                pre_move_piece_count = sum(
+                    owner is active
+                    for route_snapshot in game.normal_move_pre_board_snapshot
+                    for owner, _shape in route_snapshot
+                )
+
+                self.assertIs(game.turn_phase, TurnPhase.MOVE_PIECES)
+                self.assertEqual(active.book, capacity)
+                self.assertEqual(len(active.holding_pieces), held)
+                effective_capacity = min(active.book, pre_move_piece_count)
+                self.assertGreater(effective_capacity, held)
+                if scenario is MoveContinuationScenario.PARTIAL_USE:
+                    self.assertEqual(effective_capacity, 3)
+                self.assertTrue(legal)
+                self.assertTrue(all(isinstance(action, PostInteraction) for action in legal))
+                self.assertTrue(all(post.owner in (None, active) for post in legal_posts))
+                if held < effective_capacity:
+                    self.assertTrue(any(post.owner is active for post in legal_posts))
+                    self.assertTrue(any(not post.is_owned() for post in legal_posts))
+                self.assertTrue(validate_game(game))
+                self.assertTrue(validate_loaded_game(game))
+
+    def test_move_to_claim_state_starts_unclaimable_and_can_legally_complete_route(self):
+        generated = generate_balanced_state(
+            self._move_continuation_request(
+                12_350,
+                3,
+                4,
+                MoveContinuationScenario.MOVE_TO_CLAIM,
+                3,
+                3,
+            ),
+            max_attempts=300,
+        )
+        game = generated.game
+        player = game.current_player
+        target_index = generated.move_target_route_index
+        target = game.selected_map.routes[target_index]
+        snapshot = game.normal_move_pre_board_snapshot[target_index]
+
+        self.assertTrue(all(owner is None for owner, _shape in snapshot))
+        self.assertFalse(target.is_controlled_by(player))
+        self.assertGreaterEqual(player.actions_remaining, 2)
+
+        while player.holding_pieces:
+            held_shape = player.holding_pieces[0][0]
+            encoded_shape = PieceShape.MERCHANT if held_shape == "circle" else PieceShape.TRADER
+            target_posts = set(target.posts)
+            placement = next(
+                action
+                for action in game.get_legal_actions()
+                if isinstance(action, PostInteraction)
+                and action.shape is encoded_shape
+                and game.post_context(action.post_slot)[1] in target_posts
+            )
+            game.apply_structured_action(placement)
+
+        self.assertTrue(target.is_controlled_by(player))
+        self.assertGreaterEqual(player.actions_remaining, 1)
+        self.assertTrue(
+            any(
+                isinstance(action, RouteInteraction) and action.route_slot == target_index
+                for action in game.get_legal_actions()
+            )
+        )
+        self.assertTrue(validate_game(game))
+
+    def test_mid_move_state_survives_save_load_with_workflow_context(self):
+        generated = generate_balanced_state(
+            self._move_continuation_request(
+                12_348,
+                1,
+                4,
+                MoveContinuationScenario.PRODUCTIVE_PLACEMENT,
+                4,
+                2,
+            ),
+            max_attempts=300,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            state_path, metadata_path = save_balanced_state(generated, Path(directory))
+            loaded = load_game(state_path)
+            metadata = metadata_path.read_text(encoding="utf-8")
+
+        self.assertIs(loaded.turn_phase, TurnPhase.MOVE_PIECES)
+        self.assertEqual(loaded.current_player.book, 4)
+        self.assertEqual(len(loaded.current_player.holding_pieces), 2)
+        self.assertIsNotNone(loaded.normal_move_pre_board_snapshot)
+        self.assertTrue(
+            all(isinstance(action, PostInteraction) for action in loaded.get_legal_actions())
+        )
+        self.assertIn('"move_continuation_scenario": "move_productive_placement"', metadata)
+        self.assertIn('"move_capacity": 4', metadata)
+        self.assertIn('"move_held_piece_count": 2', metadata)
+        self.assertTrue(validate_game(loaded))
+        self.assertTrue(validate_loaded_game(loaded))
+        context = loaded_normal_move_context(loaded, _post_contexts_by_slot(loaded))
+        self.assertIsNotNone(context)
+        self.assertEqual(len(context.origin_posts), 2)
+        self.assertGreaterEqual(context.movable_pieces_at_start, 4)
+
+    def test_targeted_training_scenario_is_visible_in_descriptor_telemetry(self):
+        runner = self._runner()
+        generation_number = next(
+            number
+            for number in range(10_000)
+            if runner._move_continuation_spec(
+                runner._maturity_for_game(number),
+                number,
+            )
+            is not None
+        )
+        runner.game_number = generation_number
+        runner.training_generation_number = generation_number
+        maturity = runner._maturity_for_game(generation_number)
+        expected = runner._move_continuation_spec(maturity, generation_number)
+        generated = SimpleNamespace(
+            starting_scores_by_seat=(),
+            starting_development_by_seat=(),
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.object(runner, "_configuration_for_game", return_value=(1, 3)),
+            mock.patch(
+                "training.balanced_curriculum.generate_balanced_state",
+                return_value=generated,
+            ) as generate,
+            mock.patch(
+                "training.balanced_curriculum.save_balanced_state",
+                return_value=(Path(directory) / "state.hansa", Path(directory) / "state.json"),
+            ),
+        ):
+            descriptor = runner._generate_state(
+                SimpleNamespace(full_game=False),
+                65_432,
+                Path(directory),
+            )
+
+        request = generate.call_args.args[0]
+        self.assertEqual(
+            (
+                request.move_continuation_scenario,
+                request.move_capacity,
+                request.move_held_piece_count,
+            ),
+            expected,
+        )
+        scenario, capacity, held = expected
+        self.assertIn(f"{scenario.value}_move{capacity}_holding{held}", descriptor.scenario)
 
     def test_zero_epsilon_selection_uses_deterministic_maturity_schedule(self):
         runner = self._runner()

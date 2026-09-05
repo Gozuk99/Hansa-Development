@@ -342,7 +342,13 @@ class GreedyHeadToHeadTrainer(SelfPlayTrainer):
     def _assign_evaluation_tiers(self, player_count, _rotation):
         return (self._greedy_tier,) * player_count
 
-    def _select_workflow_action(self, scores, legal_indices, exploration_categories=None):
+    def _select_workflow_action(
+        self,
+        scores,
+        legal_indices,
+        _tier,
+        exploration_categories=None,
+    ):
         equivalent_groups = (
             None
             if exploration_categories is None

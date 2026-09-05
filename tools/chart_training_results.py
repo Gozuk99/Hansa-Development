@@ -11,62 +11,79 @@ import json
 import math
 from pathlib import Path
 import statistics
+import sys
 import webbrowser
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from training.results_schema import interpret_results_row  # noqa: E402
 
 
 DEFAULT_INPUT = Path("training_output/curriculum/results.csv")
 DEFAULT_OUTPUT = Path("training_output/curriculum/results_chart.html")
 CHART_COLUMNS = (("latest_loss", "Latest training loss"),)
 COLORS = {"training": "#2563eb", "evaluation": "#f97316"}
+NORMAL_MOVE_CAPACITY_FIELDS = tuple(
+    [f"normal_move_effective_capacity_{capacity}_moves" for capacity in range(1, 6)]
+    + [
+        f"normal_move_capacity_{capacity}_moved_{pieces_moved}"
+        for capacity in range(1, 6)
+        for pieces_moved in range(1, capacity + 1)
+    ]
+)
 MOVEMENT_COUNT_FIELDS = (
     "move_action_count",
     "spent_action_count",
     "pointless_move_workflows",
+    "pointless_normal_move_workflows",
+    "pointless_move_any2_workflows",
+    "immediate_one_piece_q_undos",
     "repeated_move_penalties",
     "all_move_turn_penalties",
     "moves_creating_claimable_route",
     "move_claim_conversions",
+    "move_claim_reward_awarded",
+    "move_claim_reward_blocked_already_claimable",
+    "consecutive_move1_pairs",
+    "consecutive_move1_pairs_with_multiple_available",
+    "consecutive_move1_pairs_move2_capacity",
+    "consecutive_move1_pairs_move3_capacity",
+    "consecutive_move1_pairs_move4_capacity",
+    "consecutive_move1_pairs_move5_capacity",
+    "avoidable_extra_move_actions",
+    "normal_move_nominal_capacity_total",
+    "normal_move_movable_pieces_available_total",
+    "normal_move_effective_capacity_total",
+    "normal_move_pieces_moved_total",
+    "normal_move_unused_capacity_total",
+    "single_piece_moves",
+    "single_piece_moves_with_multiple_available",
+    "single_piece_moves_creating_claimable_route",
+    "single_piece_move_claim_conversions",
+    "full_effective_capacity_moves",
+    "under_effective_capacity_moves",
+    *NORMAL_MOVE_CAPACITY_FIELDS,
 )
+MOVEMENT_READINESS_FIELDS = {
+    "case_a_family_ranking_q1_pickup_fraction": "case_a_family_ranking_samples",
+    "move_continuation_q1_pickup_fraction": "move_continuation_family_ranking_samples",
+    "move1_scaffold_best_pickup_minus_best_placement_mean": "move1_scaffold_mask_states",
+}
 
 
 def _run(row):
     """Read one canonical run label while accepting historical CSV schemas."""
-    current = (row.get("run") or "").strip().lower()
-    if current:
-        return current
-    mode = (row.get("run_mode") or "").strip().lower()
-    if mode.startswith("evaluation_"):
-        return mode
-    if (row.get("run_type") or "").strip().lower() == "evaluation":
-        return f"evaluation_{(row.get('evaluation_set') or 'mid_late_end').strip()}"
-
-    stage = (row.get("training_stage") or "").strip().lower()
-    if stage not in {"fresh", "early", "mid", "late", "end"}:
-        stage = (row.get("curriculum_stage") or "").partition("+")[0].lower()
-    if stage.startswith("near_") or stage.startswith("near_end"):
-        stage = "end"
-    elif stage.startswith("late"):
-        stage = "late"
-    elif stage.startswith("mid"):
-        stage = "mid"
-    elif stage.startswith("early"):
-        stage = "early"
-    elif stage.startswith("fresh") or stage == "full_game":
-        stage = "fresh"
-    if stage not in {"fresh", "early", "mid", "late", "end"}:
-        stage = "end"
-    exploration = (row.get("training_exploration_mode") or "").strip().lower()
-    zero_epsilon = mode.endswith("_zero_epsilon") or exploration == "zero_epsilon"
-    return f"training_{stage}{'_zero_epsilon' if zero_epsilon else ''}"
+    return interpret_results_row(row).run
 
 
 def _run_type(row):
-    return "evaluation" if _run(row).startswith("evaluation_") else "training"
+    return interpret_results_row(row).run_type
 
 
 def _evaluation_set(row):
-    mode = _run(row)
-    return mode.removeprefix("evaluation_") if mode.startswith("evaluation_") else None
+    return interpret_results_row(row).evaluation_set
 
 
 def _derived_ratio(row, numerator, denominator):
@@ -260,7 +277,7 @@ const evaluationEscape = value => String(value)
   .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const evaluationRolling = (values, window = 10) => values.map((_value, index) => {
   const current = values.slice(Math.max(0, index - window + 1), index + 1)
-    .filter(value => value !== null);
+    .filter(Number.isFinite);
   return current.length ? current.reduce((total, value) => total + value, 0) / current.length : null;
 });
 const evaluationCounterAdd = (target, source) => Object.entries(source).forEach(([key, value]) => {
@@ -270,6 +287,9 @@ const emptyEvaluationBatch = batch => ({
   batch, games: 0, completed: 0, random: 0, actions: 0, allActions: 0, timeouts: 0,
   lossTotal: 0, lossGames: 0, expected: 0, tierGames: {}, tierWins: {}, tierScore: {},
   tierScoreGames: {}, failureReasons: {}, movementTotals: {}, movementGames: {},
+});
+const emptyReadinessBatch = batch => ({
+  batch, weightedTotals: {}, sampleTotals: {},
 });
 function filteredEvaluationBatches(records, map, players) {
   const batches = new Map();
@@ -285,9 +305,24 @@ function filteredEvaluationBatches(records, map, players) {
   });
   return [...batches.values()].sort((left, right) => left.batch - right.batch);
 }
+function filteredReadinessBatches(records, map, players) {
+  const batches = new Map();
+  records.filter(record => (map === 'all' || record.map === map)
+    && (players === 'all' || record.players === players)).forEach(record => {
+    const target = batches.get(record.batch) || emptyReadinessBatch(record.batch);
+    evaluationCounterAdd(target.weightedTotals, record.weightedTotals);
+    evaluationCounterAdd(target.sampleTotals, record.sampleTotals);
+    batches.set(record.batch, target);
+  });
+  return [...batches.values()].sort((left, right) => left.batch - right.batch);
+}
 function evaluationLineChart(title, explanation, ordered, series, suffix, options = {}) {
   const width = 920, height = 300, left = 55, right = 20, top = 20, bottom = 40;
-  const available = series.flatMap(item => item.values).filter(value => value !== null);
+  const available = series.flatMap(item => item.values).filter(Number.isFinite);
+  if (!ordered.length || !available.length) {
+    return `<div class="evaluation-chart"><h3>${evaluationEscape(title)}</h3>`
+      + `<p>${evaluationEscape(explanation)}</p><p class="hint">No data available.</p></div>`;
+  }
   const baseline = options.baseline || [];
   const scaleValues = [...available, ...baseline];
   let minimum = 0;
@@ -327,11 +362,16 @@ function evaluationLineChart(title, explanation, ordered, series, suffix, option
   });
   const lines = [], legend = [];
   series.forEach(item => {
-    const coordinates = item.values.map((value, index) => value === null ? null
-      : [index, ...point(index, value), value]).filter(Boolean);
+    const coordinates = item.values.map((value, index) => Number.isFinite(value)
+      ? [index, ...point(index, value), value] : null).filter(Boolean);
     if (!coordinates.length) return;
-    const path = coordinates.map(([index, x, y], pathIndex) =>
-      `${pathIndex ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    let continuing = false;
+    const path = item.values.map((value, index) => {
+      if (!Number.isFinite(value)) { continuing = false; return null; }
+      const [x, y] = point(index, value);
+      const command = continuing ? 'L' : 'M'; continuing = true;
+      return `${command}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).filter(Boolean).join(' ');
     const circles = coordinates.map(([index, x, y, value]) =>
       `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${item.color}">`
       + `<title>${evaluationEscape(item.label)}, batch ${ordered[index].batch}: ${value.toFixed(1)}${suffix}</title></circle>`).join('');
@@ -365,42 +405,95 @@ function renderEvaluationPanel(container) {
   const benchmark = mode === 'fresh';
   const tiers = [...new Set(ordered.flatMap(entry => Object.keys(entry.tierGames)))].sort();
   const tierColors = {'1':'#2563eb','2':'#16a34a','3':'#7c3aed','4':'#db2777','5':'#64748b'};
-  const ratio = (entry, numerator, denominator) => entry[denominator] ? entry[numerator] / entry[denominator] : null;
-  const moveRatio = entry => ratio(entry.movementTotals, 'move_action_count', 'spent_action_count');
-  const averageField = (entry, field) => entry.movementGames[field]
-    ? entry.movementTotals[field] / entry.movementGames[field] : null;
+  const ratio = (entry, numerator, denominator) => Number.isFinite(entry[numerator])
+    && Number.isFinite(entry[denominator]) && entry[denominator] > 0
+    ? entry[numerator] / entry[denominator] : null;
+  const movementRatio = (entry, numerator, denominator) =>
+    entry.movementGames[numerator] === entry.movementGames[denominator]
+      && entry.movementGames[numerator] > 0
+      ? ratio(entry.movementTotals, numerator, denominator) : null;
+  const movementAveragePerGame = (entry, field) =>
+    entry.games > 0 && entry.movementGames[field] === entry.games
+      ? entry.movementTotals[field] / entry.games : null;
+  const movementDifferenceRatio = (entry, totalNumerator, partNumerator,
+    totalDenominator, partDenominator) => {
+    const fields = [totalNumerator, partNumerator, totalDenominator, partDenominator];
+    const coverage = fields.map(field => entry.movementGames[field]);
+    if (!coverage[0] || !coverage.every(count => count === coverage[0])) return null;
+    const numerator = entry.movementTotals[totalNumerator] - entry.movementTotals[partNumerator];
+    const denominator = entry.movementTotals[totalDenominator] - entry.movementTotals[partDenominator];
+    return Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0
+      ? numerator / denominator : null;
+  };
+  const movementRatioToSum = (entry, numerator, denominatorFields) => {
+    const fields = [numerator, ...denominatorFields];
+    const coverage = fields.map(field => entry.movementGames[field]);
+    if (!coverage[0] || !coverage.every(count => count === coverage[0])) return null;
+    const denominator = denominatorFields.reduce(
+      (total, field) => total + entry.movementTotals[field], 0
+    );
+    return Number.isFinite(entry.movementTotals[numerator]) && denominator > 0
+      ? entry.movementTotals[numerator] / denominator : null;
+  };
+  const moveRatio = entry => movementRatio(entry, 'move_action_count', 'spent_action_count');
+  const avoidableMove1Ratio = entry => movementRatioToSum(
+    entry,
+    'single_piece_moves_with_multiple_available',
+    [
+      'normal_move_effective_capacity_2_moves',
+      'normal_move_effective_capacity_3_moves',
+      'normal_move_effective_capacity_4_moves',
+      'normal_move_effective_capacity_5_moves',
+    ]
+  );
+  const perHundredMoves = (entry, field) => {
+    const value = movementRatio(entry, field, 'move_action_count');
+    return value === null ? null : value*100;
+  };
+  const trainingReadiness = filteredReadinessBatches(
+    datasets.trainingMovementRecords, map, players
+  );
+  const readinessValue = (entry, field) => entry.sampleTotals[field] > 0
+    ? entry.weightedTotals[field] / entry.sampleTotals[field] : null;
   const winSeries = tiers.map(tier => ({label:`Tier ${tier}`,color:tierColors[tier],values:evaluationRolling(
-    ordered.map(entry => entry.tierGames[tier] ? entry.tierWins[tier] / entry.tierGames[tier] * 100 : null))}));
+    ordered.map(entry => entry.tierGames[tier] ? (entry.tierWins[tier] || 0) / entry.tierGames[tier] * 100 : null))}));
   const scoreSeries = tiers.map(tier => ({label:`Tier ${tier}`,color:tierColors[tier],values:evaluationRolling(
     ordered.map(entry => entry.tierScoreGames[tier] ? entry.tierScore[tier] / entry.tierScoreGames[tier] : null))}));
   const latest = ordered[ordered.length - 1], tierOneGames = latest.tierGames['1'] || 0;
   const tierOneScoreGames = latest.tierScoreGames['1'] || 0;
-  const averageActions = benchmark ? latest.allActions/latest.games
-    : latest.completed ? latest.actions/latest.completed : 0;
+  const averageInteractions = latest.games ? latest.allActions/latest.games : null;
+  const averagePaidActions = movementAveragePerGame(latest, 'spent_action_count');
   const display = (value, percent = false) => value === null ? '&mdash;'
     : percent ? `${(value*100).toFixed(1)}%` : value.toFixed(2);
-  const failures = Object.entries(latest.failureReasons).map(([reason,count]) => `${reason}: ${count}`);
+  const failures = Object.entries(latest.failureReasons).map(([reason,count]) =>
+    `${reason === 'action_limit' ? 'interaction_limit' : reason}: ${count}`);
   const summary = '<div class="statistics">'
     + `<div><strong>Completed</strong><span>${latest.completed}/${latest.games}</span></div>`
     + `<div><strong>Tier 1 win rate</strong><span>${tierOneGames ? (latest.tierWins['1']/tierOneGames*100).toFixed(1) : '0.0'}%</span></div>`
     + `<div><strong>Tier 1 average score</strong><span>${tierOneScoreGames ? (latest.tierScore['1']/tierOneScoreGames).toFixed(1) : '0.0'}</span></div>`
-    + `<div><strong>Average game length</strong><span>${Math.round(averageActions)} actions</span></div>`
-    + (benchmark ? `<div><strong>Timeout rate</strong><span>${(latest.timeouts/latest.games*100).toFixed(1)}%</span></div>` : '')
+    + `<div><strong>Average interactions/game</strong><span>${averageInteractions === null ? '&mdash;' : Math.round(averageInteractions).toLocaleString()}</span></div>`
+    + `<div><strong>Average paid actions/game</strong><span>${averagePaidActions === null ? '&mdash;' : averagePaidActions.toFixed(1)}</span></div>`
+    + (benchmark ? `<div><strong>Interaction-limit rate</strong><span>${(latest.timeouts/latest.games*100).toFixed(1)}%</span></div>` : '')
     + `<div><strong>Move %</strong><span>${display(moveRatio(latest), true)}</span></div>`
-    + `<div><strong>Pointless Moves/game</strong><span>${display(averageField(latest,'pointless_move_workflows'))}</span></div>`
-    + `<div><strong>Move &rarr; Claim rate</strong><span>${display(ratio(latest.movementTotals,'move_claim_conversions','moves_creating_claimable_route'), true)}</span></div></div>`;
+    + `<div><strong>Pointless normal Moves / 100</strong><span>${display(perHundredMoves(latest,'pointless_normal_move_workflows'))}</span></div>`
+    + `<div><strong>Avoidable Move1 rate</strong><span>${display(avoidableMove1Ratio(latest), true)}</span></div>`
+    + `<div><strong>Avoidable extra Moves / 100</strong><span>${display(perHundredMoves(latest,'avoidable_extra_move_actions'))}</span></div>`
+    + `<div><strong>Move &rarr; Claim rate</strong><span>${display(movementRatio(latest,'move_claim_conversions','moves_creating_claimable_route'), true)}</span></div>`
+    + `<div><strong>Pickup #2 vs Placement score gap (training)</strong><span>${display(trainingReadiness.length ? readinessValue(trainingReadiness[trainingReadiness.length-1],'move1_scaffold_best_pickup_minus_best_placement_mean') : null)}</span></div></div>`;
   const status = failures.length ? `<p class="evaluation-warning"><strong>Evaluation failures:</strong> ${evaluationEscape(failures.join(', '))}</p>`
     : '<p class="evaluation-success">All latest evaluation games completed normally.</p>';
   const randomBaseline = evaluationRolling(ordered.map(entry => entry.random/entry.games*100));
-  const actionTitle = mode === 'fresh' ? 'Average interactions per fresh-game evaluation'
-    : 'Average completed-game length';
-  const actionValues = ordered.map(entry => benchmark ? entry.allActions/entry.games
-    : entry.completed ? entry.actions/entry.completed : null);
+  const interactionValues = ordered.map(entry => entry.games
+    ? entry.allActions/entry.games : null);
+  const paidActionValues = ordered.map(entry => movementAveragePerGame(
+    entry, 'spent_action_count'
+  ));
   const pathologySeries = [
-    ['Pointless Moves/game','pointless_move_workflows','#dc2626'],
-    ['Repeated-Move penalties/game','repeated_move_penalties','#f59e0b'],
-    ['All-Move-turn penalties/game','all_move_turn_penalties','#7c3aed'],
-  ].map(([label,field,color]) => ({label,color,values:ordered.map(entry => averageField(entry,field))}));
+    ['Pointless normal Moves / 100','pointless_normal_move_workflows','#dc2626'],
+    ['Immediate Q-Undo / 100','immediate_one_piece_q_undos','#f59e0b'],
+    ['Avoidable extra Move actions / 100','avoidable_extra_move_actions','#7c3aed'],
+  ].map(([label,field,color]) => ({label,color,values:ordered.map(entry =>
+    perHundredMoves(entry,field))}));
   const lossValues = ordered.map(entry => entry.lossGames ? entry.lossTotal/entry.lossGames : null);
   const evaluationLoss = mode === 'standard' ? evaluationLineChart(
     'Evaluation loss by batch',
@@ -432,11 +525,15 @@ function renderEvaluationPanel(container) {
   panel.innerHTML = summary + status + freshTierOne + evaluationLoss
     + evaluationLineChart('Win rate by tier','Higher is better. Each colored line is a rolling 10-batch policy-tier rate.',ordered,winSeries,'%',{maximum:100,baseline:randomBaseline})
     + (mode === 'fresh' ? '' : evaluationLineChart('Average final score by tier','Higher is generally better. Lines show rolling 10-batch averages across the same fixed positions.',ordered,scoreSeries,' points',{focusRange:true,tickStep:5}))
-    + evaluationLineChart(actionTitle,benchmark ? 'Includes completed games and timeouts.' : 'Lower is generally better, provided games still finish normally.',ordered,[{label:benchmark?'Interactions/game':'Game length',color:'#2563eb',values:actionValues}],' actions')
-    + (benchmark ? evaluationLineChart('Fresh-game timeout rate','Lower is better. A timeout means the fixed position reached the evaluation interaction limit.',ordered,[{label:'Timeout rate',color:'#dc2626',values:ordered.map(entry => entry.timeouts/entry.games*100)}],'%',{maximum:100}) : '')
-    + evaluationLineChart('Move % of paid actions','Lower generally indicates less reliance on Move, but Move remains legal and sometimes necessary.',ordered,[{label:'Move %',color:'#2563eb',values:ordered.map(entry => { const value=moveRatio(entry); return value === null ? null : value*100; })}],'%',{maximum:100})
-    + evaluationLineChart('Movement pathology','Lower is better. The three lines combine pointless workflows, repeated-Move penalties, and all-Move turns.',ordered,pathologySeries,'/game')
-    + evaluationLineChart('Move → Claim conversion rate','Higher means more route-creating normal Moves were followed by an immediate paid claim. This is diagnostic, not a requirement for every Move.',ordered,[{label:'Move to Claim conversion',color:'#16a34a',values:ordered.map(entry => { const value=ratio(entry.movementTotals,'move_claim_conversions','moves_creating_claimable_route'); return value === null ? null : value*100; })}],'%',{maximum:100});
+    + evaluationLineChart('Average interactions per game','Counts every neural-network decision, including multi-step workflow clicks.',ordered,[{label:'Interactions/game',color:'#2563eb',values:interactionValues}],' interactions')
+    + evaluationLineChart('Average paid actions per game','Counts paid Hansa actions; multi-click workflows count once.',ordered,[{label:'Paid actions/game',color:'#16a34a',values:paidActionValues}],' paid actions')
+    + (benchmark ? evaluationLineChart('Fresh-game interaction-limit rate','Lower is better. The fixed position reached the evaluation interaction limit.',ordered,[{label:'Interaction-limit rate',color:'#dc2626',values:ordered.map(entry => entry.timeouts/entry.games*100)}],'%',{maximum:100}) : '')
+    + evaluationLineChart('Move usage','Normal Move actions as a percent of paid actions.',ordered,[{label:'Normal Move actions',color:'#2563eb',values:ordered.map(entry => { const value=moveRatio(entry); return value === null ? null : value*100; })}],'%',{maximum:100})
+    + evaluationLineChart('Avoidable Move1 %','Normal Moves that stopped after one piece even though effective capacity was at least two.',ordered,[{label:'Avoidable Move1',color:'#dc2626',values:ordered.map(entry => { const value=avoidableMove1Ratio(entry); return value === null ? null : value*100; })}],'%',{maximum:100})
+    + evaluationLineChart('Move capacity utilization by depth','When multiple pieces could actually be moved, how often the model used the full available capacity.',ordered,[2,3,4,5].map((capacity,index) => ({label:`Effective capacity ${capacity} — full use`,color:['#2563eb','#16a34a','#f59e0b','#7c3aed'][index],values:ordered.map(entry => { const value=movementRatio(entry,`normal_move_capacity_${capacity}_moved_${capacity}`,`normal_move_effective_capacity_${capacity}_moves`); return value === null ? null : value*100; })})),'%',{maximum:100})
+    + evaluationLineChart('Movement pathology','Bad movement outcomes per 100 normal Moves.',ordered,pathologySeries,' / 100',{maximum:100})
+    + evaluationLineChart('Move → Claim effectiveness','Percent of route-creating Moves followed by an immediate Claim.',ordered,[{label:'Overall',color:'#2563eb',values:ordered.map(entry => { const value=movementRatio(entry,'move_claim_conversions','moves_creating_claimable_route'); return value === null ? null : value*100; })},{label:'Move1',color:'#f59e0b',values:ordered.map(entry => { const value=movementRatio(entry,'single_piece_move_claim_conversions','single_piece_moves_creating_claimable_route'); return value === null ? null : value*100; })},{label:'Move2+',color:'#16a34a',values:ordered.map(entry => { const value=movementDifferenceRatio(entry,'move_claim_conversions','single_piece_move_claim_conversions','moves_creating_claimable_route','single_piece_moves_creating_claimable_route'); return value === null ? null : value*100; })}],'%',{maximum:100})
+    + evaluationLineChart('Movement lesson readiness','Training telemetry: how often the model naturally ranks another pickup first before placement.',trainingReadiness,[{label:'Pickup #2 is Q1',color:'#2563eb',values:trainingReadiness.map(entry => { const value=readinessValue(entry,'case_a_family_ranking_q1_pickup_fraction'); return value === null ? null : value*100; })},{label:'Pickup #3+ continuation is Q1',color:'#7c3aed',values:trainingReadiness.map(entry => { const value=readinessValue(entry,'move_continuation_q1_pickup_fraction'); return value === null ? null : value*100; })}],'%',{maximum:100});
 }
 document.querySelectorAll('.evaluation-performance').forEach(container => {
   const update = () => renderEvaluationPanel(container);
@@ -514,6 +611,7 @@ def read_results(path: Path, max_points: int):
         "current_evaluation_suite_version": 0,
         "fresh_evaluation_map_player_batches": {},
         "current_fresh_evaluation_suite_version": 0,
+        "training_movement_readiness_batches": {},
     }
     row_count = 0
     training_game_number = 0
@@ -531,11 +629,12 @@ def read_results(path: Path, max_points: int):
                 "evaluation",
             ):
                 continue
-            run_type = _run_type(row)
-            counts["run"][_run(row)] += 1
+            interpreted = interpret_results_row(row)
+            run_type = interpreted.run_type
+            counts["run"][interpreted.run] += 1
             counts["run_type"][run_type] += 1
-            if legacy_run_type == "training_timeout" and not row.get("completion_reason"):
-                row["completion_reason"] = "action_limit"
+            if interpreted.completion_reason != row.get("completion_reason", ""):
+                row["completion_reason"] = interpreted.completion_reason
             game_number = _number(row.get("game#")) or float(row_count)
             if run_type == "training":
                 training_game_number += 1
@@ -555,10 +654,31 @@ def read_results(path: Path, max_points: int):
             assigned_tiers = _json_list(row.get("tier_to_seat_assignments"))
             winner_tiers = _json_list(row.get("winner_tier"))
             final_scores = _json_list(row.get("final_player_scores"))
+            if run_type == "training":
+                batch = int(_number(row.get("batch#")) or 0)
+                map_num = row.get("map", "unknown") or "unknown"
+                readiness_values = []
+                for field, sample_field in MOVEMENT_READINESS_FIELDS.items():
+                    value = _row_value(row, field)
+                    samples = _row_value(row, sample_field)
+                    if value is not None and samples is not None and samples > 0:
+                        readiness_values.append((field, value, samples))
+                if readiness_values:
+                    key = (map_num, player_count, batch)
+                    readiness = counts["training_movement_readiness_batches"].setdefault(
+                        key,
+                        {
+                            "weighted_totals": Counter(),
+                            "sample_totals": Counter(),
+                        },
+                    )
+                    for field, value, samples in readiness_values:
+                        readiness["weighted_totals"][field] += value * samples
+                        readiness["sample_totals"][field] += samples
             if run_type == "evaluation":
                 batch = int(_number(row.get("batch#")) or 0)
                 map_num = row.get("map", "unknown") or "unknown"
-                evaluation_set = _evaluation_set(row) or "mid_late_end"
+                evaluation_set = interpreted.evaluation_set or "mid_late_end"
                 suite_version = int(_number(row.get("evaluation_suite_version")) or 1)
                 set_versions = counts["evaluation_set_versions"].setdefault(evaluation_set, {})
                 version = set_versions.setdefault(
@@ -569,6 +689,12 @@ def read_results(path: Path, max_points: int):
                 )
                 targets = ((version["map_player_batches"], (map_num, player_count, batch)),)
                 movement_values = {field: _row_value(row, field) for field in MOVEMENT_COUNT_FIELDS}
+                if movement_values["pointless_normal_move_workflows"] is None:
+                    # Historical rows combined normal Move and permanent Move Any 2
+                    # no-ops. Use that inseparable total as the legacy approximation.
+                    movement_values["pointless_normal_move_workflows"] = movement_values[
+                        "pointless_move_workflows"
+                    ]
                 evaluation_win_share = 1 / len(winner_tiers) if winner_tiers else 0
                 for collection, key in targets:
                     evaluation = collection.setdefault(
@@ -742,7 +868,7 @@ def _dashboard_summary(counts):
         '<section class="card compact-summary">'
         f"<div><strong>Training games</strong><span>{training_games:,}</span></div>"
         f"<div><strong>Evaluation games</strong><span>{evaluation_games:,}</span></div>"
-        f"<div><strong>Timeouts</strong><span>{timeouts:,}</span></div>"
+        f"<div><strong>Interaction-limit terminations</strong><span>{timeouts:,}</span></div>"
         "</section>"
     )
 
@@ -1015,6 +1141,19 @@ def _evaluation_records(map_player_batches):
     return records
 
 
+def _training_readiness_records(map_player_batches):
+    return [
+        {
+            "map": str(map_value),
+            "players": str(player_value),
+            "batch": batch,
+            "weightedTotals": dict(entry["weighted_totals"]),
+            "sampleTotals": dict(entry["sample_totals"]),
+        }
+        for (map_value, player_value, batch), entry in sorted(map_player_batches.items())
+    ]
+
+
 def _evaluation_dashboard(counts):
     datasets = {
         "standard": {
@@ -1025,8 +1164,11 @@ def _evaluation_dashboard(counts):
             "suiteVersion": counts["current_fresh_evaluation_suite_version"],
             "records": _evaluation_records(counts["fresh_evaluation_map_player_batches"]),
         },
+        "trainingMovementRecords": _training_readiness_records(
+            counts["training_movement_readiness_batches"]
+        ),
     }
-    if not any(dataset["records"] for dataset in datasets.values()):
+    if not datasets["standard"]["records"] and not datasets["fresh"]["records"]:
         return ""
     evaluation_data = json.dumps(datasets, separators=(",", ":")).replace("</", "<\\/")
     return f"""

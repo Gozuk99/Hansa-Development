@@ -349,7 +349,10 @@ def _validate_terminal_state(game):
         )
     elif game.game_end_pending_immediate_resolution:
         _require(ending_condition, "deferred game end has no valid ending condition")
-        _require(bool(game.pending_workflows), "deferred game end has no pending workflow")
+        _require(
+            game.has_pending_immediate_workflow,
+            "deferred game end has no pending workflow",
+        )
     else:
         _require(not ending_condition, "active game has passed a mandatory ending condition")
         _require(

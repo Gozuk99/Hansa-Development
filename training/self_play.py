@@ -62,6 +62,12 @@ MOVE_BLOCK_REWARD = 25
 ROUTE_COMPLETION_REWARD = 50
 MOVE_COMPLETED_ROUTE_REWARD = 50
 MOVE_CLAIM_COMBO_REWARD = 250
+MOVE1_UTILIZATION_LOCAL_TARGET = -500
+CASE_A_FAMILY_RANK_WEIGHT = 1.00
+CASE_A_FAMILY_RANK_MARGIN = 1.0
+MOVE1_TRAINING_SCAFFOLD_ENABLED = True
+MOVE_CONTINUATION_FAMILY_RANK_WEIGHT = 0.50
+MOVE_CONTINUATION_FAMILY_RANK_MARGIN = 1.0
 POINTLESS_ROUTE_CLAIM_PENALTY = -250
 ALL_MOVE_TURN_LOCAL_TARGET = -500
 ROUTE_BUILDING_PLACEMENT_REWARD = 5
@@ -73,14 +79,23 @@ REPEATED_MOVE_LOCAL_TARGET = -1500
 CONSECUTIVE_HIGH_CAPACITY_MOVE_PENALTY = -200
 POINTLESS_MOVEMENT_LOCAL_TARGET = -1000
 _CURRICULUM_STATE_UNSET = object()
-DEFAULT_TIER_TOP_K = (2, 5, 10, 15, 20)
+DEFAULT_TIER_TOP_K = (2, 4, 6, 8, 10)
 DEFAULT_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 0.35)
 FRESH_OPTIMIZER_UPDATES_PER_TRAJECTORY = 4
 NORMAL_EXPLORATION_MODE = "normal"
 ZERO_EPSILON_EXPLORATION_MODE = "zero_epsilon"
 SHADOW_FILTER_POLICY_TOP_K = 10
 SHADOW_FILTER_Q_TOP_K = 20
+NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS = tuple(
+    [f"normal_move_effective_capacity_{capacity}_moves" for capacity in range(1, 6)]
+    + [
+        f"normal_move_capacity_{capacity}_moved_{pieces_moved}"
+        for capacity in range(1, 6)
+        for pieces_moved in range(1, capacity + 1)
+    ]
+)
 LEGACY_TIER_TOP_K = (2, 5, 10, 15, None)
+PREVIOUS_TIER_TOP_K = (2, 5, 10, 15, 20)
 LEGACY_TIER_EPSILONS = (0.05, 0.10, 0.20, 0.35, 1.00)
 _ACTIONS_BY_INDEX = tuple(
     None if DEFAULT_ACTION_CODEC.is_reserved(index) else DEFAULT_ACTION_CODEC.decode(index)
@@ -113,7 +128,7 @@ class IncompleteGameError(TrainingRunError):
 
 
 class ActionLimitExceeded(IncompleteGameError):
-    """Raised when a game remains unfinished at its configured action limit."""
+    """Raised when a game remains unfinished at its configured interaction limit."""
 
 
 @dataclass(frozen=True)
@@ -310,6 +325,12 @@ class TrainingDecision:
     equivalent_action_indices: tuple[int, ...] = ()
     equivalent_action_groups: tuple[tuple[int, ...], ...] = ()
     receives_terminal_credit: bool = True
+    move1_utilization_penalty_role: str | None = None
+    case_a_pickup_action_groups: tuple[tuple[int, ...], ...] = ()
+    case_a_placement_action_groups: tuple[tuple[int, ...], ...] = ()
+    move_continuation_pickup_action_groups: tuple[tuple[int, ...], ...] = ()
+    move_continuation_placement_action_groups: tuple[tuple[int, ...], ...] = ()
+    move_continuation_pickup_depth: int = 0
 
 
 @dataclass(frozen=True)
@@ -375,6 +396,77 @@ class CompletedTrajectory:
     shadow_filter_records: tuple[ShadowFilterAuditRecord, ...] = ()
     shadow_filter_selected_count: int = 0
     shadow_filter_epsilon_selected_count: int = 0
+    pointless_normal_move_workflows: int = 0
+    pointless_move_any2_workflows: int = 0
+    immediate_one_piece_q_undos: int = 0
+    immediate_q_undo_epsilon_pickups: int = 0
+    immediate_q_undo_ranked_pickups: int = 0
+    immediate_q_undo_q1_pickups: int = 0
+    immediate_q1_restores: int = 0
+    immediate_q1_pickup_q1_restores: int = 0
+    immediate_valuable_q1_pickup_q1_restores: int = 0
+    full_multi_piece_q_undos: int = 0
+    full_multi_piece_q_undo_any_exploration: int = 0
+    full_multi_piece_q_undo_entirely_ranked: int = 0
+    normal_move_nominal_capacity_total: int = 0
+    normal_move_movable_pieces_available_total: int = 0
+    normal_move_effective_capacity_total: int = 0
+    normal_move_pieces_moved_total: int = 0
+    normal_move_unused_capacity_total: int = 0
+    single_piece_moves: int = 0
+    single_piece_moves_with_multiple_available: int = 0
+    single_piece_moves_creating_claimable_route: int = 0
+    single_piece_move_claim_conversions: int = 0
+    full_effective_capacity_moves: int = 0
+    under_effective_capacity_moves: int = 0
+    move1_utilization_penalties_applied: int = 0
+    move1_penalties_on_placement: int = 0
+    move1_penalties_on_single_available_initiation: int = 0
+    move_claim_reward_awarded: int = 0
+    move_claim_reward_blocked_already_claimable: int = 0
+    consecutive_move1_pairs: int = 0
+    consecutive_move1_pairs_with_multiple_available: int = 0
+    consecutive_move1_pairs_move2_capacity: int = 0
+    consecutive_move1_pairs_move3_capacity: int = 0
+    consecutive_move1_pairs_move4_capacity: int = 0
+    consecutive_move1_pairs_move5_capacity: int = 0
+    avoidable_extra_move_actions: int = 0
+    move1_scaffold_mask_states: int = 0
+    move1_scaffold_masked_placement_semantic_actions: int = 0
+    move1_scaffold_legal_pickup_semantic_actions: int = 0
+    move1_scaffold_unmasked_q1_pickups: int = 0
+    move1_scaffold_unmasked_q1_placements: int = 0
+    move1_scaffold_unmasked_q1_pickup_fraction: float | None = None
+    move1_scaffold_unmasked_q1_placement_fraction: float | None = None
+    move1_scaffold_all_pickups_above_all_placements_fraction: float | None = None
+    move1_scaffold_margin_satisfied_pair_fraction: float | None = None
+    move1_scaffold_family_ranking_loss: float | None = None
+    move1_scaffold_best_pickup_minus_best_placement_mean: float | None = None
+    move1_scaffold_best_pickup_minus_best_placement_median: float | None = None
+    move1_scaffold_best_pickup_minus_best_placement_p10: float | None = None
+    move1_scaffold_best_pickup_minus_best_placement_p90: float | None = None
+    move1_scaffold_unmasked_top_k_pickup_fraction: float | None = None
+    move1_scaffold_unmasked_top_k_has_pickup_fraction: float | None = None
+    normal_move_effective_capacity_1_moves: int = 0
+    normal_move_effective_capacity_2_moves: int = 0
+    normal_move_effective_capacity_3_moves: int = 0
+    normal_move_effective_capacity_4_moves: int = 0
+    normal_move_effective_capacity_5_moves: int = 0
+    normal_move_capacity_1_moved_1: int = 0
+    normal_move_capacity_2_moved_1: int = 0
+    normal_move_capacity_2_moved_2: int = 0
+    normal_move_capacity_3_moved_1: int = 0
+    normal_move_capacity_3_moved_2: int = 0
+    normal_move_capacity_3_moved_3: int = 0
+    normal_move_capacity_4_moved_1: int = 0
+    normal_move_capacity_4_moved_2: int = 0
+    normal_move_capacity_4_moved_3: int = 0
+    normal_move_capacity_4_moved_4: int = 0
+    normal_move_capacity_5_moved_1: int = 0
+    normal_move_capacity_5_moved_2: int = 0
+    normal_move_capacity_5_moved_3: int = 0
+    normal_move_capacity_5_moved_4: int = 0
+    normal_move_capacity_5_moved_5: int = 0
 
 
 @dataclass(frozen=True)
@@ -392,6 +484,36 @@ class TrainingSampleCoverage:
         return self.sampled_decisions / self.total_decisions
 
 
+@dataclass(frozen=True)
+class CaseAFamilyRankingResult:
+    """Differentiable loss plus detached-count inputs for Case-A telemetry."""
+
+    loss: torch.Tensor
+    sample_count: int
+    per_state_losses: torch.Tensor
+    violating_sample_count: torch.Tensor
+    violating_pair_count: torch.Tensor
+    pair_count: torch.Tensor
+    violating_pair_fraction_sum: torch.Tensor
+    all_pickups_above_all_placements_count: torch.Tensor
+    q1_pickup_count: torch.Tensor
+
+
+@dataclass(frozen=True)
+class MoveContinuationFamilyRankingResult:
+    """Differentiable loss and detached telemetry for pickup-depth 2+ states."""
+
+    loss: torch.Tensor
+    sample_count: int
+    per_state_losses: torch.Tensor
+    violating_sample_count: torch.Tensor
+    best_pickup_above_all_placements_count: torch.Tensor
+    q1_pickup_count: torch.Tensor
+    depth_2_count: int
+    depth_3_count: int
+    depth_4_count: int
+
+
 @dataclass
 class MovementBehaviorMetrics:
     """Per-game counters recorded at existing movement reward/penalty boundaries."""
@@ -399,10 +521,76 @@ class MovementBehaviorMetrics:
     move_action_count: int = 0
     spent_action_count: int = 0
     pointless_move_workflows: int = 0
+    pointless_normal_move_workflows: int = 0
+    pointless_move_any2_workflows: int = 0
     repeated_move_penalties: int = 0
     all_move_turn_penalties: int = 0
     moves_creating_claimable_route: int = 0
     move_claim_conversions: int = 0
+    immediate_one_piece_q_undos: int = 0
+    immediate_q_undo_epsilon_pickups: int = 0
+    immediate_q_undo_ranked_pickups: int = 0
+    immediate_q_undo_q1_pickups: int = 0
+    immediate_q1_restores: int = 0
+    immediate_q1_pickup_q1_restores: int = 0
+    immediate_valuable_q1_pickup_q1_restores: int = 0
+    full_multi_piece_q_undos: int = 0
+    full_multi_piece_q_undo_any_exploration: int = 0
+    full_multi_piece_q_undo_entirely_ranked: int = 0
+    normal_move_nominal_capacity_total: int = 0
+    normal_move_movable_pieces_available_total: int = 0
+    normal_move_effective_capacity_total: int = 0
+    normal_move_pieces_moved_total: int = 0
+    normal_move_unused_capacity_total: int = 0
+    single_piece_moves: int = 0
+    single_piece_moves_with_multiple_available: int = 0
+    single_piece_moves_creating_claimable_route: int = 0
+    single_piece_move_claim_conversions: int = 0
+    full_effective_capacity_moves: int = 0
+    under_effective_capacity_moves: int = 0
+    move1_utilization_penalties_applied: int = 0
+    move1_penalties_on_placement: int = 0
+    move1_penalties_on_single_available_initiation: int = 0
+    move_claim_reward_awarded: int = 0
+    move_claim_reward_blocked_already_claimable: int = 0
+    consecutive_move1_pairs: int = 0
+    consecutive_move1_pairs_with_multiple_available: int = 0
+    consecutive_move1_pairs_move2_capacity: int = 0
+    consecutive_move1_pairs_move3_capacity: int = 0
+    consecutive_move1_pairs_move4_capacity: int = 0
+    consecutive_move1_pairs_move5_capacity: int = 0
+    avoidable_extra_move_actions: int = 0
+    move1_scaffold_mask_states: int = 0
+    move1_scaffold_masked_placement_semantic_actions: int = 0
+    move1_scaffold_legal_pickup_semantic_actions: int = 0
+    move1_scaffold_unmasked_q1_pickups: int = 0
+    move1_scaffold_unmasked_q1_placements: int = 0
+    move1_scaffold_all_pickups_above_all_placements: int = 0
+    move1_scaffold_margin_satisfied_pair_fraction_total: float = 0.0
+    move1_scaffold_family_ranking_loss_total: float = 0.0
+    move1_scaffold_best_pickup_minus_best_placement: list[float] = field(default_factory=list)
+    move1_scaffold_unmasked_top_k_pickup_fraction_total: float = 0.0
+    move1_scaffold_unmasked_top_k_has_pickup: int = 0
+    normal_move_effective_capacity_1_moves: int = 0
+    normal_move_effective_capacity_2_moves: int = 0
+    normal_move_effective_capacity_3_moves: int = 0
+    normal_move_effective_capacity_4_moves: int = 0
+    normal_move_effective_capacity_5_moves: int = 0
+    normal_move_capacity_1_moved_1: int = 0
+    normal_move_capacity_2_moved_1: int = 0
+    normal_move_capacity_2_moved_2: int = 0
+    normal_move_capacity_3_moved_1: int = 0
+    normal_move_capacity_3_moved_2: int = 0
+    normal_move_capacity_3_moved_3: int = 0
+    normal_move_capacity_4_moved_1: int = 0
+    normal_move_capacity_4_moved_2: int = 0
+    normal_move_capacity_4_moved_3: int = 0
+    normal_move_capacity_4_moved_4: int = 0
+    normal_move_capacity_5_moved_1: int = 0
+    normal_move_capacity_5_moved_2: int = 0
+    normal_move_capacity_5_moved_3: int = 0
+    normal_move_capacity_5_moved_4: int = 0
+    normal_move_capacity_5_moved_5: int = 0
 
     @property
     def move_ratio(self):
@@ -415,6 +603,224 @@ class MovementBehaviorMetrics:
         if not self.moves_creating_claimable_route:
             return None
         return self.move_claim_conversions / self.moves_creating_claimable_route
+
+    @property
+    def move1_scaffold_unmasked_q1_pickup_fraction(self):
+        if not self.move1_scaffold_mask_states:
+            return None
+        return self.move1_scaffold_unmasked_q1_pickups / self.move1_scaffold_mask_states
+
+    @property
+    def move1_scaffold_unmasked_q1_placement_fraction(self):
+        if not self.move1_scaffold_mask_states:
+            return None
+        return self.move1_scaffold_unmasked_q1_placements / self.move1_scaffold_mask_states
+
+    @property
+    def move1_scaffold_all_pickups_above_all_placements_fraction(self):
+        if not self.move1_scaffold_mask_states:
+            return None
+        return (
+            self.move1_scaffold_all_pickups_above_all_placements / self.move1_scaffold_mask_states
+        )
+
+    @property
+    def move1_scaffold_margin_satisfied_pair_fraction(self):
+        if not self.move1_scaffold_mask_states:
+            return None
+        return (
+            self.move1_scaffold_margin_satisfied_pair_fraction_total
+            / self.move1_scaffold_mask_states
+        )
+
+    @property
+    def move1_scaffold_family_ranking_loss(self):
+        if not self.move1_scaffold_mask_states:
+            return None
+        return self.move1_scaffold_family_ranking_loss_total / self.move1_scaffold_mask_states
+
+    @property
+    def move1_scaffold_unmasked_top_k_pickup_fraction(self):
+        if not self.move1_scaffold_mask_states:
+            return None
+        return (
+            self.move1_scaffold_unmasked_top_k_pickup_fraction_total
+            / self.move1_scaffold_mask_states
+        )
+
+    @property
+    def move1_scaffold_unmasked_top_k_has_pickup_fraction(self):
+        if not self.move1_scaffold_mask_states:
+            return None
+        return self.move1_scaffold_unmasked_top_k_has_pickup / self.move1_scaffold_mask_states
+
+
+def record_pointless_movement_workflow(
+    metrics,
+    penalty,
+    *,
+    normal_move_completed=False,
+    permanent_move_any2_completed=False,
+):
+    """Count one detected no-op in both combined and workflow-specific telemetry."""
+    if not penalty:
+        return
+    metrics.pointless_move_workflows += 1
+    if normal_move_completed:
+        metrics.pointless_normal_move_workflows += 1
+    elif permanent_move_any2_completed:
+        metrics.pointless_move_any2_workflows += 1
+
+
+def record_move_capacity_utilization(metrics, nominal_capacity, available_pieces, pieces_moved):
+    """Record completed normal-Move capacity without judging partial utilization."""
+    effective_capacity = min(nominal_capacity, available_pieces)
+    unused_capacity = max(effective_capacity - pieces_moved, 0)
+    metrics.normal_move_nominal_capacity_total += nominal_capacity
+    metrics.normal_move_movable_pieces_available_total += available_pieces
+    metrics.normal_move_effective_capacity_total += effective_capacity
+    metrics.normal_move_pieces_moved_total += pieces_moved
+    metrics.normal_move_unused_capacity_total += unused_capacity
+    metrics.single_piece_moves += int(pieces_moved == 1)
+    metrics.single_piece_moves_with_multiple_available += int(
+        pieces_moved == 1 and effective_capacity >= 2
+    )
+    metrics.full_effective_capacity_moves += int(pieces_moved == effective_capacity)
+    metrics.under_effective_capacity_moves += int(pieces_moved < effective_capacity)
+    if 1 <= effective_capacity <= 5:
+        capacity_field = f"normal_move_effective_capacity_{effective_capacity}_moves"
+        setattr(metrics, capacity_field, getattr(metrics, capacity_field) + 1)
+        if 1 <= pieces_moved <= effective_capacity:
+            depth_field = f"normal_move_capacity_{effective_capacity}_moved_{pieces_moved}"
+            setattr(metrics, depth_field, getattr(metrics, depth_field) + 1)
+    return effective_capacity
+
+
+@dataclass(frozen=True)
+class Move1CompletionTelemetry:
+    """Minimal state needed to compare adjacent paid Move1 actions."""
+
+    nominal_capacity: int
+    initial_pickup_post_slot: int
+    additional_pickup_post_slots: frozenset[int]
+
+
+def update_consecutive_move1_telemetry(
+    metrics,
+    previous_move1,
+    *,
+    normal_move_completed,
+    pieces_moved,
+    nominal_capacity,
+    initial_pickup_post_slot,
+    additional_pickup_post_slots,
+):
+    """Record adjacent paid Move1 actions and return the new pending Move1."""
+    if not normal_move_completed or pieces_moved != 1:
+        return None
+    current_move1 = Move1CompletionTelemetry(
+        nominal_capacity,
+        initial_pickup_post_slot,
+        frozenset(additional_pickup_post_slots),
+    )
+    if previous_move1 is None:
+        return current_move1
+
+    metrics.consecutive_move1_pairs += 1
+    if previous_move1.additional_pickup_post_slots:
+        metrics.consecutive_move1_pairs_with_multiple_available += 1
+    capacity_field = {
+        2: "consecutive_move1_pairs_move2_capacity",
+        3: "consecutive_move1_pairs_move3_capacity",
+        4: "consecutive_move1_pairs_move4_capacity",
+        5: "consecutive_move1_pairs_move5_capacity",
+    }.get(previous_move1.nominal_capacity)
+    if capacity_field is not None:
+        setattr(metrics, capacity_field, getattr(metrics, capacity_field) + 1)
+    if current_move1.initial_pickup_post_slot in previous_move1.additional_pickup_post_slots:
+        metrics.avoidable_extra_move_actions += 1
+    return current_move1
+
+
+@dataclass(frozen=True)
+class MoveSelectionTelemetry:
+    """Selection metadata retained only until one normal Move workflow completes."""
+
+    role: str
+    used_epsilon: bool
+    model_rank: int
+
+
+@dataclass(frozen=True)
+class LoadedNormalMoveContext:
+    """Reconstructed tracking for a trajectory staged during a normal Move."""
+
+    origin_posts: tuple
+    origin_pieces: tuple
+    completed_route_slots_before: frozenset[int]
+    observed_pickup_route_slots: frozenset[int]
+    already_claimable_pickup_route_slots: frozenset[int]
+    movable_pieces_at_start: int
+    initial_pickup_post_slot: int
+
+
+def is_immediate_one_piece_q_undo(penalty, selections):
+    """Return whether a detected no-op is one pickup immediately restored once."""
+    return bool(
+        penalty
+        and len(selections) == 2
+        and selections[0].role == "initial_pickup"
+        and selections[1].role == "final_placement"
+    )
+
+
+def record_q_undo_workflow(
+    metrics,
+    penalty,
+    selections,
+    *,
+    valuable_origin=False,
+):
+    """Classify exact/semantic full undos without changing their reward treatment."""
+    if not penalty or not selections:
+        return
+    pickups = tuple(
+        selection
+        for selection in selections
+        if selection.role in {"initial_pickup", "additional_pickup"}
+    )
+    placements = tuple(
+        selection
+        for selection in selections
+        if selection.role in {"intermediate_placement", "final_placement"}
+    )
+    if len(pickups) != len(placements):
+        return
+
+    immediate = is_immediate_one_piece_q_undo(penalty, selections) and len(pickups) == 1
+    if immediate:
+        pickup, restore = selections
+        metrics.immediate_one_piece_q_undos += 1
+        if pickup.used_epsilon:
+            metrics.immediate_q_undo_epsilon_pickups += 1
+        else:
+            metrics.immediate_q_undo_ranked_pickups += 1
+        if pickup.model_rank == 1:
+            metrics.immediate_q_undo_q1_pickups += 1
+        if restore.model_rank == 1:
+            metrics.immediate_q1_restores += 1
+        if pickup.model_rank == restore.model_rank == 1:
+            metrics.immediate_q1_pickup_q1_restores += 1
+            if valuable_origin:
+                metrics.immediate_valuable_q1_pickup_q1_restores += 1
+        return
+
+    if len(pickups) > 1:
+        metrics.full_multi_piece_q_undos += 1
+        if any(selection.used_epsilon for selection in selections):
+            metrics.full_multi_piece_q_undo_any_exploration += 1
+        else:
+            metrics.full_multi_piece_q_undo_entirely_ranked += 1
 
 
 def should_fully_validate(action_count, interval, turn_before, phase_before, game):
@@ -443,6 +849,24 @@ class TrainingProgress:
     last_q_loss: float | None = None
     last_policy_loss: float | None = None
     last_total_loss: float | None = None
+    last_case_a_family_ranking_samples: int = 0
+    last_case_a_family_ranking_loss: float | None = None
+    last_case_a_family_ranking_violating_samples: int = 0
+    last_case_a_family_ranking_violation_fraction: float | None = None
+    last_case_a_family_ranking_mean_violating_placements: float | None = None
+    last_case_a_family_ranking_mean_violating_pairs: float | None = None
+    last_case_a_family_ranking_mean_violating_pair_fraction: float | None = None
+    last_case_a_family_ranking_all_pickups_above_all_placements_fraction: float | None = None
+    last_case_a_family_ranking_q1_pickup_fraction: float | None = None
+    last_move_continuation_family_ranking_samples: int = 0
+    last_move_continuation_family_ranking_after_2_pickups: int = 0
+    last_move_continuation_family_ranking_after_3_pickups: int = 0
+    last_move_continuation_family_ranking_after_4_pickups: int = 0
+    last_move_continuation_family_ranking_loss: float | None = None
+    last_move_continuation_family_ranking_violating_samples: int = 0
+    last_move_continuation_family_ranking_violation_fraction: float | None = None
+    last_move_continuation_best_pickup_above_all_placements_fraction: float | None = None
+    last_move_continuation_q1_pickup_fraction: float | None = None
     mean_policy_loss: float | None = None
     tier_games: dict[int, int] = field(default_factory=dict)
     tier_wins: dict[int, int] = field(default_factory=dict)
@@ -876,6 +1300,124 @@ def move_workflow_exploration_categories(
     )
 
 
+def case_a_move_action_families(
+    normal_move_workflow_id,
+    picked_up_piece_count,
+    placement_has_begun,
+    effective_movement_capacity,
+    exploration_categories,
+):
+    """Return pickup/placement semantic families at a Case-A Move boundary."""
+    if (
+        normal_move_workflow_id is None
+        or picked_up_piece_count != 1
+        or placement_has_begun
+        or picked_up_piece_count >= effective_movement_capacity
+        or exploration_categories is None
+        or len(exploration_categories) != 2
+    ):
+        return (), ()
+    return exploration_categories
+
+
+def move1_scaffold_action_mask(
+    base_mask,
+    pickup_action_groups,
+    placement_action_groups,
+    *,
+    enabled=True,
+):
+    """Hide only premature placements at a qualifying one-pickup Move boundary."""
+    if not enabled or not pickup_action_groups or not placement_action_groups:
+        return base_mask
+    scaffold_mask = base_mask.clone()
+    for group in placement_action_groups:
+        for action_index in group:
+            scaffold_mask[action_index] = False
+    return scaffold_mask
+
+
+def record_move1_scaffold_readiness(
+    metrics,
+    semantic_q_scores,
+    pickup_group_count,
+    top_k,
+    *,
+    margin=CASE_A_FAMILY_RANK_MARGIN,
+):
+    """Record what the unmasked Q ranking would do at one scaffolded state."""
+    placement_group_count = len(semantic_q_scores) - pickup_group_count
+    if pickup_group_count < 1 or placement_group_count < 1:
+        raise ValueError("Scaffold readiness requires pickup and placement semantic actions")
+    pickup_scores = semantic_q_scores[:pickup_group_count]
+    placement_scores = semantic_q_scores[pickup_group_count:]
+    ranked_positions = tuple(
+        sorted(
+            range(len(semantic_q_scores)),
+            key=lambda index: (-semantic_q_scores[index], index),
+        )
+    )
+    q1_is_pickup = ranked_positions[0] < pickup_group_count
+    pair_violations = [
+        max(0.0, placement_q - pickup_q + float(margin))
+        for pickup_q in pickup_scores
+        for placement_q in placement_scores
+    ]
+    satisfied_pairs = sum(value == 0.0 for value in pair_violations)
+    effective_k = min(top_k or len(ranked_positions), len(ranked_positions))
+    top_k_positions = ranked_positions[:effective_k]
+    top_k_pickups = sum(position < pickup_group_count for position in top_k_positions)
+
+    metrics.move1_scaffold_mask_states += 1
+    metrics.move1_scaffold_masked_placement_semantic_actions += placement_group_count
+    metrics.move1_scaffold_legal_pickup_semantic_actions += pickup_group_count
+    metrics.move1_scaffold_unmasked_q1_pickups += int(q1_is_pickup)
+    metrics.move1_scaffold_unmasked_q1_placements += int(not q1_is_pickup)
+    metrics.move1_scaffold_all_pickups_above_all_placements += int(
+        min(pickup_scores) > max(placement_scores)
+    )
+    metrics.move1_scaffold_margin_satisfied_pair_fraction_total += satisfied_pairs / len(
+        pair_violations
+    )
+    metrics.move1_scaffold_family_ranking_loss_total += sum(pair_violations) / len(pair_violations)
+    metrics.move1_scaffold_best_pickup_minus_best_placement.append(
+        max(pickup_scores) - max(placement_scores)
+    )
+    metrics.move1_scaffold_unmasked_top_k_pickup_fraction_total += top_k_pickups / effective_k
+    metrics.move1_scaffold_unmasked_top_k_has_pickup += int(top_k_pickups > 0)
+
+
+def _percentile(values, fraction):
+    """Return a linearly interpolated percentile for a non-empty numeric sequence."""
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * fraction
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+
+def move_continuation_action_families(
+    normal_move_workflow_id,
+    picked_up_piece_count,
+    placement_has_begun,
+    effective_movement_capacity,
+    exploration_categories,
+):
+    """Return semantic families for the best-pickup continuation lesson."""
+    if (
+        normal_move_workflow_id is None
+        or picked_up_piece_count < 2
+        or placement_has_begun
+        or picked_up_piece_count >= effective_movement_capacity
+        or exploration_categories is None
+        or len(exploration_categories) != 2
+    ):
+        return (), ()
+    return exploration_categories
+
+
 def _would_complete_east_west(game, player, route):
     if player in game.players_who_completed_east_west:
         return False
@@ -1060,6 +1602,24 @@ def mark_movement_workflow_target(decisions, workflow_id, target):
         raise ValueError(f"Movement workflow {workflow_id} has no recorded decisions")
 
 
+def mark_movement_workflow_pickup_target(decisions, workflow_id, target):
+    """Target only the initiating pickup of an immediate one-piece Move undo."""
+    indices = [
+        index
+        for index, decision in enumerate(decisions)
+        if decision.movement_workflow_id == workflow_id
+    ]
+    if len(indices) != 2:
+        raise ValueError(
+            f"Immediate one-piece movement workflow {workflow_id} must have two decisions"
+        )
+    pickup_index = indices[0]
+    decisions[pickup_index] = replace(
+        decisions[pickup_index],
+        local_training_target=float(target),
+    )
+
+
 def add_movement_workflow_adjustment(decisions, workflow_id, adjustment):
     """Add a local adjustment to one Move workflow without changing earlier returns."""
     if workflow_id is None:
@@ -1077,6 +1637,49 @@ def add_movement_workflow_adjustment(decisions, workflow_id, adjustment):
             break
     if not found:
         raise ValueError(f"Movement workflow {workflow_id} has no recorded decisions")
+
+
+def set_single_piece_move_utilization_target(
+    decisions,
+    workflow_id,
+    target,
+    *,
+    target_role,
+):
+    """Hard-target a Move initiated when only one pickup was legally possible."""
+    indices = [
+        index
+        for index, decision in enumerate(decisions)
+        if decision.movement_workflow_id == workflow_id
+    ]
+    if len(indices) != 2:
+        raise ValueError(f"Single-piece movement workflow {workflow_id} must have two decisions")
+    if target_role == "initial_pickup":
+        target_index = indices[0]
+    else:
+        raise ValueError(f"Unknown single-piece Move utilization target role: {target_role}")
+    decision = decisions[target_index]
+    target = float(target)
+    if decision.local_training_target is not None and decision.local_training_target <= target:
+        return
+    decisions[target_index] = replace(
+        decision,
+        local_training_target=target,
+        move1_utilization_penalty_role=target_role,
+    )
+
+
+def record_applied_move1_utilization_penalties(metrics, training_decisions):
+    """Count Move1 hard targets that survive precedence into final Q targets."""
+    roles = tuple(
+        decision.move1_utilization_penalty_role
+        for decision in training_decisions
+        if decision.move1_utilization_penalty_role is not None
+        and decision.local_training_target == MOVE1_UTILIZATION_LOCAL_TARGET
+    )
+    metrics.move1_utilization_penalties_applied = len(roles)
+    metrics.move1_penalties_on_placement = roles.count("first_placement")
+    metrics.move1_penalties_on_single_available_initiation = roles.count("initial_pickup")
 
 
 def grant_movement_workflow_terminal_credit(decisions, workflow_id):
@@ -1179,11 +1782,37 @@ def apply_income_efficiency_penalty(
 
 def movement_efficiency_penalty(pieces_moved, movement_capacity):
     """Penalize only clearly inefficient completed normal Move actions."""
-    if pieces_moved == 1:
-        return -200.0
     if pieces_moved == 2 and movement_capacity >= 3:
         return -100.0
     return 0.0
+
+
+def single_piece_move_utilization_target(
+    pieces_moved,
+    *,
+    immediate_q_undo,
+    legal_pickups_at_start,
+    additional_pickup_available_before_placement,
+):
+    """Choose which decision receives the one-piece Move hard target, if any."""
+    if pieces_moved != 1 or immediate_q_undo:
+        return None
+    if legal_pickups_at_start == 1:
+        return "initial_pickup"
+    # Case A (another pickup remained) is now taught by a semantic-family
+    # ranking loss at the pre-placement decision, not a hard TD target on the
+    # one placement that happened to be selected.
+    return None
+
+
+def legal_normal_move_pickup_post_slots(legal_action_indices, post_contexts, player):
+    """Return distinct currently legal normal-Move pickup posts owned by ``player``."""
+    return frozenset(
+        action.post_slot
+        for action_index in legal_action_indices
+        if isinstance((action := _ACTIONS_BY_INDEX[action_index]), PostInteraction)
+        and post_contexts[action.post_slot][2].owner is player
+    )
 
 
 def consecutive_move_penalty(movement_capacity, consecutive_moves):
@@ -1197,6 +1826,64 @@ def consecutive_move_penalty(movement_capacity, consecutive_moves):
 
 def _is_normal_move_in_progress(action_phase, player):
     return action_phase is TurnPhase.MOVE_PIECES and bool(player.holding_pieces)
+
+
+def loaded_normal_move_context(game, post_contexts):
+    """Reconstruct pre-pickup tracking for a saved normal Move continuation."""
+    player = game.current_player
+    snapshot = game.normal_move_pre_board_snapshot
+    if (
+        game.turn_phase is not TurnPhase.MOVE_PIECES
+        or not player.holding_pieces
+        or snapshot is None
+    ):
+        return None
+    if any(
+        (
+            game.waiting_for_bm_move_any_2,
+            game.waiting_for_bm_move3,
+            game.waiting_for_place2_from_route,
+            game.waiting_for_place2_in_scotland_or_wales,
+        )
+    ):
+        return None
+
+    origin_posts = []
+    origin_pieces = []
+    observed_routes = set()
+    already_claimable_routes = set()
+    completed_routes_before = set()
+    movable_pieces_at_start = 0
+    post_slots = {}
+    for post_slot, (route_index, route, post) in enumerate(post_contexts):
+        post_slots[post] = post_slot
+        route_snapshot = snapshot[route_index]
+        snapshot_owners = tuple(owner for owner, _shape in route_snapshot)
+        if all(owner is player for owner in snapshot_owners):
+            completed_routes_before.add(route_index)
+        movable_pieces_at_start += sum(owner is player for owner in snapshot_owners)
+        post_index = route.posts.index(post)
+        owner, shape = route_snapshot[post_index]
+        if owner is player and not post.is_owned():
+            origin_posts.append(post)
+            origin_pieces.append((post, owner, shape))
+            observed_routes.add(route_index)
+            if all(snapshot_owner is player for snapshot_owner in snapshot_owners):
+                already_claimable_routes.add(route_index)
+
+    held = Counter((shape, owner) for shape, owner, _region in player.holding_pieces)
+    origins = Counter((shape, owner) for _post, owner, shape in origin_pieces)
+    if held != origins or not origin_posts:
+        raise TrainingRunError("Saved normal Move state does not match its pre-Move snapshot")
+    return LoadedNormalMoveContext(
+        tuple(origin_posts),
+        tuple(origin_pieces),
+        frozenset(completed_routes_before),
+        frozenset(observed_routes),
+        frozenset(already_claimable_routes),
+        movable_pieces_at_start,
+        post_slots[origin_posts[0]],
+    )
 
 
 def pointless_movement_penalty(origin_pieces, destination_posts, post_routes=None):
@@ -1273,6 +1960,74 @@ def update_move_claim_combo(
         else 0.0
     )
     return frozenset(newly_completed_routes), float(reward)
+
+
+def record_move_pickup_route_claimability(
+    observed_routes,
+    already_claimable_routes,
+    route_slot,
+    was_claimable,
+):
+    """Preserve a route's claimability before its first pickup in one normal Move."""
+    if route_slot in observed_routes:
+        return
+    observed_routes.add(route_slot)
+    if was_claimable:
+        already_claimable_routes.add(route_slot)
+
+
+def move_claim_eligible_routes(newly_completed_routes, already_claimable_pickup_routes):
+    """Exclude pickup-origin routes that were claimable before the Move disturbed them."""
+    return frozenset(newly_completed_routes) - frozenset(already_claimable_pickup_routes)
+
+
+def record_move_claim_reward_outcome(
+    metrics,
+    reward,
+    *,
+    action,
+    turn_phase,
+    blocked_already_claimable_routes=(),
+):
+    """Count actual Move-to-Claim reward application or its anti-loophole block."""
+    if reward:
+        metrics.move_claim_reward_awarded += 1
+    elif (
+        turn_phase is TurnPhase.ACTIONS
+        and isinstance(action, RouteInteraction)
+        and action.route_slot in blocked_already_claimable_routes
+    ):
+        metrics.move_claim_reward_blocked_already_claimable += 1
+
+
+def record_move_route_creation(metrics, pieces_moved, newly_completed_routes):
+    """Count route creation by all normal Moves and its single-piece subset."""
+    created_route = bool(newly_completed_routes)
+    metrics.moves_creating_claimable_route += int(created_route)
+    metrics.single_piece_moves_creating_claimable_route += int(pieces_moved == 1 and created_route)
+
+
+def update_single_piece_move_claim_routes(
+    pending_routes,
+    *,
+    action,
+    turn_phase,
+    normal_move_completed,
+    pieces_moved,
+    newly_completed_routes=(),
+):
+    """Track whether the next paid claim converts a route created by a one-piece Move."""
+    converted = bool(
+        turn_phase is TurnPhase.ACTIONS
+        and isinstance(action, RouteInteraction)
+        and action.route_slot in pending_routes
+    )
+    next_routes = (
+        frozenset(newly_completed_routes)
+        if normal_move_completed and pieces_moved == 1
+        else frozenset()
+    )
+    return next_routes, converted
 
 
 def pointless_route_claim_penalty(
@@ -1499,6 +2254,257 @@ def policy_decision_loss(policy_logits, sample, quality_signal):
     )[0]
 
 
+def case_a_family_ranking_loss(
+    q_values,
+    samples,
+    *,
+    margin=CASE_A_FAMILY_RANK_MARGIN,
+):
+    """Rank every semantic pickup above every premature placement after pickup one."""
+    samples = tuple(samples)
+    if q_values.ndim != 2 or q_values.shape[0] != len(samples):
+        raise ValueError("Case-A ranking requires one Q row per training sample")
+
+    member_rows = []
+    member_actions = []
+    member_group_ids = []
+    group_states = []
+    group_sizes = []
+    group_is_placement = []
+    state_count = 0
+    group_id = 0
+    pair_pickup_group_ids = []
+    pair_placement_group_ids = []
+    pair_states = []
+    for row, sample in enumerate(samples):
+        pickup_groups = sample.case_a_pickup_action_groups
+        placement_groups = sample.case_a_placement_action_groups
+        if not pickup_groups or not placement_groups:
+            continue
+        state_pickup_group_ids = []
+        state_placement_group_ids = []
+        for is_placement, groups in ((False, pickup_groups), (True, placement_groups)):
+            for group in groups:
+                member_rows.extend((row,) * len(group))
+                member_actions.extend(group)
+                member_group_ids.extend((group_id,) * len(group))
+                group_states.append(state_count)
+                group_sizes.append(len(group))
+                group_is_placement.append(is_placement)
+                (state_placement_group_ids if is_placement else state_pickup_group_ids).append(
+                    group_id
+                )
+                group_id += 1
+        for placement_group_id in state_placement_group_ids:
+            pair_pickup_group_ids.extend(state_pickup_group_ids)
+            pair_placement_group_ids.extend((placement_group_id,) * len(state_pickup_group_ids))
+            pair_states.extend((state_count,) * len(state_pickup_group_ids))
+        state_count += 1
+
+    if not state_count:
+        zero_loss = q_values.sum() * 0.0
+        zero_count = torch.zeros((), dtype=torch.long, device=q_values.device)
+        return CaseAFamilyRankingResult(
+            zero_loss,
+            0,
+            q_values.new_empty((0,)),
+            zero_count,
+            zero_count.clone(),
+            zero_count.clone(),
+            zero_loss,
+            zero_count.clone(),
+            zero_count.clone(),
+        )
+
+    member_metadata = torch.tensor(
+        (member_rows, member_actions, member_group_ids),
+        dtype=torch.long,
+        device=q_values.device,
+    )
+    group_metadata = torch.tensor(
+        (group_states, group_sizes, group_is_placement),
+        dtype=torch.long,
+        device=q_values.device,
+    )
+    member_q_values = q_values[member_metadata[0], member_metadata[1]]
+    group_q_values = q_values.new_zeros(group_id)
+    group_q_values.scatter_add_(0, member_metadata[2], member_q_values)
+    group_q_values = group_q_values / group_metadata[1]
+
+    pair_metadata = torch.tensor(
+        (pair_pickup_group_ids, pair_placement_group_ids, pair_states),
+        dtype=torch.long,
+        device=q_values.device,
+    )
+    violations = functional.relu(
+        group_q_values[pair_metadata[1]] - group_q_values[pair_metadata[0]] + float(margin)
+    )
+    state_loss_sums = q_values.new_zeros(state_count)
+    state_loss_sums.scatter_add_(0, pair_metadata[2], violations)
+    pair_counts = torch.bincount(pair_metadata[2], minlength=state_count)
+    state_losses = state_loss_sums / pair_counts
+    violating_counts = torch.zeros(
+        state_count,
+        dtype=torch.long,
+        device=q_values.device,
+    )
+    violating_counts.scatter_add_(0, pair_metadata[2], (violations > 0).to(torch.long))
+
+    placement_mask = group_metadata[2].bool()
+    pickup_mask = ~placement_mask
+    detached_group_q = group_q_values.detach()
+    lowest_pickup_q = q_values.new_full((state_count,), torch.inf)
+    lowest_pickup_q.scatter_reduce_(
+        0,
+        group_metadata[0, pickup_mask],
+        detached_group_q[pickup_mask],
+        reduce="amin",
+        include_self=True,
+    )
+    best_pickup_q = q_values.new_full((state_count,), -torch.inf)
+    best_pickup_q.scatter_reduce_(
+        0,
+        group_metadata[0, pickup_mask],
+        detached_group_q[pickup_mask],
+        reduce="amax",
+        include_self=True,
+    )
+    best_placement_q = q_values.new_full((state_count,), -torch.inf)
+    best_placement_q.scatter_reduce_(
+        0,
+        group_metadata[0, placement_mask],
+        detached_group_q[placement_mask],
+        reduce="amax",
+        include_self=True,
+    )
+    return CaseAFamilyRankingResult(
+        state_losses.mean(),
+        state_count,
+        state_losses,
+        (violating_counts > 0).sum(),
+        violating_counts.sum(),
+        pair_counts.sum(),
+        (violating_counts / pair_counts).sum(),
+        (lowest_pickup_q > best_placement_q).sum(),
+        (best_pickup_q >= best_placement_q).sum(),
+    )
+
+
+def move_continuation_family_ranking_loss(
+    q_values,
+    samples,
+    *,
+    margin=MOVE_CONTINUATION_FAMILY_RANK_MARGIN,
+):
+    """Rank the best remaining pickup above placements at pickup depths 2+."""
+    samples = tuple(samples)
+    if q_values.ndim != 2 or q_values.shape[0] != len(samples):
+        raise ValueError("Move-continuation ranking requires one Q row per training sample")
+
+    member_rows = []
+    member_actions = []
+    member_group_ids = []
+    group_states = []
+    group_sizes = []
+    group_is_placement = []
+    state_depths = []
+    state_count = 0
+    group_id = 0
+    for row, sample in enumerate(samples):
+        pickup_groups = sample.move_continuation_pickup_action_groups
+        placement_groups = sample.move_continuation_placement_action_groups
+        if not pickup_groups or not placement_groups:
+            continue
+        for is_placement, groups in ((False, pickup_groups), (True, placement_groups)):
+            for group in groups:
+                member_rows.extend((row,) * len(group))
+                member_actions.extend(group)
+                member_group_ids.extend((group_id,) * len(group))
+                group_states.append(state_count)
+                group_sizes.append(len(group))
+                group_is_placement.append(is_placement)
+                group_id += 1
+        state_depths.append(sample.move_continuation_pickup_depth)
+        state_count += 1
+
+    if not state_count:
+        zero_loss = q_values.sum() * 0.0
+        zero_count = torch.zeros((), dtype=torch.long, device=q_values.device)
+        return MoveContinuationFamilyRankingResult(
+            zero_loss,
+            0,
+            q_values.new_empty((0,)),
+            zero_count,
+            zero_count.clone(),
+            zero_count.clone(),
+            0,
+            0,
+            0,
+        )
+
+    member_metadata = torch.tensor(
+        (member_rows, member_actions, member_group_ids),
+        dtype=torch.long,
+        device=q_values.device,
+    )
+    group_metadata = torch.tensor(
+        (group_states, group_sizes, group_is_placement),
+        dtype=torch.long,
+        device=q_values.device,
+    )
+    member_q_values = q_values[member_metadata[0], member_metadata[1]]
+    group_q_values = q_values.new_zeros(group_id)
+    group_q_values.scatter_add_(0, member_metadata[2], member_q_values)
+    group_q_values = group_q_values / group_metadata[1]
+
+    placement_mask = group_metadata[2].bool()
+    pickup_mask = ~placement_mask
+    best_pickup_q = q_values.new_full((state_count,), -torch.inf)
+    best_pickup_q.scatter_reduce_(
+        0,
+        group_metadata[0, pickup_mask],
+        group_q_values[pickup_mask],
+        reduce="amax",
+        include_self=True,
+    )
+    placement_states = group_metadata[0, placement_mask]
+    violations = functional.relu(
+        group_q_values[placement_mask] - best_pickup_q[placement_states] + float(margin)
+    )
+    state_loss_sums = q_values.new_zeros(state_count)
+    state_loss_sums.scatter_add_(0, placement_states, violations)
+    placement_counts = torch.bincount(placement_states, minlength=state_count)
+    state_losses = state_loss_sums / placement_counts
+    violating_states = torch.zeros(
+        state_count,
+        dtype=torch.long,
+        device=q_values.device,
+    )
+    violating_states.scatter_add_(0, placement_states, (violations > 0).to(torch.long))
+
+    detached_group_q = group_q_values.detach()
+    detached_best_pickup_q = best_pickup_q.detach()
+    best_placement_q = q_values.new_full((state_count,), -torch.inf)
+    best_placement_q.scatter_reduce_(
+        0,
+        placement_states,
+        detached_group_q[placement_mask],
+        reduce="amax",
+        include_self=True,
+    )
+    return MoveContinuationFamilyRankingResult(
+        state_losses.mean(),
+        state_count,
+        state_losses,
+        (violating_states > 0).sum(),
+        (detached_best_pickup_q > best_placement_q).sum(),
+        (detached_best_pickup_q >= best_placement_q).sum(),
+        state_depths.count(2),
+        state_depths.count(3),
+        state_depths.count(4),
+    )
+
+
 def record_shadow_policy_metrics(metrics, q_group_scores, policy_logits, groups):
     """Compare shadow policy and Q over the same legal semantic choices."""
     metrics.record(q_group_scores, policy_logits, groups)
@@ -1517,8 +2523,35 @@ class SelfPlayTrainer:
         self.loss_total = 0.0
         self.policy_loss_total = 0.0
         self.source_state_sha256 = None
+        self._source_state_hash_cache = {}
         self.curriculum_state = None
         self.last_training_sample_coverage = ()
+        self._last_effective_batch_case_a_metrics = None
+        self._last_effective_batch_move_continuation_metrics = None
+
+    @staticmethod
+    def _source_state_signature(path):
+        stat = path.stat()
+        return (
+            stat.st_dev,
+            stat.st_ino,
+            stat.st_size,
+            stat.st_mtime_ns,
+            stat.st_ctime_ns,
+        )
+
+    def _source_state_hash(self, path):
+        path = Path(path)
+        signature = self._source_state_signature(path)
+        cached = self._source_state_hash_cache.get(path)
+        if cached is not None and cached[0] == signature:
+            return cached[1]
+        digest = _file_sha256(path)
+        verified_signature = self._source_state_signature(path)
+        if verified_signature != signature:
+            raise OSError(f"Generated state changed while it was being hashed: {path}")
+        self._source_state_hash_cache[path] = (verified_signature, digest)
+        return digest
 
     def _build_optimizer(self):
         if not hasattr(self.model, "policy_head"):
@@ -1548,9 +2581,19 @@ class SelfPlayTrainer:
             self.config.max_gradient_norm,
         )
 
-    def _accumulate_independent_losses(self, q_loss, policy_loss, scale=1.0):
+    def _accumulate_independent_losses(
+        self,
+        q_loss,
+        policy_loss,
+        scale=1.0,
+        *,
+        q_auxiliary_loss=None,
+    ):
         """Accumulate scaled Q and isolated-policy gradients without clipping or stepping."""
-        (scale * q_loss).backward()
+        q_objective = scale * q_loss
+        if q_auxiliary_loss is not None:
+            q_objective = q_objective + q_auxiliary_loss
+        q_objective.backward()
         if self._policy_parameters and self.config.policy_loss_weight:
             (scale * self.config.policy_loss_weight * policy_loss).backward()
 
@@ -1644,7 +2687,14 @@ class SelfPlayTrainer:
         if len(grouped_indices) != len(legal_indices) or set(grouped_indices) != set(legal_indices):
             raise ValueError(f"{description} must contain every legal action exactly once")
 
-    def _select_action(self, scores, legal_indices, tier, equivalent_groups=None):
+    def _select_action(
+        self,
+        scores,
+        legal_indices,
+        tier,
+        equivalent_groups=None,
+        semantic_q_scores=None,
+    ):
         legal_list = _action_index_tuple(legal_indices)
         groups = (
             tuple((index,) for index in legal_list)
@@ -1653,6 +2703,13 @@ class SelfPlayTrainer:
         )
         self._validate_action_groups(legal_list, groups, "Action groups")
         group_count = len(groups)
+        group_scores = (
+            self._group_mean_scores(scores, groups)
+            if semantic_q_scores is None
+            else tuple(semantic_q_scores)
+        )
+        if len(group_scores) != group_count:
+            raise ValueError("Semantic Q scores must match the supplied action groups")
         if group_count == 1:
             group = groups[0]
             selected = group[0] if len(group) == 1 else group[self.rng.randrange(len(group))]
@@ -1662,9 +2719,8 @@ class SelfPlayTrainer:
                 1,
                 1,
                 group,
-                self._group_mean_scores(scores, groups),
+                group_scores,
             )
-        group_scores = self._group_mean_scores(scores, groups)
         if self.rng.random() < tier.epsilon:
             selected_position = self.rng.randrange(group_count)
             used_epsilon = True
@@ -1695,78 +2751,26 @@ class SelfPlayTrainer:
             group_scores,
         )
 
-    def _select_workflow_action(self, scores, legal_indices, exploration_categories=None):
-        """Keep multi-click workflows coherent while retaining bounded exploration."""
-        legal_list = _action_index_tuple(legal_indices)
-        has_exploration_categories = exploration_categories is not None
-        categories = (
-            (tuple((index,) for index in legal_list),)
+    def _select_workflow_action(
+        self,
+        scores,
+        legal_indices,
+        tier,
+        exploration_categories=None,
+        semantic_q_scores=None,
+    ):
+        """Select a grouped workflow choice through the tier's normal policy."""
+        equivalent_groups = (
+            None
             if exploration_categories is None
-            else exploration_categories
+            else tuple(group for category in exploration_categories for group in category)
         )
-        candidate_groups = tuple(group for category in categories for group in category)
-        self._validate_action_groups(
-            legal_list,
-            candidate_groups,
-            "Workflow exploration categories",
-        )
-        candidate_count = len(candidate_groups)
-        if candidate_count == 1:
-            group = candidate_groups[0]
-            selected = group[0] if len(group) == 1 else group[self.rng.randrange(len(group))]
-            return ActionSelection(
-                selected,
-                False,
-                1,
-                1,
-                group,
-                self._group_mean_scores(scores, candidate_groups),
-            )
-        candidate_scores = self._group_mean_scores(scores, candidate_groups)
-
-        ranked_positions = self._rank_legal_positions(candidate_scores, min(3, candidate_count))
-        roll = self.rng.random()
-        used_epsilon = False
-        if candidate_count == 2:
-            selected_rank = 0 if roll < 0.60 else 1
-            selected_group_position = ranked_positions[selected_rank]
-            model_rank = selected_rank + 1
-        elif roll < 0.40:
-            selected_group_position = ranked_positions[0]
-            model_rank = 1
-        elif roll < 0.60:
-            selected_group_position = ranked_positions[1]
-            model_rank = 2
-        elif roll < 0.75:
-            selected_group_position = ranked_positions[2]
-            model_rank = 3
-        else:
-            if has_exploration_categories:
-                category_position = self.rng.randrange(len(categories))
-                category = categories[category_position]
-                group_position = self.rng.randrange(len(category))
-                selected_group_position = (
-                    sum(len(previous) for previous in categories[:category_position])
-                    + group_position
-                )
-            else:
-                selected_group_position = self.rng.randrange(candidate_count)
-            model_rank = self._model_rank(candidate_scores, selected_group_position)
-            used_epsilon = True
-
-        selected_group = candidate_groups[selected_group_position]
-        selected_index = (
-            selected_group[0]
-            if len(selected_group) == 1
-            else selected_group[self.rng.randrange(len(selected_group))]
-        )
-        return ActionSelection(
-            selected_index,
-            used_epsilon,
-            model_rank,
-            candidate_count,
-            selected_group,
-            candidate_scores,
+        return self._select_action(
+            scores,
+            legal_indices,
+            tier,
+            equivalent_groups,
+            semantic_q_scores,
         )
 
     def _complete_trajectory(
@@ -1795,6 +2799,7 @@ class SelfPlayTrainer:
             self.config.gamma,
         )
         training_decisions = apply_local_training_targets(reward_to_go_decisions)
+        record_applied_move1_utilization_penalties(movement_metrics, training_decisions)
         shadow_filter_records = (
             shadow_filter_audit.flagged_outcomes(
                 reward_to_go_decisions,
@@ -1805,6 +2810,10 @@ class SelfPlayTrainer:
             )
             if shadow_filter_audit is not None
             else ()
+        )
+        scaffold_margins = movement_metrics.move1_scaffold_best_pickup_minus_best_placement
+        scaffold_margin_mean = (
+            sum(scaffold_margins) / len(scaffold_margins) if scaffold_margins else None
         )
         trajectory = CompletedTrajectory(
             training_decisions,
@@ -1829,6 +2838,58 @@ class SelfPlayTrainer:
             shadow_filter_records,
             len(shadow_filter_records),
             sum(record.used_epsilon for record in shadow_filter_records),
+            movement_metrics.pointless_normal_move_workflows,
+            movement_metrics.pointless_move_any2_workflows,
+            movement_metrics.immediate_one_piece_q_undos,
+            movement_metrics.immediate_q_undo_epsilon_pickups,
+            movement_metrics.immediate_q_undo_ranked_pickups,
+            movement_metrics.immediate_q_undo_q1_pickups,
+            movement_metrics.immediate_q1_restores,
+            movement_metrics.immediate_q1_pickup_q1_restores,
+            movement_metrics.immediate_valuable_q1_pickup_q1_restores,
+            movement_metrics.full_multi_piece_q_undos,
+            movement_metrics.full_multi_piece_q_undo_any_exploration,
+            movement_metrics.full_multi_piece_q_undo_entirely_ranked,
+            movement_metrics.normal_move_nominal_capacity_total,
+            movement_metrics.normal_move_movable_pieces_available_total,
+            movement_metrics.normal_move_effective_capacity_total,
+            movement_metrics.normal_move_pieces_moved_total,
+            movement_metrics.normal_move_unused_capacity_total,
+            movement_metrics.single_piece_moves,
+            movement_metrics.single_piece_moves_with_multiple_available,
+            movement_metrics.single_piece_moves_creating_claimable_route,
+            movement_metrics.single_piece_move_claim_conversions,
+            movement_metrics.full_effective_capacity_moves,
+            movement_metrics.under_effective_capacity_moves,
+            movement_metrics.move1_utilization_penalties_applied,
+            movement_metrics.move1_penalties_on_placement,
+            movement_metrics.move1_penalties_on_single_available_initiation,
+            movement_metrics.move_claim_reward_awarded,
+            movement_metrics.move_claim_reward_blocked_already_claimable,
+            movement_metrics.consecutive_move1_pairs,
+            movement_metrics.consecutive_move1_pairs_with_multiple_available,
+            movement_metrics.consecutive_move1_pairs_move2_capacity,
+            movement_metrics.consecutive_move1_pairs_move3_capacity,
+            movement_metrics.consecutive_move1_pairs_move4_capacity,
+            movement_metrics.consecutive_move1_pairs_move5_capacity,
+            movement_metrics.avoidable_extra_move_actions,
+            movement_metrics.move1_scaffold_mask_states,
+            movement_metrics.move1_scaffold_masked_placement_semantic_actions,
+            movement_metrics.move1_scaffold_legal_pickup_semantic_actions,
+            movement_metrics.move1_scaffold_unmasked_q1_pickups,
+            movement_metrics.move1_scaffold_unmasked_q1_placements,
+            movement_metrics.move1_scaffold_unmasked_q1_pickup_fraction,
+            movement_metrics.move1_scaffold_unmasked_q1_placement_fraction,
+            movement_metrics.move1_scaffold_all_pickups_above_all_placements_fraction,
+            movement_metrics.move1_scaffold_margin_satisfied_pair_fraction,
+            movement_metrics.move1_scaffold_family_ranking_loss,
+            scaffold_margin_mean,
+            _percentile(scaffold_margins, 0.5) if scaffold_margins else None,
+            _percentile(scaffold_margins, 0.1) if scaffold_margins else None,
+            _percentile(scaffold_margins, 0.9) if scaffold_margins else None,
+            movement_metrics.move1_scaffold_unmasked_top_k_pickup_fraction,
+            movement_metrics.move1_scaffold_unmasked_top_k_has_pickup_fraction,
+            *(getattr(movement_metrics, field) for field in NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS),
         )
         if completed:
             self.progress.completed_games += 1
@@ -1929,6 +2990,40 @@ class SelfPlayTrainer:
         next_movement_workflow_id = 1
         normal_move_workflow_id = None
         permanent_move_workflow_id = None
+        normal_move_selections = []
+        normal_move_valuable_origin = False
+        normal_move_nominal_capacity = 0
+        normal_move_movable_pieces_available = 0
+        normal_move_legal_pickups_at_start = 0
+        normal_move_effective_capacity = 0
+        normal_move_additional_pickup_available = False
+        normal_move_initial_pickup_post_slot = None
+        normal_move_additional_pickup_post_slots = frozenset()
+        previous_paid_move1 = None
+        move_observed_pickup_routes = set()
+        already_claimable_pickup_routes = set()
+        pending_single_piece_move_claim_routes = frozenset()
+        pending_blocked_move_claim_routes = frozenset()
+        loaded_move = loaded_normal_move_context(game, post_contexts)
+        if loaded_move is not None:
+            normal_move_workflow_id = next_movement_workflow_id
+            next_movement_workflow_id += 1
+            move_tracking_active = True
+            move_pieces_picked_up = len(game.current_player.holding_pieces)
+            move_origin_posts = list(loaded_move.origin_posts)
+            move_origin_pieces = list(loaded_move.origin_pieces)
+            move_completed_routes_before = set(loaded_move.completed_route_slots_before)
+            move_observed_pickup_routes = set(loaded_move.observed_pickup_route_slots)
+            already_claimable_pickup_routes = set(loaded_move.already_claimable_pickup_route_slots)
+            normal_move_valuable_origin = bool(already_claimable_pickup_routes)
+            normal_move_nominal_capacity = game.current_player.book
+            normal_move_movable_pieces_available = loaded_move.movable_pieces_at_start
+            normal_move_legal_pickups_at_start = loaded_move.movable_pieces_at_start
+            normal_move_effective_capacity = min(
+                normal_move_nominal_capacity,
+                normal_move_movable_pieces_available,
+            )
+            normal_move_initial_pickup_post_slot = loaded_move.initial_pickup_post_slot
         output = redirect_stdout(io.StringIO()) if quiet else nullcontext()
         if detailed_profiling:
             scoring_started = perf_counter()
@@ -1966,6 +3061,20 @@ class SelfPlayTrainer:
                     permanent_move_tracking_active = False
                     normal_move_workflow_id = None
                     permanent_move_workflow_id = None
+                    normal_move_selections = []
+                    normal_move_valuable_origin = False
+                    normal_move_nominal_capacity = 0
+                    normal_move_movable_pieces_available = 0
+                    normal_move_legal_pickups_at_start = 0
+                    normal_move_effective_capacity = 0
+                    normal_move_additional_pickup_available = False
+                    normal_move_initial_pickup_post_slot = None
+                    normal_move_additional_pickup_post_slots = frozenset()
+                    previous_paid_move1 = None
+                    move_observed_pickup_routes = set()
+                    already_claimable_pickup_routes = set()
+                    pending_single_piece_move_claim_routes = frozenset()
+                    pending_blocked_move_claim_routes = frozenset()
                 action_attempted = False
                 try:
                     if detailed_profiling:
@@ -2037,6 +3146,14 @@ class SelfPlayTrainer:
                         inference_seconds += perf_counter() - inference_started
                         selection_started = perf_counter()
                     tier = seat_tiers[observation.observer_index]
+                    training_legal_action_mask = mask
+                    training_semantic_action_groups = None
+                    case_a_pickup_action_groups = ()
+                    case_a_placement_action_groups = ()
+                    move_continuation_pickup_action_groups = ()
+                    move_continuation_placement_action_groups = ()
+                    move_continuation_pickup_depth = 0
+                    scaffold_semantic_q_scores = None
                     if game.turn_phase is TurnPhase.ACTIONS:
                         equivalent_groups = action_phase_selection_groups(
                             game,
@@ -2046,6 +3163,7 @@ class SelfPlayTrainer:
                         semantic_action_groups = equivalent_groups or tuple(
                             (index,) for index in legal_action_indices
                         )
+                        training_semantic_action_groups = semantic_action_groups
                         selection = self._select_action(
                             scores,
                             legal_action_indices,
@@ -2059,6 +3177,60 @@ class SelfPlayTrainer:
                                 legal_action_indices,
                                 post_contexts=post_contexts,
                             )
+                            (
+                                case_a_pickup_action_groups,
+                                case_a_placement_action_groups,
+                            ) = case_a_move_action_families(
+                                normal_move_workflow_id,
+                                len(game.current_player.holding_pieces),
+                                bool(move_destination_posts),
+                                normal_move_effective_capacity,
+                                exploration_categories,
+                            )
+                            if (
+                                MOVE1_TRAINING_SCAFFOLD_ENABLED
+                                and not evaluation
+                                and case_a_pickup_action_groups
+                            ):
+                                pre_scaffold_groups = (
+                                    case_a_pickup_action_groups + case_a_placement_action_groups
+                                )
+                                training_semantic_action_groups = pre_scaffold_groups
+                                pre_scaffold_q_scores = self._group_mean_scores(
+                                    scores,
+                                    pre_scaffold_groups,
+                                )
+                                record_move1_scaffold_readiness(
+                                    movement_metrics,
+                                    pre_scaffold_q_scores,
+                                    len(case_a_pickup_action_groups),
+                                    tier.top_k,
+                                )
+                                mask = move1_scaffold_action_mask(
+                                    mask,
+                                    case_a_pickup_action_groups,
+                                    case_a_placement_action_groups,
+                                )
+                                legal_indices = mask.nonzero(as_tuple=False).flatten()
+                                legal_action_indices = _action_index_tuple(legal_indices)
+                                exploration_categories = (case_a_pickup_action_groups,)
+                                scaffold_semantic_q_scores = pre_scaffold_q_scores[
+                                    : len(case_a_pickup_action_groups)
+                                ]
+                            (
+                                move_continuation_pickup_action_groups,
+                                move_continuation_placement_action_groups,
+                            ) = move_continuation_action_families(
+                                normal_move_workflow_id,
+                                len(game.current_player.holding_pieces),
+                                bool(move_destination_posts),
+                                normal_move_effective_capacity,
+                                exploration_categories,
+                            )
+                            if move_continuation_pickup_action_groups:
+                                move_continuation_pickup_depth = len(
+                                    game.current_player.holding_pieces
+                                )
                         elif game.turn_phase is TurnPhase.BONUS_MARKER_CHOICE and (
                             game.waiting_for_bm_move3 or game.waiting_for_bm_move_any_2
                         ):
@@ -2078,10 +3250,14 @@ class SelfPlayTrainer:
                             if exploration_categories is not None
                             else tuple((index,) for index in legal_action_indices)
                         )
+                        if training_semantic_action_groups is None:
+                            training_semantic_action_groups = semantic_action_groups
                         selection = self._select_workflow_action(
                             scores,
                             legal_action_indices,
+                            tier,
                             exploration_categories,
+                            scaffold_semantic_q_scores,
                         )
                     if game.turn_phase is TurnPhase.ACTIONS:
                         record_shadow_policy_metrics(
@@ -2139,6 +3315,37 @@ class SelfPlayTrainer:
                     if starts_normal_move:
                         normal_move_workflow_id = next_movement_workflow_id
                         next_movement_workflow_id += 1
+                        normal_move_selections = []
+                        origin_route_index, origin_route, _origin_post = context
+                        move_observed_pickup_routes = set()
+                        already_claimable_pickup_routes = set()
+                        record_move_pickup_route_claimability(
+                            move_observed_pickup_routes,
+                            already_claimable_pickup_routes,
+                            origin_route_index,
+                            origin_route.is_controlled_by(acting_player),
+                        )
+                        normal_move_valuable_origin = bool(
+                            origin_route.is_controlled_by(acting_player)
+                            or origin_route_index in acting_player.rewarded_move_focus_route_slots
+                        )
+                        normal_move_nominal_capacity = acting_player.book
+                        normal_move_movable_pieces_available = sum(
+                            post.owner is acting_player
+                            for _route_index, _route, post in post_contexts
+                        )
+                        normal_move_legal_pickups_at_start = len(
+                            legal_normal_move_pickup_post_slots(
+                                legal_action_indices,
+                                post_contexts,
+                                acting_player,
+                            )
+                        )
+                        normal_move_effective_capacity = min(
+                            normal_move_nominal_capacity,
+                            normal_move_legal_pickups_at_start,
+                        )
+                        normal_move_initial_pickup_post_slot = action.post_slot
                     if permanent_move_in_progress and permanent_move_workflow_id is None:
                         permanent_move_workflow_id = next_movement_workflow_id
                         next_movement_workflow_id += 1
@@ -2149,6 +3356,46 @@ class SelfPlayTrainer:
                         if permanent_move_in_progress
                         else None
                     )
+                    movement_role = None
+                    if starts_normal_move:
+                        movement_role = "initial_pickup"
+                    elif (
+                        normal_move_in_progress
+                        and isinstance(action, PostInteraction)
+                        and context is not None
+                    ):
+                        selected_movement_post = context[2]
+                        if selected_movement_post.owner is acting_player:
+                            movement_role = "additional_pickup"
+                        elif not selected_movement_post.is_owned():
+                            movement_role = (
+                                "final_placement"
+                                if len(acting_player.holding_pieces) == 1
+                                else "intermediate_placement"
+                            )
+                    if movement_role is not None:
+                        if movement_role in {
+                            "intermediate_placement",
+                            "final_placement",
+                        } and not any(
+                            prior.role in {"intermediate_placement", "final_placement"}
+                            for prior in normal_move_selections
+                        ):
+                            normal_move_additional_pickup_post_slots = (
+                                legal_normal_move_pickup_post_slots(
+                                    legal_action_indices, post_contexts, acting_player
+                                )
+                            )
+                            normal_move_additional_pickup_available = bool(
+                                normal_move_additional_pickup_post_slots
+                            )
+                        normal_move_selections.append(
+                            MoveSelectionTelemetry(
+                                movement_role,
+                                selection.used_epsilon,
+                                selection.model_rank,
+                            )
+                        )
                     movement_capacity = acting_player.book
                     pieces_moved = move_pieces_picked_up
                     actions_remaining_before = acting_player.actions_remaining
@@ -2190,6 +3437,12 @@ class SelfPlayTrainer:
                                 for post in route.posts
                             )
                         elif selected_post.owner is acting_player:
+                            record_move_pickup_route_claimability(
+                                move_observed_pickup_routes,
+                                already_claimable_pickup_routes,
+                                route_index,
+                                route.is_controlled_by(acting_player),
+                            )
                             move_origin_posts.append(selected_post)
                             move_origin_pieces.append(
                                 (
@@ -2378,6 +3631,9 @@ class SelfPlayTrainer:
                 no_change_penalty = 0.0
                 movement_local_target = None
                 movement_local_adjustment = 0.0
+                immediate_q_undo = False
+                immediate_q_undo_pickup_target = None
+                single_piece_utilization_role = None
                 if normal_move_completed and action_was_spent:
                     next_consecutive_move = acting_player.consecutive_paid_move_actions
                     repeated_move_penalty = consecutive_move_penalty(
@@ -2388,12 +3644,31 @@ class SelfPlayTrainer:
                         move_destination_posts,
                         post_routes,
                     )
-                    if next_consecutive_move >= 3 or no_change_penalty:
+                    immediate_q_undo = is_immediate_one_piece_q_undo(
+                        no_change_penalty,
+                        normal_move_selections,
+                    )
+                    single_piece_utilization_role = single_piece_move_utilization_target(
+                        pieces_moved,
+                        immediate_q_undo=immediate_q_undo,
+                        legal_pickups_at_start=normal_move_legal_pickups_at_start,
+                        additional_pickup_available_before_placement=(
+                            normal_move_additional_pickup_available
+                        ),
+                    )
+                    if immediate_q_undo:
+                        immediate_q_undo_pickup_target = no_change_penalty + repeated_move_penalty
+                        if next_consecutive_move >= 3:
+                            movement_local_target = repeated_move_penalty
+                        else:
+                            movement_local_adjustment = repeated_move_penalty
+                    elif next_consecutive_move >= 3 or no_change_penalty:
                         movement_local_target = repeated_move_penalty + no_change_penalty
                     else:
-                        movement_local_adjustment = (
-                            repeated_move_penalty
-                            + movement_efficiency_penalty(pieces_moved, movement_capacity)
+                        movement_local_adjustment = repeated_move_penalty + (
+                            0.0
+                            if pieces_moved == 1
+                            else movement_efficiency_penalty(pieces_moved, movement_capacity)
                         )
                 elif permanent_move_completed:
                     no_change_penalty = pointless_movement_penalty(
@@ -2402,7 +3677,19 @@ class SelfPlayTrainer:
                         post_routes,
                     )
                     movement_local_target = no_change_penalty or None
-                movement_metrics.pointless_move_workflows += int(bool(no_change_penalty))
+                if normal_move_completed:
+                    record_q_undo_workflow(
+                        movement_metrics,
+                        no_change_penalty,
+                        normal_move_selections,
+                        valuable_origin=normal_move_valuable_origin,
+                    )
+                record_pointless_movement_workflow(
+                    movement_metrics,
+                    no_change_penalty,
+                    normal_move_completed=normal_move_completed,
+                    permanent_move_any2_completed=permanent_move_completed,
+                )
                 movement_metrics.repeated_move_penalties += int(bool(repeated_move_penalty))
                 if move_placement_route is not None:
                     move_destination_counts[move_placement_route] = (
@@ -2413,8 +3700,25 @@ class SelfPlayTrainer:
                 if action_was_spent:
                     movement_metrics.spent_action_count += 1
                     newly_completed_routes = frozenset()
+                    move_claim_routes = frozenset()
+                    blocked_move_claim_routes = frozenset()
                     if normal_move_completed:
                         movement_metrics.move_action_count += 1
+                        record_move_capacity_utilization(
+                            movement_metrics,
+                            normal_move_nominal_capacity,
+                            normal_move_movable_pieces_available,
+                            pieces_moved,
+                        )
+                        previous_paid_move1 = update_consecutive_move1_telemetry(
+                            movement_metrics,
+                            previous_paid_move1,
+                            normal_move_completed=True,
+                            pieces_moved=pieces_moved,
+                            nominal_capacity=normal_move_nominal_capacity,
+                            initial_pickup_post_slot=normal_move_initial_pickup_post_slot,
+                            additional_pickup_post_slots=(normal_move_additional_pickup_post_slots),
+                        )
                         turn_move_workflow_ids.append(movement_workflow_id)
                         movement_destination_routes = frozenset(
                             post_route_indices[post] for post in move_destination_posts
@@ -2431,11 +3735,20 @@ class SelfPlayTrainer:
                         newly_completed_routes = frozenset(
                             completed_routes_after - move_completed_routes_before
                         )
-                        movement_metrics.moves_creating_claimable_route += int(
-                            bool(newly_completed_routes)
+                        move_claim_routes = move_claim_eligible_routes(
+                            newly_completed_routes,
+                            already_claimable_pickup_routes,
+                        )
+                        blocked_move_claim_routes = frozenset(
+                            completed_routes_after & already_claimable_pickup_routes
+                        )
+                        record_move_route_creation(
+                            movement_metrics,
+                            pieces_moved,
+                            newly_completed_routes,
                         )
                         adjusted = list(player_reward_deltas)
-                        if movement_local_target is None:
+                        if movement_local_target is None and not immediate_q_undo:
                             if move_blocked_next_player:
                                 adjusted[observation.observer_index] += MOVE_BLOCK_REWARD
                             (
@@ -2460,6 +3773,19 @@ class SelfPlayTrainer:
                         move_origin_posts = []
                         move_origin_pieces = []
                         move_destination_posts = []
+                        normal_move_selections = []
+                        normal_move_valuable_origin = False
+                        normal_move_nominal_capacity = 0
+                        normal_move_movable_pieces_available = 0
+                        normal_move_legal_pickups_at_start = 0
+                        normal_move_effective_capacity = 0
+                        normal_move_additional_pickup_available = False
+                        normal_move_initial_pickup_post_slot = None
+                        normal_move_additional_pickup_post_slots = frozenset()
+                        move_observed_pickup_routes = set()
+                        already_claimable_pickup_routes = set()
+                    else:
+                        previous_paid_move1 = None
                     acting_player.rewarded_move_focus_route_slots = (
                         clear_move_route_focus_after_claim(
                             acting_player.rewarded_move_focus_route_slots,
@@ -2472,11 +3798,35 @@ class SelfPlayTrainer:
                         action=action,
                         turn_phase=action_phase,
                         action_was_spent=True,
-                        newly_completed_routes=newly_completed_routes,
+                        newly_completed_routes=move_claim_routes,
                     )
                     acting_player.pending_move_claim_route_slots = pending_routes
+                    (
+                        pending_single_piece_move_claim_routes,
+                        single_piece_claim_conversion,
+                    ) = update_single_piece_move_claim_routes(
+                        pending_single_piece_move_claim_routes,
+                        action=action,
+                        turn_phase=action_phase,
+                        normal_move_completed=normal_move_completed,
+                        pieces_moved=pieces_moved,
+                        newly_completed_routes=move_claim_routes,
+                    )
+                    record_move_claim_reward_outcome(
+                        movement_metrics,
+                        combo_reward,
+                        action=action,
+                        turn_phase=action_phase,
+                        blocked_already_claimable_routes=pending_blocked_move_claim_routes,
+                    )
+                    pending_blocked_move_claim_routes = (
+                        blocked_move_claim_routes if normal_move_completed else frozenset()
+                    )
                     if combo_reward:
                         movement_metrics.move_claim_conversions += 1
+                        movement_metrics.single_piece_move_claim_conversions += int(
+                            single_piece_claim_conversion
+                        )
                         adjusted = list(player_reward_deltas)
                         adjusted[observation.observer_index] += combo_reward
                         player_reward_deltas = tuple(adjusted)
@@ -2532,7 +3882,7 @@ class SelfPlayTrainer:
                 decisions.append(
                     TrainingDecision(
                         observation.features.clone(),
-                        mask.to(torch.uint8),
+                        training_legal_action_mask.to(torch.uint8),
                         action_index,
                         observation.observer_index,
                         player_reward_deltas,
@@ -2547,11 +3897,20 @@ class SelfPlayTrainer:
                         movement_workflow_id,
                         equivalent_action_indices=selection.equivalent_action_indices,
                         equivalent_action_groups=tuple(
-                            group for group in semantic_action_groups if len(group) > 1
+                            group for group in training_semantic_action_groups if len(group) > 1
                         ),
                         receives_terminal_credit=not (
                             starts_normal_move or normal_move_in_progress
                         ),
+                        case_a_pickup_action_groups=case_a_pickup_action_groups,
+                        case_a_placement_action_groups=case_a_placement_action_groups,
+                        move_continuation_pickup_action_groups=(
+                            move_continuation_pickup_action_groups
+                        ),
+                        move_continuation_placement_action_groups=(
+                            move_continuation_placement_action_groups
+                        ),
+                        move_continuation_pickup_depth=move_continuation_pickup_depth,
                     )
                 )
                 if movement_local_target is not None:
@@ -2565,6 +3924,19 @@ class SelfPlayTrainer:
                         decisions,
                         movement_workflow_id,
                         movement_local_adjustment,
+                    )
+                if immediate_q_undo_pickup_target is not None:
+                    mark_movement_workflow_pickup_target(
+                        decisions,
+                        movement_workflow_id,
+                        immediate_q_undo_pickup_target,
+                    )
+                if single_piece_utilization_role is not None:
+                    set_single_piece_move_utilization_target(
+                        decisions,
+                        movement_workflow_id,
+                        MOVE1_UTILIZATION_LOCAL_TARGET,
+                        target_role=single_piece_utilization_role,
                     )
                 if normal_move_completed:
                     normal_move_workflow_id = None
@@ -2584,7 +3956,7 @@ class SelfPlayTrainer:
                 )
                 self.progress.game_completion_failures += 1
                 error = ActionLimitExceeded(
-                    f"Game did not finish within {self.config.max_actions} actions"
+                    f"Game did not finish within {self.config.max_actions} interactions"
                 )
                 if failure_callback is not None:
                     failure_callback(game, tuple(action_trace), seat_tiers, error)
@@ -2920,7 +4292,7 @@ class SelfPlayTrainer:
             return self.config.fresh_max_training_decisions
         return self.config.normal_max_training_decisions
 
-    def _decision_batch_losses(self, batch):
+    def _decision_batch_loss_components(self, batch):
         observations = torch.stack([sample.observation for sample in batch]).float().to(device)
         targets = torch.tensor(
             [sample.reward_to_go for sample in batch], dtype=torch.float32, device=device
@@ -2948,7 +4320,12 @@ class SelfPlayTrainer:
             reduction="none",
         )
         decision_losses = (member_losses * member_mask).sum(dim=1) / group_sizes
-        q_loss = decision_losses.mean()
+        base_q_loss = decision_losses.mean()
+        case_a_result = case_a_family_ranking_loss(model_outputs.q_values, batch)
+        continuation_result = move_continuation_family_ranking_loss(
+            model_outputs.q_values,
+            batch,
+        )
         quality_signals = policy_quality_signal(
             targets,
             self.config.policy_return_scale,
@@ -2958,6 +4335,17 @@ class SelfPlayTrainer:
             batch,
             quality_signals,
         ).mean()
+        return base_q_loss, policy_loss, case_a_result, continuation_result
+
+    def _decision_batch_losses(self, batch):
+        base_q_loss, policy_loss, case_a_result, continuation_result = (
+            self._decision_batch_loss_components(batch)
+        )
+        q_loss = (
+            base_q_loss
+            + CASE_A_FAMILY_RANK_WEIGHT * case_a_result.loss
+            + MOVE_CONTINUATION_FAMILY_RANK_WEIGHT * continuation_result.loss
+        )
         total_loss = q_loss + self.config.policy_loss_weight * policy_loss
         return q_loss, policy_loss, total_loss
 
@@ -2972,17 +4360,115 @@ class SelfPlayTrainer:
 
         self.optimizer.zero_grad(set_to_none=True)
         effective_size = len(batch)
+        case_a_sample_count = sum(
+            bool(sample.case_a_pickup_action_groups and sample.case_a_placement_action_groups)
+            for sample in batch
+        )
+        continuation_sample_count = sum(
+            bool(
+                sample.move_continuation_pickup_action_groups
+                and sample.move_continuation_placement_action_groups
+            )
+            for sample in batch
+        )
         detached_losses = torch.zeros(3, dtype=torch.float32, device=device)
+        detached_case_a = torch.zeros(6, dtype=torch.float32, device=device)
+        detached_continuation = torch.zeros(4, dtype=torch.float32, device=device)
+        continuation_depth_counts = [0, 0, 0]
         for start in range(0, effective_size, microbatch_size):
             microbatch = batch[start : start + microbatch_size]
             scale = len(microbatch) / effective_size
-            q_loss, policy_loss, total_loss = self._decision_batch_losses(microbatch)
-            self._accumulate_independent_losses(q_loss, policy_loss, scale)
-            detached_losses += scale * torch.stack(
-                (q_loss.detach(), policy_loss.detach(), total_loss.detach())
+            base_q_loss, policy_loss, case_a_result, continuation_result = (
+                self._decision_batch_loss_components(microbatch)
             )
+            case_a_contribution = (
+                CASE_A_FAMILY_RANK_WEIGHT
+                * case_a_result.loss
+                * case_a_result.sample_count
+                / case_a_sample_count
+                if case_a_sample_count
+                else None
+            )
+            continuation_contribution = (
+                MOVE_CONTINUATION_FAMILY_RANK_WEIGHT
+                * continuation_result.loss
+                * continuation_result.sample_count
+                / continuation_sample_count
+                if continuation_sample_count
+                else None
+            )
+            auxiliary_contribution = case_a_contribution
+            if continuation_contribution is not None:
+                auxiliary_contribution = (
+                    continuation_contribution
+                    if auxiliary_contribution is None
+                    else auxiliary_contribution + continuation_contribution
+                )
+            self._accumulate_independent_losses(
+                base_q_loss,
+                policy_loss,
+                scale,
+                q_auxiliary_loss=auxiliary_contribution,
+            )
+            q_contribution = scale * base_q_loss.detach()
+            if case_a_contribution is not None:
+                q_contribution = q_contribution + case_a_contribution.detach()
+            if continuation_contribution is not None:
+                q_contribution = q_contribution + continuation_contribution.detach()
+            policy_contribution = scale * policy_loss.detach()
+            detached_losses += torch.stack(
+                (
+                    q_contribution,
+                    policy_contribution,
+                    q_contribution + self.config.policy_loss_weight * policy_contribution,
+                )
+            )
+            if case_a_result.sample_count:
+                detached_case_a += torch.stack(
+                    (
+                        case_a_result.loss.detach() * case_a_result.sample_count,
+                        case_a_result.violating_sample_count.to(torch.float32),
+                        case_a_result.violating_pair_count.to(torch.float32),
+                        case_a_result.violating_pair_fraction_sum.to(torch.float32),
+                        case_a_result.all_pickups_above_all_placements_count.to(torch.float32),
+                        case_a_result.q1_pickup_count.to(torch.float32),
+                    )
+                )
+            if continuation_result.sample_count:
+                detached_continuation += torch.stack(
+                    (
+                        continuation_result.loss.detach() * continuation_result.sample_count,
+                        continuation_result.violating_sample_count.to(torch.float32),
+                        continuation_result.best_pickup_above_all_placements_count.to(
+                            torch.float32
+                        ),
+                        continuation_result.q1_pickup_count.to(torch.float32),
+                    )
+                )
+                continuation_depth_counts[0] += continuation_result.depth_2_count
+                continuation_depth_counts[1] += continuation_result.depth_3_count
+                continuation_depth_counts[2] += continuation_result.depth_4_count
         self._clip_independent_gradients()
         self.optimizer.step()
+        case_a_values = detached_case_a.cpu().tolist()
+        self._last_effective_batch_case_a_metrics = (
+            case_a_sample_count,
+            case_a_values[0],
+            int(case_a_values[1]),
+            int(case_a_values[2]),
+            case_a_values[3],
+            int(case_a_values[4]),
+            int(case_a_values[5]),
+        )
+        continuation_values = detached_continuation.cpu().tolist()
+        self._last_effective_batch_move_continuation_metrics = (
+            continuation_sample_count,
+            continuation_values[0],
+            int(continuation_values[1]),
+            int(continuation_values[2]),
+            int(continuation_values[3]),
+            *continuation_depth_counts,
+        )
         return tuple(detached_losses.cpu().tolist())
 
     def update_model(self, trajectories, *, curriculum_maturities=None) -> float:
@@ -3000,6 +4486,21 @@ class SelfPlayTrainer:
         q_losses = []
         policy_losses = []
         total_losses = []
+        case_a_sample_count = 0
+        case_a_loss_sum = 0.0
+        case_a_violating_sample_count = 0
+        case_a_violating_pair_count = 0
+        case_a_violating_pair_fraction_sum = 0.0
+        case_a_all_pickups_above_all_placements_count = 0
+        case_a_q1_pickup_count = 0
+        continuation_sample_count = 0
+        continuation_loss_sum = 0.0
+        continuation_violating_sample_count = 0
+        continuation_best_pickup_above_all_placements_count = 0
+        continuation_q1_pickup_count = 0
+        continuation_depth_2_count = 0
+        continuation_depth_3_count = 0
+        continuation_depth_4_count = 0
         coverage = []
         for trajectory, curriculum_maturity in zip(trajectories, curriculum_maturities):
             if curriculum_maturity == "early":
@@ -3030,6 +4531,44 @@ class SelfPlayTrainer:
                 q_losses.append(q_value)
                 policy_losses.append(policy_value)
                 total_losses.append(total_value)
+                (
+                    batch_case_a_samples,
+                    batch_case_a_loss_sum,
+                    batch_case_a_violating_samples,
+                    batch_case_a_violating_pairs,
+                    batch_case_a_violating_pair_fraction_sum,
+                    batch_case_a_all_pickups_above_all_placements,
+                    batch_case_a_q1_pickups,
+                ) = self._last_effective_batch_case_a_metrics
+                case_a_sample_count += batch_case_a_samples
+                case_a_loss_sum += batch_case_a_loss_sum
+                case_a_violating_sample_count += batch_case_a_violating_samples
+                case_a_violating_pair_count += batch_case_a_violating_pairs
+                case_a_violating_pair_fraction_sum += batch_case_a_violating_pair_fraction_sum
+                case_a_all_pickups_above_all_placements_count += (
+                    batch_case_a_all_pickups_above_all_placements
+                )
+                case_a_q1_pickup_count += batch_case_a_q1_pickups
+                (
+                    batch_continuation_samples,
+                    batch_continuation_loss_sum,
+                    batch_continuation_violating_samples,
+                    batch_continuation_best_pickup_above_all_placements,
+                    batch_continuation_q1_pickups,
+                    batch_continuation_depth_2,
+                    batch_continuation_depth_3,
+                    batch_continuation_depth_4,
+                ) = self._last_effective_batch_move_continuation_metrics
+                continuation_sample_count += batch_continuation_samples
+                continuation_loss_sum += batch_continuation_loss_sum
+                continuation_violating_sample_count += batch_continuation_violating_samples
+                continuation_best_pickup_above_all_placements_count += (
+                    batch_continuation_best_pickup_above_all_placements
+                )
+                continuation_q1_pickup_count += batch_continuation_q1_pickups
+                continuation_depth_2_count += batch_continuation_depth_2
+                continuation_depth_3_count += batch_continuation_depth_3
+                continuation_depth_4_count += batch_continuation_depth_4
                 self.progress.training_updates += 1
                 if self._policy_parameters and self.config.policy_loss_weight:
                     self.progress.policy_training_updates += 1
@@ -3043,6 +4582,64 @@ class SelfPlayTrainer:
         self.progress.last_q_loss = value
         self.progress.last_policy_loss = policy_value
         self.progress.last_total_loss = total_value
+        self.progress.last_case_a_family_ranking_samples = case_a_sample_count
+        self.progress.last_case_a_family_ranking_loss = (
+            case_a_loss_sum / case_a_sample_count if case_a_sample_count else None
+        )
+        self.progress.last_case_a_family_ranking_violating_samples = case_a_violating_sample_count
+        self.progress.last_case_a_family_ranking_violation_fraction = (
+            case_a_violating_sample_count / case_a_sample_count if case_a_sample_count else None
+        )
+        # Retained in the CSV schema for historical rows from the previous
+        # best-pickup experiment; the all-pickups objective reports pair metrics.
+        self.progress.last_case_a_family_ranking_mean_violating_placements = None
+        self.progress.last_case_a_family_ranking_mean_violating_pairs = (
+            case_a_violating_pair_count / case_a_sample_count if case_a_sample_count else None
+        )
+        self.progress.last_case_a_family_ranking_mean_violating_pair_fraction = (
+            case_a_violating_pair_fraction_sum / case_a_sample_count
+            if case_a_sample_count
+            else None
+        )
+        self.progress.last_case_a_family_ranking_all_pickups_above_all_placements_fraction = (
+            case_a_all_pickups_above_all_placements_count / case_a_sample_count
+            if case_a_sample_count
+            else None
+        )
+        self.progress.last_case_a_family_ranking_q1_pickup_fraction = (
+            case_a_q1_pickup_count / case_a_sample_count if case_a_sample_count else None
+        )
+        self.progress.last_move_continuation_family_ranking_samples = continuation_sample_count
+        self.progress.last_move_continuation_family_ranking_after_2_pickups = (
+            continuation_depth_2_count
+        )
+        self.progress.last_move_continuation_family_ranking_after_3_pickups = (
+            continuation_depth_3_count
+        )
+        self.progress.last_move_continuation_family_ranking_after_4_pickups = (
+            continuation_depth_4_count
+        )
+        self.progress.last_move_continuation_family_ranking_loss = (
+            continuation_loss_sum / continuation_sample_count if continuation_sample_count else None
+        )
+        self.progress.last_move_continuation_family_ranking_violating_samples = (
+            continuation_violating_sample_count
+        )
+        self.progress.last_move_continuation_family_ranking_violation_fraction = (
+            continuation_violating_sample_count / continuation_sample_count
+            if continuation_sample_count
+            else None
+        )
+        self.progress.last_move_continuation_best_pickup_above_all_placements_fraction = (
+            continuation_best_pickup_above_all_placements_count / continuation_sample_count
+            if continuation_sample_count
+            else None
+        )
+        self.progress.last_move_continuation_q1_pickup_fraction = (
+            continuation_q1_pickup_count / continuation_sample_count
+            if continuation_sample_count
+            else None
+        )
         self.loss_total += sum(q_losses)
         if self._policy_parameters and self.config.policy_loss_weight:
             self.policy_loss_total += sum(policy_losses)
@@ -3140,7 +4737,14 @@ class SelfPlayTrainer:
             curriculum_state = self.curriculum_state
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        sources = {str(Path(source)): _file_sha256(Path(source)) for source in starting_states}
+        state_paths = tuple(Path(source) for source in starting_states)
+        sources = {str(source): self._source_state_hash(source) for source in state_paths}
+        active_paths = set(state_paths)
+        self._source_state_hash_cache = {
+            source: cached
+            for source, cached in self._source_state_hash_cache.items()
+            if source in active_paths
+        }
         self.progress.checkpoint_saves += 1
         checkpoint = {
             "training_checkpoint_format": TRAINING_CHECKPOINT_FORMAT,
@@ -3209,7 +4813,10 @@ class SelfPlayTrainer:
             config_values.pop(obsolete_key, None)
         if config_values.get("learning_rate") == LEGACY_LEARNING_RATE:
             config_values["learning_rate"] = DEFAULT_LEARNING_RATE
-        if tuple(config_values.get("tier_top_k", ())) == LEGACY_TIER_TOP_K:
+        if tuple(config_values.get("tier_top_k", ())) in (
+            LEGACY_TIER_TOP_K,
+            PREVIOUS_TIER_TOP_K,
+        ):
             config_values["tier_top_k"] = DEFAULT_TIER_TOP_K
         if tuple(config_values.get("tier_epsilons", ())) == LEGACY_TIER_EPSILONS:
             config_values["tier_epsilons"] = DEFAULT_TIER_EPSILONS

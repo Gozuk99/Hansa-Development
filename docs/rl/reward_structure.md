@@ -150,11 +150,20 @@ The current trainer also applies these deliberately shaped signals:
   doing so through displacement;
 - `+250` for an intermediate Privilege, Book, Actions, or Bank upgrade, except
   the first Actions upgrade receives `+400`;
-- a workflow-local additive `-200` for moving only one piece, `-100` for moving
-  only two when the player's Book permits at least three, and `-200` for a
-  second consecutive Move when Book permits at least four. These adjustments
-  modify only the offending Move's calculated return and do not enter the
-  reward stream for earlier decisions;
+- a hard local `-500` target on normal-Move initiation when only one piece can
+  legally be picked up. When another pickup remains after the first pickup,
+  premature placements instead participate in a semantic-family ranking loss:
+  every semantic remaining pickup is trained toward at least `1.0` Q above
+  every semantic premature placement, with auxiliary weight `1.00`. This rule
+  applies only after exactly one pickup. After two or more pickups, while
+  effective Move capacity and another legal pickup remain, the best remaining
+  semantic pickup is trained `1.0` Q above every premature placement with
+  auxiliary weight `0.50`. Neither lesson is a reward or TD target;
+- a workflow-local additive `-100` for moving only two pieces when the player's
+  Book permits at least three, and `-200` for a second consecutive Move when
+  Book permits at least four. These adjustments modify only the offending
+  Move's calculated return and do not enter the reward stream for earlier
+  decisions;
 - a local `-1,000` target for a normal Move or permanent Move Any 2 workflow
   that leaves every affected post with the same owner and shape as before, or
   merely rearranges the same owner/shape totals among equivalent posts of one

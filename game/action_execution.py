@@ -75,16 +75,6 @@ def execute_action(game, action):
         raise TypeError(f"Unsupported structured action: {action!r}")
 
     game.complete_deferred_game_end_if_ready()
-
-    if not (
-        game.waiting_for_bm_swap_office
-        or game.waiting_for_bm_upgrade_ability
-        or game.waiting_for_bm_move_any_2
-        or game.waiting_for_bm_move3
-        or game.waiting_for_bm_exchange_bm
-        or game.waiting_for_bm_tribute_trading_post
-        or game.waiting_for_bm_block_trade_route
-        or game.waiting_for_bm_green_city
-        or game.waiting_for_place2_in_scotland_or_wales
-    ):
-        game.switch_player_if_needed()
+    # TurnPhase is the authority for whether this interaction completed every
+    # required follow-up; subtype-specific workflow flags stay inside resolvers.
+    game.switch_player_if_needed()

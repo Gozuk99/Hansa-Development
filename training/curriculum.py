@@ -19,9 +19,17 @@ import torch
 
 from ai.ai_model import MODEL_CHECKPOINT_FORMAT, MODEL_CHECKPOINT_VERSION
 from game.persistence import save_game
+from training.results_schema import (
+    TRAINING_MATURITIES,
+    canonical_run as _canonical_run_from_legacy_row,
+    interpret_results_row,
+    maturity_from_stage_name as _maturity_from_stage_name,
+    scenario as _scenario_from_legacy_row,
+)
 from training.self_play import (
     ActionLimitExceeded,
     IncompleteGameError,
+    NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
     NORMAL_EXPLORATION_MODE,
     SHADOW_FILTER_POLICY_TOP_K,
     SHADOW_FILTER_Q_TOP_K,
@@ -74,6 +82,58 @@ CSV_FIELDS = (
     "move_action_count",
     "spent_action_count",
     "pointless_move_workflows",
+    "pointless_normal_move_workflows",
+    "pointless_move_any2_workflows",
+    "immediate_one_piece_q_undos",
+    "immediate_q_undo_epsilon_pickups",
+    "immediate_q_undo_ranked_pickups",
+    "immediate_q_undo_q1_pickups",
+    "immediate_q1_restores",
+    "immediate_q1_pickup_q1_restores",
+    "immediate_valuable_q1_pickup_q1_restores",
+    "full_multi_piece_q_undos",
+    "full_multi_piece_q_undo_any_exploration",
+    "full_multi_piece_q_undo_entirely_ranked",
+    "normal_move_nominal_capacity_total",
+    "normal_move_movable_pieces_available_total",
+    "normal_move_effective_capacity_total",
+    "normal_move_pieces_moved_total",
+    "normal_move_unused_capacity_total",
+    "single_piece_moves",
+    "single_piece_moves_with_multiple_available",
+    "single_piece_moves_creating_claimable_route",
+    "single_piece_move_claim_conversions",
+    "full_effective_capacity_moves",
+    "under_effective_capacity_moves",
+    *NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
+    "move1_utilization_penalties_applied",
+    "move1_penalties_on_placement",
+    "move1_penalties_on_single_available_initiation",
+    "move_claim_reward_awarded",
+    "move_claim_reward_blocked_already_claimable",
+    "consecutive_move1_pairs",
+    "consecutive_move1_pairs_with_multiple_available",
+    "consecutive_move1_pairs_move2_capacity",
+    "consecutive_move1_pairs_move3_capacity",
+    "consecutive_move1_pairs_move4_capacity",
+    "consecutive_move1_pairs_move5_capacity",
+    "avoidable_extra_move_actions",
+    "move1_scaffold_mask_states",
+    "move1_scaffold_masked_placement_semantic_actions",
+    "move1_scaffold_legal_pickup_semantic_actions",
+    "move1_scaffold_unmasked_q1_pickups",
+    "move1_scaffold_unmasked_q1_placements",
+    "move1_scaffold_unmasked_q1_pickup_fraction",
+    "move1_scaffold_unmasked_q1_placement_fraction",
+    "move1_scaffold_all_pickups_above_all_placements_fraction",
+    "move1_scaffold_margin_satisfied_pair_fraction",
+    "move1_scaffold_family_ranking_loss",
+    "move1_scaffold_best_pickup_minus_best_placement_mean",
+    "move1_scaffold_best_pickup_minus_best_placement_median",
+    "move1_scaffold_best_pickup_minus_best_placement_p10",
+    "move1_scaffold_best_pickup_minus_best_placement_p90",
+    "move1_scaffold_unmasked_top_k_pickup_fraction",
+    "move1_scaffold_unmasked_top_k_has_pickup_fraction",
     "repeated_move_penalties",
     "all_move_turn_penalties",
     "moves_creating_claimable_route",
@@ -85,6 +145,24 @@ CSV_FIELDS = (
     "q_loss",
     "policy_loss",
     "total_loss",
+    "case_a_family_ranking_samples",
+    "case_a_family_ranking_loss",
+    "case_a_family_ranking_violating_samples",
+    "case_a_family_ranking_violation_fraction",
+    "case_a_family_ranking_mean_violating_placements",
+    "case_a_family_ranking_mean_violating_pairs",
+    "case_a_family_ranking_mean_violating_pair_fraction",
+    "case_a_family_ranking_all_pickups_above_all_placements_fraction",
+    "case_a_family_ranking_q1_pickup_fraction",
+    "move_continuation_family_ranking_samples",
+    "move_continuation_family_ranking_after_2_pickups",
+    "move_continuation_family_ranking_after_3_pickups",
+    "move_continuation_family_ranking_after_4_pickups",
+    "move_continuation_family_ranking_loss",
+    "move_continuation_family_ranking_violating_samples",
+    "move_continuation_family_ranking_violation_fraction",
+    "move_continuation_best_pickup_above_all_placements_fraction",
+    "move_continuation_q1_pickup_fraction",
     "policy_q_top1_agreement",
     "policy_top1_q_rank",
     "policy_entropy",
@@ -152,76 +230,6 @@ DETAILED_PROFILING_FIELDS = (
 
 def csv_fields(*, detailed_profiling=False):
     return CSV_FIELDS + (DETAILED_PROFILING_FIELDS if detailed_profiling else ())
-
-
-TRAINING_MATURITIES = frozenset(("fresh", "early", "mid", "late", "end"))
-
-
-def _maturity_from_stage_name(stage_name):
-    value = (stage_name or "").strip().lower()
-    if value in TRAINING_MATURITIES:
-        return value
-    if value.startswith("near_end") or value.startswith("end"):
-        return "end"
-    if value.startswith("late"):
-        return "late"
-    if value.startswith("mid"):
-        return "mid"
-    if value.startswith("early"):
-        return "early"
-    if value.startswith("fresh") or value == "full_game":
-        return "fresh"
-    if value.startswith("near_"):
-        return "end"
-    return "end"
-
-
-def _canonical_run_from_legacy_row(row):
-    """Return one canonical run label for current or historical CSV rows."""
-    current = (row.get("run") or "").strip().lower()
-    legacy_mode = (row.get("run_mode") or "").strip().lower()
-    run_type = (row.get("run_type") or "").strip().lower()
-    if current.startswith("evaluation_"):
-        return current
-    if legacy_mode.startswith("evaluation_"):
-        return legacy_mode
-    if run_type == "evaluation":
-        evaluation_set = (row.get("evaluation_set") or "mid_late_end").strip().lower()
-        return f"evaluation_{evaluation_set}"
-
-    stage = (row.get("training_stage") or "").strip().lower()
-    if stage not in TRAINING_MATURITIES and current.startswith("training_"):
-        current_stage = current.removeprefix("training_").removesuffix("_zero_epsilon")
-        if current_stage in TRAINING_MATURITIES:
-            stage = current_stage
-    if stage not in TRAINING_MATURITIES:
-        curriculum_stage = (row.get("curriculum_stage") or "").partition("+")[0]
-        stage = _maturity_from_stage_name(curriculum_stage)
-
-    exploration = (row.get("training_exploration_mode") or "").strip().lower()
-    zero_epsilon = (
-        current.endswith("_zero_epsilon")
-        or legacy_mode.endswith("_zero_epsilon")
-        or exploration == ZERO_EPSILON_EXPLORATION_MODE
-    )
-    suffix = "_zero_epsilon" if zero_epsilon else ""
-    return f"training_{stage}{suffix}"
-
-
-def _scenario_from_legacy_row(row):
-    """Preserve only scenario detail not already encoded by ``run``."""
-    current = (row.get("scenario") or "").strip()
-    if current:
-        return current
-    value = (row.get("curriculum_stage") or "").strip()
-    if not value:
-        return ""
-    first, separator, detail = value.partition("+")
-    if first.lower() in TRAINING_MATURITIES:
-        return detail if separator else ""
-    if first.lower() in {"early_game", "mid_game", "late_game", "full_game"}:
-        return detail if separator else ""
-    return value
 
 
 @dataclass(frozen=True)
@@ -810,6 +818,163 @@ class CurriculumRunner:
             "move_action_count": move_action_count,
             "spent_action_count": spent_action_count,
             "pointless_move_workflows": getattr(trajectory, "pointless_move_workflows", 0),
+            "pointless_normal_move_workflows": getattr(
+                trajectory, "pointless_normal_move_workflows", 0
+            ),
+            "pointless_move_any2_workflows": getattr(
+                trajectory, "pointless_move_any2_workflows", 0
+            ),
+            "immediate_one_piece_q_undos": getattr(trajectory, "immediate_one_piece_q_undos", 0),
+            "immediate_q_undo_epsilon_pickups": getattr(
+                trajectory, "immediate_q_undo_epsilon_pickups", 0
+            ),
+            "immediate_q_undo_ranked_pickups": getattr(
+                trajectory, "immediate_q_undo_ranked_pickups", 0
+            ),
+            "immediate_q_undo_q1_pickups": getattr(trajectory, "immediate_q_undo_q1_pickups", 0),
+            "immediate_q1_restores": getattr(trajectory, "immediate_q1_restores", 0),
+            "immediate_q1_pickup_q1_restores": getattr(
+                trajectory, "immediate_q1_pickup_q1_restores", 0
+            ),
+            "immediate_valuable_q1_pickup_q1_restores": getattr(
+                trajectory, "immediate_valuable_q1_pickup_q1_restores", 0
+            ),
+            "full_multi_piece_q_undos": getattr(trajectory, "full_multi_piece_q_undos", 0),
+            "full_multi_piece_q_undo_any_exploration": getattr(
+                trajectory, "full_multi_piece_q_undo_any_exploration", 0
+            ),
+            "full_multi_piece_q_undo_entirely_ranked": getattr(
+                trajectory, "full_multi_piece_q_undo_entirely_ranked", 0
+            ),
+            "normal_move_nominal_capacity_total": getattr(
+                trajectory, "normal_move_nominal_capacity_total", 0
+            ),
+            "normal_move_movable_pieces_available_total": getattr(
+                trajectory, "normal_move_movable_pieces_available_total", 0
+            ),
+            "normal_move_effective_capacity_total": getattr(
+                trajectory, "normal_move_effective_capacity_total", 0
+            ),
+            "normal_move_pieces_moved_total": getattr(
+                trajectory, "normal_move_pieces_moved_total", 0
+            ),
+            "normal_move_unused_capacity_total": getattr(
+                trajectory, "normal_move_unused_capacity_total", 0
+            ),
+            "single_piece_moves": getattr(trajectory, "single_piece_moves", 0),
+            "single_piece_moves_with_multiple_available": getattr(
+                trajectory, "single_piece_moves_with_multiple_available", 0
+            ),
+            "single_piece_moves_creating_claimable_route": getattr(
+                trajectory, "single_piece_moves_creating_claimable_route", 0
+            ),
+            "single_piece_move_claim_conversions": getattr(
+                trajectory, "single_piece_move_claim_conversions", 0
+            ),
+            "full_effective_capacity_moves": getattr(
+                trajectory, "full_effective_capacity_moves", 0
+            ),
+            "under_effective_capacity_moves": getattr(
+                trajectory, "under_effective_capacity_moves", 0
+            ),
+            **{
+                field: getattr(trajectory, field, 0)
+                for field in NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS
+            },
+            "move1_utilization_penalties_applied": getattr(
+                trajectory, "move1_utilization_penalties_applied", 0
+            ),
+            "move1_penalties_on_placement": getattr(trajectory, "move1_penalties_on_placement", 0),
+            "move1_penalties_on_single_available_initiation": getattr(
+                trajectory, "move1_penalties_on_single_available_initiation", 0
+            ),
+            "move_claim_reward_awarded": getattr(trajectory, "move_claim_reward_awarded", 0),
+            "move_claim_reward_blocked_already_claimable": getattr(
+                trajectory, "move_claim_reward_blocked_already_claimable", 0
+            ),
+            "consecutive_move1_pairs": getattr(trajectory, "consecutive_move1_pairs", 0),
+            "consecutive_move1_pairs_with_multiple_available": getattr(
+                trajectory, "consecutive_move1_pairs_with_multiple_available", 0
+            ),
+            "consecutive_move1_pairs_move2_capacity": getattr(
+                trajectory, "consecutive_move1_pairs_move2_capacity", 0
+            ),
+            "consecutive_move1_pairs_move3_capacity": getattr(
+                trajectory, "consecutive_move1_pairs_move3_capacity", 0
+            ),
+            "consecutive_move1_pairs_move4_capacity": getattr(
+                trajectory, "consecutive_move1_pairs_move4_capacity", 0
+            ),
+            "consecutive_move1_pairs_move5_capacity": getattr(
+                trajectory, "consecutive_move1_pairs_move5_capacity", 0
+            ),
+            "avoidable_extra_move_actions": getattr(trajectory, "avoidable_extra_move_actions", 0),
+            "move1_scaffold_mask_states": getattr(trajectory, "move1_scaffold_mask_states", 0),
+            "move1_scaffold_masked_placement_semantic_actions": getattr(
+                trajectory,
+                "move1_scaffold_masked_placement_semantic_actions",
+                0,
+            ),
+            "move1_scaffold_legal_pickup_semantic_actions": getattr(
+                trajectory,
+                "move1_scaffold_legal_pickup_semantic_actions",
+                0,
+            ),
+            "move1_scaffold_unmasked_q1_pickups": getattr(
+                trajectory, "move1_scaffold_unmasked_q1_pickups", 0
+            ),
+            "move1_scaffold_unmasked_q1_placements": getattr(
+                trajectory, "move1_scaffold_unmasked_q1_placements", 0
+            ),
+            "move1_scaffold_unmasked_q1_pickup_fraction": getattr(
+                trajectory, "move1_scaffold_unmasked_q1_pickup_fraction", None
+            ),
+            "move1_scaffold_unmasked_q1_placement_fraction": getattr(
+                trajectory, "move1_scaffold_unmasked_q1_placement_fraction", None
+            ),
+            "move1_scaffold_all_pickups_above_all_placements_fraction": getattr(
+                trajectory,
+                "move1_scaffold_all_pickups_above_all_placements_fraction",
+                None,
+            ),
+            "move1_scaffold_margin_satisfied_pair_fraction": getattr(
+                trajectory,
+                "move1_scaffold_margin_satisfied_pair_fraction",
+                None,
+            ),
+            "move1_scaffold_family_ranking_loss": getattr(
+                trajectory, "move1_scaffold_family_ranking_loss", None
+            ),
+            "move1_scaffold_best_pickup_minus_best_placement_mean": getattr(
+                trajectory,
+                "move1_scaffold_best_pickup_minus_best_placement_mean",
+                None,
+            ),
+            "move1_scaffold_best_pickup_minus_best_placement_median": getattr(
+                trajectory,
+                "move1_scaffold_best_pickup_minus_best_placement_median",
+                None,
+            ),
+            "move1_scaffold_best_pickup_minus_best_placement_p10": getattr(
+                trajectory,
+                "move1_scaffold_best_pickup_minus_best_placement_p10",
+                None,
+            ),
+            "move1_scaffold_best_pickup_minus_best_placement_p90": getattr(
+                trajectory,
+                "move1_scaffold_best_pickup_minus_best_placement_p90",
+                None,
+            ),
+            "move1_scaffold_unmasked_top_k_pickup_fraction": getattr(
+                trajectory,
+                "move1_scaffold_unmasked_top_k_pickup_fraction",
+                None,
+            ),
+            "move1_scaffold_unmasked_top_k_has_pickup_fraction": getattr(
+                trajectory,
+                "move1_scaffold_unmasked_top_k_has_pickup_fraction",
+                None,
+            ),
             "repeated_move_penalties": getattr(trajectory, "repeated_move_penalties", 0),
             "all_move_turn_penalties": getattr(trajectory, "all_move_turn_penalties", 0),
             "moves_creating_claimable_route": moves_creating_claimable_route,
@@ -832,6 +997,96 @@ class CurriculumRunner:
             ),
             "total_loss": (
                 self.trainer.progress.last_total_loss
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_samples": (
+                self.trainer.progress.last_case_a_family_ranking_samples
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_loss": (
+                self.trainer.progress.last_case_a_family_ranking_loss
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_violating_samples": (
+                self.trainer.progress.last_case_a_family_ranking_violating_samples
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_violation_fraction": (
+                self.trainer.progress.last_case_a_family_ranking_violation_fraction
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_mean_violating_placements": (
+                self.trainer.progress.last_case_a_family_ranking_mean_violating_placements
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_mean_violating_pairs": (
+                self.trainer.progress.last_case_a_family_ranking_mean_violating_pairs
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_mean_violating_pair_fraction": (
+                self.trainer.progress.last_case_a_family_ranking_mean_violating_pair_fraction
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_all_pickups_above_all_placements_fraction": (
+                self.trainer.progress.last_case_a_family_ranking_all_pickups_above_all_placements_fraction
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "case_a_family_ranking_q1_pickup_fraction": (
+                self.trainer.progress.last_case_a_family_ranking_q1_pickup_fraction
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_family_ranking_samples": (
+                self.trainer.progress.last_move_continuation_family_ranking_samples
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_family_ranking_after_2_pickups": (
+                self.trainer.progress.last_move_continuation_family_ranking_after_2_pickups
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_family_ranking_after_3_pickups": (
+                self.trainer.progress.last_move_continuation_family_ranking_after_3_pickups
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_family_ranking_after_4_pickups": (
+                self.trainer.progress.last_move_continuation_family_ranking_after_4_pickups
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_family_ranking_loss": (
+                self.trainer.progress.last_move_continuation_family_ranking_loss
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_family_ranking_violating_samples": (
+                self.trainer.progress.last_move_continuation_family_ranking_violating_samples
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_family_ranking_violation_fraction": (
+                self.trainer.progress.last_move_continuation_family_ranking_violation_fraction
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_best_pickup_above_all_placements_fraction": (
+                self.trainer.progress.last_move_continuation_best_pickup_above_all_placements_fraction
+                if run_type in {"training", "training_timeout"}
+                else None
+            ),
+            "move_continuation_q1_pickup_fraction": (
+                self.trainer.progress.last_move_continuation_q1_pickup_fraction
                 if run_type in {"training", "training_timeout"}
                 else None
             ),
@@ -881,23 +1136,17 @@ class CurriculumRunner:
                         writer = csv.DictWriter(output, fieldnames=fields)
                         writer.writeheader()
                         for existing in reader:
+                            interpreted = interpret_results_row(existing)
                             migrated = {field: existing.get(field, "") for field in fields}
-                            migrated["run"] = _canonical_run_from_legacy_row(existing)
-                            migrated["scenario"] = _scenario_from_legacy_row(existing)
-                            migrated["total_training_decisions"] = existing.get(
-                                "total_training_decisions",
-                                existing.get("trajectory_decision_count", ""),
+                            migrated["run"] = interpreted.run
+                            migrated["scenario"] = interpreted.scenario
+                            migrated["total_training_decisions"] = (
+                                interpreted.total_training_decisions
                             )
-                            migrated["sampled_training_decisions"] = existing.get(
-                                "sampled_training_decisions",
-                                existing.get("sampled_training_decision_count", ""),
+                            migrated["sampled_training_decisions"] = (
+                                interpreted.sampled_training_decisions
                             )
-                            if (
-                                existing.get("run_type") or ""
-                            ).strip().lower() == "training_timeout" and not migrated[
-                                "completion_reason"
-                            ]:
-                                migrated["completion_reason"] = "action_limit"
+                            migrated["completion_reason"] = interpreted.completion_reason
                             writer.writerow(migrated)
             if replacement is not None:
                 replacement.replace(self.csv_path)
@@ -1100,9 +1349,13 @@ class CurriculumRunner:
                     f"; generate {generation_seconds:.2f}s" if generation_seconds >= 1 else ""
                 )
                 learning = f"; learn {learning_seconds:.2f}s" if learning_seconds >= 1 else ""
+                displayed_result = (
+                    "interaction_limit reached" if result == "action_limit" else result
+                )
                 self._report(
-                    f"Training game {game_index + 1}/{total_games}: {result}; "
-                    f"{len(trajectory.action_trace)} actions; "
+                    f"Training game {game_index + 1}/{total_games}: {displayed_result}; "
+                    f"{len(trajectory.action_trace)} interactions; "
+                    f"{trajectory.spent_action_count} paid actions; "
                     f"play {trajectory.play_seconds:.2f}s{loss}{timing}{generation}{learning}"
                 )
                 pending_update.append(trajectory)
@@ -1266,7 +1519,8 @@ class CurriculumRunner:
                         failure_reason = "action_limit"
                         incomplete += 1
                         self._report(
-                            f"Evaluation game {index + 1}/{total_games}: action_limit; retrying"
+                            f"Evaluation game {index + 1}/{total_games}: "
+                            "interaction_limit reached; retrying"
                         )
                         continue
                     except IncompleteGameError:
@@ -1298,6 +1552,9 @@ class CurriculumRunner:
                 trajectories.append(trajectory)
                 evaluation_loss = self.trainer.trajectory_loss(trajectory)
                 result = getattr(trajectory, "completion_reason", "normal")
+                displayed_result = (
+                    "interaction_limit reached" if result == "action_limit" else result
+                )
                 slow_timings = (
                     _play_timing_breakdown(trajectory)
                     if self.trainer.config.detailed_profiling
@@ -1305,8 +1562,9 @@ class CurriculumRunner:
                 )
                 timing = f" ({slow_timings})" if slow_timings else ""
                 self._report(
-                    f"Evaluation game {index + 1}/{total_games}: {result}; "
-                    f"{len(trajectory.action_trace)} actions; "
+                    f"Evaluation game {index + 1}/{total_games}: {displayed_result}; "
+                    f"{len(trajectory.action_trace)} interactions; "
+                    f"{trajectory.spent_action_count} paid actions; "
                     f"play {trajectory.play_seconds:.2f}s{timing}"
                 )
                 self.game_number += 1

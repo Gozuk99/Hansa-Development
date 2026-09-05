@@ -134,6 +134,7 @@ class ModelLineageEvaluationTests(unittest.TestCase):
         workflow = trainer._select_workflow_action(
             scores,
             (0, 1, 2, 3),
+            tiers[0],
             (((0,), (1,)), ((2,), (3,))),
         )
         self.assertEqual((paid.action_index, paid.model_rank, paid.used_epsilon), (1, 1, False))

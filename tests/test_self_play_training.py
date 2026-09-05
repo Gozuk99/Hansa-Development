@@ -30,8 +30,15 @@ from game.turn_state import TurnPhase
 from map_data.constants import MAX_POSTS
 from training.self_play import (
     ALL_MOVE_TURN_LOCAL_TARGET,
+    CASE_A_FAMILY_RANK_MARGIN,
+    CASE_A_FAMILY_RANK_WEIGHT,
+    MOVE_CONTINUATION_FAMILY_RANK_MARGIN,
+    MOVE_CONTINUATION_FAMILY_RANK_WEIGHT,
+    MOVE1_UTILIZATION_LOCAL_TARGET,
     MOVE_CLAIM_COMBO_REWARD,
     MOVE_ROUTE_FOCUS_REWARD,
+    Move1CompletionTelemetry,
+    MoveSelectionTelemetry,
     MovementBehaviorMetrics,
     POINTLESS_ROUTE_CLAIM_PENALTY,
     NO_REPLACEMENT_ROUTE_PENALTY,
@@ -42,6 +49,7 @@ from training.self_play import (
     TrainingDecision,
     TrainingRosterPolicy,
     ZERO_EPSILON_EXPLORATION_MODE,
+    _file_sha256,
     _is_normal_move_in_progress,
     action_phase_selection_groups,
     add_movement_workflow_adjustment,
@@ -52,6 +60,8 @@ from training.self_play import (
     assign_reward_to_go,
     assign_training_targets,
     calculate_terminal_rewards,
+    case_a_family_ranking_loss,
+    case_a_move_action_families,
     completed_game_reason,
     completed_route_move_reward,
     consecutive_move_penalty,
@@ -60,18 +70,36 @@ from training.self_play import (
     grant_movement_workflow_terminal_credit,
     income_efficiency_penalty,
     inverse_sqrt_rank_weights,
+    is_immediate_one_piece_q_undo,
     intermediate_ability_upgrade_reward,
+    mark_movement_workflow_pickup_target,
     mark_movement_workflow_target,
+    move1_scaffold_action_mask,
+    move_claim_eligible_routes,
+    move_continuation_action_families,
+    move_continuation_family_ranking_loss,
     move_route_focus_reward,
     movement_efficiency_penalty,
     move_workflow_exploration_categories,
     normalized_rank_weights,
     pointless_movement_penalty,
     pointless_route_claim_penalty,
+    record_pointless_movement_workflow,
+    record_move_capacity_utilization,
+    record_move_pickup_route_claimability,
+    record_move_claim_reward_outcome,
+    record_move1_scaffold_readiness,
+    record_move_route_creation,
+    record_applied_move1_utilization_penalties,
+    record_q_undo_workflow,
     route_building_post_reward,
+    set_single_piece_move_utilization_target,
     should_fully_validate,
+    single_piece_move_utilization_target,
     training_action_mask,
     update_move_claim_combo,
+    update_consecutive_move1_telemetry,
+    update_single_piece_move_claim_routes,
     valuable_completed_route_slots,
 )
 from game.structured_actions import (
@@ -149,6 +177,54 @@ def tiny_training_decisions(count):
     )
 
 
+def reference_case_a_family_ranking_losses(q_values, samples, margin=1.0):
+    """Calculate the all-pickup/all-placement objective one state at a time."""
+    losses = []
+    violating_counts = []
+    for row, sample in enumerate(samples):
+        if not sample.case_a_pickup_action_groups or not sample.case_a_placement_action_groups:
+            continue
+
+        def semantic_scores(groups):
+            return torch.stack(
+                tuple(
+                    q_values[row, torch.as_tensor(group, dtype=torch.long)].mean()
+                    for group in groups
+                )
+            )
+
+        pickups = semantic_scores(sample.case_a_pickup_action_groups)
+        placements = semantic_scores(sample.case_a_placement_action_groups)
+        violations = functional.relu(placements[:, None] - pickups[None, :] + margin)
+        losses.append(violations.mean())
+        violating_counts.append((violations > 0).sum())
+    return torch.stack(losses), torch.stack(violating_counts)
+
+
+def reference_move_continuation_family_ranking_losses(q_values, samples, margin=1.0):
+    """Calculate the best-pickup continuation objective one state at a time."""
+    losses = []
+    for row, sample in enumerate(samples):
+        if (
+            not sample.move_continuation_pickup_action_groups
+            or not sample.move_continuation_placement_action_groups
+        ):
+            continue
+
+        def semantic_scores(groups):
+            return torch.stack(
+                tuple(
+                    q_values[row, torch.as_tensor(group, dtype=torch.long)].mean()
+                    for group in groups
+                )
+            )
+
+        best_pickup = semantic_scores(sample.move_continuation_pickup_action_groups).max()
+        placements = semantic_scores(sample.move_continuation_placement_action_groups)
+        losses.append(functional.relu(placements - best_pickup + margin).mean())
+    return torch.stack(losses)
+
+
 class SelfPlayTrainingTests(unittest.TestCase):
     def test_movement_behavior_metric_rates_are_blank_without_denominators(self):
         metrics = MovementBehaviorMetrics()
@@ -163,6 +239,966 @@ class SelfPlayTrainingTests(unittest.TestCase):
 
         self.assertEqual(metrics.move_ratio, 0.25)
         self.assertEqual(metrics.move_claim_conversion_rate, 0.75)
+
+    def test_pointless_movement_metrics_separate_normal_move_and_move_any2(self):
+        metrics = MovementBehaviorMetrics()
+
+        record_pointless_movement_workflow(
+            metrics,
+            -1000,
+            normal_move_completed=True,
+        )
+        record_pointless_movement_workflow(
+            metrics,
+            -1000,
+            permanent_move_any2_completed=True,
+        )
+        record_pointless_movement_workflow(
+            metrics,
+            0,
+            normal_move_completed=True,
+        )
+
+        self.assertEqual(metrics.pointless_move_workflows, 2)
+        self.assertEqual(metrics.pointless_normal_move_workflows, 1)
+        self.assertEqual(metrics.pointless_move_any2_workflows, 1)
+
+    def test_q_undo_metrics_classify_immediate_rank_and_exploration(self):
+        epsilon_metrics = MovementBehaviorMetrics()
+        record_q_undo_workflow(
+            epsilon_metrics,
+            -1000,
+            (
+                MoveSelectionTelemetry("initial_pickup", True, 4),
+                MoveSelectionTelemetry("final_placement", False, 1),
+            ),
+        )
+        self.assertEqual(epsilon_metrics.immediate_one_piece_q_undos, 1)
+        self.assertEqual(epsilon_metrics.immediate_q_undo_epsilon_pickups, 1)
+        self.assertEqual(epsilon_metrics.immediate_q1_restores, 1)
+        self.assertEqual(epsilon_metrics.immediate_q1_pickup_q1_restores, 0)
+
+        ranked_metrics = MovementBehaviorMetrics()
+        record_q_undo_workflow(
+            ranked_metrics,
+            -1000,
+            (
+                MoveSelectionTelemetry("initial_pickup", False, 1),
+                MoveSelectionTelemetry("final_placement", False, 1),
+            ),
+            valuable_origin=True,
+        )
+        self.assertEqual(ranked_metrics.immediate_q_undo_ranked_pickups, 1)
+        self.assertEqual(ranked_metrics.immediate_q_undo_q1_pickups, 1)
+        self.assertEqual(ranked_metrics.immediate_q1_pickup_q1_restores, 1)
+        self.assertEqual(ranked_metrics.immediate_valuable_q1_pickup_q1_restores, 1)
+
+    def test_q_undo_metrics_count_full_multi_piece_but_not_partial_return(self):
+        full = (
+            MoveSelectionTelemetry("initial_pickup", False, 1),
+            MoveSelectionTelemetry("additional_pickup", False, 2),
+            MoveSelectionTelemetry("intermediate_placement", False, 1),
+            MoveSelectionTelemetry("final_placement", False, 1),
+        )
+        metrics = MovementBehaviorMetrics()
+        record_q_undo_workflow(metrics, -1000, full)
+        self.assertEqual(metrics.full_multi_piece_q_undos, 1)
+        self.assertEqual(metrics.full_multi_piece_q_undo_entirely_ranked, 1)
+        self.assertEqual(metrics.full_multi_piece_q_undo_any_exploration, 0)
+
+        explored = replace(full[1], used_epsilon=True)
+        record_q_undo_workflow(metrics, -1000, (full[0], explored, *full[2:]))
+        self.assertEqual(metrics.full_multi_piece_q_undos, 2)
+        self.assertEqual(metrics.full_multi_piece_q_undo_any_exploration, 1)
+
+        blue = object()
+        origin_route = mock.Mock(required_circles=0)
+        productive_route = mock.Mock(required_circles=0)
+        first_origin = mock.Mock(owner=blue, owner_piece_shape="square")
+        second_origin = mock.Mock(owner=None, owner_piece_shape=None)
+        productive_destination = mock.Mock(owner=blue, owner_piece_shape="square")
+        partial_return_penalty = pointless_movement_penalty(
+            [
+                (first_origin, blue, "square"),
+                (second_origin, blue, "square"),
+            ],
+            [first_origin, productive_destination],
+            {
+                first_origin: origin_route,
+                second_origin: origin_route,
+                productive_destination: productive_route,
+            },
+        )
+        self.assertEqual(partial_return_penalty, 0)
+        record_q_undo_workflow(metrics, partial_return_penalty, full)
+        self.assertEqual(metrics.full_multi_piece_q_undos, 2)
+
+    def test_q_undo_metrics_accept_exact_and_same_route_pointless_detection(self):
+        blue = object()
+        route = mock.Mock(required_circles=0)
+        origin = mock.Mock(owner=blue, owner_piece_shape="square")
+        equivalent = mock.Mock(owner=blue, owner_piece_shape="square")
+        selections = (
+            MoveSelectionTelemetry("initial_pickup", False, 1),
+            MoveSelectionTelemetry("final_placement", False, 1),
+        )
+        metrics = MovementBehaviorMetrics()
+
+        exact_penalty = pointless_movement_penalty([(origin, blue, "square")], [origin])
+        record_q_undo_workflow(metrics, exact_penalty, selections)
+        same_route_penalty = pointless_movement_penalty(
+            [(origin, blue, "square")],
+            [equivalent],
+            {origin: route, equivalent: route},
+        )
+        record_q_undo_workflow(metrics, same_route_penalty, selections)
+
+        self.assertEqual(metrics.immediate_one_piece_q_undos, 2)
+
+    def test_immediate_exact_post_q_undo_targets_only_pickup(self):
+        owner = object()
+        origin = mock.Mock(owner=owner, owner_piece_shape="square")
+        penalty = pointless_movement_penalty([(origin, owner, "square")], [origin])
+        selections = (
+            MoveSelectionTelemetry("initial_pickup", False, 1),
+            MoveSelectionTelemetry("final_placement", False, 1),
+        )
+        decisions = [
+            training_decision(1, 0, (0,), 0, movement_workflow_id=7),
+            training_decision(2, 0, (300,), 300, movement_workflow_id=7),
+        ]
+
+        self.assertTrue(is_immediate_one_piece_q_undo(penalty, selections))
+        mark_movement_workflow_pickup_target(decisions, 7, penalty)
+        completed = assign_training_targets(decisions, (0,), gamma=1.0)
+
+        self.assertEqual(completed[0].reward_to_go, -1000)
+        self.assertEqual(completed[1].reward_to_go, 300)
+        self.assertIsNone(completed[1].local_training_target)
+
+    def test_immediate_same_route_q_undo_targets_only_pickup_regardless_of_selection(self):
+        owner = object()
+        route = mock.Mock(required_circles=0)
+        origin = mock.Mock(owner=owner, owner_piece_shape="square")
+        equivalent = mock.Mock(owner=owner, owner_piece_shape="square")
+        penalty = pointless_movement_penalty(
+            [(origin, owner, "square")],
+            [equivalent],
+            {origin: route, equivalent: route},
+        )
+        for used_epsilon, rank in ((True, 8), (False, 1)):
+            with self.subTest(used_epsilon=used_epsilon, rank=rank):
+                selections = (
+                    MoveSelectionTelemetry("initial_pickup", used_epsilon, rank),
+                    MoveSelectionTelemetry("final_placement", False, 1),
+                )
+                decisions = [
+                    training_decision(1, 0, (0,), 0, movement_workflow_id=7),
+                    training_decision(2, 0, (250,), 250, movement_workflow_id=7),
+                ]
+
+                self.assertTrue(is_immediate_one_piece_q_undo(penalty, selections))
+                mark_movement_workflow_pickup_target(decisions, 7, penalty)
+                completed = assign_training_targets(decisions, (0,), gamma=1.0)
+
+                self.assertEqual([item.reward_to_go for item in completed], [-1000, 250])
+
+    def test_non_undo_and_multi_piece_pointless_attribution_remain_unchanged(self):
+        non_undo = (
+            MoveSelectionTelemetry("initial_pickup", False, 1),
+            MoveSelectionTelemetry("final_placement", False, 1),
+        )
+        multi = (
+            MoveSelectionTelemetry("initial_pickup", False, 1),
+            MoveSelectionTelemetry("additional_pickup", False, 2),
+            MoveSelectionTelemetry("intermediate_placement", False, 1),
+            MoveSelectionTelemetry("final_placement", False, 1),
+        )
+        self.assertFalse(is_immediate_one_piece_q_undo(0, non_undo))
+        self.assertFalse(is_immediate_one_piece_q_undo(-1000, multi))
+
+        decisions = [
+            training_decision(1, 0, (0,), 0, movement_workflow_id=7),
+            training_decision(2, 0, (0,), 0, movement_workflow_id=7),
+            training_decision(3, 0, (0,), 0, movement_workflow_id=7),
+            training_decision(4, 0, (0,), 0, movement_workflow_id=7),
+        ]
+        mark_movement_workflow_target(decisions, 7, -1000)
+        completed = assign_training_targets(decisions, (5000,), gamma=0.99)
+        self.assertEqual([item.reward_to_go for item in completed], [-1000] * 4)
+
+    def test_single_piece_move_with_another_pickup_has_no_hard_target(self):
+        role = single_piece_move_utilization_target(
+            1,
+            immediate_q_undo=False,
+            legal_pickups_at_start=3,
+            additional_pickup_available_before_placement=True,
+        )
+        self.assertIsNone(role)
+
+    def test_case_a_detection_requires_pickup_and_placement_before_placement_begins(self):
+        categories = (((1,), (2, 3)), ((4,), (5, 6)))
+
+        self.assertEqual(
+            case_a_move_action_families(7, 1, False, 2, categories),
+            categories,
+        )
+        self.assertEqual(case_a_move_action_families(None, 1, False, 2, categories), ((), ()))
+        self.assertEqual(case_a_move_action_families(7, 0, False, 2, categories), ((), ()))
+        self.assertEqual(case_a_move_action_families(7, 1, False, 1, categories), ((), ()))
+        self.assertEqual(case_a_move_action_families(7, 2, False, 3, categories), ((), ()))
+        self.assertEqual(case_a_move_action_families(7, 1, True, 2, categories), ((), ()))
+        self.assertEqual(
+            case_a_move_action_families(7, 1, False, 2, (categories[0],)),
+            ((), ()),
+        )
+
+    def test_move1_scaffold_masks_only_case_a_placements(self):
+        categories = (((1,), (2, 3)), ((4,), (5, 6)))
+        base_mask = torch.zeros(8, dtype=torch.bool)
+        base_mask[list(range(1, 7))] = True
+        case_a_groups = case_a_move_action_families(7, 1, False, 3, categories)
+
+        scaffold_mask = move1_scaffold_action_mask(base_mask, *case_a_groups)
+
+        self.assertEqual(scaffold_mask.nonzero().flatten().tolist(), [1, 2, 3])
+        self.assertEqual(base_mask.nonzero().flatten().tolist(), [1, 2, 3, 4, 5, 6])
+
+    def test_move1_scaffold_does_not_enable_illegal_pickups(self):
+        base_mask = torch.zeros(8, dtype=torch.bool)
+        base_mask[[1, 4, 5]] = True
+
+        scaffold_mask = move1_scaffold_action_mask(
+            base_mask,
+            ((1,),),
+            ((4,), (5,)),
+        )
+
+        self.assertEqual(scaffold_mask.nonzero().flatten().tolist(), [1])
+        self.assertTrue(torch.all(scaffold_mask <= base_mask))
+
+    def test_move1_scaffold_is_inactive_outside_exactly_one_pickup_boundary(self):
+        categories = (((1,),), ((4,),))
+        base_mask = torch.zeros(6, dtype=torch.bool)
+        base_mask[[1, 4]] = True
+        non_case_a_inputs = (
+            (7, 1, False, 2, (categories[1],)),
+            (7, 1, False, 1, categories),
+            (7, 2, False, 3, categories),
+            (7, 1, True, 3, categories),
+            (None, 1, False, 3, categories),
+        )
+
+        for inputs in non_case_a_inputs:
+            with self.subTest(inputs=inputs):
+                groups = case_a_move_action_families(*inputs)
+                self.assertIs(move1_scaffold_action_mask(base_mask, *groups), base_mask)
+
+    def test_move1_scaffold_keeps_pre_scaffold_groups_for_family_loss(self):
+        pickup_groups = ((0,), (1, 2))
+        placement_groups = ((3,), (4, 5))
+        base_mask = torch.ones(6, dtype=torch.bool)
+        gameplay_mask = move1_scaffold_action_mask(
+            base_mask,
+            pickup_groups,
+            placement_groups,
+        )
+        sample = replace(
+            training_decision(3, 0, (0,), 0),
+            legal_action_mask=base_mask.to(torch.uint8),
+            case_a_pickup_action_groups=pickup_groups,
+            case_a_placement_action_groups=placement_groups,
+        )
+        q_values = torch.tensor([[1.0, 2.0, 4.0, 5.0, 3.0, 3.0]])
+
+        result = case_a_family_ranking_loss(q_values, (sample,))
+
+        self.assertEqual(gameplay_mask.nonzero().flatten().tolist(), [0, 1, 2])
+        self.assertEqual(sample.legal_action_mask.nonzero().flatten().tolist(), list(range(6)))
+        self.assertEqual(result.sample_count, 1)
+        self.assertAlmostEqual(result.loss.item(), 3.0)
+
+    def test_move1_scaffold_reports_unmasked_q1_and_selects_only_pickups(self):
+        metrics = MovementBehaviorMetrics()
+        pre_scaffold_scores = (4.0, 3.0, 9.0, 2.0)
+        record_move1_scaffold_readiness(metrics, pre_scaffold_scores, 2, top_k=2)
+        trainer = self.trainer(seed=123)
+        selection = trainer._select_workflow_action(
+            torch.tensor([4.0, 3.0, 9.0, 2.0]),
+            [0, 1],
+            PolicyTier(1, 1, 0.0),
+            (((0,), (1,)),),
+            pre_scaffold_scores[:2],
+        )
+
+        self.assertIn(selection.action_index, (0, 1))
+        self.assertEqual(metrics.move1_scaffold_unmasked_q1_pickups, 0)
+        self.assertEqual(metrics.move1_scaffold_unmasked_q1_placements, 1)
+        self.assertEqual(metrics.move1_scaffold_unmasked_q1_pickup_fraction, 0.0)
+        self.assertEqual(metrics.move1_scaffold_unmasked_q1_placement_fraction, 1.0)
+
+    def test_move1_scaffold_readiness_uses_semantic_groups_and_pre_scaffold_scores(self):
+        metrics = MovementBehaviorMetrics()
+
+        record_move1_scaffold_readiness(metrics, (6.0, 5.0, 4.0, 3.0), 2, top_k=3)
+
+        self.assertEqual(metrics.move1_scaffold_mask_states, 1)
+        self.assertEqual(metrics.move1_scaffold_legal_pickup_semantic_actions, 2)
+        self.assertEqual(metrics.move1_scaffold_masked_placement_semantic_actions, 2)
+        self.assertEqual(metrics.move1_scaffold_unmasked_q1_pickups, 1)
+        self.assertEqual(
+            metrics.move1_scaffold_all_pickups_above_all_placements_fraction,
+            1.0,
+        )
+        self.assertEqual(metrics.move1_scaffold_margin_satisfied_pair_fraction, 1.0)
+        self.assertEqual(metrics.move1_scaffold_family_ranking_loss, 0.0)
+        self.assertEqual(metrics.move1_scaffold_unmasked_top_k_pickup_fraction, 2 / 3)
+        self.assertEqual(metrics.move1_scaffold_unmasked_top_k_has_pickup_fraction, 1.0)
+
+    def test_case_a_family_loss_uses_every_pickup_placement_pair(self):
+        sample = replace(
+            training_decision(3, 0, (0,), 0),
+            case_a_pickup_action_groups=((0,), (1, 2)),
+            case_a_placement_action_groups=((3,), (4, 5), (6,)),
+        )
+        q_values = torch.tensor(
+            [[4.0, 5.0, 7.0, 8.0, 5.0, 5.0, 6.5]],
+            requires_grad=True,
+        )
+
+        result = case_a_family_ranking_loss(q_values, (sample,))
+
+        self.assertEqual(CASE_A_FAMILY_RANK_MARGIN, 1.0)
+        self.assertAlmostEqual(result.loss.item(), 2.5)
+        self.assertEqual(result.sample_count, 1)
+        self.assertEqual(result.violating_sample_count.item(), 1)
+        self.assertEqual(result.violating_pair_count.item(), 5)
+        self.assertEqual(result.pair_count.item(), 6)
+        self.assertAlmostEqual(result.violating_pair_fraction_sum.item(), 5 / 6)
+        self.assertEqual(result.all_pickups_above_all_placements_count.item(), 0)
+        self.assertEqual(result.q1_pickup_count.item(), 0)
+
+    def test_case_a_family_loss_is_meaned_per_state_not_per_pair_count(self):
+        one_placement = replace(
+            training_decision(1, 0, (0,), 0),
+            case_a_pickup_action_groups=((0,),),
+            case_a_placement_action_groups=((1,),),
+        )
+        three_placements = replace(
+            training_decision(1, 0, (0,), 0),
+            case_a_pickup_action_groups=((0,), (4,)),
+            case_a_placement_action_groups=((1,), (2,), (3,)),
+        )
+        q_values = torch.tensor([[0.0, 1.0, 1.0, 1.0, 0.0], [0.0, 1.0, 1.0, 1.0, 0.0]])
+
+        result = case_a_family_ranking_loss(q_values, (one_placement, three_placements))
+
+        self.assertAlmostEqual(result.loss.item(), 2.0)
+        self.assertEqual(result.sample_count, 2)
+
+    def test_case_a_semantic_aliases_do_not_multiply_placement_weight(self):
+        sample = replace(
+            training_decision(2, 0, (0,), 0),
+            case_a_pickup_action_groups=((0,),),
+            case_a_placement_action_groups=((2, 3, 4, 5), (6,)),
+        )
+        q_values = torch.tensor([[3.0, 0.0, 4.0, 4.0, 4.0, 4.0, 2.0]])
+
+        result = case_a_family_ranking_loss(q_values, (sample,))
+
+        self.assertAlmostEqual(result.loss.item(), 1.0)
+        self.assertEqual(result.violating_pair_count.item(), 1)
+
+    def test_case_a_family_loss_is_zero_when_every_pickup_clears_margin(self):
+        sample = replace(
+            training_decision(2, 0, (0,), 0),
+            case_a_pickup_action_groups=((0,), (1,)),
+            case_a_placement_action_groups=((2,), (3,)),
+        )
+        q_values = torch.tensor([[5.0, 4.0, 3.0, -2.0]], requires_grad=True)
+
+        result = case_a_family_ranking_loss(q_values, (sample,))
+
+        self.assertEqual(result.loss.item(), 0.0)
+        self.assertEqual(result.violating_pair_count.item(), 0)
+        self.assertEqual(result.all_pickups_above_all_placements_count.item(), 1)
+        self.assertEqual(result.q1_pickup_count.item(), 1)
+
+    def test_case_a_family_loss_backpropagates_through_q_outputs(self):
+        self.assertEqual(CASE_A_FAMILY_RANK_WEIGHT, 1.00)
+        sample = replace(
+            training_decision(1, 0, (0,), 0),
+            case_a_pickup_action_groups=((0,), (3,)),
+            case_a_placement_action_groups=((1,), (2,)),
+        )
+        q_values = torch.tensor([[0.0, 2.0, -2.0, 1.0]], requires_grad=True)
+
+        result = case_a_family_ranking_loss(q_values, (sample,))
+        (CASE_A_FAMILY_RANK_WEIGHT * result.loss).backward()
+
+        self.assertLess(q_values.grad[0, 0].item(), 0)
+        self.assertGreater(q_values.grad[0, 1].item(), 0)
+        self.assertEqual(q_values.grad[0, 2].item(), 0)
+        self.assertLess(q_values.grad[0, 3].item(), 0)
+
+    def test_move_continuation_detection_requires_unused_capacity_and_both_families(self):
+        categories = (((1,), (2, 3)), ((4,), (5, 6)))
+
+        self.assertEqual(
+            move_continuation_action_families(7, 2, False, 4, categories),
+            categories,
+        )
+        self.assertEqual(
+            move_continuation_action_families(7, 3, False, 4, categories),
+            categories,
+        )
+        self.assertEqual(
+            move_continuation_action_families(7, 1, False, 4, categories),
+            ((), ()),
+        )
+        self.assertEqual(
+            move_continuation_action_families(7, 4, False, 4, categories),
+            ((), ()),
+        )
+        self.assertEqual(
+            move_continuation_action_families(7, 2, True, 4, categories),
+            ((), ()),
+        )
+        self.assertEqual(
+            move_continuation_action_families(7, 2, False, 4, (categories[1],)),
+            ((), ()),
+        )
+
+    def test_move_continuation_loss_uses_best_semantic_pickup(self):
+        sample = replace(
+            training_decision(3, 0, (0,), 0),
+            move_continuation_pickup_action_groups=((0, 1), (2,)),
+            move_continuation_placement_action_groups=((3,), (4, 5), (6,)),
+            move_continuation_pickup_depth=2,
+        )
+        q_values = torch.tensor(
+            [[3.0, 5.0, 6.0, 8.0, 5.0, 5.0, 6.5]],
+            requires_grad=True,
+        )
+
+        result = move_continuation_family_ranking_loss(q_values, (sample,))
+
+        self.assertEqual(MOVE_CONTINUATION_FAMILY_RANK_MARGIN, 1.0)
+        self.assertEqual(MOVE_CONTINUATION_FAMILY_RANK_WEIGHT, 0.50)
+        self.assertAlmostEqual(result.loss.item(), 1.5)
+        self.assertEqual(result.sample_count, 1)
+        self.assertEqual(result.violating_sample_count.item(), 1)
+        self.assertEqual(result.depth_2_count, 1)
+        self.assertEqual(result.depth_3_count, 0)
+        self.assertEqual(result.depth_4_count, 0)
+
+        result.loss.backward()
+        self.assertEqual(q_values.grad[0, 0].item(), 0)
+        self.assertEqual(q_values.grad[0, 1].item(), 0)
+        self.assertLess(q_values.grad[0, 2].item(), 0)
+        self.assertGreater(q_values.grad[0, 3].item(), 0)
+        self.assertEqual(q_values.grad[0, 4].item(), 0)
+        self.assertEqual(q_values.grad[0, 5].item(), 0)
+        self.assertGreater(q_values.grad[0, 6].item(), 0)
+
+    def test_move_continuation_loss_is_meaned_per_state_and_preserves_aliases(self):
+        one_placement = replace(
+            training_decision(1, 0, (0,), 0),
+            move_continuation_pickup_action_groups=((0,),),
+            move_continuation_placement_action_groups=((1,),),
+            move_continuation_pickup_depth=2,
+        )
+        three_placements = replace(
+            training_decision(1, 0, (0,), 0),
+            move_continuation_pickup_action_groups=((0,), (4, 5)),
+            move_continuation_placement_action_groups=((1, 2), (3,), (6,)),
+            move_continuation_pickup_depth=3,
+        )
+        q_values = torch.tensor([[0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0]] * 2)
+
+        result = move_continuation_family_ranking_loss(
+            q_values,
+            (one_placement, three_placements),
+        )
+
+        self.assertAlmostEqual(result.loss.item(), 2.0)
+        self.assertEqual(result.sample_count, 2)
+        self.assertEqual(result.depth_2_count, 1)
+        self.assertEqual(result.depth_3_count, 1)
+
+    def test_vectorized_move_continuation_loss_matches_reference_and_gradients(self):
+        samples = (
+            replace(
+                training_decision(3, 0, (0,), 0),
+                move_continuation_pickup_action_groups=((0, 1), (2,)),
+                move_continuation_placement_action_groups=((3,), (4, 5), (6,)),
+                move_continuation_pickup_depth=2,
+            ),
+            training_decision(0, 0, (0,), 0),
+            replace(
+                training_decision(8, 0, (0,), 0),
+                move_continuation_pickup_action_groups=((7,), (11,)),
+                move_continuation_placement_action_groups=((8, 9, 10), (12,)),
+                move_continuation_pickup_depth=4,
+            ),
+        )
+        torch.manual_seed(9_002)
+        optimized_q = torch.randn(3, 13, dtype=torch.float64, requires_grad=True)
+        reference_q = optimized_q.detach().clone().requires_grad_()
+
+        optimized = move_continuation_family_ranking_loss(optimized_q, samples)
+        reference_losses = reference_move_continuation_family_ranking_losses(
+            reference_q,
+            samples,
+        )
+
+        self.assertTrue(
+            torch.allclose(optimized.per_state_losses, reference_losses, atol=1e-12, rtol=1e-12)
+        )
+        self.assertTrue(
+            torch.allclose(optimized.loss, reference_losses.mean(), atol=1e-12, rtol=1e-12)
+        )
+        optimized.loss.backward()
+        reference_losses.mean().backward()
+        self.assertTrue(torch.allclose(optimized_q.grad, reference_q.grad, atol=1e-12, rtol=1e-12))
+
+    def test_vectorized_case_a_loss_matches_reference_values_and_gradients(self):
+        samples = (
+            replace(
+                training_decision(3, 0, (0,), 0),
+                case_a_pickup_action_groups=((0, 1), (2,)),
+                case_a_placement_action_groups=((3,), (4, 5), (6,)),
+            ),
+            training_decision(0, 0, (0,), 0),
+            replace(
+                training_decision(8, 0, (0,), 0),
+                case_a_pickup_action_groups=((7,),),
+                case_a_placement_action_groups=((8, 9, 10), (11,)),
+            ),
+            replace(
+                training_decision(4, 0, (0,), 0),
+                case_a_pickup_action_groups=((0,), (1, 2)),
+                case_a_placement_action_groups=((3, 4), (5,), (6, 7, 8)),
+            ),
+        )
+        torch.manual_seed(9_001)
+        optimized_q = torch.randn(4, 12, dtype=torch.float64, requires_grad=True)
+        with torch.no_grad():
+            optimized_q[3, 0] = optimized_q[3, 1:3].mean()
+        reference_q = optimized_q.detach().clone().requires_grad_()
+
+        optimized = case_a_family_ranking_loss(optimized_q, samples)
+        reference_losses, reference_counts = reference_case_a_family_ranking_losses(
+            reference_q,
+            samples,
+        )
+
+        self.assertTrue(
+            torch.allclose(
+                optimized.per_state_losses,
+                reference_losses,
+                atol=1e-12,
+                rtol=1e-12,
+            )
+        )
+        self.assertTrue(
+            torch.allclose(
+                optimized.loss,
+                reference_losses.mean(),
+                atol=1e-12,
+                rtol=1e-12,
+            )
+        )
+        self.assertEqual(optimized.sample_count, len(reference_losses))
+        self.assertEqual(
+            optimized.violating_sample_count.item(),
+            (reference_counts > 0).sum().item(),
+        )
+        self.assertEqual(
+            optimized.violating_pair_count.item(),
+            reference_counts.sum().item(),
+        )
+
+        optimized.loss.backward()
+        reference_losses.mean().backward()
+        self.assertTrue(
+            torch.allclose(
+                optimized_q.grad,
+                reference_q.grad,
+                atol=1e-12,
+                rtol=1e-12,
+            )
+        )
+
+    def test_case_a_family_loss_is_added_to_q_loss_before_policy_loss(self):
+        trainer = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(seed=8_150),
+        )
+        sample = replace(
+            tiny_training_decisions(1)[0],
+            case_a_pickup_action_groups=((0,),),
+            case_a_placement_action_groups=((1,), (2, 3)),
+        )
+
+        base_q_loss, policy_loss, case_a_result, _continuation_result = (
+            trainer._decision_batch_loss_components((sample,))
+        )
+        q_loss, actual_policy_loss, total_loss = trainer._decision_batch_losses((sample,))
+
+        self.assertTrue(
+            torch.allclose(
+                q_loss,
+                base_q_loss + CASE_A_FAMILY_RANK_WEIGHT * case_a_result.loss,
+            )
+        )
+        self.assertTrue(torch.allclose(actual_policy_loss, policy_loss))
+        self.assertTrue(
+            torch.allclose(
+                total_loss,
+                q_loss + trainer.config.policy_loss_weight * policy_loss,
+            )
+        )
+
+    def test_case_a_metadata_does_not_change_base_q_or_policy_losses(self):
+        trainer = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(seed=8_151),
+        )
+        ordinary = tiny_training_decisions(1)[0]
+        case_a = replace(
+            ordinary,
+            case_a_pickup_action_groups=((0,),),
+            case_a_placement_action_groups=((1,), (2, 3)),
+        )
+
+        ordinary_q_loss, ordinary_policy_loss, _ordinary_case_a, _ordinary_continuation = (
+            trainer._decision_batch_loss_components((ordinary,))
+        )
+        case_a_q_loss, case_a_policy_loss, _case_a, _case_a_continuation = (
+            trainer._decision_batch_loss_components((case_a,))
+        )
+
+        self.assertTrue(torch.equal(ordinary_q_loss, case_a_q_loss))
+        self.assertTrue(torch.equal(ordinary_policy_loss, case_a_policy_loss))
+
+    def test_move_continuation_loss_is_added_to_q_loss_at_separate_weight(self):
+        trainer = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(seed=8_152),
+        )
+        sample = replace(
+            tiny_training_decisions(1)[0],
+            move_continuation_pickup_action_groups=((0,), (1,)),
+            move_continuation_placement_action_groups=((2,), (3,)),
+            move_continuation_pickup_depth=2,
+        )
+
+        base_q_loss, policy_loss, case_a_result, continuation_result = (
+            trainer._decision_batch_loss_components((sample,))
+        )
+        q_loss, actual_policy_loss, total_loss = trainer._decision_batch_losses((sample,))
+
+        self.assertEqual(case_a_result.sample_count, 0)
+        self.assertEqual(continuation_result.sample_count, 1)
+        self.assertTrue(
+            torch.allclose(
+                q_loss,
+                base_q_loss + MOVE_CONTINUATION_FAMILY_RANK_WEIGHT * continuation_result.loss,
+            )
+        )
+        self.assertTrue(torch.allclose(actual_policy_loss, policy_loss))
+        self.assertTrue(
+            torch.allclose(
+                total_loss,
+                q_loss + trainer.config.policy_loss_weight * policy_loss,
+            )
+        )
+
+    def test_multi_piece_move_has_no_utilization_target(self):
+        self.assertIsNone(
+            single_piece_move_utilization_target(
+                2,
+                immediate_q_undo=False,
+                legal_pickups_at_start=4,
+                additional_pickup_available_before_placement=True,
+            )
+        )
+
+    def test_single_piece_move_with_only_one_legal_piece_targets_pickup(self):
+        role = single_piece_move_utilization_target(
+            1,
+            immediate_q_undo=False,
+            legal_pickups_at_start=1,
+            additional_pickup_available_before_placement=False,
+        )
+        decisions = [
+            training_decision(1, 0, (300,), 300, movement_workflow_id=7),
+            training_decision(2, 0, (0,), 0, movement_workflow_id=7),
+        ]
+
+        set_single_piece_move_utilization_target(
+            decisions,
+            7,
+            MOVE1_UTILIZATION_LOCAL_TARGET,
+            target_role=role,
+        )
+        completed = assign_training_targets(decisions, (0,), gamma=1.0)
+
+        self.assertEqual(role, "initial_pickup")
+        self.assertEqual([item.reward_to_go for item in completed], [-500, 0])
+        self.assertEqual(decisions[0].local_training_adjustment, 0)
+        self.assertEqual(decisions[0].local_training_target, -500)
+        self.assertEqual(decisions[1].local_training_adjustment, 0)
+        self.assertEqual(decisions[0].move1_utilization_penalty_role, "initial_pickup")
+
+    def test_immediate_q_undo_does_not_receive_move_utilization_target(self):
+        selections = (
+            MoveSelectionTelemetry("initial_pickup", True, 8),
+            MoveSelectionTelemetry("final_placement", False, 1),
+        )
+        role = single_piece_move_utilization_target(
+            1,
+            immediate_q_undo=is_immediate_one_piece_q_undo(-1000, selections),
+            legal_pickups_at_start=3,
+            additional_pickup_available_before_placement=True,
+        )
+        decisions = [
+            training_decision(1, 0, (0,), 0, movement_workflow_id=7),
+            training_decision(2, 0, (250,), 250, movement_workflow_id=7),
+        ]
+        mark_movement_workflow_pickup_target(decisions, 7, -1000)
+        completed = assign_training_targets(decisions, (0,), gamma=1.0)
+
+        self.assertIsNone(role)
+        self.assertEqual([item.reward_to_go for item in completed], [-1000, 250])
+        self.assertEqual(decisions[1].local_training_adjustment, 0)
+        self.assertIsNone(decisions[1].move1_utilization_penalty_role)
+
+    def test_single_piece_utilization_rule_is_not_applied_to_permanent_move_workflow(self):
+        decisions = [
+            training_decision(1, 0, (0,), 0, movement_workflow_id=9),
+            training_decision(2, 0, (200,), 200, movement_workflow_id=9),
+        ]
+
+        completed = assign_training_targets(decisions, (0,), gamma=1.0)
+
+        self.assertEqual([item.reward_to_go for item in completed], [200, 200])
+        self.assertTrue(all(item.local_training_adjustment == 0 for item in decisions))
+
+    def test_move1_telemetry_counts_only_hard_targets_present_in_final_targets(self):
+        metrics = MovementBehaviorMetrics()
+        applied = replace(
+            training_decision(1, 0, (0,), 0),
+            local_training_target=-500,
+            move1_utilization_penalty_role="first_placement",
+            reward_to_go=-500,
+        )
+        overridden = replace(
+            training_decision(2, 0, (0,), 0),
+            local_training_target=-1500,
+            move1_utilization_penalty_role="initial_pickup",
+            reward_to_go=-1500,
+        )
+
+        record_applied_move1_utilization_penalties(metrics, (applied, overridden))
+
+        self.assertEqual(metrics.move1_utilization_penalties_applied, 1)
+        self.assertEqual(metrics.move1_penalties_on_placement, 1)
+        self.assertEqual(metrics.move1_penalties_on_single_available_initiation, 0)
+
+    def test_case_b_move1_hard_target_is_prioritized_and_passed_to_q_loss(self):
+        base = tiny_training_decisions(20)
+        pickup = replace(
+            base[5],
+            movement_workflow_id=7,
+            reward_to_go=-500,
+            local_training_target=-500,
+            move1_utilization_penalty_role="initial_pickup",
+        )
+        placement = replace(
+            base[6],
+            movement_workflow_id=7,
+            immediate_reward=300,
+            reward_to_go=300,
+        )
+        decisions = (*base[:5], pickup, placement, *base[7:])
+        trainer = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(
+                seed=8_201,
+                normal_max_training_decisions=6,
+                decision_batch_size=2,
+            ),
+        )
+        batches = trainer._training_batches(decisions, max_training_decisions=6)
+        sampled = tuple(decision for batch in batches for decision in batch)
+
+        self.assertTrue(any(decision is pickup for decision in sampled))
+        self.assertTrue(any(decision is placement for decision in sampled))
+
+        for parameter in trainer.model.parameters():
+            parameter.data.zero_()
+        q_loss, _policy_loss, _total_loss = trainer._decision_batch_losses((pickup,))
+
+        self.assertAlmostEqual(q_loss.item(), 499.5, places=5)
+
+    def test_move_capacity_utilization_uses_effective_available_capacity(self):
+        metrics = MovementBehaviorMetrics()
+
+        # Move4 with one movable piece: full use, not an avoidable Move1.
+        record_move_capacity_utilization(metrics, 4, 1, 1)
+        # Move4 with three movable pieces: effective capacity 3, moved only two.
+        record_move_capacity_utilization(metrics, 4, 3, 2)
+        # Move5 with four movable pieces: effective capacity 4, moved all four.
+        record_move_capacity_utilization(metrics, 5, 4, 4)
+        # Move3 with three movable pieces: effective capacity 3, avoidable Move1.
+        record_move_capacity_utilization(metrics, 3, 3, 1)
+
+        self.assertEqual(metrics.normal_move_nominal_capacity_total, 16)
+        self.assertEqual(metrics.normal_move_movable_pieces_available_total, 11)
+        self.assertEqual(metrics.normal_move_effective_capacity_total, 11)
+        self.assertEqual(metrics.normal_move_pieces_moved_total, 8)
+        self.assertEqual(metrics.normal_move_unused_capacity_total, 3)
+        self.assertEqual(metrics.single_piece_moves, 2)
+        self.assertEqual(metrics.single_piece_moves_with_multiple_available, 1)
+        self.assertEqual(metrics.full_effective_capacity_moves, 2)
+        self.assertEqual(metrics.under_effective_capacity_moves, 2)
+        self.assertEqual(metrics.normal_move_effective_capacity_1_moves, 1)
+        self.assertEqual(metrics.normal_move_effective_capacity_3_moves, 2)
+        self.assertEqual(metrics.normal_move_effective_capacity_4_moves, 1)
+        self.assertEqual(metrics.normal_move_capacity_1_moved_1, 1)
+        self.assertEqual(metrics.normal_move_capacity_3_moved_1, 1)
+        self.assertEqual(metrics.normal_move_capacity_3_moved_2, 1)
+        self.assertEqual(metrics.normal_move_capacity_4_moved_4, 1)
+
+    def test_move_capacity_matrix_counts_every_effective_capacity_and_completion_depth(self):
+        metrics = MovementBehaviorMetrics()
+
+        for effective_capacity in range(1, 6):
+            for pieces_moved in range(1, effective_capacity + 1):
+                record_move_capacity_utilization(
+                    metrics,
+                    nominal_capacity=5,
+                    available_pieces=effective_capacity,
+                    pieces_moved=pieces_moved,
+                )
+
+        for effective_capacity in range(1, 6):
+            self.assertEqual(
+                getattr(metrics, f"normal_move_effective_capacity_{effective_capacity}_moves"),
+                effective_capacity,
+            )
+            for pieces_moved in range(1, effective_capacity + 1):
+                self.assertEqual(
+                    getattr(
+                        metrics,
+                        f"normal_move_capacity_{effective_capacity}_moved_{pieces_moved}",
+                    ),
+                    1,
+                )
+
+    def test_consecutive_move1_telemetry_tracks_pairs_capacity_and_avoidable_action(self):
+        metrics = MovementBehaviorMetrics()
+        previous = None
+        for capacity, pickup, next_pickup in (
+            (2, 10, 11),
+            (3, 11, 12),
+            (4, 12, 13),
+            (5, 13, 14),
+            (2, 14, 15),
+        ):
+            previous = update_consecutive_move1_telemetry(
+                metrics,
+                previous,
+                normal_move_completed=True,
+                pieces_moved=1,
+                nominal_capacity=capacity,
+                initial_pickup_post_slot=pickup,
+                additional_pickup_post_slots={next_pickup},
+            )
+
+        self.assertEqual(metrics.consecutive_move1_pairs, 4)
+        self.assertEqual(metrics.consecutive_move1_pairs_with_multiple_available, 4)
+        self.assertEqual(metrics.consecutive_move1_pairs_move2_capacity, 1)
+        self.assertEqual(metrics.consecutive_move1_pairs_move3_capacity, 1)
+        self.assertEqual(metrics.consecutive_move1_pairs_move4_capacity, 1)
+        self.assertEqual(metrics.consecutive_move1_pairs_move5_capacity, 1)
+        self.assertEqual(metrics.avoidable_extra_move_actions, 4)
+
+    def test_avoidable_extra_move_requires_second_pickup_to_match_prior_legal_pickup(self):
+        metrics = MovementBehaviorMetrics()
+        previous = Move1CompletionTelemetry(4, 2, frozenset({7, 8}))
+
+        update_consecutive_move1_telemetry(
+            metrics,
+            previous,
+            normal_move_completed=True,
+            pieces_moved=1,
+            nominal_capacity=4,
+            initial_pickup_post_slot=9,
+            additional_pickup_post_slots=(),
+        )
+
+        self.assertEqual(metrics.consecutive_move1_pairs, 1)
+        self.assertEqual(metrics.consecutive_move1_pairs_with_multiple_available, 1)
+        self.assertEqual(metrics.avoidable_extra_move_actions, 0)
+
+    def test_non_move_or_multi_piece_action_breaks_move1_pair_tracking(self):
+        metrics = MovementBehaviorMetrics()
+        previous = Move1CompletionTelemetry(4, 2, frozenset({7}))
+
+        after_non_move = update_consecutive_move1_telemetry(
+            metrics,
+            previous,
+            normal_move_completed=False,
+            pieces_moved=0,
+            nominal_capacity=0,
+            initial_pickup_post_slot=0,
+            additional_pickup_post_slots=(),
+        )
+        after_move2 = update_consecutive_move1_telemetry(
+            metrics,
+            previous,
+            normal_move_completed=True,
+            pieces_moved=2,
+            nominal_capacity=4,
+            initial_pickup_post_slot=7,
+            additional_pickup_post_slots=(),
+        )
+
+        self.assertIsNone(after_non_move)
+        self.assertIsNone(after_move2)
+        self.assertEqual(metrics.consecutive_move1_pairs, 0)
+
+    def test_single_piece_route_creation_and_next_claim_conversion_are_counted(self):
+        metrics = MovementBehaviorMetrics()
+        record_move_route_creation(metrics, 1, frozenset({4}))
+        pending, converted = update_single_piece_move_claim_routes(
+            frozenset(),
+            action=PostInteraction(0, PieceShape.TRADER),
+            turn_phase=TurnPhase.MOVE_PIECES,
+            normal_move_completed=True,
+            pieces_moved=1,
+            newly_completed_routes=frozenset({4}),
+        )
+        pending, converted = update_single_piece_move_claim_routes(
+            pending,
+            action=RouteInteraction(4, 0),
+            turn_phase=TurnPhase.ACTIONS,
+            normal_move_completed=False,
+            pieces_moved=0,
+        )
+        metrics.single_piece_move_claim_conversions += int(converted)
+
+        self.assertEqual(metrics.moves_creating_claimable_route, 1)
+        self.assertEqual(metrics.single_piece_moves_creating_claimable_route, 1)
+        self.assertEqual(metrics.single_piece_move_claim_conversions, 1)
+        self.assertEqual(pending, frozenset())
+
+        record_move_route_creation(metrics, 2, frozenset({7}))
+        self.assertEqual(metrics.moves_creating_claimable_route, 2)
+        self.assertEqual(metrics.single_piece_moves_creating_claimable_route, 1)
 
     def test_completed_game_reason_reports_authoritative_end_conditions(self):
         game = mock.Mock()
@@ -444,8 +1480,9 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertTrue(mask[post_slot] or mask[MAX_POSTS + post_slot])
 
     def test_normal_move_efficiency_penalties(self):
-        self.assertEqual(movement_efficiency_penalty(1, 2), -200)
-        self.assertEqual(movement_efficiency_penalty(1, 5), -200)
+        self.assertEqual(MOVE1_UTILIZATION_LOCAL_TARGET, -500)
+        self.assertEqual(movement_efficiency_penalty(1, 2), 0)
+        self.assertEqual(movement_efficiency_penalty(1, 5), 0)
         self.assertEqual(movement_efficiency_penalty(2, 2), 0)
         self.assertEqual(movement_efficiency_penalty(2, 3), -100)
         self.assertEqual(movement_efficiency_penalty(2, 5), -100)
@@ -641,6 +1678,46 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(pending, frozenset())
         self.assertEqual(reward, 0)
 
+    def test_move_claim_reward_telemetry_counts_actual_award(self):
+        metrics = MovementBehaviorMetrics()
+        _pending, reward = update_move_claim_combo(
+            {4},
+            action=RouteInteraction(4, 1),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+        )
+
+        record_move_claim_reward_outcome(
+            metrics,
+            reward,
+            action=RouteInteraction(4, 1),
+            turn_phase=TurnPhase.ACTIONS,
+            blocked_already_claimable_routes=(),
+        )
+
+        self.assertEqual(metrics.move_claim_reward_awarded, 1)
+        self.assertEqual(metrics.move_claim_reward_blocked_already_claimable, 0)
+
+    def test_move_claim_reward_telemetry_counts_only_matching_blocked_claim(self):
+        metrics = MovementBehaviorMetrics()
+        record_move_claim_reward_outcome(
+            metrics,
+            0,
+            action=RouteInteraction(4, 1),
+            turn_phase=TurnPhase.ACTIONS,
+            blocked_already_claimable_routes={4},
+        )
+        record_move_claim_reward_outcome(
+            metrics,
+            0,
+            action=RouteInteraction(3, 1),
+            turn_phase=TurnPhase.ACTIONS,
+            blocked_already_claimable_routes={4},
+        )
+
+        self.assertEqual(metrics.move_claim_reward_awarded, 0)
+        self.assertEqual(metrics.move_claim_reward_blocked_already_claimable, 1)
+
     def test_move_claim_combo_tracks_every_route_filled_by_the_move(self):
         pending, reward = update_move_claim_combo(
             (),
@@ -660,6 +1737,85 @@ class SelfPlayTrainingTests(unittest.TestCase):
         )
         self.assertEqual(unchanged, pending)
         self.assertEqual(reward, 0)
+
+    def test_move_claim_combo_excludes_route_claimable_before_pickup(self):
+        observed = set()
+        already_claimable = set()
+        record_move_pickup_route_claimability(observed, already_claimable, 4, True)
+        eligible = move_claim_eligible_routes({4}, already_claimable)
+        pending, _reward = update_move_claim_combo(
+            (),
+            action=PostInteraction(0, PieceShape.TRADER),
+            turn_phase=TurnPhase.MOVE_PIECES,
+            action_was_spent=True,
+            newly_completed_routes=eligible,
+        )
+        _pending, reward = update_move_claim_combo(
+            pending,
+            action=RouteInteraction(4, 0),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+        )
+
+        self.assertEqual(eligible, frozenset())
+        self.assertEqual(reward, 0)
+
+    def test_move_claim_combo_keeps_genuinely_completed_route(self):
+        observed = set()
+        already_claimable = set()
+        record_move_pickup_route_claimability(observed, already_claimable, 2, False)
+        eligible = move_claim_eligible_routes({4}, already_claimable)
+        pending, _reward = update_move_claim_combo(
+            (),
+            action=PostInteraction(0, PieceShape.TRADER),
+            turn_phase=TurnPhase.MOVE_PIECES,
+            action_was_spent=True,
+            newly_completed_routes=eligible,
+        )
+        _pending, reward = update_move_claim_combo(
+            pending,
+            action=RouteInteraction(4, 0),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+        )
+
+        self.assertEqual(eligible, frozenset({4}))
+        self.assertEqual(reward, MOVE_CLAIM_COMBO_REWARD)
+
+    def test_move_pickup_route_claimability_preserves_first_observation(self):
+        observed = set()
+        already_claimable = set()
+
+        record_move_pickup_route_claimability(observed, already_claimable, 4, True)
+        record_move_pickup_route_claimability(observed, already_claimable, 4, False)
+        record_move_pickup_route_claimability(observed, already_claimable, 5, False)
+        record_move_pickup_route_claimability(observed, already_claimable, 5, True)
+
+        self.assertEqual(observed, {4, 5})
+        self.assertEqual(already_claimable, {4})
+        self.assertEqual(move_claim_eligible_routes({4}, already_claimable), frozenset())
+
+    def test_disturbed_claimable_route_does_not_block_other_move_claim_combo(self):
+        observed = set()
+        already_claimable = set()
+        record_move_pickup_route_claimability(observed, already_claimable, 4, True)
+        eligible = move_claim_eligible_routes({4, 7}, already_claimable)
+        pending, _reward = update_move_claim_combo(
+            (),
+            action=PostInteraction(0, PieceShape.TRADER),
+            turn_phase=TurnPhase.MOVE_PIECES,
+            action_was_spent=True,
+            newly_completed_routes=eligible,
+        )
+        _pending, reward = update_move_claim_combo(
+            pending,
+            action=RouteInteraction(7, 0),
+            turn_phase=TurnPhase.ACTIONS,
+            action_was_spent=True,
+        )
+
+        self.assertEqual(eligible, frozenset({7}))
+        self.assertEqual(reward, MOVE_CLAIM_COMBO_REWARD)
 
     def test_move_reward_values(self):
         self.assertEqual(MOVE_ROUTE_FOCUS_REWARD, 10)
@@ -803,6 +1959,25 @@ class SelfPlayTrainingTests(unittest.TestCase):
             trajectory.move_claim_conversion_rate,
             expected_conversion_rate,
         )
+        capacity_move_count = sum(
+            getattr(trajectory, f"normal_move_effective_capacity_{capacity}_moves")
+            for capacity in range(1, 6)
+        )
+        capacity_depth_count = sum(
+            getattr(trajectory, f"normal_move_capacity_{capacity}_moved_{pieces_moved}")
+            for capacity in range(1, 6)
+            for pieces_moved in range(1, capacity + 1)
+        )
+        self.assertEqual(capacity_move_count, trajectory.move_action_count)
+        self.assertEqual(capacity_depth_count, trajectory.move_action_count)
+        for capacity in range(1, 6):
+            self.assertEqual(
+                sum(
+                    getattr(trajectory, f"normal_move_capacity_{capacity}_moved_{pieces_moved}")
+                    for pieces_moved in range(1, capacity + 1)
+                ),
+                getattr(trajectory, f"normal_move_effective_capacity_{capacity}_moves"),
+            )
 
     def test_evaluation_keeps_tiers_but_disables_epsilon(self):
         trainer = self.trainer()
@@ -818,7 +1993,14 @@ class SelfPlayTrainingTests(unittest.TestCase):
 
         self.assertTrue(selected_tiers)
         self.assertTrue(all(tier.epsilon == 0 for tier in selected_tiers))
-        self.assertTrue(all(tier.top_k in (2, 5, 10, 15, 20) for tier in selected_tiers))
+        self.assertTrue(all(tier.top_k in (2, 4, 6, 8, 10) for tier in selected_tiers))
+
+    def test_default_tiers_use_narrower_top_k_with_unchanged_epsilon(self):
+        trainer = self.trainer()
+        tiers = tuple(trainer._tier(number) for number in range(1, 6))
+
+        self.assertEqual([tier.top_k for tier in tiers], [2, 4, 6, 8, 10])
+        self.assertEqual([tier.epsilon for tier in tiers], [0.05, 0.10, 0.20, 0.35, 0.35])
 
     def test_zero_epsilon_training_overrides_every_tier_without_changing_top_k(self):
         trainer = self.trainer(seed=314)
@@ -859,7 +2041,7 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(trajectory.training_exploration_mode, ZERO_EPSILON_EXPLORATION_MODE)
         self.assertTrue(selected_tiers)
         self.assertTrue(all(tier.epsilon == 0 for tier in selected_tiers))
-        self.assertTrue(all(tier.top_k in (2, 5, 10, 15, 20) for tier in selected_tiers))
+        self.assertTrue(all(tier.top_k in (2, 4, 6, 8, 10) for tier in selected_tiers))
         self.assertTrue(all(not decision.used_epsilon for decision in trajectory.decisions))
         self.assertGreater(loss, 0)
         self.assertTrue(
@@ -1009,6 +2191,136 @@ class SelfPlayTrainingTests(unittest.TestCase):
             self.assertAlmostEqual(actual, expected, places=5)
         for actual, expected in zip(accumulated.model.parameters(), unsplit.model.parameters()):
             self.assertTrue(torch.allclose(actual, expected, atol=1e-6, rtol=1e-5))
+
+    def test_case_a_gradient_accumulation_matches_unsplit_effective_batch(self):
+        config = TrainingConfig(seed=813, max_gradient_norm=1_000_000.0)
+        accumulated = SelfPlayTrainer(model=TinyDualHead().to(device), config=config)
+        unsplit = SelfPlayTrainer(model=TinyDualHead().to(device), config=config)
+        unsplit.model.load_state_dict(accumulated.model.state_dict())
+        decisions = list(tiny_training_decisions(300))
+        for index in (0, 299):
+            decisions[index] = replace(
+                decisions[index],
+                case_a_pickup_action_groups=((0,),),
+                case_a_placement_action_groups=((1,), (2, 3)),
+            )
+
+        accumulated_losses = accumulated._optimize_effective_batch(
+            decisions,
+            microbatch_size=256,
+        )
+        unsplit_losses = unsplit._optimize_effective_batch(
+            decisions,
+            microbatch_size=len(decisions),
+        )
+
+        for actual, expected in zip(accumulated_losses, unsplit_losses):
+            self.assertAlmostEqual(actual, expected, places=5)
+        for actual, expected in zip(accumulated.model.parameters(), unsplit.model.parameters()):
+            self.assertTrue(torch.allclose(actual, expected, atol=1e-6, rtol=1e-5))
+
+    def test_move_continuation_gradient_accumulation_matches_unsplit_effective_batch(self):
+        config = TrainingConfig(seed=8_153, max_gradient_norm=1_000_000.0)
+        accumulated = SelfPlayTrainer(model=TinyDualHead().to(device), config=config)
+        unsplit = SelfPlayTrainer(model=TinyDualHead().to(device), config=config)
+        unsplit.model.load_state_dict(accumulated.model.state_dict())
+        decisions = list(tiny_training_decisions(300))
+        for index, depth in ((0, 2), (299, 3)):
+            decisions[index] = replace(
+                decisions[index],
+                move_continuation_pickup_action_groups=((0,), (1,)),
+                move_continuation_placement_action_groups=((2,), (3,)),
+                move_continuation_pickup_depth=depth,
+            )
+
+        accumulated_losses = accumulated._optimize_effective_batch(
+            decisions,
+            microbatch_size=256,
+        )
+        unsplit_losses = unsplit._optimize_effective_batch(
+            decisions,
+            microbatch_size=len(decisions),
+        )
+
+        for actual, expected in zip(accumulated_losses, unsplit_losses):
+            self.assertAlmostEqual(actual, expected, places=5)
+        for actual, expected in zip(accumulated.model.parameters(), unsplit.model.parameters()):
+            self.assertTrue(torch.allclose(actual, expected, atol=1e-6, rtol=1e-5))
+
+    def test_case_a_training_telemetry_counts_sampled_states_and_violations(self):
+        trainer = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(seed=814, max_gradient_norm=1_000_000.0),
+        )
+        decisions = tuple(
+            replace(
+                decision,
+                case_a_pickup_action_groups=((0,),),
+                case_a_placement_action_groups=((1,), (2, 3)),
+            )
+            for decision in tiny_training_decisions(3)
+        )
+        trajectory = mock.Mock(decisions=decisions)
+
+        trainer.update_model((trajectory,), curriculum_maturities=("mid",))
+
+        self.assertEqual(trainer.progress.last_case_a_family_ranking_samples, 3)
+        self.assertIsNotNone(trainer.progress.last_case_a_family_ranking_loss)
+        self.assertGreaterEqual(
+            trainer.progress.last_case_a_family_ranking_violating_samples,
+            0,
+        )
+        self.assertIsNotNone(trainer.progress.last_case_a_family_ranking_violation_fraction)
+        self.assertIsNone(trainer.progress.last_case_a_family_ranking_mean_violating_placements)
+        self.assertIsNotNone(trainer.progress.last_case_a_family_ranking_mean_violating_pairs)
+        self.assertIsNotNone(
+            trainer.progress.last_case_a_family_ranking_mean_violating_pair_fraction
+        )
+        self.assertIsNotNone(
+            trainer.progress.last_case_a_family_ranking_all_pickups_above_all_placements_fraction
+        )
+        self.assertIsNotNone(trainer.progress.last_case_a_family_ranking_q1_pickup_fraction)
+
+    def test_move_continuation_training_telemetry_is_separate_by_pickup_depth(self):
+        trainer = SelfPlayTrainer(
+            model=TinyDualHead().to(device),
+            config=TrainingConfig(seed=815, max_gradient_norm=1_000_000.0),
+        )
+        decisions = tuple(
+            replace(
+                decision,
+                move_continuation_pickup_action_groups=((0,), (1,)),
+                move_continuation_placement_action_groups=((2,), (3,)),
+                move_continuation_pickup_depth=depth,
+            )
+            for decision, depth in zip(tiny_training_decisions(3), (2, 3, 4))
+        )
+        trajectory = mock.Mock(decisions=decisions)
+
+        trainer.update_model((trajectory,), curriculum_maturities=("mid",))
+
+        self.assertEqual(trainer.progress.last_move_continuation_family_ranking_samples, 3)
+        self.assertEqual(
+            trainer.progress.last_move_continuation_family_ranking_after_2_pickups,
+            1,
+        )
+        self.assertEqual(
+            trainer.progress.last_move_continuation_family_ranking_after_3_pickups,
+            1,
+        )
+        self.assertEqual(
+            trainer.progress.last_move_continuation_family_ranking_after_4_pickups,
+            1,
+        )
+        self.assertIsNotNone(trainer.progress.last_move_continuation_family_ranking_loss)
+        self.assertIsNotNone(
+            trainer.progress.last_move_continuation_family_ranking_violation_fraction
+        )
+        self.assertIsNotNone(
+            trainer.progress.last_move_continuation_best_pickup_above_all_placements_fraction
+        )
+        self.assertIsNotNone(trainer.progress.last_move_continuation_q1_pickup_fraction)
+        self.assertEqual(trainer.progress.last_case_a_family_ranking_samples, 0)
 
     def test_normal_long_trajectory_samples_at_most_1024_decisions(self):
         trainer = self.trainer()
@@ -1282,27 +2594,36 @@ class SelfPlayTrainingTests(unittest.TestCase):
         self.assertEqual(trajectory.decisions[0].reward_to_go, 5_000.0)
         self.assertEqual(len(trajectory.action_trace), 10_001)
 
-    def test_workflow_selection_uses_weighted_top_three_and_random_exploration(self):
+    def test_workflow_selection_uses_tier_top_k_weighting_and_epsilon(self):
         trainer = self.trainer()
         scores = torch.tensor([0.0, 40.0, 20.0, 30.0, 10.0])
         legal = [1, 2, 3, 4]
 
-        for roll, expected_index, expected_rank in (
-            (0.10, 1, 1),
-            (0.50, 3, 2),
-            (0.70, 2, 3),
-        ):
-            trainer.rng = mock.Mock()
-            trainer.rng.random.return_value = roll
-            selection = trainer._select_workflow_action(scores, legal)
-            self.assertEqual(selection.action_index, expected_index)
-            self.assertEqual(selection.model_rank, expected_rank)
-            self.assertFalse(selection.used_epsilon)
-
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.90
+        trainer.rng.choices.return_value = [1]
+        selection = trainer._select_workflow_action(
+            scores,
+            legal,
+            PolicyTier(1, 2, 0.05),
+        )
+        self.assertEqual(selection.action_index, 3)
+        self.assertEqual(selection.model_rank, 2)
+        self.assertFalse(selection.used_epsilon)
+        trainer.rng.choices.assert_called_once_with(
+            range(2),
+            weights=normalized_rank_weights(2),
+            k=1,
+        )
+
+        trainer.rng = mock.Mock()
+        trainer.rng.random.return_value = 0.10
         trainer.rng.randrange.return_value = 3
-        selection = trainer._select_workflow_action(scores, legal)
+        selection = trainer._select_workflow_action(
+            scores,
+            legal,
+            PolicyTier(3, 10, 0.20),
+        )
         self.assertEqual(selection.action_index, 4)
         self.assertEqual(selection.model_rank, 4)
         self.assertTrue(selection.used_epsilon)
@@ -1311,14 +2632,16 @@ class SelfPlayTrainingTests(unittest.TestCase):
         trainer = self.trainer()
         scores = torch.tensor([0.0, 10.0, 20.0])
 
-        forced = trainer._select_workflow_action(scores, [2])
+        tier = PolicyTier(1, 2, 0.0)
+        forced = trainer._select_workflow_action(scores, [2], tier)
         self.assertEqual(forced.action_index, 2)
         self.assertFalse(forced.used_epsilon)
 
         trainer.rng = mock.Mock()
-        trainer.rng.random.side_effect = (0.59, 0.60)
-        best = trainer._select_workflow_action(scores, [1, 2])
-        second = trainer._select_workflow_action(scores, [1, 2])
+        trainer.rng.random.return_value = 0.90
+        trainer.rng.choices.side_effect = ([0], [1])
+        best = trainer._select_workflow_action(scores, [1, 2], tier)
+        second = trainer._select_workflow_action(scores, [1, 2], tier)
         self.assertEqual(best.action_index, 2)
         self.assertEqual(second.action_index, 1)
 
@@ -1537,12 +2860,13 @@ class SelfPlayTrainingTests(unittest.TestCase):
         trainer = self.trainer()
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.90
-        trainer.rng.randrange.side_effect = (1, 0, 1)
+        trainer.rng.randrange.side_effect = (1, 1)
         scores = torch.tensor([10.0, 20.0, 30.0, 5.0, 1.0])
 
         selection = trainer._select_workflow_action(
             scores,
             [0, 1, 2, 3, 4],
+            PolicyTier(5, 20, 1.0),
             (((3,),), ((0, 1, 2), (4,))),
         )
 
@@ -1557,11 +2881,13 @@ class SelfPlayTrainingTests(unittest.TestCase):
         trainer.rng = mock.Mock()
         trainer.rng.random.return_value = 0.10
         trainer.rng.randrange.return_value = 1
+        trainer.rng.choices.return_value = [0]
         scores = torch.tensor([10.0, 20.0, 30.0, 5.0])
 
         selection = trainer._select_workflow_action(
             scores,
             [0, 1, 2, 3],
+            PolicyTier(1, 2, 0.0),
             (((3,),), ((0, 1, 2),)),
         )
 
@@ -1761,6 +3087,43 @@ class SelfPlayTrainingTests(unittest.TestCase):
             [decision.reward_to_go for decision in second.decisions],
         )
         self.assertEqual(first.final_scores, second.final_scores)
+
+    def test_case_a_family_capture_does_not_change_seeded_action_selection(self):
+        captured_trainer = self.trainer(seed=100)
+        uncaptured_trainer = self.trainer(seed=100)
+        uncaptured_trainer.model.load_state_dict(captured_trainer.model.state_dict())
+
+        captured = captured_trainer.collect_game(STATE)
+        with (
+            mock.patch(
+                "training.self_play.case_a_move_action_families",
+                return_value=((), ()),
+            ),
+            mock.patch(
+                "training.self_play.move_continuation_action_families",
+                return_value=((), ()),
+            ),
+        ):
+            uncaptured = uncaptured_trainer.collect_game(STATE)
+
+        self.assertEqual(captured.action_trace, uncaptured.action_trace)
+        self.assertEqual(captured.final_scores, uncaptured.final_scores)
+
+    def test_move1_scaffold_preserves_seeded_trace_when_condition_never_fires(self):
+        scaffolded_trainer = self.trainer(seed=101)
+        unscaffolded_trainer = self.trainer(seed=101)
+        unscaffolded_trainer.model.load_state_dict(scaffolded_trainer.model.state_dict())
+
+        scaffolded = scaffolded_trainer.collect_game(STATE)
+        with mock.patch(
+            "training.self_play.MOVE1_TRAINING_SCAFFOLD_ENABLED",
+            False,
+        ):
+            unscaffolded = unscaffolded_trainer.collect_game(STATE)
+
+        self.assertEqual(scaffolded.move1_scaffold_mask_states, 0)
+        self.assertEqual(scaffolded.action_trace, unscaffolded.action_trace)
+        self.assertEqual(scaffolded.final_scores, unscaffolded.final_scores)
 
     def test_zero_extended_legacy_model_preserves_seeded_self_play_trace(self):
         config = TrainingConfig(max_actions=200, seed=417)
@@ -2001,7 +3364,6 @@ class SelfPlayTrainingTests(unittest.TestCase):
 
     def test_small_move_penalties_are_additive_only_to_the_offending_workflow(self):
         penalties = {
-            "one piece": movement_efficiency_penalty(1, 4),
             "inefficient two pieces": movement_efficiency_penalty(2, 4),
             "second consecutive": consecutive_move_penalty(4, 2),
         }
@@ -2230,7 +3592,7 @@ class SelfPlayTrainingTests(unittest.TestCase):
             self.assertAlmostEqual(restored.optimizer.param_groups[1]["lr"], 0.0001)
             self.assertEqual(restored.config.income_penalty_scale, 100)
             self.assertEqual(restored.config.early_max_training_decisions, 4_096)
-            self.assertEqual(restored.config.tier_top_k, (2, 5, 10, 15, 20))
+            self.assertEqual(restored.config.tier_top_k, (2, 4, 6, 8, 10))
             self.assertEqual(restored.config.tier_epsilons, (0.05, 0.10, 0.20, 0.35, 0.35))
             self.assertEqual(
                 restored.config.tier_rosters.evaluation_three_player,
@@ -2255,6 +3617,125 @@ class SelfPlayTrainingTests(unittest.TestCase):
             self.assertEqual(
                 SelfPlayTrainer.from_checkpoint(checkpoint).curriculum_state,
                 curriculum_state,
+            )
+
+    def test_checkpoint_with_previous_default_top_k_uses_new_normal_tiers(self):
+        trainer = self.trainer(seed=412)
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "model.pth"
+            trainer.save_checkpoint(checkpoint, (STATE,))
+            contents = torch.load(checkpoint, map_location="cpu")
+            contents["training_config"]["tier_top_k"] = (2, 5, 10, 15, 20)
+            expected_model = {name: value.clone() for name, value in contents["state_dict"].items()}
+            expected_rng = contents["policy_rng_state"]
+            torch.save(contents, checkpoint)
+
+            restored = SelfPlayTrainer.from_checkpoint(checkpoint)
+
+        self.assertEqual(restored.config.tier_top_k, (2, 4, 6, 8, 10))
+        self.assertEqual(restored.config.tier_epsilons, (0.05, 0.10, 0.20, 0.35, 0.35))
+        self.assertEqual(restored.rng.getstate(), expected_rng)
+        self.assertTrue(
+            all(
+                torch.equal(restored.model.state_dict()[name].cpu(), value)
+                for name, value in expected_model.items()
+            )
+        )
+
+    def test_checkpoint_reuses_verified_generated_state_hashes(self):
+        trainer = self.trainer()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state.hansa"
+            state.write_bytes(b"generated state")
+            checkpoint = root / "checkpoint.pth"
+            expected_hash = _file_sha256(state)
+
+            with mock.patch(
+                "training.self_play._file_sha256",
+                wraps=_file_sha256,
+            ) as file_hash:
+                trainer.save_checkpoint(checkpoint, (state,))
+                trainer.save_checkpoint(checkpoint, (state,))
+
+            self.assertEqual(file_hash.call_count, 1)
+            self.assertEqual(trainer.source_state_sha256[str(state)], expected_hash)
+
+    def test_checkpoint_rehashes_changed_generated_state(self):
+        trainer = self.trainer()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state.hansa"
+            state.write_bytes(b"first generated state")
+            checkpoint = root / "checkpoint.pth"
+
+            trainer.save_checkpoint(checkpoint, (state,))
+            first_hash = trainer.source_state_sha256[str(state)]
+            state.write_bytes(b"changed generated state with a different size")
+            trainer.save_checkpoint(checkpoint, (state,))
+
+            self.assertNotEqual(trainer.source_state_sha256[str(state)], first_hash)
+            self.assertEqual(trainer.source_state_sha256[str(state)], _file_sha256(state))
+
+    def test_checkpoint_rejects_generated_state_changed_during_hashing(self):
+        trainer = self.trainer()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state.hansa"
+            state.write_bytes(b"generated state")
+
+            def hash_then_change(path):
+                digest = _file_sha256(path)
+                path.write_bytes(b"changed while hashing")
+                return digest
+
+            with mock.patch(
+                "training.self_play._file_sha256",
+                side_effect=hash_then_change,
+            ):
+                with self.assertRaisesRegex(
+                    OSError,
+                    "Generated state changed while it was being hashed",
+                ):
+                    trainer.save_checkpoint(root / "checkpoint.pth", (state,))
+
+    def test_resumed_checkpoint_still_rejects_changed_generated_state(self):
+        trainer = self.trainer()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state.hansa"
+            state.write_bytes(Path(STATE).read_bytes())
+            checkpoint = root / "checkpoint.pth"
+            trainer.save_checkpoint(checkpoint, (state,))
+            state.write_bytes(state.read_bytes() + b"changed")
+
+            restored = SelfPlayTrainer.from_checkpoint(checkpoint)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "Starting states do not match the resumed checkpoint",
+            ):
+                restored.train((state,), episodes=1)
+
+    def test_failed_checkpoint_save_preserves_previous_valid_checkpoint(self):
+        trainer = self.trainer()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "checkpoint.pth"
+            trainer.save_checkpoint(checkpoint, (STATE,))
+            previous = checkpoint.read_bytes()
+
+            with mock.patch(
+                "training.self_play.torch.save",
+                side_effect=OSError("simulated serialization failure"),
+            ):
+                with self.assertRaisesRegex(OSError, "simulated serialization failure"):
+                    trainer.save_checkpoint(checkpoint, (STATE,))
+
+            self.assertEqual(checkpoint.read_bytes(), previous)
+            self.assertEqual(
+                SelfPlayTrainer.from_checkpoint(checkpoint).source_state_sha256,
+                trainer.source_state_sha256,
             )
 
     def test_legacy_tier_roster_checkpoint_migrates_without_resetting_state(self):
