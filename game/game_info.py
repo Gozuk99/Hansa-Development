@@ -179,7 +179,7 @@ class Game:
             workflows.append(TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION)
         if self.pending_britannia_place2 and not tribute_response_pending:
             workflows.append(TurnPhase.PERMANENT_ROUTE_PIECE_SELECTION)
-        if self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0:
+        if self.replacement_marker_workflow_pending:
             workflows.append(TurnPhase.REPLACE_BONUS_MARKERS)
 
         bonus_pending = any(
@@ -207,26 +207,52 @@ class Game:
         return tuple(workflows)
 
     @property
+    def immediate_pending_workflows(self):
+        """Return workflows that must resolve before turn advancement or game end."""
+        return tuple(
+            workflow
+            for workflow in self.pending_workflows
+            if workflow != TurnPhase.REPLACE_BONUS_MARKERS
+        )
+
+    @property
+    def has_pending_immediate_workflow(self):
+        """Whether a mandatory in-progress interaction is awaiting resolution."""
+        return bool(self.immediate_pending_workflows)
+
+    @property
+    def replacement_marker_workflow_pending(self):
+        """Whether end-of-turn bonus-marker replacement is currently required."""
+        return self.replace_bonus_marker > 0 and self.current_player.actions_remaining == 0
+
+    @property
+    def may_advance_player(self):
+        """Whether the active player's turn is complete and may advance."""
+        return self.turn_phase == TurnPhase.TURN_COMPLETE
+
+    @property
+    def may_finish_game(self):
+        """Whether no immediate workflow must resolve before final scoring."""
+        return not self.has_pending_immediate_workflow
+
+    @property
     def turn_phase(self):
         if self.game_end:
             return TurnPhase.GAME_OVER
-        workflows = self.pending_workflows
-        immediate_workflows = tuple(
-            workflow for workflow in workflows if workflow != TurnPhase.REPLACE_BONUS_MARKERS
-        )
+        immediate_workflows = self.immediate_pending_workflows
         if len(immediate_workflows) > 1:
             names = ", ".join(workflow.value for workflow in immediate_workflows)
             raise TurnStateError(f"Conflicting pending workflows: {names}")
         if immediate_workflows:
             return immediate_workflows[0]
-        if TurnPhase.REPLACE_BONUS_MARKERS in workflows:
+        if self.replacement_marker_workflow_pending:
             return TurnPhase.REPLACE_BONUS_MARKERS
         if self.current_player.actions_remaining == 0:
             return TurnPhase.TURN_COMPLETE
         return TurnPhase.ACTIONS
 
     def advance_turn(self):
-        if self.turn_phase != TurnPhase.TURN_COMPLETE:
+        if not self.may_advance_player:
             raise TurnStateError(f"Cannot advance player during phase {self.turn_phase.value}")
 
         previous_player = self.current_player
@@ -245,7 +271,7 @@ class Game:
             self.current_player.refresh_map3_priv_actions(self)
 
     def switch_player_if_needed(self):
-        if self.turn_phase == TurnPhase.TURN_COMPLETE:
+        if self.may_advance_player:
             self.advance_turn()
             return True
         return False
@@ -382,7 +408,9 @@ class Game:
         self.active_player = self.current_player_index
 
     def begin_tribute_income_responses(self, owners):
-        self.pending_tribute_income_owners.extend(owners)
+        self.pending_tribute_income_owners.extend(
+            owner for owner in owners if owner.general_stock_squares or owner.general_stock_circles
+        )
         if self.pending_tribute_income_owners:
             self.active_player = self.pending_tribute_income_owners[0].order - 1
 
@@ -400,8 +428,14 @@ class Game:
             or num_squares > owner.general_stock_squares
         ):
             raise TurnStateError("Selected tribute-income composition is unavailable")
-        owner.income_action(num_squares, num_circles, tribute_income=True)
+        if amount:
+            owner.income_action(num_squares, num_circles, tribute_income=True)
         self.pending_tribute_income_owners.pop(0)
+        while self.pending_tribute_income_owners:
+            next_owner = self.pending_tribute_income_owners[0]
+            if next_owner.general_stock_squares or next_owner.general_stock_circles:
+                break
+            self.pending_tribute_income_owners.pop(0)
         self.active_player = (
             self.pending_tribute_income_owners[0].order - 1
             if self.pending_tribute_income_owners
@@ -412,12 +446,7 @@ class Game:
     def complete_deferred_game_end_if_ready(self):
         if not self.game_end_pending_immediate_resolution:
             return
-        immediate = [
-            workflow
-            for workflow in self.pending_workflows
-            if workflow != TurnPhase.REPLACE_BONUS_MARKERS
-        ]
-        if not immediate:
+        if self.may_finish_game:
             self.game_end_pending_immediate_resolution = False
             self.check_for_game_end()
 
@@ -693,12 +722,7 @@ class Game:
         )
 
         if end_conditions_met:
-            immediate = [
-                workflow
-                for workflow in self.pending_workflows
-                if workflow != TurnPhase.REPLACE_BONUS_MARKERS
-            ]
-            if immediate:
+            if not self.may_finish_game:
                 self.game_end_pending_immediate_resolution = True
                 return
             self.current_player.forfeit_remaining_actions()

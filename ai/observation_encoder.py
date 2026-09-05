@@ -285,22 +285,23 @@ class ObservationEncoder:
                     f"capacity is {self.MAX_OFFICES}"
                 )
             base = start + city_index * self.CITY_SIZE
-            tributes = self._pad(
-                (owner_ids.get(player, 0) for player in city.tributed_players),
-                4,
-                f"{city.name} tribute owners",
-            )
-            features[base + 4 : base + 8] = tributes
+            tributes = [owner_ids.get(player, 0) for player in city.tributed_players]
+            if len(tributes) > 4:
+                raise ValueError(
+                    f"{city.name} tribute owners exceeds observation capacity 4: {len(tributes)}"
+                )
+            features[base + 4 : base + 8] = tributes + [0] * (4 - len(tributes))
             for office_index, office in enumerate(city.offices):
                 office_base = base + 8 + office_index * 7
+                try:
+                    printed_privilege = office.printed_privilege
+                except AttributeError:
+                    printed_privilege = self._color_name(office.color)
                 features[office_base : office_base + 7] = (
                     1,
                     int(office.place_adjacent_office),
                     self.PIECE_TYPE_TO_ID[office.shape],
-                    self.PRIVILEGE_TO_ID.get(
-                        getattr(office, "printed_privilege", self._color_name(office.color)),
-                        0,
-                    ),
+                    self.PRIVILEGE_TO_ID.get(printed_privilege, 0),
                     office.awards_points,
                     owner_ids.get(office.controller, 0),
                     self.PIECE_TYPE_TO_ID[office.owner_piece_shape],
@@ -317,16 +318,20 @@ class ObservationEncoder:
             features[base + 6] = self.BONUS_MARKER_TYPE_TO_ID.get(
                 route.bonus_marker.type if route.bonus_marker else None, 0
             )
-            features[base + 8 : base + 13] = self._pad(
-                (owner_ids.get(owner, 0) for owner in route.tribute_owners),
-                5,
-                f"route {route_index} tribute owners",
-            )
-            features[base + 13 : base + 18] = self._pad(
-                (owner_ids.get(owner, 0) for owner in route.block_marker_owners),
-                5,
-                f"route {route_index} block owners",
-            )
+            tribute_owners = [owner_ids.get(owner, 0) for owner in route.tribute_owners]
+            if len(tribute_owners) > 5:
+                raise ValueError(
+                    f"route {route_index} tribute owners exceeds observation capacity 5: "
+                    f"{len(tribute_owners)}"
+                )
+            features[base + 8 : base + 13] = tribute_owners + [0] * (5 - len(tribute_owners))
+            block_owners = [owner_ids.get(owner, 0) for owner in route.block_marker_owners]
+            if len(block_owners) > 5:
+                raise ValueError(
+                    f"route {route_index} block owners exceeds observation capacity 5: "
+                    f"{len(block_owners)}"
+                )
+            features[base + 13 : base + 18] = block_owners + [0] * (5 - len(block_owners))
             for post_index, post in enumerate(route.posts):
                 post_base = base + 18 + post_index * 4
                 features[post_base + 2] = owner_ids.get(post.owner, 0)

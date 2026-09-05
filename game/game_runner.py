@@ -163,9 +163,7 @@ def select_progress_action(game, legal_actions, policy_rng):
     post_actions = [
         (index, action) for index, action in indexed_actions if isinstance(action, PostInteraction)
     ]
-    pending_post_workflow = game.waiting_for_displaced_player or any(
-        value for name, value in vars(game).items() if name.startswith("waiting_for_bm_")
-    )
+    pending_post_workflow = game.has_pending_immediate_workflow
     progressing_post_actions = []
     post_action_scores = {}
     for index, action in post_actions:

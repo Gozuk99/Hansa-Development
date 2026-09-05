@@ -14,6 +14,8 @@ from game.game_config import GameConfiguration, human_players
 from game.invariants import GameInvariantError, validate_game
 from game.loaded_state_validation import validate_loaded_game
 from game.persistence import load_game, save_game
+from game.structured_actions import PostInteraction
+from game.turn_state import TurnPhase
 from map_data.map_attributes import Map
 from training.targeted_state_generator import (
     DEVELOPMENT_RANGES,
@@ -42,7 +44,7 @@ from training.targeted_state_generator import (
 )
 
 
-GENERATOR_VERSION = 8
+GENERATOR_VERSION = 9
 
 
 class EndingCondition(str, Enum):
@@ -77,6 +79,13 @@ class BonusMarkerSetup(str, Enum):
     DEFAULT = "default"
     ALL_PROMOS = "all_promos"
     MIXED = "mixed"
+
+
+class MoveContinuationScenario(str, Enum):
+    CAPACITY_PRACTICE = "move_capacity_practice"
+    PRODUCTIVE_PLACEMENT = "move_productive_placement"
+    MOVE_TO_CLAIM = "move_to_claim"
+    PARTIAL_USE = "move_partial_use"
 
 
 EAST_WEST_FOCUSES = {
@@ -137,6 +146,9 @@ class BalancedGenerationRequest:
     development_range: tuple[int, int] | None = None
     prepare_ending_condition: bool = True
     round_range: tuple[int, int] = (8, 20)
+    move_continuation_scenario: MoveContinuationScenario | None = None
+    move_capacity: int | None = None
+    move_held_piece_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -149,6 +161,7 @@ class BalancedGeneratedState:
     focus_variants: tuple[str, ...]
     starting_scores_by_seat: tuple[int, ...]
     starting_development_by_seat: tuple[int, ...]
+    move_target_route_index: int | None = None
 
 
 @dataclass
@@ -194,6 +207,21 @@ def _validate_request(request):
     minimum_round, maximum_round = request.round_range
     if minimum_round < 1 or maximum_round < minimum_round:
         raise ValueError("round_range must contain positive increasing rounds")
+    move_fields = (
+        request.move_continuation_scenario,
+        request.move_capacity,
+        request.move_held_piece_count,
+    )
+    if any(value is not None for value in move_fields) and not all(
+        value is not None for value in move_fields
+    ):
+        raise ValueError("mid-Move generation requires scenario, capacity, and held-piece count")
+    if request.move_continuation_scenario is not None:
+        MoveContinuationScenario(request.move_continuation_scenario)
+        if request.move_capacity not in (3, 4, 5):
+            raise ValueError("mid-Move capacity must be Move3, Move4, or Move5")
+        if not 1 <= request.move_held_piece_count <= request.move_capacity:
+            raise ValueError("mid-Move held-piece count must be within Move capacity")
 
 
 def _resolved_bonus_marker_setup(request):
@@ -514,6 +542,221 @@ def _configure_turn(game, rng, request, prepared_player):
     return prepared_index
 
 
+def _take_piece_from_stock(player, shape):
+    """Move one already-unlocked piece from player stock into staged board play."""
+    for stock_name in (f"personal_supply_{shape}s", f"general_stock_{shape}s"):
+        count = getattr(player, stock_name)
+        if count:
+            setattr(player, stock_name, count - 1)
+            return True
+    return False
+
+
+def _ensure_move_capacity(player, capacity):
+    """Legally unlock Book merchants until the requested Move capacity is reached."""
+    if player.book > capacity:
+        return False
+    messages_enabled = player.messages_enabled
+    player.messages_enabled = False
+    try:
+        while player.book < capacity:
+            if not player.perform_upgrade("book"):
+                return False
+    finally:
+        player.messages_enabled = messages_enabled
+    return player.book == capacity
+
+
+def _empty_route_for_move_target(game, rng, *, minimum_posts, maximum_posts=None):
+    routes = [
+        route
+        for route in game.selected_map.routes
+        if all(not post.is_owned() for post in route.posts)
+        and len(route.posts) >= minimum_posts
+        and (maximum_posts is None or len(route.posts) <= maximum_posts)
+        and route.region is None
+    ]
+    rng.shuffle(routes)
+    routes.sort(key=lambda route: len(route.posts))
+    return routes[0] if routes else None
+
+
+def _place_staged_piece(player, post, shape):
+    if post.is_owned() or post.required_shape not in (None, shape):
+        return False
+    if not _take_piece_from_stock(player, shape):
+        return False
+    post.claim(player, shape)
+    return True
+
+
+def _ensure_move_origin_posts(
+    game,
+    player,
+    rng,
+    required_shapes,
+    *,
+    excluded_route=None,
+    target_region=None,
+):
+    """Return legal owned origin posts, staging stock pieces when necessary."""
+    selected = []
+    used_posts = set()
+    for shape in required_shapes:
+        existing = [
+            post
+            for route in game.selected_map.routes
+            if route is not excluded_route and not route.is_controlled_by(player)
+            for post in route.posts
+            if post not in used_posts
+            and post.owner is player
+            and post.owner_piece_shape == shape
+            and player.is_valid_region_transition(post.region, target_region)
+        ]
+        rng.shuffle(existing)
+        if existing:
+            post = existing[0]
+        else:
+            candidates = [
+                post
+                for route in game.selected_map.routes
+                if route is not excluded_route
+                and sum(not candidate.is_owned() for candidate in route.posts) >= 2
+                for post in route.posts
+                if post not in used_posts
+                and not post.is_owned()
+                and post.required_shape in (None, shape)
+                and player.is_valid_region_transition(post.region, target_region)
+            ]
+            rng.shuffle(candidates)
+            if not candidates:
+                return None
+            post = candidates[0]
+            if not _place_staged_piece(player, post, shape):
+                return None
+        selected.append(post)
+        used_posts.add(post)
+    return selected
+
+
+def _prepare_move_target_route(game, player, rng, scenario, capacity, held_count):
+    """Create a productive destination without making it claimable in the saved state."""
+    if scenario is MoveContinuationScenario.CAPACITY_PRACTICE:
+        return None, None
+
+    if scenario is MoveContinuationScenario.MOVE_TO_CLAIM:
+        route = _empty_route_for_move_target(
+            game,
+            rng,
+            minimum_posts=held_count,
+            maximum_posts=held_count,
+        )
+        return route, held_count if route is not None else None
+
+    if scenario is MoveContinuationScenario.PARTIAL_USE:
+        route = _empty_route_for_move_target(
+            game,
+            rng,
+            minimum_posts=held_count + 1,
+            maximum_posts=held_count + 1,
+        )
+        return route, held_count + 1 if route is not None else None
+
+    route = _empty_route_for_move_target(game, rng, minimum_posts=held_count)
+    if route is None:
+        return None, None
+    for post in route.posts[held_count:]:
+        shape = post.required_shape or "square"
+        if not _place_staged_piece(player, post, shape):
+            return None, None
+    return route, held_count
+
+
+def _prepare_mid_move_state(game, rng, request):
+    """Stage the active player inside a legal normal paid Move workflow."""
+    scenario = MoveContinuationScenario(request.move_continuation_scenario)
+    player = game.current_player
+    capacity = request.move_capacity
+    held_count = request.move_held_piece_count
+    if not _ensure_move_capacity(player, capacity):
+        return None
+
+    target_route, useful_piece_count = _prepare_move_target_route(
+        game,
+        player,
+        rng,
+        scenario,
+        capacity,
+        held_count,
+    )
+    if scenario is not MoveContinuationScenario.CAPACITY_PRACTICE and target_route is None:
+        return None
+
+    origin_count = {
+        MoveContinuationScenario.CAPACITY_PRACTICE: capacity,
+        MoveContinuationScenario.PRODUCTIVE_PLACEMENT: capacity,
+        MoveContinuationScenario.MOVE_TO_CLAIM: held_count,
+        MoveContinuationScenario.PARTIAL_USE: useful_piece_count,
+    }[scenario]
+    target_region = None if target_route is None else target_route.region
+    required_shapes = []
+    if target_route is not None:
+        required_shapes.extend(
+            post.required_shape or "square" for post in target_route.posts[:useful_piece_count]
+        )
+    required_shapes.extend("square" for _ in range(origin_count - len(required_shapes)))
+    origins = _ensure_move_origin_posts(
+        game,
+        player,
+        rng,
+        required_shapes,
+        excluded_route=target_route,
+        target_region=target_region,
+    )
+    if origins is None:
+        return None
+    if scenario is MoveContinuationScenario.PARTIAL_USE:
+        movable_piece_count = sum(
+            post.owner is player for route in game.selected_map.routes for post in route.posts
+        )
+        if movable_piece_count != useful_piece_count:
+            return None
+
+    game.capture_normal_move_pre_board_snapshot()
+    messages_enabled = player.messages_enabled
+    player.messages_enabled = False
+    try:
+        player.start_move()
+        for post in origins[:held_count]:
+            player.pick_up_piece(post)
+    finally:
+        player.messages_enabled = messages_enabled
+
+    legal_actions = game.get_legal_actions()
+    if game.turn_phase is not TurnPhase.MOVE_PIECES or not legal_actions:
+        return None
+    if any(not isinstance(action, PostInteraction) for action in legal_actions):
+        return None
+    legal_posts = [game.post_context(action.post_slot)[1] for action in legal_actions]
+    has_pickup = any(post.owner is player for post in legal_posts)
+    has_placement = any(not post.is_owned() for post in legal_posts)
+    pre_move_owned = sum(
+        owner is player
+        for route_snapshot in game.normal_move_pre_board_snapshot
+        for owner, _shape in route_snapshot
+    )
+    effective_capacity = min(capacity, pre_move_owned)
+    if held_count < effective_capacity and not (has_pickup and has_placement):
+        return None
+    if scenario is MoveContinuationScenario.MOVE_TO_CLAIM:
+        if player.actions_remaining < 2 or target_route.is_controlled_by(player):
+            return None
+    target_index = (
+        game.selected_map.routes.index(target_route) if target_route is not None else None
+    )
+    return True, target_index
+
+
 def player_has_starting_score_source(game, player):
     """Return whether a player's existing points have an authoritative board source."""
     owns_city = any(city.determine_controller() is player for city in game.selected_map.cities)
@@ -663,6 +906,12 @@ def _build_once(request, attempt_seed):
     if not request.prepare_ending_condition and game.current_full_cities_count:
         return None
     prepared_index = _configure_turn(game, rng, request, prepared_player)
+    move_target_route_index = None
+    if request.move_continuation_scenario is not None:
+        prepared_move = _prepare_mid_move_state(game, rng, request)
+        if prepared_move is None:
+            return None
+        _prepared, move_target_route_index = prepared_move
     if not _is_valid_generated_state(game, request):
         return None
     return BalancedGeneratedState(
@@ -674,6 +923,7 @@ def _build_once(request, attempt_seed):
         tuple(focus.variants),
         tuple(player.score for player in game.players),
         tuple(_development_total(game, player) for player in game.players),
+        move_target_route_index,
     )
 
 
@@ -713,6 +963,9 @@ def save_balanced_state(generated, output_directory, *, scenario_directory=None)
         "development_range": request.development_range,
         "prepare_ending_condition": request.prepare_ending_condition,
         "round_range": request.round_range,
+        "move_continuation_scenario": request.move_continuation_scenario,
+        "move_capacity": request.move_capacity,
+        "move_held_piece_count": request.move_held_piece_count,
         "bonus_marker_setup": _resolved_bonus_marker_setup(request),
         "regional_focus": request.regional_focus,
         "options": (
@@ -741,6 +994,7 @@ def save_balanced_state(generated, output_directory, *, scenario_directory=None)
         "starting_score_by_seat": generated.starting_scores_by_seat,
         "starting_development_by_seat": generated.starting_development_by_seat,
         "starting_position": request.starting_position.value,
+        "move_target_route_index": generated.move_target_route_index,
         "save_file": save_path.name,
     }
     metadata_path = directory / f"state-{state_id}.json"

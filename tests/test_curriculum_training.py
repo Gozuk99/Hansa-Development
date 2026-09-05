@@ -28,6 +28,7 @@ from training.curriculum import (
 from training.self_play import (
     ActionLimitExceeded,
     IncompleteGameError,
+    NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
     TrainingConfig,
     TRAINING_CHECKPOINT_FORMAT,
     TRAINING_CHECKPOINT_VERSION,
@@ -63,6 +64,57 @@ def completed_trajectory():
         spent_action_count=5,
         move_ratio=0.4,
         pointless_move_workflows=1,
+        pointless_normal_move_workflows=1,
+        pointless_move_any2_workflows=0,
+        immediate_one_piece_q_undos=2,
+        immediate_q_undo_epsilon_pickups=1,
+        immediate_q_undo_ranked_pickups=1,
+        immediate_q_undo_q1_pickups=1,
+        immediate_q1_restores=2,
+        immediate_q1_pickup_q1_restores=1,
+        immediate_valuable_q1_pickup_q1_restores=1,
+        full_multi_piece_q_undos=3,
+        full_multi_piece_q_undo_any_exploration=1,
+        full_multi_piece_q_undo_entirely_ranked=2,
+        normal_move_nominal_capacity_total=8,
+        normal_move_movable_pieces_available_total=5,
+        normal_move_effective_capacity_total=5,
+        normal_move_pieces_moved_total=3,
+        normal_move_unused_capacity_total=2,
+        single_piece_moves=1,
+        single_piece_moves_with_multiple_available=1,
+        single_piece_moves_creating_claimable_route=1,
+        single_piece_move_claim_conversions=1,
+        full_effective_capacity_moves=1,
+        under_effective_capacity_moves=1,
+        move1_utilization_penalties_applied=4,
+        move1_penalties_on_placement=3,
+        move1_penalties_on_single_available_initiation=1,
+        move_claim_reward_awarded=2,
+        move_claim_reward_blocked_already_claimable=1,
+        consecutive_move1_pairs=9,
+        consecutive_move1_pairs_with_multiple_available=8,
+        consecutive_move1_pairs_move2_capacity=1,
+        consecutive_move1_pairs_move3_capacity=2,
+        consecutive_move1_pairs_move4_capacity=3,
+        consecutive_move1_pairs_move5_capacity=3,
+        avoidable_extra_move_actions=7,
+        move1_scaffold_mask_states=10,
+        move1_scaffold_masked_placement_semantic_actions=80,
+        move1_scaffold_legal_pickup_semantic_actions=25,
+        move1_scaffold_unmasked_q1_pickups=6,
+        move1_scaffold_unmasked_q1_placements=4,
+        move1_scaffold_unmasked_q1_pickup_fraction=0.6,
+        move1_scaffold_unmasked_q1_placement_fraction=0.4,
+        move1_scaffold_all_pickups_above_all_placements_fraction=0.2,
+        move1_scaffold_margin_satisfied_pair_fraction=0.4,
+        move1_scaffold_family_ranking_loss=2.5,
+        move1_scaffold_best_pickup_minus_best_placement_mean=-1.5,
+        move1_scaffold_best_pickup_minus_best_placement_median=-1.0,
+        move1_scaffold_best_pickup_minus_best_placement_p10=-4.0,
+        move1_scaffold_best_pickup_minus_best_placement_p90=2.0,
+        move1_scaffold_unmasked_top_k_pickup_fraction=0.35,
+        move1_scaffold_unmasked_top_k_has_pickup_fraction=0.9,
         repeated_move_penalties=2,
         all_move_turn_penalties=1,
         moves_creating_claimable_route=2,
@@ -219,6 +271,58 @@ class CurriculumTrainingTests(unittest.TestCase):
             "sampled_training_decisions",
             "move_action_count",
             "spent_action_count",
+            "pointless_normal_move_workflows",
+            "pointless_move_any2_workflows",
+            "immediate_one_piece_q_undos",
+            "immediate_q_undo_epsilon_pickups",
+            "immediate_q_undo_ranked_pickups",
+            "immediate_q_undo_q1_pickups",
+            "immediate_q1_restores",
+            "immediate_q1_pickup_q1_restores",
+            "immediate_valuable_q1_pickup_q1_restores",
+            "full_multi_piece_q_undos",
+            "full_multi_piece_q_undo_any_exploration",
+            "full_multi_piece_q_undo_entirely_ranked",
+            "normal_move_nominal_capacity_total",
+            "normal_move_movable_pieces_available_total",
+            "normal_move_effective_capacity_total",
+            "normal_move_pieces_moved_total",
+            "normal_move_unused_capacity_total",
+            "single_piece_moves",
+            "single_piece_moves_with_multiple_available",
+            "single_piece_moves_creating_claimable_route",
+            "single_piece_move_claim_conversions",
+            "full_effective_capacity_moves",
+            "under_effective_capacity_moves",
+            *NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
+            "move1_utilization_penalties_applied",
+            "move1_penalties_on_placement",
+            "move1_penalties_on_single_available_initiation",
+            "move_claim_reward_awarded",
+            "move_claim_reward_blocked_already_claimable",
+            "consecutive_move1_pairs",
+            "consecutive_move1_pairs_with_multiple_available",
+            "consecutive_move1_pairs_move2_capacity",
+            "consecutive_move1_pairs_move3_capacity",
+            "consecutive_move1_pairs_move4_capacity",
+            "consecutive_move1_pairs_move5_capacity",
+            "avoidable_extra_move_actions",
+            "move1_scaffold_mask_states",
+            "move1_scaffold_masked_placement_semantic_actions",
+            "move1_scaffold_legal_pickup_semantic_actions",
+            "move1_scaffold_unmasked_q1_pickups",
+            "move1_scaffold_unmasked_q1_placements",
+            "move1_scaffold_unmasked_q1_pickup_fraction",
+            "move1_scaffold_unmasked_q1_placement_fraction",
+            "move1_scaffold_all_pickups_above_all_placements_fraction",
+            "move1_scaffold_margin_satisfied_pair_fraction",
+            "move1_scaffold_family_ranking_loss",
+            "move1_scaffold_best_pickup_minus_best_placement_mean",
+            "move1_scaffold_best_pickup_minus_best_placement_median",
+            "move1_scaffold_best_pickup_minus_best_placement_p10",
+            "move1_scaffold_best_pickup_minus_best_placement_p90",
+            "move1_scaffold_unmasked_top_k_pickup_fraction",
+            "move1_scaffold_unmasked_top_k_has_pickup_fraction",
             "moves_creating_claimable_route",
             "move_claim_conversions",
             "shadow_filter_selected_count",
@@ -229,6 +333,24 @@ class CurriculumTrainingTests(unittest.TestCase):
             "q_loss",
             "policy_loss",
             "total_loss",
+            "case_a_family_ranking_samples",
+            "case_a_family_ranking_loss",
+            "case_a_family_ranking_violating_samples",
+            "case_a_family_ranking_violation_fraction",
+            "case_a_family_ranking_mean_violating_placements",
+            "case_a_family_ranking_mean_violating_pairs",
+            "case_a_family_ranking_mean_violating_pair_fraction",
+            "case_a_family_ranking_all_pickups_above_all_placements_fraction",
+            "case_a_family_ranking_q1_pickup_fraction",
+            "move_continuation_family_ranking_samples",
+            "move_continuation_family_ranking_after_2_pickups",
+            "move_continuation_family_ranking_after_3_pickups",
+            "move_continuation_family_ranking_after_4_pickups",
+            "move_continuation_family_ranking_loss",
+            "move_continuation_family_ranking_violating_samples",
+            "move_continuation_family_ranking_violation_fraction",
+            "move_continuation_best_pickup_above_all_placements_fraction",
+            "move_continuation_q1_pickup_fraction",
             "policy_q_top1_agreement",
             "policy_top1_q_rank",
             "policy_entropy",
@@ -529,8 +651,29 @@ class CurriculumTrainingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             runner = self.runner(root)
+            runner.trainer.progress.last_case_a_family_ranking_samples = 12
+            runner.trainer.progress.last_case_a_family_ranking_loss = 3.5
+            runner.trainer.progress.last_case_a_family_ranking_violating_samples = 9
+            runner.trainer.progress.last_case_a_family_ranking_violation_fraction = 0.75
+            runner.trainer.progress.last_case_a_family_ranking_mean_violating_placements = 2.25
+            runner.trainer.progress.last_case_a_family_ranking_mean_violating_pairs = 5.5
+            runner.trainer.progress.last_case_a_family_ranking_mean_violating_pair_fraction = 0.625
+            runner.trainer.progress.last_case_a_family_ranking_all_pickups_above_all_placements_fraction = 0.2
+            runner.trainer.progress.last_case_a_family_ranking_q1_pickup_fraction = 0.7
+            runner.trainer.progress.last_move_continuation_family_ranking_samples = 8
+            runner.trainer.progress.last_move_continuation_family_ranking_after_2_pickups = 4
+            runner.trainer.progress.last_move_continuation_family_ranking_after_3_pickups = 3
+            runner.trainer.progress.last_move_continuation_family_ranking_after_4_pickups = 1
+            runner.trainer.progress.last_move_continuation_family_ranking_loss = 2.75
+            runner.trainer.progress.last_move_continuation_family_ranking_violating_samples = 6
+            runner.trainer.progress.last_move_continuation_family_ranking_violation_fraction = 0.75
+            runner.trainer.progress.last_move_continuation_best_pickup_above_all_placements_fraction = 0.25
+            runner.trainer.progress.last_move_continuation_q1_pickup_fraction = 0.375
+            trajectory = completed_trajectory()
+            for index, field in enumerate(NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS, start=1):
+                setattr(trajectory, field, index)
             row = runner._trajectory_row(
-                completed_trajectory(),
+                trajectory,
                 StateDescriptor(VALIDATION_STATE, None, 2, 5, 1, "near_bonus_markers"),
                 runner.config.stages[0],
                 "training",
@@ -548,10 +691,101 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(row["move_action_count"], 2)
             self.assertEqual(row["spent_action_count"], 5)
             self.assertEqual(row["pointless_move_workflows"], 1)
+            self.assertEqual(row["pointless_normal_move_workflows"], 1)
+            self.assertEqual(row["pointless_move_any2_workflows"], 0)
+            self.assertEqual(row["immediate_one_piece_q_undos"], 2)
+            self.assertEqual(row["immediate_q1_pickup_q1_restores"], 1)
+            self.assertEqual(row["immediate_valuable_q1_pickup_q1_restores"], 1)
+            self.assertEqual(row["full_multi_piece_q_undos"], 3)
+            self.assertEqual(row["full_multi_piece_q_undo_any_exploration"], 1)
+            self.assertEqual(row["full_multi_piece_q_undo_entirely_ranked"], 2)
+            self.assertEqual(row["normal_move_nominal_capacity_total"], 8)
+            self.assertEqual(row["normal_move_movable_pieces_available_total"], 5)
+            self.assertEqual(row["normal_move_effective_capacity_total"], 5)
+            self.assertEqual(row["normal_move_pieces_moved_total"], 3)
+            self.assertEqual(row["normal_move_unused_capacity_total"], 2)
+            self.assertEqual(row["single_piece_moves"], 1)
+            self.assertEqual(row["single_piece_moves_with_multiple_available"], 1)
+            self.assertEqual(row["single_piece_moves_creating_claimable_route"], 1)
+            self.assertEqual(row["single_piece_move_claim_conversions"], 1)
+            self.assertEqual(row["full_effective_capacity_moves"], 1)
+            self.assertEqual(row["under_effective_capacity_moves"], 1)
+            for index, field in enumerate(NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS, start=1):
+                self.assertEqual(row[field], index)
+            self.assertEqual(row["move1_utilization_penalties_applied"], 4)
+            self.assertEqual(row["move1_penalties_on_placement"], 3)
+            self.assertEqual(row["move1_penalties_on_single_available_initiation"], 1)
+            self.assertEqual(row["move_claim_reward_awarded"], 2)
+            self.assertEqual(row["move_claim_reward_blocked_already_claimable"], 1)
+            self.assertEqual(row["consecutive_move1_pairs"], 9)
+            self.assertEqual(row["consecutive_move1_pairs_with_multiple_available"], 8)
+            self.assertEqual(row["consecutive_move1_pairs_move2_capacity"], 1)
+            self.assertEqual(row["consecutive_move1_pairs_move3_capacity"], 2)
+            self.assertEqual(row["consecutive_move1_pairs_move4_capacity"], 3)
+            self.assertEqual(row["consecutive_move1_pairs_move5_capacity"], 3)
+            self.assertEqual(row["avoidable_extra_move_actions"], 7)
+            self.assertEqual(row["move1_scaffold_mask_states"], 10)
+            self.assertEqual(row["move1_scaffold_masked_placement_semantic_actions"], 80)
+            self.assertEqual(row["move1_scaffold_legal_pickup_semantic_actions"], 25)
+            self.assertEqual(row["move1_scaffold_unmasked_q1_pickups"], 6)
+            self.assertEqual(row["move1_scaffold_unmasked_q1_placements"], 4)
+            self.assertEqual(row["move1_scaffold_unmasked_q1_pickup_fraction"], 0.6)
+            self.assertEqual(row["move1_scaffold_unmasked_q1_placement_fraction"], 0.4)
+            self.assertEqual(
+                row["move1_scaffold_all_pickups_above_all_placements_fraction"],
+                0.2,
+            )
+            self.assertEqual(row["move1_scaffold_margin_satisfied_pair_fraction"], 0.4)
+            self.assertEqual(row["move1_scaffold_family_ranking_loss"], 2.5)
+            self.assertEqual(
+                row["move1_scaffold_best_pickup_minus_best_placement_mean"],
+                -1.5,
+            )
+            self.assertEqual(
+                row["move1_scaffold_best_pickup_minus_best_placement_median"],
+                -1.0,
+            )
+            self.assertEqual(row["move1_scaffold_best_pickup_minus_best_placement_p10"], -4.0)
+            self.assertEqual(row["move1_scaffold_best_pickup_minus_best_placement_p90"], 2.0)
+            self.assertEqual(row["move1_scaffold_unmasked_top_k_pickup_fraction"], 0.35)
+            self.assertEqual(
+                row["move1_scaffold_unmasked_top_k_has_pickup_fraction"],
+                0.9,
+            )
             self.assertEqual(row["repeated_move_penalties"], 2)
             self.assertEqual(row["all_move_turn_penalties"], 1)
             self.assertEqual(row["moves_creating_claimable_route"], 2)
             self.assertEqual(row["move_claim_conversions"], 1)
+            self.assertEqual(row["case_a_family_ranking_samples"], 12)
+            self.assertEqual(row["case_a_family_ranking_loss"], 3.5)
+            self.assertEqual(row["case_a_family_ranking_violating_samples"], 9)
+            self.assertEqual(row["case_a_family_ranking_violation_fraction"], 0.75)
+            self.assertEqual(
+                row["case_a_family_ranking_mean_violating_placements"],
+                2.25,
+            )
+            self.assertEqual(row["case_a_family_ranking_mean_violating_pairs"], 5.5)
+            self.assertEqual(
+                row["case_a_family_ranking_mean_violating_pair_fraction"],
+                0.625,
+            )
+            self.assertEqual(
+                row["case_a_family_ranking_all_pickups_above_all_placements_fraction"],
+                0.2,
+            )
+            self.assertEqual(row["case_a_family_ranking_q1_pickup_fraction"], 0.7)
+            self.assertEqual(row["move_continuation_family_ranking_samples"], 8)
+            self.assertEqual(row["move_continuation_family_ranking_after_2_pickups"], 4)
+            self.assertEqual(row["move_continuation_family_ranking_after_3_pickups"], 3)
+            self.assertEqual(row["move_continuation_family_ranking_after_4_pickups"], 1)
+            self.assertEqual(row["move_continuation_family_ranking_loss"], 2.75)
+            self.assertEqual(row["move_continuation_family_ranking_violating_samples"], 6)
+            self.assertEqual(row["move_continuation_family_ranking_violation_fraction"], 0.75)
+            self.assertEqual(
+                row["move_continuation_best_pickup_above_all_placements_fraction"],
+                0.25,
+            )
+            self.assertEqual(row["move_continuation_q1_pickup_fraction"], 0.375)
 
     def test_run_labels_cover_training_evaluation_and_timeout_cases(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -947,6 +1181,18 @@ class CurriculumTrainingTests(unittest.TestCase):
                     for message in messages
                 )
             )
+            self.assertTrue(
+                any(
+                    "Training game 1/1: normal; 1 interactions; 5 paid actions;" in message
+                    for message in messages
+                )
+            )
+            self.assertTrue(
+                any(
+                    "Evaluation game 1/1: normal; 1 interactions; 5 paid actions;" in message
+                    for message in messages
+                )
+            )
             self.assertIn(f"{prefix}Saved training games 1", messages)
 
     def test_zero_epsilon_and_evaluation_run_modes_are_written(self):
@@ -1060,6 +1306,8 @@ class CurriculumTrainingTests(unittest.TestCase):
             root = Path(directory)
             trainer = RetryEvaluationTrainer()
             runner = self.runner(root, trainer)
+            messages = []
+            runner.progress_callback = messages.append
 
             runner.run()
 
@@ -1070,6 +1318,9 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(rows[1]["run"], "evaluation_mid_late_end")
             self.assertEqual(rows[1]["completion_reason"], "normal")
             self.assertEqual(rows[1]["retry_count"], "1")
+            self.assertTrue(
+                any("interaction_limit reached; retrying" in message for message in messages)
+            )
 
     def test_exhausted_evaluation_is_not_recorded_and_does_not_stop_training(self):
         class DeadlockedEvaluationTrainer(FakeTrainer):
@@ -1167,6 +1418,8 @@ class CurriculumTrainingTests(unittest.TestCase):
             root = Path(directory)
             trainer = LimitedTrainer()
             runner = self.runner(root, trainer)
+            messages = []
+            runner.progress_callback = messages.append
 
             runner.run()
 
@@ -1181,6 +1434,13 @@ class CurriculumTrainingTests(unittest.TestCase):
                 ["training_end", "evaluation_mid_late_end"],
             )
             self.assertEqual(rows[0]["completion_reason"], "action_limit")
+            self.assertTrue(
+                any(
+                    "Training game 1/1: interaction_limit reached; 1 interactions; "
+                    "5 paid actions;" in message
+                    for message in messages
+                )
+            )
 
     def test_dead_end_saves_failure_and_retries_with_new_seed(self):
         class RetryTrainer(FakeTrainer):

@@ -12,6 +12,7 @@ from training.balanced_state_generator import (
     BonusMarkerSetup,
     EAST_WEST_FOCUSES,
     EndingCondition,
+    MoveContinuationScenario,
     RegionalFocus,
     StartingPosition,
     StrategicFocus,
@@ -26,6 +27,8 @@ CONFIGURATIONS = tuple(
     (map_num, player_count) for map_num in (1, 2, 3) for player_count in (3, 4, 5)
 )
 ENDING_CONDITIONS = tuple(EndingCondition)
+MOVE_CONTINUATION_NON_FRESH_FRACTION = 0.16
+MOVE_CONTINUATION_SCENARIOS = tuple(MoveContinuationScenario)
 
 
 @dataclass(frozen=True)
@@ -192,6 +195,23 @@ class BalancedCurriculumRunner(CurriculumRunner):
         random.Random(self.config.seed + 500_009 + block * 1_000_003).shuffle(profiles)
         return profiles[index]
 
+    def _move_continuation_spec(self, maturity, generation_number=None):
+        """Select an independent targeted Mid/Late/End Move setup deterministically."""
+        if maturity.name not in {"mid", "late", "end"}:
+            return None
+        generation_number = self.game_number if generation_number is None else generation_number
+        rng = random.Random(self.config.seed + 900_001 + generation_number * 1_000_003)
+        if rng.random() >= MOVE_CONTINUATION_NON_FRESH_FRACTION:
+            return None
+        scenario = rng.choice(MOVE_CONTINUATION_SCENARIOS)
+        if scenario is MoveContinuationScenario.MOVE_TO_CLAIM:
+            return scenario, 3, 3
+        if scenario is MoveContinuationScenario.PARTIAL_USE:
+            return scenario, 5, 2
+        capacity = rng.choice((3, 4, 5))
+        minimum_held = 2 if scenario is MoveContinuationScenario.PRODUCTIVE_PLACEMENT else 1
+        return scenario, capacity, rng.randint(minimum_held, capacity - 1)
+
     @staticmethod
     def _stage_label(_stage):
         return "fresh_mid_late_end_game"
@@ -266,6 +286,9 @@ class BalancedCurriculumRunner(CurriculumRunner):
             return descriptor
 
         use_missions, use_favour, marker_setup = _select_optional_modules(rng, map_num)
+        move_continuation_spec = (
+            self._move_continuation_spec(maturity) if is_training_generation else None
+        )
 
         ending_condition = ENDING_CONDITIONS[
             self.training_generation_number % len(ENDING_CONDITIONS)
@@ -300,6 +323,13 @@ class BalancedCurriculumRunner(CurriculumRunner):
                 development_range=maturity.development_range,
                 prepare_ending_condition=maturity.name != "early",
                 round_range=maturity.round_range,
+                move_continuation_scenario=(
+                    move_continuation_spec[0] if move_continuation_spec else None
+                ),
+                move_capacity=move_continuation_spec[1] if move_continuation_spec else None,
+                move_held_piece_count=(
+                    move_continuation_spec[2] if move_continuation_spec else None
+                ),
             )
         )
         path, metadata_path = save_balanced_state(
@@ -314,6 +344,12 @@ class BalancedCurriculumRunner(CurriculumRunner):
                     maturity.name,
                     _scenario_condition_label(maturity, ending_condition),
                     *_focus_labels(focus, regional),
+                    (
+                        f"{move_continuation_spec[0].value}_move{move_continuation_spec[1]}"
+                        f"_holding{move_continuation_spec[2]}"
+                        if move_continuation_spec
+                        else None
+                    ),
                 ),
             )
         )
