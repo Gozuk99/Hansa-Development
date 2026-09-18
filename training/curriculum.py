@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import csv
-from copy import deepcopy
-from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timezone
 import hashlib
 import json
-from pathlib import Path
 import random
 import shutil
 import tempfile
-from time import perf_counter
 import traceback
+from copy import deepcopy
+from dataclasses import asdict, dataclass, field, replace
+from datetime import UTC, datetime
+from pathlib import Path
+from time import perf_counter
 
 import torch
 
@@ -21,27 +21,32 @@ from ai.ai_model import MODEL_CHECKPOINT_FORMAT, MODEL_CHECKPOINT_VERSION
 from game.persistence import save_game
 from training.results_schema import (
     TRAINING_MATURITIES,
-    canonical_run as _canonical_run_from_legacy_row,
     interpret_results_row,
     maturity_from_stage_name as _maturity_from_stage_name,
     scenario as _scenario_from_legacy_row,
 )
 from training.self_play import (
-    ActionLimitExceeded,
-    IncompleteGameError,
-    NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
+    MOVE_PICKUP_RANKING_DEPTH_DIAGNOSTIC_METRICS,
     NORMAL_EXPLORATION_MODE,
+    NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
+    POINTLESS_MOVE_ATTRIBUTION_FIELDS,
     SHADOW_FILTER_POLICY_TOP_K,
     SHADOW_FILTER_Q_TOP_K,
-    SelfPlayTrainer,
     TRAINING_CHECKPOINT_FORMAT,
     TRAINING_CHECKPOINT_VERSION,
     ZERO_EPSILON_EXPLORATION_MODE,
+    ActionLimitExceeded,
+    IncompleteGameError,
+    SelfPlayTrainer,
 )
 from training.targeted_state_generator import StateGenerationError
 
-
 ACTIVE_EVALUATION_SETS = frozenset(("mid_late_end", "fresh"))
+ACTION_SEED_OFFSET = 1_000_000_007
+EVALUATION_RETRY_LIMIT = 2
+EVALUATION_CONFIGURATIONS = tuple(
+    (map_num, player_count) for map_num in (1, 2, 3) for player_count in (3, 4, 5)
+)
 TRAINING_EXPLORATION_SEED_OFFSET = 2_000_000_033
 ROLLING_BACKUP_INTERVAL = 100
 ROLLING_BACKUP_RETENTION = 10
@@ -51,6 +56,99 @@ DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS = (
     ("mid", 0.05),
     ("late", 0.50),
     ("end", 1.00),
+)
+_CONFIGURATION_COMPATIBILITY_OVERRIDES = (
+    {},
+    {"late_game_action_limit": 4_000},
+    {"near_end_score_range": (10, 18)},
+    {"near_end_action_limit": 6_000},
+    {"near_end_action_limit": 6_000, "near_end_score_range": (10, 18)},
+    {"near_end_action_limit": 6_000, "retry_limit": 2},
+    {
+        "near_end_action_limit": 6_000,
+        "near_end_score_range": (10, 18),
+        "retry_limit": 2,
+    },
+    {"retry_limit": 2},
+    {"near_end_action_limit": 3_000, "near_end_score_range": (18, 19)},
+    {
+        "near_end_action_limit": 3_000,
+        "near_end_score_range": (18, 19),
+        "retry_limit": 2,
+    },
+    {"near_end_action_limit": 2_000, "retry_limit": 2},
+)
+
+MOVE_PICKUP_RANKING_AGGREGATE_METRICS = (
+    "samples",
+    "loss",
+    "eligible_effective_batches",
+    "mean_present_depth_count",
+    "q1_pickup_fraction",
+    "all_pickups_above_all_placements_fraction",
+    "margin_satisfied_fraction",
+    "worst_pickup_minus_best_placement_gap_mean",
+)
+MOVE_PICKUP_RANKING_DEPTH_METRICS = (
+    "samples",
+    "loss",
+    "q1_pickup_fraction",
+    "all_pickups_above_all_placements_fraction",
+    "margin_satisfied_fraction",
+    "worst_pickup_minus_best_placement_gap_mean",
+    "weighted_contribution",
+    *MOVE_PICKUP_RANKING_DEPTH_DIAGNOSTIC_METRICS,
+)
+MOVE_PICKUP_RANKING_CSV_FIELDS = tuple(
+    f"move_pickup_ranking_{metric}" for metric in MOVE_PICKUP_RANKING_AGGREGATE_METRICS
+) + tuple(
+    f"move_pickup_ranking_holding_{depth}_{metric}"
+    for depth in range(1, 5)
+    for metric in MOVE_PICKUP_RANKING_DEPTH_METRICS
+)
+
+MOVE_FAMILY_RANKING_PROGRESS_FIELDS = (
+    "case_a_family_ranking_samples",
+    "case_a_family_ranking_loss",
+    "case_a_family_ranking_violating_samples",
+    "case_a_family_ranking_violation_fraction",
+    "case_a_family_ranking_mean_violating_placements",
+    "case_a_family_ranking_mean_violating_pairs",
+    "case_a_family_ranking_mean_violating_pair_fraction",
+    "case_a_family_ranking_all_pickups_above_all_placements_fraction",
+    "case_a_family_ranking_q1_pickup_fraction",
+    "case_a_family_ranking_worst_pickup_q_mean",
+    "case_a_family_ranking_best_placement_q_mean",
+    "case_a_family_ranking_worst_pickup_minus_best_placement_gap_mean",
+    "case_a_family_ranking_margin_satisfied_fraction",
+    "move_continuation_family_ranking_samples",
+    "move_continuation_family_ranking_after_2_pickups",
+    "move_continuation_family_ranking_after_3_pickups",
+    "move_continuation_family_ranking_after_4_pickups",
+    "move_continuation_family_ranking_loss",
+    "move_continuation_family_ranking_violating_samples",
+    "move_continuation_family_ranking_violation_fraction",
+    "move_continuation_best_pickup_above_all_placements_fraction",
+    "move_continuation_q1_pickup_fraction",
+)
+POINTLESS_FINAL_PLACEMENT_PROGRESS_FIELDS = (
+    "pointless_final_placement_ranking_samples",
+    "pointless_final_placement_ranking_loss",
+    "pointless_final_placement_restorative_q1_fraction",
+    "pointless_final_placement_margin_satisfied_fraction",
+    "pointless_final_placement_q_gap_mean",
+    "pointless_final_placement_immediate_q_undo_samples",
+    "pointless_final_placement_multi_piece_samples",
+    "pointless_final_placement_exact_restoration_samples",
+    "pointless_final_placement_equivalent_rearrangement_samples",
+)
+BASE_Q_EXCLUSION_PROGRESS_FIELDS = (
+    "base_q_included_samples",
+    "base_q_excluded_samples",
+    "move_continuation_base_q_excluded_samples",
+    "move_continuation_base_q_excluded_h2",
+    "move_continuation_base_q_excluded_h3",
+    "move_continuation_base_q_excluded_h4",
 )
 
 
@@ -106,6 +204,7 @@ CSV_FIELDS = (
     "full_effective_capacity_moves",
     "under_effective_capacity_moves",
     *NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
+    *POINTLESS_MOVE_ATTRIBUTION_FIELDS,
     "move1_utilization_penalties_applied",
     "move1_penalties_on_placement",
     "move1_penalties_on_single_available_initiation",
@@ -145,24 +244,10 @@ CSV_FIELDS = (
     "q_loss",
     "policy_loss",
     "total_loss",
-    "case_a_family_ranking_samples",
-    "case_a_family_ranking_loss",
-    "case_a_family_ranking_violating_samples",
-    "case_a_family_ranking_violation_fraction",
-    "case_a_family_ranking_mean_violating_placements",
-    "case_a_family_ranking_mean_violating_pairs",
-    "case_a_family_ranking_mean_violating_pair_fraction",
-    "case_a_family_ranking_all_pickups_above_all_placements_fraction",
-    "case_a_family_ranking_q1_pickup_fraction",
-    "move_continuation_family_ranking_samples",
-    "move_continuation_family_ranking_after_2_pickups",
-    "move_continuation_family_ranking_after_3_pickups",
-    "move_continuation_family_ranking_after_4_pickups",
-    "move_continuation_family_ranking_loss",
-    "move_continuation_family_ranking_violating_samples",
-    "move_continuation_family_ranking_violation_fraction",
-    "move_continuation_best_pickup_above_all_placements_fraction",
-    "move_continuation_q1_pickup_fraction",
+    *BASE_Q_EXCLUSION_PROGRESS_FIELDS,
+    *MOVE_FAMILY_RANKING_PROGRESS_FIELDS,
+    *MOVE_PICKUP_RANKING_CSV_FIELDS,
+    *POINTLESS_FINAL_PLACEMENT_PROGRESS_FIELDS,
     "policy_q_top1_agreement",
     "policy_top1_q_rank",
     "policy_entropy",
@@ -246,11 +331,6 @@ DEFAULT_STAGES = (
     CurriculumStage("mid_game", 6_000, (8, 14)),
     CurriculumStage("early_game", 8_000, (0, 7)),
     CurriculumStage("full_game", 10_000, full_game=True),
-)
-ACTION_SEED_OFFSET = 1_000_000_007
-EVALUATION_RETRY_LIMIT = 2
-EVALUATION_CONFIGURATIONS = tuple(
-    (map_num, player_count) for map_num in (1, 2, 3) for player_count in (3, 4, 5)
 )
 
 
@@ -381,6 +461,100 @@ def _format_game_numbers(game_numbers):
     return f"{', '.join(map(str, numbers[:-1]))}, and {numbers[-1]}"
 
 
+def _pointless_move_attribution_lines(maturity_trajectories):
+    """Format one aggregate-only audit summary for a completed training batch."""
+    items = tuple(maturity_trajectories)
+    totals = dict.fromkeys(POINTLESS_MOVE_ATTRIBUTION_FIELDS, 0)
+    total_moves = 0
+    total_pointless = 0
+    by_maturity = {}
+    for maturity, trajectory in items:
+        total_moves += getattr(trajectory, "move_action_count", 0)
+        pointless = getattr(trajectory, "pointless_normal_move_workflows", 0)
+        total_pointless += pointless
+        stage = by_maturity.setdefault(maturity, [0, 0])
+        stage[0] += getattr(trajectory, "move_action_count", 0)
+        stage[1] += pointless
+        audit = getattr(trajectory, "pointless_move_attribution", {})
+        for field_name in totals:
+            totals[field_name] += int(audit.get(field_name, 0) or 0)
+
+    def percentage(numerator, denominator):
+        return "n/a" if not denominator else f"{100 * numerator / denominator:.1f}%"
+
+    def pointless_percentage(field_name):
+        return percentage(totals[field_name], total_pointless)
+
+    lines = [
+        "POINTLESS MOVE ATTRIBUTION",
+        f"total normal Moves: {total_moves}",
+        f"total pointless normal Moves: {total_pointless}",
+        f"pointless rate / 100 normal Moves: {percentage(total_pointless, total_moves)}",
+        "By selection source:",
+    ]
+    for key, label in (
+        ("ranked_top_k", "ranked Top-K"),
+        ("epsilon_random", "epsilon/random"),
+        ("other", "other/preloaded"),
+    ):
+        numerator = totals[f"pointless_audit_{key}_moves"]
+        denominator = totals[f"pointless_audit_all_{key}_moves"]
+        lines.append(
+            f"  {label}: {numerator} / {denominator} pointless "
+            f"({percentage(numerator, denominator)})"
+        )
+    lines.append("  workflow exploration: inactive (no separate selection path)")
+    other_type = total_pointless - (
+        totals["pointless_audit_exact_restoration_moves"]
+        + totals["pointless_audit_equivalent_rearrangement_moves"]
+    )
+    lines.extend(
+        (
+            "Among pointless Moves by initiating rank: "
+            f"Q1 {percentage(totals['pointless_audit_q1_moves'], total_pointless)}, "
+            f"Q2 {percentage(totals['pointless_audit_q2_moves'], total_pointless)}, "
+            f"Q3 {percentage(totals['pointless_audit_q3_moves'], total_pointless)}, "
+            f"Q4+ {percentage(totals['pointless_audit_q4_plus_moves'], total_pointless)}, "
+            "exploration/unranked "
+            f"{pointless_percentage('pointless_audit_exploration_unranked_moves')}",
+            "By pointless type: "
+            "exact restoration "
+            f"{pointless_percentage('pointless_audit_exact_restoration_moves')}, "
+            "equivalent rearrangement "
+            f"{pointless_percentage('pointless_audit_equivalent_rearrangement_moves')}, "
+            f"other {percentage(other_type, total_pointless)}",
+            "By pieces moved: "
+            + ", ".join(
+                f"Move{depth} {pointless_percentage(f'pointless_audit_move{depth}_moves')}"
+                for depth in range(1, 6)
+            ),
+            "By effective Move capacity: "
+            + ", ".join(
+                f"Move{capacity} "
+                f"{pointless_percentage(f'pointless_audit_effective_capacity_{capacity}_moves')}"
+                for capacity in range(1, 6)
+            ),
+            "Pathology overlap: "
+            "immediate Q-Undo "
+            f"{pointless_percentage('pointless_audit_immediate_q_undo_moves')}, "
+            "repeated Move "
+            f"{pointless_percentage('pointless_audit_repeated_penalty_moves')}, "
+            "all-Move turn "
+            f"{pointless_percentage('pointless_audit_all_move_turn_moves')}, "
+            "avoidable-extra-Move "
+            f"{pointless_percentage('pointless_audit_avoidable_extra_move_actions')}, "
+            "consecutive-Move1 "
+            f"{pointless_percentage('pointless_audit_consecutive_move1_moves')}",
+            "By maturity: "
+            + ", ".join(
+                f"{maturity} {pointless}/{moves} ({percentage(pointless, moves)})"
+                for maturity, (moves, pointless) in sorted(by_maturity.items())
+            ),
+        )
+    )
+    return tuple(lines)
+
+
 def _rounded_seconds(value):
     return round(float(value), 2)
 
@@ -437,41 +611,20 @@ class CurriculumRunner:
         self._captured_errors = set()
         self._latest_descriptor = None
         saved = trainer.curriculum_state or {}
-        signature = self._configuration_signature()
-        compatibility_overrides = (
-            {},
-            {"late_game_action_limit": 4_000},
-            {"near_end_score_range": (10, 18)},
-            {"near_end_action_limit": 6_000},
-            {"near_end_action_limit": 6_000, "near_end_score_range": (10, 18)},
-            {"near_end_action_limit": 6_000, "retry_limit": 2},
-            {
-                "near_end_action_limit": 6_000,
-                "near_end_score_range": (10, 18),
-                "retry_limit": 2,
-            },
-            {"retry_limit": 2},
-            {"near_end_action_limit": 3_000, "near_end_score_range": (18, 19)},
-            {
-                "near_end_action_limit": 3_000,
-                "near_end_score_range": (18, 19),
-                "retry_limit": 2,
-            },
-            {"near_end_action_limit": 2_000, "retry_limit": 2},
-        )
         compatible_signatures = {
-            self._configuration_signature(**overrides) for overrides in compatibility_overrides
+            self._configuration_signature(**overrides)
+            for overrides in _CONFIGURATION_COMPATIBILITY_OVERRIDES
         }
         compatible_signatures.update(
             self._configuration_signature(include_zero_epsilon=False, **overrides)
-            for overrides in compatibility_overrides
+            for overrides in _CONFIGURATION_COMPATIBILITY_OVERRIDES
         )
         compatible_signatures.update(
             self._configuration_signature(
                 legacy_zero_epsilon_training_fraction=0.05,
                 **overrides,
             )
-            for overrides in compatibility_overrides
+            for overrides in _CONFIGURATION_COMPATIBILITY_OVERRIDES
         )
         if (
             saved.get("configuration_version", 1) >= 4
@@ -534,7 +687,7 @@ class CurriculumRunner:
             metadata = {
                 "completed_training_games": completed_games,
                 "batch_number": self.batch_number,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "training_updates": self.trainer.progress.training_updates,
                 "training_checkpoint_format": TRAINING_CHECKPOINT_FORMAT,
                 "training_checkpoint_version": TRAINING_CHECKPOINT_VERSION,
@@ -696,7 +849,7 @@ class CurriculumRunner:
         action_trace=(),
         seat_tiers=(),
     ):
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
         self.failure_directory.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix=f"{timestamp}_", dir=self.failure_directory))
         if descriptor is not None and descriptor.path.is_file():
@@ -881,6 +1034,10 @@ class CurriculumRunner:
                 field: getattr(trajectory, field, 0)
                 for field in NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS
             },
+            **{
+                field: getattr(trajectory, "pointless_move_attribution", {}).get(field, 0)
+                for field in POINTLESS_MOVE_ATTRIBUTION_FIELDS
+            },
             "move1_utilization_penalties_applied": getattr(
                 trajectory, "move1_utilization_penalties_applied", 0
             ),
@@ -1000,96 +1157,6 @@ class CurriculumRunner:
                 if run_type in {"training", "training_timeout"}
                 else None
             ),
-            "case_a_family_ranking_samples": (
-                self.trainer.progress.last_case_a_family_ranking_samples
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_loss": (
-                self.trainer.progress.last_case_a_family_ranking_loss
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_violating_samples": (
-                self.trainer.progress.last_case_a_family_ranking_violating_samples
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_violation_fraction": (
-                self.trainer.progress.last_case_a_family_ranking_violation_fraction
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_mean_violating_placements": (
-                self.trainer.progress.last_case_a_family_ranking_mean_violating_placements
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_mean_violating_pairs": (
-                self.trainer.progress.last_case_a_family_ranking_mean_violating_pairs
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_mean_violating_pair_fraction": (
-                self.trainer.progress.last_case_a_family_ranking_mean_violating_pair_fraction
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_all_pickups_above_all_placements_fraction": (
-                self.trainer.progress.last_case_a_family_ranking_all_pickups_above_all_placements_fraction
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "case_a_family_ranking_q1_pickup_fraction": (
-                self.trainer.progress.last_case_a_family_ranking_q1_pickup_fraction
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_family_ranking_samples": (
-                self.trainer.progress.last_move_continuation_family_ranking_samples
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_family_ranking_after_2_pickups": (
-                self.trainer.progress.last_move_continuation_family_ranking_after_2_pickups
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_family_ranking_after_3_pickups": (
-                self.trainer.progress.last_move_continuation_family_ranking_after_3_pickups
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_family_ranking_after_4_pickups": (
-                self.trainer.progress.last_move_continuation_family_ranking_after_4_pickups
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_family_ranking_loss": (
-                self.trainer.progress.last_move_continuation_family_ranking_loss
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_family_ranking_violating_samples": (
-                self.trainer.progress.last_move_continuation_family_ranking_violating_samples
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_family_ranking_violation_fraction": (
-                self.trainer.progress.last_move_continuation_family_ranking_violation_fraction
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_best_pickup_above_all_placements_fraction": (
-                self.trainer.progress.last_move_continuation_best_pickup_above_all_placements_fraction
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
-            "move_continuation_q1_pickup_fraction": (
-                self.trainer.progress.last_move_continuation_q1_pickup_fraction
-                if run_type in {"training", "training_timeout"}
-                else None
-            ),
             "policy_q_top1_agreement": getattr(trajectory, "policy_q_top1_agreement", None),
             "policy_top1_q_rank": getattr(trajectory, "policy_top1_q_rank", None),
             "policy_entropy": getattr(trajectory, "policy_entropy", None),
@@ -1107,6 +1174,22 @@ class CurriculumRunner:
             "play_seconds": _rounded_seconds(trajectory.play_seconds),
             "learning_seconds": _rounded_seconds(learning_seconds),
         }
+        for field_name in MOVE_FAMILY_RANKING_PROGRESS_FIELDS:
+            row[field_name] = (
+                getattr(self.trainer.progress, f"last_{field_name}") if is_training else None
+            )
+        for field_name in BASE_Q_EXCLUSION_PROGRESS_FIELDS:
+            row[field_name] = (
+                getattr(self.trainer.progress, f"last_{field_name}") if is_training else None
+            )
+        for field_name in MOVE_PICKUP_RANKING_CSV_FIELDS:
+            row[field_name] = (
+                getattr(self.trainer.progress, f"last_{field_name}", None) if is_training else None
+            )
+        for field_name in POINTLESS_FINAL_PLACEMENT_PROGRESS_FIELDS:
+            row[field_name] = (
+                getattr(self.trainer.progress, f"last_{field_name}") if is_training else None
+            )
         if self.trainer.config.detailed_profiling:
             row.update(
                 {
@@ -1230,6 +1313,7 @@ class CurriculumRunner:
         pending_shadow_filter_rows = []
         pending_game_numbers = []
         rows = []
+        pointless_move_audit_trajectories = []
         unfinished = 0
 
         def save_completed_group():
@@ -1321,6 +1405,8 @@ class CurriculumRunner:
                     )
                     continue
                 result = getattr(trajectory, "completion_reason", "normal")
+                if self.trainer.config.pointless_move_attribution_audit_enabled:
+                    pointless_move_audit_trajectories.append((maturity, trajectory))
                 descriptors.append(descriptor)
                 learning_started = perf_counter()
                 game_loss = self.trainer.update_model(
@@ -1423,6 +1509,9 @@ class CurriculumRunner:
             if completed_game:
                 game_index += 1
         save_completed_group()
+        if self.trainer.config.pointless_move_attribution_audit_enabled:
+            for line in _pointless_move_attribution_lines(pointless_move_audit_trajectories):
+                self._report(line)
         return rows, descriptors, unfinished
 
     def _collect_evaluation(self, stage, directory):
@@ -1642,7 +1731,7 @@ class CurriculumRunner:
             )
             self.batch_number += 1
             self.report_batch_number += 1
-            run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+            run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
             batch_directory = self.temporary_directory / f"batch_{self.batch_number}_{run_id}"
             batch_directory.mkdir(parents=True, exist_ok=False)
             self.trainer.config = replace(
@@ -1683,7 +1772,7 @@ class CurriculumRunner:
                 self._report("Saved final batch progress and evaluation result")
             except Exception as error:
                 if id(error) not in self._captured_errors and not isinstance(
-                    error, (ActionLimitExceeded, CurriculumRunError)
+                    error, ActionLimitExceeded | CurriculumRunError
                 ):
                     self._save_failure(stage, self._latest_descriptor, 0, "runner", error)
                 raise

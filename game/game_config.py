@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
-from enum import Enum
 import math
 import random
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field, replace
+from enum import Enum
 
 from game.action_schema import TILE_TYPES
 from game.game_info import Game
 from game.setup import MAX_PLAYERS, MIN_PLAYERS, SUPPORTED_MAPS
 from map_data.map_attributes import Map
-
 
 EMPERORS_FAVOUR_TILES = TILE_TYPES
 
@@ -131,9 +130,7 @@ class GameConfiguration:
         if not enabled or mode != "manual":
             return
 
-        allowed_counts = (
-            dict(allowed) if isinstance(allowed, dict) else {value: 1 for value in allowed}
-        )
+        allowed_counts = dict(allowed) if isinstance(allowed, dict) else dict.fromkeys(allowed, 1)
         if not selected:
             raise ValueError(f"Manual {label} selection cannot be empty")
         if exact_count is not None and len(selected) != exact_count:
@@ -181,11 +178,10 @@ class GameConfiguration:
         ]
         if self.promo_marker_mode == "manual":
             return tuple(self.promo_markers)
-        else:
-            promos = rng.sample(
-                available_promos,
-                rng.randint(1, len(available_promos)),
-            )
+        promos = rng.sample(
+            available_promos,
+            rng.randint(1, len(available_promos)),
+        )
 
         available_standard = [
             marker
@@ -222,7 +218,7 @@ class GameConfiguration:
     @staticmethod
     def _load_ai_model():
         # AI models are optional; human-only games must not import PyTorch.
-        from ai.ai_model import HansaNN, SHARED_MODEL_FILE
+        from ai.ai_model import SHARED_MODEL_FILE, HansaNN
 
         return HansaNN(model_file=SHARED_MODEL_FILE)
 

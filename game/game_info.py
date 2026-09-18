@@ -1,25 +1,25 @@
 import random
 
-from game.action_codec import ActionCodecError, DEFAULT_ACTION_CODEC
-from game.action_schema import TILE_TYPES
+from game.action_codec import DEFAULT_ACTION_CODEC, ActionCodecError
 from game.action_execution import execute_action
+from game.action_schema import TILE_TYPES
 from game.game_actions import InvalidActionError
 from game.legal_actions import get_legal_actions
 from game.setup import validate_game_configuration
 from game.turn_state import TurnPhase, TurnStateError
+from map_data.constants import (
+    BLUE,
+    COLOR_NAMES,
+    GREEN,
+    PURPLE,
+    RED,
+    UPGRADE_MAX_VALUES,
+    YELLOW,
+)
 from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
-from map_data.constants import (
-    COLOR_NAMES,
-    GREEN,
-    BLUE,
-    PURPLE,
-    RED,
-    YELLOW,
-    UPGRADE_MAX_VALUES,
-)
-from player_info.player_attributes import Player, DisplacedPlayer
+from player_info.player_attributes import DisplacedPlayer, Player
 
 
 class Game:
@@ -153,13 +153,13 @@ class Game:
         self.tile_pool.extend(tiles[: self.num_players])
 
     def assign_map(self, map_num, num_players):
-        # Logic to assign a map based on map_num
         if map_num == 1:
             return Map1(num_players, rng=self.rng)
-        elif map_num == 2:
+        if map_num == 2:
             return Map2(rng=self.rng)
-        elif map_num == 3:
+        if map_num == 3:
             return Map3(num_players, rng=self.rng)
+        return None
 
     @property
     def pending_workflows(self):
@@ -363,12 +363,10 @@ class Game:
                     return False
 
             # Check for Scotland region
-            elif route.region == "Scotland":
-                if not (
-                    self.current_player.blue_priv_count > 0
-                    or self.current_player.london_priv_count > 0
-                ):
-                    return False
+            elif route.region == "Scotland" and not (
+                self.current_player.blue_priv_count > 0 or self.current_player.london_priv_count > 0
+            ):
+                return False
         return True
 
     def consume_region_privilege(self, route):
@@ -515,7 +513,7 @@ class Game:
         for route in start_city.routes:
             # Check all cities connected to this route
             for connected_city in route.cities:
-                # Skip if we've already visited this city or if the connected city doesn't have the player's office
+                # Skip visited cities and cities without one of the player's offices.
                 if connected_city in visited or not connected_city.has_office_owned_by(
                     self.current_player
                 ):
@@ -531,18 +529,17 @@ class Game:
     def get_bonus_marker_points(self, total_bms):
         if total_bms == 1:
             return 1
-        elif 2 <= total_bms <= 3:
+        if 2 <= total_bms <= 3:
             return 3
-        elif 4 <= total_bms <= 5:
+        if 4 <= total_bms <= 5:
             return 6
-        elif 6 <= total_bms <= 7:
+        if 6 <= total_bms <= 7:
             return 10
-        elif 8 <= total_bms <= 9:
+        if 8 <= total_bms <= 9:
             return 15
-        elif total_bms >= 10:
+        if total_bms >= 10:
             return 21
-        else:
-            return 0
+        return 0
 
         # 1 initial points
         # 2 fully developed abilities
@@ -648,7 +645,7 @@ class Game:
 
     def calculate_britannia_region_points(self):
         """Award the Britannia 7/4/2 ladders for Wales and, on 4–5p, Scotland."""
-        totals = {player: 0 for player in self.players}
+        totals = dict.fromkeys(self.players, 0)
         regions = ["Wales"]
         if self.num_players > 3:
             regions.append("Scotland")

@@ -5,24 +5,22 @@ import pygame
 from drawing.action_ui import action_label, fit_text
 from game.action_schema import CONTROL, INCOME
 from map_data.constants import (
-    TAN,
-    COLOR_NAMES,
-    WHITE,
-    ORANGE,
-    PINK,
+    ACTIONS_MAX_VALUES,
+    BANK_MAX_VALUES,
     BLACK,
-    RED,
-    YELLOW,
+    BLUE,
+    BOOK_OF_KNOWLEDGE_MAX_VALUES,
     BUFFER,
-    SQUARE_SIZE,
-    SPACING,
     CIRCLE_RADIUS,
     CITY_KEYS_MAX_VALUES,
-    ACTIONS_MAX_VALUES,
-    PRIVILEGE_COLORS,
-    BOOK_OF_KNOWLEDGE_MAX_VALUES,
-    BANK_MAX_VALUES,
-    BLUE,
+    COLOR_NAMES,
+    ORANGE,
+    PINK,
+    SPACING,
+    SQUARE_SIZE,
+    TAN,
+    WHITE,
+    YELLOW,
 )
 
 pygame.font.init()
@@ -203,9 +201,6 @@ def draw_bonus_markers(win, selected_map):
             # If the position exists, call the draw method on the bonus marker
             if bonus_marker_pos:
                 draw_board_bonus_markers(win, route.bonus_marker, bonus_marker_pos)
-                # print(f"Drew bonus marker between {city_pair[0]} and {city_pair[1]} at position {bonus_marker_pos}")
-            # else:
-            # print(f"No bonus marker position found for route between {city_pair[0]} and {city_pair[1]}")
         if route.permanent_bonus_marker:
             # Construct the key for the dictionary
             city_pair = tuple(sorted([route.cities[0].name, route.cities[1].name]))
@@ -339,7 +334,12 @@ def draw_route_post(win, post):
 def draw_actions_remaining(win, game):
     padding = 5
     if game.waiting_for_displaced_player:
-        text_str = f"{COLOR_NAMES[game.current_player.color]} displaced {COLOR_NAMES[game.displaced_player.player.color]} - waiting for {COLOR_NAMES[game.displaced_player.player.color]} to place {game.displaced_player.total_pieces_to_place} pieces!"
+        displaced_color = COLOR_NAMES[game.displaced_player.player.color]
+        text_str = (
+            f"{COLOR_NAMES[game.current_player.color]} displaced {displaced_color} - "
+            f"waiting for {displaced_color} to place "
+            f"{game.displaced_player.total_pieces_to_place} pieces!"
+        )
     else:
         text_str = f"Actions: {game.current_player.actions_remaining}"
 
@@ -456,7 +456,10 @@ def draw_end_game(win, winning_players):
 
     # Now create and blit the end game text
     if len(winning_players) == 1:
-        winner_text_str = f"Game Over! {COLOR_NAMES[winning_players[0].color]} wins with {winning_players[0].final_score} points!"
+        winner = winning_players[0]
+        winner_text_str = (
+            f"Game Over! {COLOR_NAMES[winner.color]} wins with {winner.final_score} points!"
+        )
     else:
         winners_str = ", ".join(
             f"{COLOR_NAMES[player.color]} ({player.final_score} points)"
@@ -621,10 +624,7 @@ def draw_privilegium_section(window, board):
     privilege_y = board.y + 10 + 2 * SQUARE_SIZE + 10
     colors = [WHITE, ORANGE, PINK, BLACK]
     for i, color in enumerate(colors):
-        if board.player.has_unlocked_privilege(i):
-            color_to_use = color
-        else:
-            color_to_use = board.player.color
+        color_to_use = color if board.player.has_unlocked_privilege(i) else board.player.color
         draw_shape(
             window,
             "rectangle",
@@ -663,10 +663,7 @@ def draw_liber_sophiae_section(window, board):
     start_x += (circle_section_width - circle_label_width) // 2
 
     for i, value in enumerate(BOOK_OF_KNOWLEDGE_MAX_VALUES):
-        if board.player.has_unlocked_book(i):
-            color = WHITE
-        else:
-            color = board.player.color
+        color = WHITE if board.player.has_unlocked_book(i) else board.player.color
 
         draw_shape(
             window,
@@ -783,10 +780,7 @@ def draw_bank_section(window, board):
 
     # Draw "Bank" section (squares)
     for i, value in enumerate(BANK_MAX_VALUES):
-        if board.player.has_unlocked_bank(i):
-            color = WHITE
-        else:
-            color = board.player.color
+        color = WHITE if board.player.has_unlocked_bank(i) else board.player.color
 
         draw_shape(
             window,

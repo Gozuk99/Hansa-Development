@@ -19,7 +19,6 @@ from drawing.drawing_utils import (
 )
 from drawing.game_window import GameWindow
 from game.game_config import GameConfiguration, PlayerControl
-from map_data.map_attributes import BonusMarker
 
 
 class DrawingTests(unittest.TestCase):
@@ -218,7 +217,6 @@ class DrawingTests(unittest.TestCase):
             seed=124,
         ).create_game()
         observer = game.players[0]
-        opponent = game.players[1]
         board_data = ObservationEncoder()
 
         state = public_game_state(board_data, game, observer)

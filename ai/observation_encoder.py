@@ -11,7 +11,6 @@ import torch
 from ai.observation_schema import OBSERVATION_SIZE
 from game.turn_state import TurnPhase
 from map_data.constants import (
-    ACTIONS_MAX_VALUES,
     BANK_MAX_VALUES,
     BLACK,
     BLACKISH_BROWN,

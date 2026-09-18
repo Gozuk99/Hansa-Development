@@ -1,5 +1,5 @@
 from collections import deque
-from functools import lru_cache
+from functools import cache
 
 from map_data.constants import DARK_GREEN
 from player_info.player_attributes import valid_region_transition
@@ -153,7 +153,7 @@ def displacement_can_be_completed(game, route, displaced_player, displaced_shape
     """Whether some legal placement sequence can relocate the mandatory piece."""
     optional_limit = 1 if displaced_shape == "square" else 2
 
-    @lru_cache(maxsize=None)
+    @cache
     def search(unavailable_posts, general_stock, personal_supply, optional_remaining):
         source = general_stock if sum(general_stock) else personal_supply
         shapes = [displaced_shape]
@@ -380,9 +380,12 @@ def get_adjacent_routes(current_route, start_route_region):
     adjacent_routes = []
     for city in current_route.cities:
         for adjacent_route in city.routes:
-            if adjacent_route != current_route and adjacent_route not in adjacent_routes:
-                if valid_region_transition(start_route_region, adjacent_route.region):
-                    adjacent_routes.append(adjacent_route)
+            if (
+                adjacent_route != current_route
+                and adjacent_route not in adjacent_routes
+                and valid_region_transition(start_route_region, adjacent_route.region)
+            ):
+                adjacent_routes.append(adjacent_route)
     return adjacent_routes
 
 
@@ -504,7 +507,7 @@ def displace_claim(game, post, desired_shape):
                 displaced_player.player.holding_pieces
             )
     elif (
-        displaced_player.played_displaced_shape == True
+        displaced_player.played_displaced_shape
         and displaced_player.is_general_stock_empty()
         and displaced_player.is_personal_supply_empty()
     ):

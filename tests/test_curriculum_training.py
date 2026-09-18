@@ -15,6 +15,7 @@ from training.curriculum import (
     CSV_FIELDS,
     DEFAULT_ZERO_EPSILON_TRAINING_FRACTIONS,
     DETAILED_PROFILING_FIELDS,
+    MOVE_PICKUP_RANKING_CSV_FIELDS,
     SHADOW_FILTER_CSV_FIELDS,
     CurriculumConfig,
     CurriculumRunner,
@@ -23,12 +24,14 @@ from training.curriculum import (
     StateDescriptor,
     ZERO_EPSILON_EXPLORATION_MODE,
     _format_game_numbers,
+    _pointless_move_attribution_lines,
     csv_fields,
 )
 from training.self_play import (
     ActionLimitExceeded,
     IncompleteGameError,
     NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
+    POINTLESS_MOVE_ATTRIBUTION_FIELDS,
     TrainingConfig,
     TRAINING_CHECKPOINT_FORMAT,
     TRAINING_CHECKPOINT_VERSION,
@@ -295,6 +298,7 @@ class CurriculumTrainingTests(unittest.TestCase):
             "full_effective_capacity_moves",
             "under_effective_capacity_moves",
             *NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS,
+            *POINTLESS_MOVE_ATTRIBUTION_FIELDS,
             "move1_utilization_penalties_applied",
             "move1_penalties_on_placement",
             "move1_penalties_on_single_available_initiation",
@@ -342,6 +346,10 @@ class CurriculumTrainingTests(unittest.TestCase):
             "case_a_family_ranking_mean_violating_pair_fraction",
             "case_a_family_ranking_all_pickups_above_all_placements_fraction",
             "case_a_family_ranking_q1_pickup_fraction",
+            "case_a_family_ranking_worst_pickup_q_mean",
+            "case_a_family_ranking_best_placement_q_mean",
+            "case_a_family_ranking_worst_pickup_minus_best_placement_gap_mean",
+            "case_a_family_ranking_margin_satisfied_fraction",
             "move_continuation_family_ranking_samples",
             "move_continuation_family_ranking_after_2_pickups",
             "move_continuation_family_ranking_after_3_pickups",
@@ -351,6 +359,7 @@ class CurriculumTrainingTests(unittest.TestCase):
             "move_continuation_family_ranking_violation_fraction",
             "move_continuation_best_pickup_above_all_placements_fraction",
             "move_continuation_q1_pickup_fraction",
+            *MOVE_PICKUP_RANKING_CSV_FIELDS,
             "policy_q_top1_agreement",
             "policy_top1_q_rank",
             "policy_entropy",
@@ -494,6 +503,30 @@ class CurriculumTrainingTests(unittest.TestCase):
     def test_saved_game_numbers_are_compact_but_preserve_gaps(self):
         self.assertEqual(_format_game_numbers([16, 17, 18, 19, 20]), "16-20")
         self.assertEqual(_format_game_numbers([2, 3, 5]), "2, 3, and 5")
+
+    def test_pointless_move_attribution_summary_uses_consistent_source_denominators(self):
+        trajectory = SimpleNamespace(
+            move_action_count=10,
+            pointless_normal_move_workflows=3,
+            pointless_move_attribution={
+                "pointless_audit_all_ranked_top_k_moves": 8,
+                "pointless_audit_all_epsilon_random_moves": 2,
+                "pointless_audit_ranked_top_k_moves": 2,
+                "pointless_audit_epsilon_random_moves": 1,
+                "pointless_audit_q1_moves": 2,
+                "pointless_audit_exploration_unranked_moves": 1,
+                "pointless_audit_exact_restoration_moves": 2,
+                "pointless_audit_equivalent_rearrangement_moves": 1,
+                "pointless_audit_move1_moves": 3,
+            },
+        )
+
+        rendered = "\n".join(_pointless_move_attribution_lines((("fresh", trajectory),)))
+
+        self.assertIn("pointless rate / 100 normal Moves: 30.0%", rendered)
+        self.assertIn("ranked Top-K: 2 / 8 pointless (25.0%)", rendered)
+        self.assertIn("epsilon/random: 1 / 2 pointless (50.0%)", rendered)
+        self.assertIn("fresh 3/10 (30.0%)", rendered)
 
     def test_evaluation_tier_rotation_advances_each_batch(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -660,6 +693,10 @@ class CurriculumTrainingTests(unittest.TestCase):
             runner.trainer.progress.last_case_a_family_ranking_mean_violating_pair_fraction = 0.625
             runner.trainer.progress.last_case_a_family_ranking_all_pickups_above_all_placements_fraction = 0.2
             runner.trainer.progress.last_case_a_family_ranking_q1_pickup_fraction = 0.7
+            runner.trainer.progress.last_case_a_family_ranking_worst_pickup_q_mean = 4.25
+            runner.trainer.progress.last_case_a_family_ranking_best_placement_q_mean = 3.5
+            runner.trainer.progress.last_case_a_family_ranking_worst_pickup_minus_best_placement_gap_mean = 0.75
+            runner.trainer.progress.last_case_a_family_ranking_margin_satisfied_fraction = 0.6
             runner.trainer.progress.last_move_continuation_family_ranking_samples = 8
             runner.trainer.progress.last_move_continuation_family_ranking_after_2_pickups = 4
             runner.trainer.progress.last_move_continuation_family_ranking_after_3_pickups = 3
@@ -669,7 +706,39 @@ class CurriculumTrainingTests(unittest.TestCase):
             runner.trainer.progress.last_move_continuation_family_ranking_violation_fraction = 0.75
             runner.trainer.progress.last_move_continuation_best_pickup_above_all_placements_fraction = 0.25
             runner.trainer.progress.last_move_continuation_q1_pickup_fraction = 0.375
+            runner.trainer.progress.last_move_pickup_ranking_samples = 20
+            runner.trainer.progress.last_move_pickup_ranking_loss = 1.5
+            runner.trainer.progress.last_move_pickup_ranking_eligible_effective_batches = 3
+            runner.trainer.progress.last_move_pickup_ranking_mean_present_depth_count = 2.5
+            runner.trainer.progress.last_move_pickup_ranking_margin_satisfied_fraction = 0.55
+            runner.trainer.progress.last_base_q_included_samples = 17
+            runner.trainer.progress.last_base_q_excluded_samples = 3
+            runner.trainer.progress.last_move_continuation_base_q_excluded_samples = 3
+            runner.trainer.progress.last_move_continuation_base_q_excluded_h2 = 1
+            runner.trainer.progress.last_move_continuation_base_q_excluded_h3 = 1
+            runner.trainer.progress.last_move_continuation_base_q_excluded_h4 = 1
+            runner.trainer.progress.last_move_pickup_ranking_holding_4_samples = 2
+            runner.trainer.progress.last_move_pickup_ranking_holding_4_loss = 1.25
+            runner.trainer.progress.last_move_pickup_ranking_holding_4_weighted_contribution = 0.2
+            runner.trainer.progress.last_move_pickup_ranking_holding_4_best_pickup_q_mean = 3.0
+            runner.trainer.progress.last_move_pickup_ranking_holding_4_ordinary_target_mean = -500.0
+            runner.trainer.progress.last_pointless_final_placement_ranking_samples = 7
+            runner.trainer.progress.last_pointless_final_placement_ranking_loss = 1.75
+            runner.trainer.progress.last_pointless_final_placement_restorative_q1_fraction = 0.5
+            runner.trainer.progress.last_pointless_final_placement_margin_satisfied_fraction = 0.25
+            runner.trainer.progress.last_pointless_final_placement_q_gap_mean = 0.125
+            runner.trainer.progress.last_pointless_final_placement_immediate_q_undo_samples = 3
+            runner.trainer.progress.last_pointless_final_placement_multi_piece_samples = 4
+            runner.trainer.progress.last_pointless_final_placement_exact_restoration_samples = 5
+            runner.trainer.progress.last_pointless_final_placement_equivalent_rearrangement_samples = 2
             trajectory = completed_trajectory()
+            trajectory.pointless_move_attribution = {
+                "pointless_audit_all_ranked_top_k_moves": 5,
+                "pointless_audit_ranked_top_k_moves": 2,
+                "pointless_audit_q1_moves": 1,
+                "pointless_audit_exact_restoration_moves": 2,
+                "pointless_audit_move1_moves": 2,
+            }
             for index, field in enumerate(NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS, start=1):
                 setattr(trajectory, field, index)
             row = runner._trajectory_row(
@@ -712,6 +781,11 @@ class CurriculumTrainingTests(unittest.TestCase):
             self.assertEqual(row["under_effective_capacity_moves"], 1)
             for index, field in enumerate(NORMAL_MOVE_CAPACITY_TELEMETRY_FIELDS, start=1):
                 self.assertEqual(row[field], index)
+            self.assertEqual(row["pointless_audit_all_ranked_top_k_moves"], 5)
+            self.assertEqual(row["pointless_audit_ranked_top_k_moves"], 2)
+            self.assertEqual(row["pointless_audit_q1_moves"], 1)
+            self.assertEqual(row["pointless_audit_exact_restoration_moves"], 2)
+            self.assertEqual(row["pointless_audit_move1_moves"], 2)
             self.assertEqual(row["move1_utilization_penalties_applied"], 4)
             self.assertEqual(row["move1_penalties_on_placement"], 3)
             self.assertEqual(row["move1_penalties_on_single_available_initiation"], 1)
@@ -774,6 +848,16 @@ class CurriculumTrainingTests(unittest.TestCase):
                 0.2,
             )
             self.assertEqual(row["case_a_family_ranking_q1_pickup_fraction"], 0.7)
+            self.assertEqual(row["case_a_family_ranking_worst_pickup_q_mean"], 4.25)
+            self.assertEqual(row["case_a_family_ranking_best_placement_q_mean"], 3.5)
+            self.assertEqual(
+                row["case_a_family_ranking_worst_pickup_minus_best_placement_gap_mean"],
+                0.75,
+            )
+            self.assertEqual(
+                row["case_a_family_ranking_margin_satisfied_fraction"],
+                0.6,
+            )
             self.assertEqual(row["move_continuation_family_ranking_samples"], 8)
             self.assertEqual(row["move_continuation_family_ranking_after_2_pickups"], 4)
             self.assertEqual(row["move_continuation_family_ranking_after_3_pickups"], 3)
@@ -786,6 +870,46 @@ class CurriculumTrainingTests(unittest.TestCase):
                 0.25,
             )
             self.assertEqual(row["move_continuation_q1_pickup_fraction"], 0.375)
+            self.assertEqual(row["move_pickup_ranking_samples"], 20)
+            self.assertNotIn("move_pickup_ranking_sample_weighted_loss", row)
+            self.assertNotIn("move_pickup_ranking_raw_weighted_loss", row)
+            self.assertEqual(row["move_pickup_ranking_loss"], 1.5)
+            self.assertEqual(row["move_pickup_ranking_eligible_effective_batches"], 3)
+            self.assertEqual(row["move_pickup_ranking_mean_present_depth_count"], 2.5)
+            self.assertEqual(row["move_pickup_ranking_margin_satisfied_fraction"], 0.55)
+            self.assertEqual(row["base_q_included_samples"], 17)
+            self.assertEqual(row["base_q_excluded_samples"], 3)
+            self.assertEqual(row["move_continuation_base_q_excluded_samples"], 3)
+            self.assertEqual(row["move_continuation_base_q_excluded_h4"], 1)
+            self.assertEqual(row["move_pickup_ranking_holding_4_samples"], 2)
+            self.assertEqual(row["move_pickup_ranking_holding_4_loss"], 1.25)
+            self.assertEqual(row["move_pickup_ranking_holding_4_weighted_contribution"], 0.2)
+            self.assertEqual(row["move_pickup_ranking_holding_4_best_pickup_q_mean"], 3.0)
+            self.assertEqual(row["move_pickup_ranking_holding_4_ordinary_target_mean"], -500.0)
+            self.assertEqual(row["pointless_final_placement_ranking_samples"], 7)
+            self.assertEqual(row["pointless_final_placement_ranking_loss"], 1.75)
+            self.assertEqual(
+                row["pointless_final_placement_restorative_q1_fraction"],
+                0.5,
+            )
+            self.assertEqual(
+                row["pointless_final_placement_margin_satisfied_fraction"],
+                0.25,
+            )
+            self.assertEqual(row["pointless_final_placement_q_gap_mean"], 0.125)
+            self.assertEqual(
+                row["pointless_final_placement_immediate_q_undo_samples"],
+                3,
+            )
+            self.assertEqual(row["pointless_final_placement_multi_piece_samples"], 4)
+            self.assertEqual(
+                row["pointless_final_placement_exact_restoration_samples"],
+                5,
+            )
+            self.assertEqual(
+                row["pointless_final_placement_equivalent_rearrangement_samples"],
+                2,
+            )
 
     def test_run_labels_cover_training_evaluation_and_timeout_cases(self):
         with tempfile.TemporaryDirectory() as directory:

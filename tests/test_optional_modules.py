@@ -21,17 +21,6 @@ TILES = (
     "+4PtsPerOwnedCity",
     "+7PtsPerCompletedAbility",
 )
-MARKER_TYPES = (
-    "SwapOffice",
-    "Move3",
-    "UpgradeAbility",
-    "3Actions",
-    "4Actions",
-    "ExchangeBonusMarker",
-    "Tribute4EstablishingTP",
-    "BlockTradeRoute",
-    "PlaceAdjacent",
-)
 
 
 class OptionalModuleTests(unittest.TestCase):

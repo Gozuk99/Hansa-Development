@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import random
 from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
-import hashlib
 from itertools import product
-import json
 from pathlib import Path
-import random
 
 from game.action_validation import ActionValidationError, validate_action_state
 from game.game_config import GameConfiguration, human_players
@@ -26,7 +26,6 @@ from map_data.constants import (
     PRIVILEGE_COLORS,
 )
 from map_data.map_attributes import BonusMarker
-
 
 GENERATOR_VERSION = 9
 DEFAULT_OUTPUT_DIRECTORY = Path("training_data/generated")
@@ -1139,9 +1138,11 @@ def _build_once(request, attempt_seed):
     validate_loaded_game(game)
     if game.game_end or not game.get_legal_actions():
         return None
-    if scenario is EndGameScenario.NEAR_COMPLETED_CITIES:
-        if game.current_full_cities_count != game.selected_map.max_full_cities - 1:
-            return None
+    if (
+        scenario is EndGameScenario.NEAR_COMPLETED_CITIES
+        and game.current_full_cities_count != game.selected_map.max_full_cities - 1
+    ):
+        return None
     try:
         validate_action_state(game, quiet=True)
     except ActionValidationError:

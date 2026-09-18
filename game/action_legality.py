@@ -4,9 +4,9 @@ from game.action_schema import (
     TILE_SLOT_BY_TYPE,
 )
 from game.game_actions import (
-    can_select_optional_displaced_shape,
     can_pick_up_displacement_fallback,
     can_place_displacement_piece,
+    can_select_optional_displaced_shape,
     displacement_can_be_completed,
 )
 from game.turn_state import TurnPhase
@@ -347,12 +347,11 @@ def mask_claim_route(game):
         or _has_pending_post_workflow(game)
         or _has_pending_action_choice(game)
     ):
-        claim_route_tensor = (
+        return (
             claim_route_for_points_tensor
             + claim_route_for_office_tensor
             + claim_route_for_upgrade_tensor
         )
-        return claim_route_tensor
 
     route_idx = 0
     for route in game.selected_map.routes:
@@ -383,9 +382,9 @@ def mask_claim_route(game):
                     if (
                         game.current_player.player_can_claim_office(next_open_office_color)
                         and city.color != DARK_GREEN
+                        and city.has_required_piece_shape(game.current_player, route)
                     ):
-                        if city.has_required_piece_shape(game.current_player, route):
-                            claim_route_for_office_tensor[base_index_office] = 1
+                        claim_route_for_office_tensor[base_index_office] = 1
                 if city.upgrade_city_type and special_city is None:
                     for upgrade_idx, upgrade in enumerate(city.upgrade_city_type):
                         if upgrade_idx < max_upgrades_per_city:
@@ -409,12 +408,11 @@ def mask_claim_route(game):
 
         route_idx += 1
 
-    claim_route_tensor = (
+    return (
         claim_route_for_points_tensor
         + claim_route_for_office_tensor
         + claim_route_for_upgrade_tensor
     )
-    return claim_route_tensor
 
 
 def mask_income_actions(game):
@@ -713,7 +711,7 @@ def _has_usable_bonus_marker(game):
     for bm in game.current_player.bonus_markers:
         if bm.type == "PlaceAdjacent":
             continue
-        elif bm.type == "SwapOffice":
+        if bm.type == "SwapOffice":
             # Check if there's a city where the player is eligible to swap offices
             swap_office_possible = False
             for city in game.selected_map.cities:

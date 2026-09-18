@@ -1,7 +1,7 @@
 """Codec for stable Hansa interaction locations."""
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Callable, Iterable
 
 from game.action_schema import (
     ABILITY,
@@ -11,8 +11,8 @@ from game.action_schema import (
     CITY,
     CONTROL,
     INCOME,
-    POST,
     PLAYER,
+    POST,
     ROUTE,
     SUPPLY,
     TILE,
@@ -26,8 +26,8 @@ from game.structured_actions import (
     GameAction,
     IncomeInteraction,
     PieceShape,
-    PostInteraction,
     PlayerInteraction,
+    PostInteraction,
     RouteInteraction,
     SupplyInteraction,
     TileInteraction,

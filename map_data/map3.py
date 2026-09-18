@@ -1,6 +1,6 @@
 # map3.py
-from map_data.map_attributes import Map, City, Upgrade, Office, Route
-from map_data.constants import GREY, CIRCLE_RADIUS, SPACING, BLACKISH_BROWN, DARK_RED, DARK_BLUE
+from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, DARK_BLUE, DARK_RED, GREY, SPACING
+from map_data.map_attributes import City, Map, Office, Route, Upgrade
 
 
 class Map3(Map):

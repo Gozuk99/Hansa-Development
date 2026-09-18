@@ -13,8 +13,13 @@ from drawing.game_window import GameWindow
 from drawing.new_game_menu import NewGameMenu
 from game.action_schema import ACTION_SCHEMA_VERSION
 from game.game_config import GameConfiguration, PlayerControl
-from game.persistence import SAVE_FORMAT_VERSION, SaveGameError, load_game, save_game
-from game.persistence import default_save_directory
+from game.persistence import (
+    SAVE_FORMAT_VERSION,
+    SaveGameError,
+    default_save_directory,
+    load_game,
+    save_game,
+)
 from game.loaded_state_validation import validate_loaded_game
 from game.invariants import GameInvariantError
 from map_data.map_attributes import BonusMarker, Map, Office

@@ -18,7 +18,6 @@ from map_data.constants import (
 from training.balanced_state_generator import (
     BonusMarkerSetup,
     EndingCondition,
-    generate_balanced_state,
 )
 from training.curriculum import ACTIVE_EVALUATION_SETS
 from training.targeted_state_generator import (
