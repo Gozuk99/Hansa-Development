@@ -145,7 +145,7 @@ def main(argv=None):
         evaluation_suite_directory=args.evaluation_suite,
         progress_callback=print,
     )
-    state = runner.run()
+    runner.run()
     print(
         f"Training complete: {args.batch} batch(es), "
         f"{args.batch * args.iterations} learning game(s), and "

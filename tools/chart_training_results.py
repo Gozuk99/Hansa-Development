@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter, deque
 import csv
-from dataclasses import dataclass, field
 import html
 import json
 import math
-from pathlib import Path
 import statistics
 import sys
 import webbrowser
+from collections import Counter, deque
+from dataclasses import dataclass, field
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from training.results_schema import interpret_results_row  # noqa: E402
-
 
 DEFAULT_INPUT = Path("training_output/curriculum/results.csv")
 DEFAULT_OUTPUT = Path("training_output/curriculum/results_chart.html")
@@ -76,10 +75,6 @@ MOVEMENT_READINESS_FIELDS = {
 def _run(row):
     """Read one canonical run label while accepting historical CSV schemas."""
     return interpret_results_row(row).run
-
-
-def _run_type(row):
-    return interpret_results_row(row).run_type
 
 
 def _evaluation_set(row):
@@ -542,7 +537,7 @@ document.querySelectorAll('.evaluation-performance').forEach(container => {
   container.querySelector('[data-evaluation-players]').addEventListener('change', update);
   update();
 });
-"""
+"""  # noqa: E501 - Embedded JavaScript follows JavaScript formatting conventions.
 
 
 @dataclass
@@ -749,7 +744,7 @@ def read_results(path: Path, max_points: int):
                             evaluation["movement_games"][field] += 1
                     for tier, score in zip(assigned_tiers, final_scores):
                         evaluation["tier_games"][tier] += 1
-                        if isinstance(score, (int, float)):
+                        if isinstance(score, int | float):
                             evaluation["tier_score"][tier] += score
                             evaluation["tier_score_games"][tier] += 1
                     for tier in winner_tiers:
@@ -765,7 +760,7 @@ def read_results(path: Path, max_points: int):
                 counts["ties_by_player_count"][player_count] += 1
             winning_tier_ids = {str(tier) for tier in winner_tiers}
             for tier, score in zip(assigned_tiers, final_scores):
-                if isinstance(score, (int, float)):
+                if isinstance(score, int | float):
                     tier = str(tier)
                     key = (player_count, tier)
                     counts["tier_score_total_by_player_count"][key] += score
@@ -927,7 +922,7 @@ def _svg_grouped_bar_chart(
     bar_width = min(34, spacing * 0.62)
     bars = []
     group_centers = {group: [] for group in groups}
-    group_positions = {group: 0 for group in groups}
+    group_positions = dict.fromkeys(groups, 0)
     group_sizes = {
         group: sum(
             (player_count if group_by_player_count else tier) == group
@@ -1093,6 +1088,18 @@ def _tier_player_count_charts(counts):
         f"{_score_result_summary(player_count, tiers, counts)}</div>"
         for player_count in player_counts
     )
+    win_chart = _svg_grouped_bar_chart(
+        win_values,
+        maximum=win_maximum,
+        suffix="%",
+        baselines=baselines,
+        group_by_player_count=True,
+    )
+    score_chart = _svg_grouped_bar_chart(
+        score_values,
+        maximum=score_maximum,
+        group_by_player_count=True,
+    )
     return (
         '<section class="card tier-performance"><h2>Tier performance by player count</h2>'
         "<p>Blue bars are 3-player games, purple bars are 4-player games, and green bars "
@@ -1100,9 +1107,10 @@ def _tier_player_count_charts(counts):
         "(33.3%, 25%, or 20%). Only tiers assigned at that player count are shown. "
         "Rulebook tie-breakers are applied; remaining shared victories split one chart win. "
         f'Shared victories: {html.escape(shared)}.</p><div class="performance-grid"><div>'
-        f"<h3>Win percentage</h3>{_svg_grouped_bar_chart(win_values, maximum=win_maximum, suffix='%', baselines=baselines, group_by_player_count=True)}"
+        f"<h3>Win percentage</h3>{win_chart}"
         "</div><div><h3>Average final score</h3>"
-        f"{_svg_grouped_bar_chart(score_values, maximum=score_maximum, group_by_player_count=True)}</div></div>"
+        f"{score_chart}"
+        "</div></div>"
         '<div class="score-results"><h3>Scores when each tier wins or loses</h3>'
         "<p>Each result shows the average score, the lowest-to-highest range, and "
         f'the number of games.</p><div class="score-summary-grid">{summaries}</div></div>'
@@ -1269,7 +1277,7 @@ grid-template-columns:1fr; gap:20px; margin-top:18px; }}
 {_tier_player_count_charts(counts)}
 {_evaluation_dashboard(counts)}
 {charts}{summary}
-<script>{DASHBOARD_SCRIPT}</script></body></html>"""
+<script>{DASHBOARD_SCRIPT}</script></body></html>"""  # noqa: E501 - Embedded CSS/HTML.
 
 
 def parse_args():

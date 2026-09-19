@@ -1,6 +1,6 @@
 # map2.py
-from map_data.map_attributes import Map, City, Upgrade, Office, Route
-from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, SPACING, DARK_GREEN, DARK_RED
+from map_data.constants import BLACKISH_BROWN, CIRCLE_RADIUS, DARK_GREEN, DARK_RED, SPACING
+from map_data.map_attributes import City, Map, Office, Route, Upgrade
 
 
 class Map2(Map):
@@ -14,7 +14,7 @@ class Map2(Map):
         self.max_full_cities_x_pos = 77
         self.max_full_cities_y_pos = 52
 
-        self.create_cities_and_routes()  # Populate cities, offices, and routes etc., specifically for Map1
+        self.create_cities_and_routes()
         self.assign_starting_bonus_markers()
 
         self.map_width = 1800

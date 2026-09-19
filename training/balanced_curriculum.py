@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from game.game_config import GameConfiguration, human_players
 from game.persistence import save_game
 from training.balanced_state_generator import (
+    EAST_WEST_FOCUSES,
     BalancedGenerationRequest,
     BonusMarkerSetup,
-    EAST_WEST_FOCUSES,
     EndingCondition,
     MoveContinuationScenario,
     RegionalFocus,
@@ -21,7 +21,6 @@ from training.balanced_state_generator import (
     save_balanced_state,
 )
 from training.curriculum import CurriculumRunner, StateDescriptor
-
 
 CONFIGURATIONS = tuple(
     (map_num, player_count) for map_num in (1, 2, 3) for player_count in (3, 4, 5)
@@ -97,9 +96,9 @@ def _select_focus(rng, map_num, player_count, ending_condition):
         choices = [RegionalFocus.WALES]
         if player_count > 3:
             choices.extend((RegionalFocus.SCOTLAND, RegionalFocus.ISLE_OF_MAN))
-        if ending_condition is EndingCondition.NEAR_COMPLETED_CITIES and focus in EAST_WEST_FOCUSES:
-            choices = [choice for choice in choices if choice is not RegionalFocus.ISLE_OF_MAN]
-        elif ending_condition is EndingCondition.NEAR_BONUS_MARKERS:
+        if (
+            ending_condition is EndingCondition.NEAR_COMPLETED_CITIES and focus in EAST_WEST_FOCUSES
+        ) or ending_condition is EndingCondition.NEAR_BONUS_MARKERS:
             choices = [choice for choice in choices if choice is not RegionalFocus.ISLE_OF_MAN]
         regional = rng.choice(choices)
     return focus, regional
@@ -224,7 +223,7 @@ class BalancedCurriculumRunner(CurriculumRunner):
         maturity = (descriptor.scenario or stage.name).partition("+")[0]
         return 15_000 if maturity == "early" else self._stage_action_limit(stage)
 
-    def _generate_state(self, stage, seed, directory, *, map_num=None, player_count=None):
+    def _generate_state(self, _stage, seed, directory, *, map_num=None, player_count=None):
         rng = random.Random(seed)
         is_training_generation = map_num is None and player_count is None
         if is_training_generation:

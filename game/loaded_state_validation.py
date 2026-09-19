@@ -2,6 +2,8 @@
 
 from collections import Counter
 
+from game.action_schema import TILE_TYPES
+from game.invariants import GameInvariantError, validate_game
 from map_data.constants import (
     ACTIONS_MAX_VALUES,
     BANK_MAX_VALUES,
@@ -9,13 +11,10 @@ from map_data.constants import (
     CITY_KEYS_MAX_VALUES,
     PRIVILEGE_COLORS,
 )
-from map_data.map_attributes import Map
 from map_data.map1 import Map1
 from map_data.map2 import Map2
 from map_data.map3 import Map3
-
-from game.action_schema import TILE_TYPES
-from game.invariants import GameInvariantError, validate_game
+from map_data.map_attributes import Map
 
 
 def _require(condition, message):

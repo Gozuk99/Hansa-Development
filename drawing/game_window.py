@@ -11,15 +11,15 @@ from ai.observation_encoder import ObservationEncoder
 from drawing.action_ui import action_label, fit_text, phase_prompt
 from drawing.ai_observation import public_game_state
 from drawing.drawing_utils import draw_end_game, redraw_window
-from drawing.scaled_display import ScaledDisplay
 from drawing.save_dialogs import choose_save_file
-from game.game_config import PlayerControl, choose_ranked_ai_action
+from drawing.scaled_display import ScaledDisplay
 from game.action_codec import DEFAULT_ACTION_CODEC
 from game.action_schema import (
     ROUTE_OFFICE_SLOT_START,
     ROUTE_OUTCOME_SLOT_START,
     TILE_SLOT_BY_TYPE,
 )
+from game.game_config import PlayerControl, choose_ranked_ai_action
 from game.persistence import save_game
 from game.structured_actions import (
     ControlInteraction,

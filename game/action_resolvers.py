@@ -10,17 +10,17 @@ from game.action_schema import (
 )
 from game.game_actions import (
     InvalidActionError,
+    assign_new_bonus_marker_on_route,
+    buy_tile,
     claim_post_action,
+    claim_route_for_additional_office,
+    claim_route_for_office,
+    claim_route_for_points,
+    claim_route_for_upgrade,
     displace_action,
-    move_action,
     displace_claim,
     finish_displacement,
-    assign_new_bonus_marker_on_route,
-    claim_route_for_office,
-    claim_route_for_additional_office,
-    claim_route_for_upgrade,
-    claim_route_for_points,
-    buy_tile,
+    move_action,
 )
 from game.turn_state import TurnPhase
 
@@ -345,43 +345,41 @@ def resolve_bonus_marker_interaction(game, index):
         game.exchange_target_player = None
         game.waiting_for_bm_exchange_bm = False
         return
-    else:
-        selected_bm = next(
-            (
-                marker
-                for marker in current_player.bonus_markers
-                if BONUS_MARKER_SLOT_BY_TYPE.get(marker.type) == index
-            ),
-            None,
-        )
-        if selected_bm is None:
-            raise InvalidActionError("Selected bonus marker is unavailable")
-        if selected_bm.type == "SwapOffice":
-            game.waiting_for_bm_swap_office = True
-        elif selected_bm.type == "Move3":
-            selected_bm.handle_move3(game)
-        elif selected_bm.type == "UpgradeAbility":
-            game.waiting_for_bm_upgrade_ability = True
-        elif selected_bm.type == "3Actions":
-            selected_bm.handle_3_actions(current_player)
-        elif selected_bm.type == "4Actions":
-            selected_bm.handle_4_actions(current_player)
+    selected_bm = next(
+        (
+            marker
+            for marker in current_player.bonus_markers
+            if BONUS_MARKER_SLOT_BY_TYPE.get(marker.type) == index
+        ),
+        None,
+    )
+    if selected_bm is None:
+        raise InvalidActionError("Selected bonus marker is unavailable")
+    if selected_bm.type == "SwapOffice":
+        game.waiting_for_bm_swap_office = True
+    elif selected_bm.type == "Move3":
+        selected_bm.handle_move3(game)
+    elif selected_bm.type == "UpgradeAbility":
+        game.waiting_for_bm_upgrade_ability = True
+    elif selected_bm.type == "3Actions":
+        selected_bm.handle_3_actions(current_player)
+    elif selected_bm.type == "4Actions":
+        selected_bm.handle_4_actions(current_player)
 
-        elif selected_bm.type == "ExchangeBonusMarker":
-            game.waiting_for_bm_exchange_bm = True
-            game.pending_exchange_marker = selected_bm
-        elif (
-            selected_bm.type == "Tribute4EstablishingTP"
-            and current_player.personal_supply_squares > 0
-        ):
-            game.waiting_for_bm_tribute_trading_post = True
-        elif selected_bm.type == "BlockTradeRoute" and current_player.personal_supply_squares > 0:
-            game.waiting_for_bm_block_trade_route = True
+    elif selected_bm.type == "ExchangeBonusMarker":
+        game.waiting_for_bm_exchange_bm = True
+        game.pending_exchange_marker = selected_bm
+    elif (
+        selected_bm.type == "Tribute4EstablishingTP" and current_player.personal_supply_squares > 0
+    ):
+        game.waiting_for_bm_tribute_trading_post = True
+    elif selected_bm.type == "BlockTradeRoute" and current_player.personal_supply_squares > 0:
+        game.waiting_for_bm_block_trade_route = True
 
-        game.current_player.bonus_markers.remove(selected_bm)
-        if selected_bm.type != "ExchangeBonusMarker":
-            selected_bm.owner = current_player
-            current_player.used_bonus_markers.append(selected_bm)
+    game.current_player.bonus_markers.remove(selected_bm)
+    if selected_bm.type != "ExchangeBonusMarker":
+        selected_bm.owner = current_player
+        current_player.used_bonus_markers.append(selected_bm)
     return
 
 
@@ -502,11 +500,10 @@ def resolve_city_interaction(game, action):
 
 def resolve_ability_interaction(game, index):
     for upgrade_idx, upgrade_city in enumerate(game.selected_map.upgrade_cities):
-        if upgrade_idx == index:
-            if game.waiting_for_bm_upgrade_ability:
-                upgrade_type = upgrade_city.upgrade_type
-                game.current_player.perform_upgrade(upgrade_type)
-                game.waiting_for_bm_upgrade_ability = False
+        if upgrade_idx == index and game.waiting_for_bm_upgrade_ability:
+            upgrade_type = upgrade_city.upgrade_type
+            game.current_player.perform_upgrade(upgrade_type)
+            game.waiting_for_bm_upgrade_ability = False
 
 
 def resolve_control_interaction(game):

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
 import hashlib
 import json
-from pathlib import Path
 import random
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
 
 from game.action_validation import ActionValidationError, validate_action_state
 from game.game_config import GameConfiguration, human_players
@@ -23,7 +23,6 @@ from training.targeted_state_generator import (
     StateGenerationError,
     _assign_some_emperor_tiles,
     _balance_projected_scores,
-    _apply_upgrade,
     _can_claim_office,
     _complete_balanced_development,
     _configure_bonus_marker_scenario,
@@ -31,18 +30,16 @@ from training.targeted_state_generator import (
     _development_total,
     _divide_remaining_supply,
     _ensure_personal_piece,
+    _place_office,
     _prepare_bonus_marker_route,
     _prepare_britannia_region,
     _prepare_completed_cities,
-    _prepare_east_west,
     _prepare_dual_east_west,
+    _prepare_east_west,
+    _prepare_network_keys,
     _prepare_score_route,
     _prepare_special_prestige,
-    _prepare_network_keys,
-    _place_office,
-    _upgrade_choices,
 )
-
 
 GENERATOR_VERSION = 9
 
@@ -639,7 +636,7 @@ def _ensure_move_origin_posts(
     return selected
 
 
-def _prepare_move_target_route(game, player, rng, scenario, capacity, held_count):
+def _prepare_move_target_route(game, player, rng, scenario, held_count):
     """Create a productive destination without making it claimable in the saved state."""
     if scenario is MoveContinuationScenario.CAPACITY_PRACTICE:
         return None, None
@@ -686,7 +683,6 @@ def _prepare_mid_move_state(game, rng, request):
         player,
         rng,
         scenario,
-        capacity,
         held_count,
     )
     if scenario is not MoveContinuationScenario.CAPACITY_PRACTICE and target_route is None:
@@ -748,9 +744,10 @@ def _prepare_mid_move_state(game, rng, request):
     effective_capacity = min(capacity, pre_move_owned)
     if held_count < effective_capacity and not (has_pickup and has_placement):
         return None
-    if scenario is MoveContinuationScenario.MOVE_TO_CLAIM:
-        if player.actions_remaining < 2 or target_route.is_controlled_by(player):
-            return None
+    if scenario is MoveContinuationScenario.MOVE_TO_CLAIM and (
+        player.actions_remaining < 2 or target_route.is_controlled_by(player)
+    ):
+        return None
     target_index = (
         game.selected_map.routes.index(target_route) if target_route is not None else None
     )
@@ -878,9 +875,11 @@ def _build_once(request, attempt_seed):
         if opened_piece is not None:
             focus.required_pieces.append(opened_piece)
 
-    if request.strategic_focus is not StrategicFocus.NETWORK_KEYS:
-        if _complete_balanced_development(game, pools, rng, development_range) is None:
-            return None
+    if (
+        request.strategic_focus is not StrategicFocus.NETWORK_KEYS
+        and _complete_balanced_development(game, pools, rng, development_range) is None
+    ):
+        return None
     if not _finish_supply_setup(game, pools, rng, focus):
         return None
 

@@ -13,7 +13,6 @@ from game.action_resolvers import (
 )
 from game.action_schema import (
     ADDITIONAL_TRADING_POST_SLOT,
-    BONUS_MARKER_PAYMENT_TYPES,
     BONUS_MARKER_TYPES,
     EXCHANGED_BONUS_MARKER_START,
 )

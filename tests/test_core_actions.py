@@ -4,7 +4,6 @@ import unittest
 
 from tests.action_helpers import legal_action_mask
 
-from game.game_actions import InvalidActionError
 from game.game_actions import (
     can_pick_up_displacement_fallback,
     can_place_displacement_piece,

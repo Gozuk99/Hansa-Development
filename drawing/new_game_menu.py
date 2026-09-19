@@ -6,18 +6,17 @@ from dataclasses import dataclass, field
 
 import pygame
 
+from drawing.save_dialogs import choose_load_file
+from drawing.scaled_display import ScaledDisplay
 from game.game_config import (
     EMPERORS_FAVOUR_TILES,
     GameConfiguration,
     PlayerControl,
     human_players,
 )
-from game.setup import MAX_PLAYERS, MIN_PLAYERS, SUPPORTED_MAPS
-from drawing.scaled_display import ScaledDisplay
-from drawing.save_dialogs import choose_load_file
 from game.persistence import load_game
+from game.setup import MAX_PLAYERS, MIN_PLAYERS, SUPPORTED_MAPS
 from map_data.map_attributes import Map
-
 
 WINDOW_SIZE = (980, 940)
 INITIAL_WINDOW_SCALE = 2.0

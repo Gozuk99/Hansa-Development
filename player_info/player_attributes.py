@@ -1,16 +1,16 @@
 # player_attributes.py
 
-from map_data.constants import (
-    CITY_KEYS_MAX_VALUES,
-    ACTIONS_MAX_VALUES,
-    PRIVILEGE_COLORS,
-    BOOK_OF_KNOWLEDGE_MAX_VALUES,
-    BANK_MAX_VALUES,
-    COLOR_NAMES,
-    UPGRADE_METHODS_MAP,
-    UPGRADE_MAX_VALUES,
-)
 from game.setup import starting_inventory
+from map_data.constants import (
+    ACTIONS_MAX_VALUES,
+    BANK_MAX_VALUES,
+    BOOK_OF_KNOWLEDGE_MAX_VALUES,
+    CITY_KEYS_MAX_VALUES,
+    COLOR_NAMES,
+    PRIVILEGE_COLORS,
+    UPGRADE_MAX_VALUES,
+    UPGRADE_METHODS_MAP,
+)
 
 
 def valid_region_transition(start_region, target_region):
@@ -164,7 +164,9 @@ class Player:
             self.pieces_to_pickup -= 1
             if self.messages_enabled:
                 print(
-                    f"Picked up Player {COLOR_NAMES[post.owner.color]}'s {post.owner_piece_shape} from {post.region} region. {self.pieces_to_pickup} moves left."
+                    f"Picked up Player {COLOR_NAMES[post.owner.color]}'s "
+                    f"{post.owner_piece_shape} from {post.region} region. "
+                    f"{self.pieces_to_pickup} moves left."
                 )
             post.reset_post()
         else:
@@ -188,7 +190,8 @@ class Player:
         if post.required_shape and post.required_shape != shape:
             if self.messages_enabled:
                 print(
-                    f"Cannot place a {shape} on this post. This post requires a {post.required_shape}."
+                    f"Cannot place a {shape} on this post. "
+                    f"This post requires a {post.required_shape}."
                 )
             return False
 
@@ -197,14 +200,16 @@ class Player:
             if shape_to_place == shape:
                 if self.messages_enabled:
                     print(
-                        f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place}."
+                        f"Please place Player {COLOR_NAMES[owner_to_place.color]}'s "
+                        f"{shape_to_place}."
                     )
                     print(f"[{self.actions_remaining}] {COLOR_NAMES[self.color]} placed a piece")
                 post.claim(owner_to_place, shape_to_place)
                 self.holding_pieces.pop(0)
                 if self.messages_enabled:
                     print(
-                        f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s {shape_to_place} on the board."
+                        f"Placed Player {COLOR_NAMES[owner_to_place.color]}'s "
+                        f"{shape_to_place} on the board."
                     )
                 return True
         else:
@@ -216,7 +221,8 @@ class Player:
             next_shape, next_owner, _ = self.holding_pieces[0]
             if self.messages_enabled:
                 print(
-                    f"The next piece to place must be Player {COLOR_NAMES[next_owner.color]}'s {next_shape}."
+                    "The next piece to place must be Player "
+                    f"{COLOR_NAMES[next_owner.color]}'s {next_shape}."
                 )
         return False
 
@@ -252,7 +258,7 @@ class Player:
             self.actions_index += 1
             self.actions = ACTIONS_MAX_VALUES[self.actions_index]
 
-            # If the new value of actions is greater than the previous one, increment actions_remaining by 1
+            # Grant the newly unlocked action immediately.
             if self.actions > previous_actions:
                 self.grant_actions(1)
         else:
@@ -303,14 +309,14 @@ class Player:
             elif upgrade_type.lower() == "book":
                 self.personal_supply_circles += 1
 
-            # If this is called from a bonus marker, you might not want to adjust actions or switch player
+            # Bonus-marker upgrades do not spend actions or switch players here.
             return True
-        else:
-            if self.messages_enabled:
-                print(
-                    f"{upgrade_type} is already at its maximum value for player {COLOR_NAMES[self.color]}."
-                )
-            return False
+        if self.messages_enabled:
+            print(
+                f"{upgrade_type} is already at its maximum value for player "
+                f"{COLOR_NAMES[self.color]}."
+            )
+        return False
 
     def has_unlocked_key(self, index):
         return self.keys_index + 1 > index

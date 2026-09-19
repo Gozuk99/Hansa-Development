@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 import base64
-import io
-from datetime import datetime, timezone
-from enum import Enum
 import hashlib
+import io
 import json
 import os
-from pathlib import Path
 import pickle
 import tempfile
+from datetime import UTC, datetime
+from enum import Enum
+from pathlib import Path
 
 from game.action_schema import action_schema_metadata, validate_action_schema_metadata
 from game.game_info import Game
 from game.loaded_state_validation import validate_loaded_game
-
 
 SAVE_FORMAT = "hansa-exact-game"
 SAVE_FORMAT_VERSION = 1
@@ -67,7 +66,7 @@ class _GameSaveUnpickler(pickle.Unpickler):
 
     def persistent_load(self, persistent_id):
         if persistent_id == ("external_ai_model",):
-            return None
+            return
         raise pickle.UnpicklingError("Save file contains an unknown external reference")
 
 
@@ -148,7 +147,7 @@ def _metadata(game: Game, payload_hash: str) -> dict[str, object]:
         "save_format": SAVE_FORMAT,
         "save_format_version": SAVE_FORMAT_VERSION,
         **action_schema_metadata(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "map_num": game.map_num,
         "player_count": len(game.players),
         "turn_number": game.turn_number,

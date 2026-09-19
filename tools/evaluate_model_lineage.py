@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
-from pathlib import Path
 import shutil
 import sys
 import tempfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from time import perf_counter
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ai.ai_model import HansaNN, SHARED_MODEL_FILE  # noqa: E402
+from ai.ai_model import SHARED_MODEL_FILE, HansaNN  # noqa: E402
 from training.balanced_curriculum import BalancedCurriculumRunner  # noqa: E402
 from training.curriculum import (  # noqa: E402
     ACTION_SEED_OFFSET,
@@ -32,7 +32,6 @@ from training.self_play import (  # noqa: E402
     SelfPlayTrainer,
     TrainingConfig,
 )
-
 
 DEFAULT_ARCHIVE_DIRECTORY = ROOT / "training_output/archive"
 DEFAULT_CURRENT_MODEL = ROOT / SHARED_MODEL_FILE
@@ -533,10 +532,10 @@ def _head_to_head_detail(
 
 def summarize_head_to_head(current_artifact, archived_artifact, details):
     names = (archived_artifact.name, current_artifact.name)
-    seats = {name: 0 for name in names}
-    wins = {name: 0.0 for name in names}
-    score_totals = {name: 0 for name in names}
-    scored_seats = {name: 0 for name in names}
+    seats = dict.fromkeys(names, 0)
+    wins = dict.fromkeys(names, 0.0)
+    score_totals = dict.fromkeys(names, 0)
+    scored_seats = dict.fromkeys(names, 0)
     draws = 0
     for row in details:
         ownership = _json_values(row["seat_ownership"])
@@ -621,7 +620,7 @@ def run_lineage_evaluation(
     progress_callback=print,
 ):
     artifacts, discovery_rows = discover_models(archive_directory, current_model)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
     run_directory = Path(output_directory) / timestamp
     run_directory.mkdir(parents=True, exist_ok=False)
     _write_csv(run_directory / "model_discovery.csv", DISCOVERY_FIELDS, discovery_rows)

@@ -4,8 +4,7 @@ from unittest import mock
 from game import action_legality
 from game.action_codec import DEFAULT_ACTION_CODEC
 from game.action_legality import _MovePlacementFeasibility, _can_finish_move_after_placement
-from game.game_actions import InvalidActionError
-from game.game_actions import refresh_displacement_targets
+from game.game_actions import InvalidActionError, refresh_displacement_targets
 from game.game_runner import create_headless_game, legal_action_indices
 from game.invariants import validate_game
 from map_data.constants import MAX_POSTS
@@ -100,7 +99,6 @@ class LegalActionTests(unittest.TestCase):
 
     def test_displacement_with_no_valid_destination_is_blocked(self):
         game = create_headless_game(2, 3, seed=124)
-        actor = game.current_player
         opponent = game.players[1]
         route = game.selected_map.routes[0]
         occupied = route.posts[0]
